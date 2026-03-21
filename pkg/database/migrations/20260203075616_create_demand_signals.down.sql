@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS demand_responses CASCADE;
+DROP TABLE IF EXISTS demand_signals CASCADE;

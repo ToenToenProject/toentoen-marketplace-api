@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS ad_campaigns CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;

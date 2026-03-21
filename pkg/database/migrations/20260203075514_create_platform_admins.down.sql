@@ -1,0 +1,4 @@
+DROP INDEX IF EXISTS idx_logs_target CASCADE;
+DROP INDEX IF EXISTS idx_logs_admin CASCADE;
+DROP TABLE IF EXISTS platform_logs CASCADE;
+DROP TABLE IF EXISTS platform_admins CASCADE; 
