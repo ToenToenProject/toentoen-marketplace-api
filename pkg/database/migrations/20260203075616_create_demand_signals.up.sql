@@ -1,6 +1,6 @@
 CREATE TABLE demand_signals (
     demand_signal_id BIGSERIAL PRIMARY KEY,
-    account_id BIGINT REFERENCES users(account_id) ON DELETE CASCADE,
+    account_id VARCHAR(50) REFERENCES users(account_id) ON DELETE CASCADE,
     keyword VARCHAR(255) NOT NULL,
     description TEXT,
     media_urls JSONB, 
@@ -17,7 +17,7 @@ CREATE TABLE demand_signals (
 CREATE TABLE demand_responses (
     demand_response_id BIGSERIAL PRIMARY KEY,
     signal_id BIGINT REFERENCES demand_signals(demand_signal_id) ON DELETE CASCADE,
-    business_id BIGINT REFERENCES businesses(business_id) ON DELETE CASCADE,
+    business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     message TEXT,
     media_urls JSONB,
     is_accepted BOOLEAN DEFAULT false,

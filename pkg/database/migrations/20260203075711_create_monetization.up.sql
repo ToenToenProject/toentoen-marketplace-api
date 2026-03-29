@@ -1,6 +1,6 @@
 CREATE TABLE ad_campaigns (
     ad_campaign_id BIGSERIAL PRIMARY KEY,
-    business_id BIGINT REFERENCES businesses(business_id) ON DELETE CASCADE,
+    business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     target_type enum_ad_target,
     target_id BIGINT,
     start_date TIMESTAMPTZ,
@@ -11,7 +11,7 @@ CREATE TABLE ad_campaigns (
 
 CREATE TABLE transactions (
     transaction_id BIGSERIAL PRIMARY KEY,
-    business_id BIGINT REFERENCES businesses(business_id),
+    business_id VARCHAR(50) REFERENCES businesses(business_id),
     amount DECIMAL(15,2),
     type VARCHAR(50),
     status enum_payment_status,

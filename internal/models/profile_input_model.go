@@ -7,7 +7,6 @@ type UpdateProfileUserInput struct {
 	PhoneNumber *string `json:"phone_number"`
 	Gender      *string `json:"gender"`
 
-	// Role user
 	Bio               *string  `json:"bio"`
 	ProfilePictureUrl *string  `json:"profile_picture_url"`
 	BirthDate         *string  `json:"birth_date"`
@@ -22,7 +21,6 @@ type UpdateProfileOwnerInput struct {
 	PhoneNumber *string `json:"phone_number"`
 	Gender      *string `json:"gender"`
 
-	// Role owner
 	KtpNumber   *string `json:"ktp_number"`
 	KtpPhotoUrl *string `json:"ktp_photo_url"`
 }

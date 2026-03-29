@@ -4,10 +4,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// AllowRoles middleware to restrict access based on user roles
 func AllowRoles(allowedRoles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Fetch role
 		roleValue := c.Locals("role")
 		if roleValue == nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -15,7 +13,6 @@ func AllowRoles(allowedRoles ...string) fiber.Handler {
 			})
 		}
 
-		// Convert to string
 		userRole, ok := roleValue.(string)
 		if !ok {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -23,7 +20,6 @@ func AllowRoles(allowedRoles ...string) fiber.Handler {
 			})
 		}
 
-		// Check whether the user role is allowed or not
 		isAllowed := false
 		for _, role := range allowedRoles {
 			if userRole == role {
@@ -32,7 +28,6 @@ func AllowRoles(allowedRoles ...string) fiber.Handler {
 			}
 		}
 
-		// If not allowes, return fail
 		if !isAllowed {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"status": "fail",
@@ -40,7 +35,6 @@ func AllowRoles(allowedRoles ...string) fiber.Handler {
 			})
 		}
 
-		// If allowed, continue to handler
 		return c.Next()
 	}
 }

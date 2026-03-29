@@ -9,8 +9,8 @@ import (
 )
 
 type ProfileService interface {
-	UpdateUserProfile(accountID int64, input models.UpdateProfileUserInput) (*models.Account, *models.User, error)
-	UpdateOwnerProfile(accountID int64, input models.UpdateProfileOwnerInput) (*models.Account, *models.Owner, error)
+	UpdateUserProfile(accountID int64, input models.UpdateProfileUserInput) (*models.Account, error)
+	UpdateOwnerProfile(accountID int64, input models.UpdateProfileOwnerInput) (*models.Account, error)
 }
 
 type profileService struct {
@@ -53,13 +53,13 @@ func isAccountDataComplete(account *models.Account) string {
 	}
 }
 
-func (s *profileService) UpdateUserProfile(accountID int64, input models.UpdateProfileUserInput) (*models.Account, *models.User, error) {
+func (s *profileService) UpdateUserProfile(accountID int64, input models.UpdateProfileUserInput) (*models.Account, error) {
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, nil, errors.New("account not found")
+			return nil, errors.New("account not found")
 		}
-		return nil, nil, err
+		return nil, err
 	}
 
 	if input.Fullname != nil {
@@ -80,7 +80,7 @@ func (s *profileService) UpdateUserProfile(accountID int64, input models.UpdateP
 
 	user, err := s.repo.GetUserByAccountID(accountID)
 	if err != nil {
-		return nil, nil, errors.New("user specific profile data not found")
+		return nil, errors.New("user specific profile data not found")
 	}
 
 	if input.Bio != nil {
@@ -98,19 +98,19 @@ func (s *profileService) UpdateUserProfile(accountID int64, input models.UpdateP
 	}
 
 	if err := s.repo.SaveUserProfile(account, user); err != nil {
-		return nil, nil, errors.New("failed to save user profile data")
+		return nil, errors.New("failed to save user profile data")
 	}
 
-	return account, user, nil
+	return account, nil
 }
 
-func (s *profileService) UpdateOwnerProfile(accountID int64, input models.UpdateProfileOwnerInput) (*models.Account, *models.Owner, error) {
+func (s *profileService) UpdateOwnerProfile(accountID int64, input models.UpdateProfileOwnerInput) (*models.Account, error) {
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, nil, errors.New("account not found")
+			return nil, errors.New("account not found")
 		}
-		return nil, nil, err
+		return nil, err
 	}
 
 	if input.Fullname != nil {
@@ -131,7 +131,7 @@ func (s *profileService) UpdateOwnerProfile(accountID int64, input models.Update
 
 	owner, err := s.repo.GetOwnerByAccountID(accountID)
 	if err != nil {
-		return nil, nil, errors.New("user specific profile data not found")
+		return nil, errors.New("user specific profile data not found")
 	}
 
 	if input.KtpNumber != nil {
@@ -153,7 +153,7 @@ func (s *profileService) UpdateOwnerProfile(accountID int64, input models.Update
 	account.AccountStatus = isAccountDataComplete(account)
 
 	if err := s.repo.SaveOwnerProfile(account, owner); err != nil {
-		return nil, nil, errors.New("failed to save owner profile data")
+		return nil, errors.New("failed to save owner profile data")
 	}
-	return account, owner, nil
+	return account, nil
 }

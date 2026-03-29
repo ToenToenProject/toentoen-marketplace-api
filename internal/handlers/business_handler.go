@@ -1,9 +1,10 @@
 package handlers
 
 import (
-	"strconv"
+	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/models"
 	"toentoen-backend/internal/services"
+	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,127 +18,96 @@ func NewBusinessHandler(service services.BusinessService) *BusinessHandler {
 }
 
 func (h *BusinessHandler) CreateBusiness(c *fiber.Ctx) error {
-	// 1. Parsing Body JSON
 	var input models.CreateBusinessInput
 	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Format request tidak valid",
-			"error":   err.Error(),
-		})
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", fiber.Map{"error": err.Error()})
 	}
 
-	// 2. Ambil Account ID (Owner) dari context/JWT yang login
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Sesi tidak valid atau Anda belum login"})
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var ownerID int64
-	switch v := accountIDValue.(type) {
-	case int64:
-		ownerID = v
-	case float64:
-		ownerID = int64(v)
+	var ownerID, ok = accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
-	// 3. Panggil Service
-	if err := h.service.CreateBusiness(ownerID, input); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "Gagal membuat profil bisnis",
-			"error":   err.Error(),
-		})
+	createdBusiness, err := h.service.CreateBusiness(ownerID, input)
+	if err != nil {
+		if err.Error() == "nama bisnis sudah terdaftar di akun Anda" {
+			return utils.SendResponse(c, fiber.StatusConflict, constants.DuplicateData, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal membuat profil bisnis", fiber.Map{"error": err.Error()})
 	}
 
-	// 4. Return Success Response
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Profil bisnis berhasil dibuat dan disimpan",
-	})
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Profil bisnis berhasil dibuat dan disimpan", createdBusiness)
 }
 
 func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Sesi tidak valid"})
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
-	var ownerID int64
-	switch v := accountIDValue.(type) {
-	case int64: ownerID = v
-	case float64: ownerID = int64(v)
+	var ownerID, ok = accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
 	businesses, err := h.service.GetMyBusinesses(ownerID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Gagal mengambil data bisnis"})
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil data bisnis", nil)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Berhasil mengambil daftar bisnis",
-		"data":    businesses,
-	})
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar bisnis", businesses)
 }
 
 func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
-	businessIDStr := c.Params("id")
-	businessID, err := strconv.ParseInt(businessIDStr, 10, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Format ID Bisnis tidak valid"})
-	}
+	businessID := c.Params("id")
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Sesi tidak valid"})
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
-	var ownerID int64
-	switch v := accountIDValue.(type) {
-	case int64: ownerID = v
-	case float64: ownerID = int64(v)
+	var ownerID, ok = accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
 	var input models.UpdateBusinessInput
 	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Format request tidak valid"})
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
 	}
 
 	updatedBusiness, err := h.service.UpdateBusiness(ownerID, businessID, input)
 	if err != nil {
-		// Pembedaan error conflict (409) dan error lain (400/404)
 		if err.Error() == "handle sudah digunakan, silakan pilih yang lain" {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"message": err.Error()})
+			return utils.SendResponse(c, fiber.StatusConflict, constants.HandleTaken, err.Error(), nil)
 		}
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.ForbiddenAccess, err.Error(), nil)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Bisnis berhasil diperbarui",
-		"data":    updatedBusiness,
-	})
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Bisnis berhasil diperbarui", updatedBusiness)
 }
 
 func (h *BusinessHandler) DeleteBusiness(c *fiber.Ctx) error {
-	businessIDStr := c.Params("id")
-	businessID, err := strconv.ParseInt(businessIDStr, 10, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": "Format ID Bisnis tidak valid"})
-	}
+	businessID := c.Params("id")
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "Sesi tidak valid"})
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
-	var ownerID int64
-	switch v := accountIDValue.(type) {
-	case int64: ownerID = v
-	case float64: ownerID = int64(v)
+	var ownerID, ok = accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
 	if err := h.service.DeleteBusiness(ownerID, businessID); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Bisnis berhasil dihapus",
-	})
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Bisnis berhasil dihapus", nil)
 }

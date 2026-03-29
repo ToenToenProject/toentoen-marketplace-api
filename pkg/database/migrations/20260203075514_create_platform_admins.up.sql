@@ -1,12 +1,12 @@
 CREATE TABLE platform_admins (
-    account_id BIGINT PRIMARY KEY REFERENCES accounts(account_id) ON DELETE CASCADE,
+    account_id VARCHAR(50) PRIMARY KEY REFERENCES accounts(account_id) ON DELETE CASCADE,
     role enum_platform_admin_role DEFAULT 'moderator' NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE platform_logs (
     platform_log_id BIGSERIAL PRIMARY KEY,
-    admin_id INT REFERENCES platform_admins(account_id) ON DELETE SET NULL, -- Jika admin dihapus, log jangan hilang
+    admin_id VARCHAR(50) REFERENCES platform_admins(account_id) ON DELETE SET NULL, -- Jika admin dihapus, log jangan hilang
     action VARCHAR(100) NOT NULL,
     target_type VARCHAR(50) NOT NULL,
     target_id BIGINT NOT NULL,

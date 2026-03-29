@@ -16,14 +16,14 @@ import (
 )
 
 type AuthService interface {
-	Register (input models.RegisterUnifiedInput) error
-	Login (input models.LoginUnifiedInput) error
+	Register(input models.RegisterUnifiedInput) error
+	Login(input models.LoginUnifiedInput) error
 	VerifyLoginOTP(input models.VerifyLoginOTPInput) (*models.Account, string, error)
 	ForgotPassword(input models.ForgotPasswordInput) error
 	VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error)
 	ResetPassword(input models.ResetPasswordInput) error
 	ChangePassword(input models.ChangePasswordInput) error
-	CreateBusinessAdmin(ownerID int64, input models.CreateBusinessAdminInput) error
+	CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error)
 }
 
 type authService struct {
@@ -50,10 +50,11 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	pwd := string(passwordHash)
 
 	account := models.Account{
+		AccountID:    utils.GenerateUUID("ACC"),
 		PasswordHash: &pwd,
-		Role: input.Role,
-		Username: utils.GenerateRandomUsername(input.Identifier),
-		Fullname: "New Account",
+		Role:         input.Role,
+		Username:     utils.GenerateRandomUsername(input.Identifier),
+		Fullname:     "New Account",
 		AuthProvider: "local",
 	}
 
@@ -69,7 +70,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 func (s *authService) Login(input models.LoginUnifiedInput) error {
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound{
+		if err == gorm.ErrRecordNotFound {
 			return errors.New("account not found")
 		}
 		return err
@@ -79,7 +80,7 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 		return errors.New("google account")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.Password));err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.Password)); err != nil {
 		return errors.New("invalid credentials")
 	}
 
@@ -233,18 +234,19 @@ func (s *authService) ChangePassword(input models.ChangePasswordInput) error {
 	return s.repo.Update(account)
 }
 
-func (s *authService) CreateBusinessAdmin(ownerID int64, input models.CreateBusinessAdminInput) error {
+func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return nil, err 
 	}
 	pwd := string(passwordHash)
 
 	account := models.Account{
+		AccountID:    utils.GenerateUUID("ACC"), 
 		PasswordHash: &pwd,
-		Role: "business_admin",
-		Username: utils.GenerateRandomUsername(input.Identifier),
-		Fullname: "Business Admin",
+		Role:         "business_admin",
+		Username:     utils.GenerateRandomUsername(input.Identifier),
+		Fullname:     "Business Admin",
 		AuthProvider: "local",
 	}
 
@@ -254,5 +256,11 @@ func (s *authService) CreateBusinessAdmin(ownerID int64, input models.CreateBusi
 		account.PhoneNumber = &input.Identifier
 	}
 
-	return s.repo.CreateAccountWithProfile(&account, "business_admin", ownerID)
+	if err := s.repo.CreateAccountWithProfile(&account, "business_admin", ownerID); err != nil {
+		return nil, err
+	}
+	
+	account.PasswordHash = nil 
+
+	return &account, nil
 }

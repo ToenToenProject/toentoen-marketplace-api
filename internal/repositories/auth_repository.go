@@ -8,9 +8,9 @@ import (
 )
 
 type AuthRepository interface {
-	CreateAccountWithProfile(account *models.Account, role string, ownerID ...int64) error
+	CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error
 	FindByIdentifier(identifier string) (*models.Account, error)
-	FindByID(id int64) (*models.Account, error)
+	FindByID(id string) (*models.Account, error) 
 	Update(account *models.Account) error
 	LoadAssociations(account *models.Account) error
 }
@@ -23,7 +23,7 @@ func NewAuthRepository(db *gorm.DB) AuthRepository {
 	return &authRepository{db}
 }
 
-func (r *authRepository) CreateAccountWithProfile(account *models.Account, role string, ownerID ...int64) error {
+func (r *authRepository) CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(account).Error; err != nil {
 			return err
@@ -41,11 +41,16 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 			}
 
 		case "business_admin":
-			var bossID int64
+			var bossID string
 			if len(ownerID) > 0 {
 				bossID = ownerID[0]
 			} else {
-				return errors.New("business_admin creation requires owner_id")
+				return errors.New("pembuatan akun business_admin membutuhkan owner_id")
+			}
+
+			var existingOwner models.Owner
+			if err := tx.Where("account_id = ?", bossID).First(&existingOwner).Error; err != nil {
+				return errors.New("gagal membuat admin: data owner tidak valid atau tidak terdaftar")
 			}
 
 			if err := tx.Create(&models.BusinessAdmin{
@@ -65,9 +70,9 @@ func (r *authRepository) FindByIdentifier(identifier string) (*models.Account, e
 	return &account, err
 }
 
-func (r *authRepository) FindByID(id int64) (*models.Account, error) {
+func (r *authRepository) FindByID(id string) (*models.Account, error) {
 	var account models.Account
-	err := r.db.First(&account, id).Error
+	err := r.db.Where("account_id = ?", id).First(&account).Error
 	return &account, err
 }
 
@@ -85,7 +90,6 @@ func (r *authRepository) LoadAssociations(account *models.Account) error {
 		r.db.Model(account).Association("BusinessAdmin").Find(&account.BusinessAdmin)
 	case "platform_admin":
 		r.db.Model(account).Association("PlatformAdmin").Find(&account.PlatformAdmin)
-
 	}
 	return nil
 }

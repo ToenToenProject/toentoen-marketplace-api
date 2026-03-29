@@ -13,7 +13,6 @@ var authCookies = []string{
 	"user_token",      
 }
 
-// Logout user by clearing all auth cookies
 func Logout(c *fiber.Ctx) error {
 	for _, cookieName := range authCookies {
 		c.Cookie(&fiber.Cookie{

@@ -3,8 +3,8 @@ package models
 import "time"
 
 type BusinessAdmin struct {
-	AccountID int64     `gorm:"primaryKey" json:"account_id"`
-	OwnerID   int64     `json:"owner_id"`
+	AccountID string     `gorm:"primaryKey" json:"account_id"`
+	OwnerID   string     `json:"owner_id"`
 	CreatedAt time.Time `json:"created_at"`
 
 	Account     Account                   `gorm:"foreignKey:AccountID;references:AccountID" json:"account"`
@@ -12,8 +12,8 @@ type BusinessAdmin struct {
 }
 
 type BusinessAdminAssignment struct {
-	BusinessAdminID int64     `gorm:"primaryKey;column:admin_id" json:"admin_id"`
-	BusinessID      int64     `gorm:"primaryKey" json:"business_id"`
+	BusinessAdminID string     `gorm:"primaryKey;column:admin_id" json:"admin_id"`
+	BusinessID      string     `gorm:"primaryKey" json:"business_id"`
 	Role            string    `gorm:"default:'admin';not null" json:"role"`
 	ShiftStart      *string   `json:"shift_start"`
 	ShiftEnd        *string   `json:"shift_end"`
@@ -25,14 +25,21 @@ type BusinessAdminAssignment struct {
 }
 
 type AssignBusinessAdminInput struct {
-	BusinessAdminID int64   `json:"business_admin_id"`
-	BusinessID      int64   `json:"business_id"`
+	BusinessAdminID string   `json:"business_admin_id"`
+	BusinessID      string   `json:"business_id"`
 	Role            string  `json:"role"`
 	ShiftStart      *string `json:"shift_start"`
 	ShiftEnd        *string `json:"shift_end"`
 }
 
 type UpdateAssignmentInput struct {
+	Fullname    *string `json:"fullname"`
+	Username    *string `json:"username"`
+	Email       *string `json:"email"`
+	PhoneNumber *string `json:"phone_number"`
+	Gender      *string `json:"gender"`
+	Password    *string `json:"password"`
+
 	Role       *string `json:"role"`
 	ShiftStart *string `json:"shift_start"`
 	ShiftEnd   *string `json:"shift_end"`

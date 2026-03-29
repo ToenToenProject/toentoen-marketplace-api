@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/models"
 	"toentoen-backend/internal/services"
+	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -18,93 +20,99 @@ func NewAssignmentHandler(service services.AssignmentService) *AssignmentHandler
 func (h *AssignmentHandler) AssignBusinessAdmin(c *fiber.Ctx) error {
 	var input models.AssignBusinessAdminInput
 	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Invalid request",
-		})
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request", fiber.Map{"error": err.Error()})
 	}
 
-	if input.BusinessAdminID == 0 || input.BusinessID == 0 || input.Role == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "BusinessAdminID, businessID, and role must be filled",
-		})
+	if input.BusinessAdminID == "" || input.BusinessID == "" || input.Role == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "BusinessAdminID, businessID, and role must be filled", nil)
 	}
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"message": "Session is not valid",
-		})
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid", nil)
 	}
 
-	var ownerID int64
-	switch v := accountIDValue.(type) {
-	case int64:
-		ownerID = v
-
-	case float64:
-		ownerID = int64(v)
+	ownerID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
 	assignmentDetails, err := h.service.AssignBusinessAdminToBusiness(ownerID, input)
 	if err != nil {
 		if err.Error() == "admin has been placed in this business, please use the update feature to change working hours or role" {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"message": err.Error()})
+			return utils.SendResponse(c, fiber.StatusConflict, constants.DuplicateData, err.Error(), nil)
 		}
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": err.Error()})
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Business admin successfully placed in the business",
-		"data": assignmentDetails,
-	})
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Business admin successfully placed in the business", assignmentDetails)
 }
 
 func (h *AssignmentHandler) GetMyAdmins(c *fiber.Ctx) error {
-	ownerID := c.Locals("account_id").(int64)
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid", nil)
+	}
+
+	ownerID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
+	}
 
 	admins, err := h.service.GetMyAdmins(ownerID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"message": "Failed to retrieve business admin data"})
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to retrieve business admin data", nil)
 	}
-	
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Successfully retrieved admin data",
-		"data": admins,
-	})
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Successfully retrieved admin data", admins)
 }
 
 func (h *AssignmentHandler) UpdateAssignment(c *fiber.Ctx) error {
 	var input models.UpdateAssignmentInput
 	if err := c.BodyParser(&input); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Invalid request",
-		})
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request", fiber.Map{"error": err.Error()})
 	}
 
-	adminID, _ := c.ParamsInt("admin_id")
-	businessID, _ := c.ParamsInt("business_id")
-	ownerID, _ := c.Locals("account_id").(int64)
+	adminID := c.Params("admin_id")
+	businessID := c.Params("business_id")
 
-	updatedAssignment, err := h.service.UpdateAssignment(ownerID, int64(adminID), int64(businessID), input);
+	accountIDValue := c.Locals("account_id")
+	roleValue := c.Locals("role") 
+
+	if accountIDValue == nil || roleValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid", nil)
+	}
+
+	requesterID, ok1 := accountIDValue.(string)
+	requesterRole, ok2 := roleValue.(string)
+	if !ok1 || !ok2 {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses data sesi", nil)
+	}
+
+	updatedAssignment, err := h.service.UpdateAssignment(requesterID, requesterRole, adminID, businessID, input)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": err.Error(),
-		})
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
 	}
-	
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Admin placement data successfully updated",
-		"data": updatedAssignment,
-	})
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data berhasil diperbarui", updatedAssignment)
 }
 
 func (h *AssignmentHandler) DeleteBusinessAdmin(c *fiber.Ctx) error {
-	adminID, _ := c.ParamsInt("admin_id")
-	ownerID := c.Locals("account_id").(int64)
+	adminID := c.Params("admin_id")
 
-	if err := h.service.DeleteBusinessAdmin(ownerID, int64(adminID)); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"message": err.Error()})
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid", nil)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": "Admin berhasil dihapus dari sistem secara permanen"})
+	ownerID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
+	}
+
+	if err := h.service.DeleteBusinessAdmin(ownerID, adminID); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Admin berhasil dihapus dari sistem secara permanen", nil)
 }

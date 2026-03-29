@@ -1,5 +1,5 @@
 CREATE TABLE accounts (
-  account_id SERIAL PRIMARY KEY,
+  account_id VARCHAR(50) PRIMARY KEY,
   auth_provider VARCHAR(50) NOT NULL DEFAULT 'local',
   email VARCHAR(255) UNIQUE,
   phone_number VARCHAR(20) UNIQUE,

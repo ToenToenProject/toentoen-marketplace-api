@@ -1,6 +1,6 @@
 CREATE TABLE products (
     product_id BIGSERIAL PRIMARY KEY,
-    business_id BIGINT REFERENCES businesses(business_id) ON DELETE CASCADE,
+    business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     price DECIMAL(15,2) NOT NULL,

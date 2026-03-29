@@ -5,17 +5,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// Pastikan interface BusinessRepository di-update menjadi:
 type BusinessRepository interface {
-	CreateBusinessWithRelations(business *models.Business, categoryIDs []int64, tagIDs []int64, hours []models.BusinessHour) error
+	CreateBusinessWithRelations(business *models.Business, categoryIDs []int64, tagIDs []int64, hours []models.BusinessHour, websites []models.BusinessWebsite, images []models.BusinessImage) error
 	
-	// Tambahan baru:
-	FindBusinessesByOwnerID(ownerID int64) ([]models.Business, error)
-	FindBusinessByIDAndOwner(businessID, ownerID int64) (*models.Business, error)
-	CheckHandleExists(handle string, excludeBusinessID int64) bool
-	UpdateBusiness(business *models.Business, newHours *[]models.BusinessHour, newCategoryIDs *[]int64, newTagIDs *[]int64) error
+	FindBusinessesByOwnerID(ownerID string) ([]models.Business, error)
+	FindBusinessByIDAndOwner(businessID, ownerID string) (*models.Business, error)
+	CheckHandleExists(handle, excludeBusinessID string) bool
+	UpdateBusiness(business *models.Business, newHours *[]models.BusinessHour, newCategoryIDs *[]int64, newTagIDs *[]int64, newWebsites *[]models.BusinessWebsite, newImages *[]models.BusinessImage) error
 	DeleteBusiness(business *models.Business) error
-	FindBusinessByIDAndOwnerWithPreload(businessID, ownerID int64) (*models.Business, error)
+	FindBusinessByIDAndOwnerWithPreload(businessID, ownerID string) (*models.Business, error)
+	CheckBusinessNameExists(ownerID, name string) bool
 }
 
 type businessRepository struct {
@@ -26,24 +25,39 @@ func NewBusinessRepository(db *gorm.DB) BusinessRepository {
 	return &businessRepository{db}
 }
 
-func (r *businessRepository) CreateBusinessWithRelations(business *models.Business, categoryIDs []int64, tagIDs []int64, hours []models.BusinessHour) error {
+func (r *businessRepository) CreateBusinessWithRelations(business *models.Business, categoryIDs []int64, tagIDs []int64, hours []models.BusinessHour, websites []models.BusinessWebsite, images []models.BusinessImage) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Insert Data Utama (Tabel businesses)
 		if err := tx.Create(business).Error; err != nil {
 			return err
 		}
 
-		// 2. Insert Jam Operasional (Bulk Insert)
 		if len(hours) > 0 {
 			for i := range hours {
-				hours[i].BusinessID = business.BusinessID // Pasang ID bisnis yang baru jadi
+				hours[i].BusinessID = business.BusinessID 
 			}
 			if err := tx.Create(&hours).Error; err != nil {
 				return err
 			}
 		}
 
-		// 3. Insert Kategori Pivot (Tabel business_categories)
+		if len(websites) > 0 {
+			for i := range websites {
+				websites[i].BusinessID = business.BusinessID 
+			}
+			if err := tx.Create(&websites).Error; err != nil {
+				return err
+			}
+		}
+
+		if len(images) > 0 {
+			for i := range images {
+				images[i].BusinessID = business.BusinessID 
+			}
+			if err := tx.Create(&images).Error; err != nil {
+				return err
+			}
+		}
+
 		if len(categoryIDs) > 0 {
 			var businessCategories []models.BusinessCategory
 			for _, catID := range categoryIDs {
@@ -57,7 +71,6 @@ func (r *businessRepository) CreateBusinessWithRelations(business *models.Busine
 			}
 		}
 
-		// 4. Insert Tag Pivot (Tabel business_tags)
 		if len(tagIDs) > 0 {
 			var businessTags []models.BusinessTag
 			for _, tagID := range tagIDs {
@@ -71,52 +84,59 @@ func (r *businessRepository) CreateBusinessWithRelations(business *models.Busine
 			}
 		}
 
-		return nil // Commit transaksi jika semua lancar
+		return nil
 	})
 }
 
-// === IMPLEMENTASI FUNGSI BARU ===
-
-func (r *businessRepository) FindBusinessesByOwnerID(ownerID int64) ([]models.Business, error) {
+func (r *businessRepository) FindBusinessesByOwnerID(ownerID string) ([]models.Business, error) {
 	var businesses []models.Business
-	// Preload menarik data relasi (Jam, Kategori, Tag) agar JSON response lengkap
 	err := r.db.
 		Preload("Hours").
 		Preload("Categories").
 		Preload("Tags").
+		Preload("Websites").
+		Preload("Images").
 		Where("account_id = ?", ownerID).
 		Find(&businesses).Error
 	return businesses, err
 }
 
-func (r *businessRepository) FindBusinessByIDAndOwner(businessID, ownerID int64) (*models.Business, error) {
+func (r *businessRepository) FindBusinessByIDAndOwner(businessID, ownerID string) (*models.Business, error) {
 	var business models.Business
 	err := r.db.Where("business_id = ? AND account_id = ?", businessID, ownerID).First(&business).Error
 	return &business, err
 }
 
-func (r *businessRepository) CheckHandleExists(handle string, excludeBusinessID int64) bool {
-	var count int64
-	r.db.Model(&models.Business{}).Where("handle = ? AND business_id != ?", handle, excludeBusinessID).Count(&count)
-	return count > 0 // Return true jika handle sudah dipakai toko lain
+func (r *businessRepository) FindBusinessByIDAndOwnerWithPreload(businessID, ownerID string) (*models.Business, error) {
+	var business models.Business
+	err := r.db.
+		Preload("Hours").
+		Preload("Categories").
+		Preload("Tags").
+		Preload("Websites").
+		Preload("Images").
+		Where("business_id = ? AND account_id = ?", businessID, ownerID).
+		First(&business).Error
+
+	return &business, err
 }
 
-// Ubah implementasi UpdateBusiness di file repository Anda menjadi seperti ini:
+func (r *businessRepository) CheckHandleExists(handle ,excludeBusinessID string) bool {
+	var count int64
+	r.db.Model(&models.Business{}).Where("handle = ? AND business_id != ?", handle, excludeBusinessID).Count(&count)
+	return count > 0 
+}
 
-func (r *businessRepository) UpdateBusiness(business *models.Business, newHours *[]models.BusinessHour, newCategoryIDs *[]int64, newTagIDs *[]int64) error {
+func (r *businessRepository) UpdateBusiness(business *models.Business, newHours *[]models.BusinessHour, newCategoryIDs *[]int64, newTagIDs *[]int64, newWebsites *[]models.BusinessWebsite, newImages *[]models.BusinessImage) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Update tabel utama (businesses)
 		if err := tx.Save(business).Error; err != nil {
 			return err
 		}
 
-		// 2. Sync Jam Operasional (Jika dikirim dari Frontend)
 		if newHours != nil {
-			// Hapus semua jam lama
 			if err := tx.Where("business_id = ?", business.BusinessID).Delete(&models.BusinessHour{}).Error; err != nil {
 				return err
 			}
-			// Insert jam baru (jika array tidak kosong)
 			if len(*newHours) > 0 {
 				hours := *newHours
 				for i := range hours {
@@ -128,7 +148,36 @@ func (r *businessRepository) UpdateBusiness(business *models.Business, newHours 
 			}
 		}
 
-		// 3. Sync Kategori (Jika dikirim dari Frontend)
+		if newWebsites != nil {
+			if err := tx.Where("business_id = ?", business.BusinessID).Delete(&models.BusinessWebsite{}).Error; err != nil {
+				return err
+			}
+			if len(*newWebsites) > 0 {
+				websites := *newWebsites
+				for i := range websites {
+					websites[i].BusinessID = business.BusinessID
+				}
+				if err := tx.Create(&websites).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		if newImages != nil {
+			if err := tx.Where("business_id = ?", business.BusinessID).Delete(&models.BusinessImage{}).Error; err != nil {
+				return err
+			}
+			if len(*newImages) > 0 {
+				images := *newImages
+				for i := range images {
+					images[i].BusinessID = business.BusinessID
+				}
+				if err := tx.Create(&images).Error; err != nil {
+					return err
+				}
+			}
+		}
+
 		if newCategoryIDs != nil {
 			if err := tx.Where("business_id = ?", business.BusinessID).Delete(&models.BusinessCategory{}).Error; err != nil {
 				return err
@@ -147,7 +196,6 @@ func (r *businessRepository) UpdateBusiness(business *models.Business, newHours 
 			}
 		}
 
-		// 4. Sync Tags (Jika dikirim dari Frontend)
 		if newTagIDs != nil {
 			if err := tx.Where("business_id = ?", business.BusinessID).Delete(&models.BusinessTag{}).Error; err != nil {
 				return err
@@ -174,14 +222,8 @@ func (r *businessRepository) DeleteBusiness(business *models.Business) error {
 	return r.db.Delete(business).Error
 }
 
-func (r *businessRepository) FindBusinessByIDAndOwnerWithPreload(businessID, ownerID int64) (*models.Business, error) {
-	var business models.Business
-	err := r.db.
-		Preload("Hours").
-		Preload("Categories").
-		Preload("Tags").
-		Where("business_id = ? AND account_id = ?", businessID, ownerID).
-		First(&business).Error
-
-	return &business, err
+func (r *businessRepository) CheckBusinessNameExists(ownerID, name string) bool {
+	var count int64
+	r.db.Model(&models.Business{}).Where("account_id = ? AND name = ?", ownerID, name).Count(&count)
+	return count > 0 
 }

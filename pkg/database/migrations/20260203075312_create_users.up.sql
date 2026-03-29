@@ -1,5 +1,5 @@
 CREATE TABLE users (
-    account_id BIGINT PRIMARY KEY REFERENCES accounts(account_id) ON DELETE CASCADE,
+    account_id VARCHAR(50) PRIMARY KEY REFERENCES accounts(account_id) ON DELETE CASCADE,
     bio TEXT,
     profile_picture_url VARCHAR(255),
     birth_date DATE,
