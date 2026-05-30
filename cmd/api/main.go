@@ -49,8 +49,8 @@ func main() {
 
 	config.InitConfig()
 	database.ConnectDB()
-	config.ConnectRedis()
-	config.InitFirebase()
+	// config.ConnectRedis()
+	// config.InitFirebase()
 
 	// ==========================================
 	// 2. INIT REPO, SERVICE, & HANDLER
