@@ -1,18 +1,21 @@
 package repositories
 
 import (
-	"errors"
+	"time"
 	"toentoen-backend/internal/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type AuthRepository interface {
 	CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error
+	UpdateAccountStatus(email string, status string) error
 	FindByIdentifier(identifier string) (*models.Account, error)
 	FindByID(id string) (*models.Account, error) 
 	Update(account *models.Account) error
 	LoadAssociations(account *models.Account) error
+	SaveDeviceToken(accountID, fcmToken, deviceType string) error
 }
 
 type authRepository struct {
@@ -30,8 +33,8 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 		}
 
 		switch role {
-		case "user":
-			if err := tx.Create(&models.User{AccountID: account.AccountID}).Error; err != nil {
+		case "customer":
+			if err := tx.Create(&models.Customer{AccountID: account.AccountID}).Error; err != nil {
 				return err
 			}
 
@@ -41,27 +44,19 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 			}
 
 		case "business_admin":
-			var bossID string
-			if len(ownerID) > 0 {
-				bossID = ownerID[0]
-			} else {
-				return errors.New("pembuatan akun business_admin membutuhkan owner_id")
-			}
-
-			var existingOwner models.Owner
-			if err := tx.Where("account_id = ?", bossID).First(&existingOwner).Error; err != nil {
-				return errors.New("gagal membuat admin: data owner tidak valid atau tidak terdaftar")
-			}
-
-			if err := tx.Create(&models.BusinessAdmin{
-				AccountID: account.AccountID,
-				OwnerID:   bossID,
-			}).Error; err != nil {
+			if err := tx.Create(&models.BusinessAdmin{AccountID: account.AccountID}).Error; err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+func (r *authRepository) UpdateAccountStatus(email string, status string) error {
+	// Query: UPDATE accounts SET account_status = 'active' WHERE email = 'xxx'
+	return r.db.Model(&models.Account{}).
+		Where("email = ?", email).
+		Update("account_status", status).Error
 }
 
 func (r *authRepository) FindByIdentifier(identifier string) (*models.Account, error) {
@@ -82,8 +77,8 @@ func (r *authRepository) Update(account *models.Account) error {
 
 func (r *authRepository) LoadAssociations(account *models.Account) error {
 	switch account.Role {
-	case "user":
-		r.db.Model(account).Association("User").Find(&account.User)
+	case "customer":
+		r.db.Model(account).Association("Customer").Find(&account.Customer)
 	case "owner":
 		r.db.Model(account).Association("Owner").Find(&account.Owner)
 	case "business_admin":
@@ -92,4 +87,20 @@ func (r *authRepository) LoadAssociations(account *models.Account) error {
 		r.db.Model(account).Association("PlatformAdmin").Find(&account.PlatformAdmin)
 	}
 	return nil
+}
+
+func (r *authRepository) SaveDeviceToken(accountID, fcmToken, deviceType string) error {
+	// Asumsi Anda menaruh struct DeviceToken di folder models
+	token := models.DeviceToken{
+		AccountID:  accountID,
+		FCMToken:   fcmToken,
+		DeviceType: deviceType,
+		UpdatedAt:  time.Now(),
+	}
+
+	// r.db adalah instance GORM bawaan dari struct authRepository Anda
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "fcm_token"}},
+		DoUpdates: clause.AssignmentColumns([]string{"account_id", "updated_at"}),
+	}).Create(&token).Error
 }

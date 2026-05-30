@@ -17,7 +17,7 @@ CREATE TABLE analytics_search_keywords (
 
 CREATE TABLE notifications (
     notification_id BIGSERIAL PRIMARY KEY,
-    recipient_account_id VARCHAR(50) REFERENCES users(account_id),
+    recipient_account_id VARCHAR(50) REFERENCES customers(account_id),
     recipient_business_id VARCHAR(50) REFERENCES businesses(business_id),
     title VARCHAR(255),
     message TEXT,

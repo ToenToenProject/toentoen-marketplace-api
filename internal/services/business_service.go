@@ -9,10 +9,12 @@ import (
 )
 
 type BusinessService interface {
-	CreateBusiness(ownerID string, input models.CreateBusinessInput) (*models.Business, error)
-	GetMyBusinesses(ownerID string) ([]models.Business, error)
-	UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (*models.Business, error)
+	CreateBusiness(ownerID string, input models.CreateBusinessInput) (error)
+	GetMyBusinesses(ownerID, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error)
+	GetBusinessDetail(businessID string) (*models.Business, error)
+	UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (error)
 	DeleteBusiness(ownerID, businessID string) error
+	ToggleStoreStatus(ownerID, businessID string) (bool, error)
 }
 
 type businessService struct {
@@ -30,39 +32,33 @@ func toPointerOrNil(s string) *string {
 	return &s
 }
 
-func parseDatePtr(dateStr string) *time.Time {
-	if dateStr == "" {
-		return nil
-	}
-	t, err := time.Parse(time.DateOnly, dateStr)
-	if err != nil {
-		return nil
-	}
-	return &t
-}
+// parseDatePtr dihapus karena StartDate dan EndDate sudah tidak ada di model
 
-func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (*models.Business, error) {
+func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (error) {
 	business := models.Business{
 		BusinessID:       utils.GenerateUUID("BUS"),
 		AccountID:        ownerID,
-		BusinessName:     input.Name,
+		LogoURL:          toPointerOrNil(input.LogoURL),
+		BusinessName:     &input.BusinessName,
+		Email:            &input.Email, // Ditambahkan karena sekarang wajib (NOT NULL)
 		Status:           "draft",
 		SubscriptionTier: "free",
-		Description:      toPointerOrNil(input.Description),
+		BusinessDetails:  toPointerOrNil(input.BusinessDetails),
 		Province:         toPointerOrNil(input.Province),
 		City:             toPointerOrNil(input.City),
 		AddressDetail:    toPointerOrNil(input.AddressDetail),
-		Address:          toPointerOrNil(input.Address),
 		Latitude:         &input.Latitude,
 		Longitude:        &input.Longitude,
 		StoreType:        toPointerOrNil(input.StoreType),
-		StartDate:        parseDatePtr(input.StartDate),
-		EndDate:          parseDatePtr(input.EndDate),
 		PhoneContact:     toPointerOrNil(input.PhoneContact),
 		WhatsappContact:  toPointerOrNil(input.WhatsappContact),
 		SocialInstagram:  toPointerOrNil(input.SocialInstagram),
 		SocialTiktok:     toPointerOrNil(input.SocialTiktok),
-		LogoURL:          toPointerOrNil(input.LogoURL),
+		
+		// 🪄 MAGIC JSONB: Langsung masukkan array-nya, GORM akan mengurus sisanya
+		BusinessImages:           input.BusinessImages,
+		SocialWebsites:   input.SocialWebsites,
+		
 		IsActive:         true,
 	}
 
@@ -76,107 +72,171 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		hours = append(hours, hour)
 	}
 
-	var websites []models.BusinessWebsite
-	for _, w := range input.Websites {
-		if w != "" {
-			websites = append(websites, models.BusinessWebsite{URL: w})
-		}
+	// Looping Websites dan Images manual dihapus
+
+	// Panggil Repository dengan 4 Argumen saja
+	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.TagIDs, hours); err != nil {
+		return err
 	}
 
-	var images []models.BusinessImage
-	for _, img := range input.Images {
-		if img != "" {
-			images = append(images, models.BusinessImage{ImageURL: img})
-		}
-	}
+	return nil
+}
 
-	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.TagIDs, hours, websites, images); err != nil {
-		return nil, err
-	}
-
-	createdBusiness, err := s.repo.FindBusinessByIDAndOwnerWithPreload(business.BusinessID, ownerID)
+func (s *businessService) GetMyBusinesses(ownerID, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error) {
+	// Teruskan parameter pencarian dan filter ke repository
+	businessesWithPreview, err := s.repo.GetBusinessListWithPreviews(ownerID, search, categoryID, tagIDs, cursor, limit+1)
 	if err != nil {
-		return &business, nil
+		return nil, errors.New("failed to retrieve business list")
 	}
 
-	return createdBusiness, nil
+	var responseList []models.BusinessListItem
+	hasMore := false
+	nextCursor := ""
+
+	if len(businessesWithPreview) > limit {
+		hasMore = true
+		businessesWithPreview = businessesWithPreview[:limit]
+	}
+
+	for _, b := range businessesWithPreview {
+		var mainImage string
+		if b.LogoURL != nil && *b.LogoURL != "" {
+			mainImage = *b.LogoURL
+		} else if len(b.BusinessImages) > 0 {
+			mainImage = b.BusinessImages[0]
+		}
+
+		var fullAddress string
+		if b.AddressDetail != nil {
+			fullAddress += *b.AddressDetail
+		}
+		if b.City != nil {
+			if fullAddress != "" {
+				fullAddress += ", "
+			}
+			fullAddress += *b.City
+		}
+		if b.Province != nil {
+			if fullAddress != "" {
+				fullAddress += ", "
+			}
+			fullAddress += *b.Province
+		}
+
+		item := models.BusinessListItem{
+			BusinessID:    b.BusinessID,
+			BusinessName:  *b.BusinessName,
+			OwnerName:     b.OwnerName,
+			LogoURL:       mainImage,
+			Address:       fullAddress,
+			PreviewImages: b.PreviewImages,
+		}
+		
+		responseList = append(responseList, item)
+	}
+
+	if len(responseList) > 0 && hasMore {
+		nextCursor = responseList[len(responseList)-1].BusinessID
+	}
+
+	response := &models.GetBusinessListResponse{
+		Businesses: responseList,
+		Pagination: models.PaginationMeta{
+			NextCursor: nextCursor,
+			HasMore:    hasMore,
+		},
+	}
+
+	return response, nil
 }
 
-func (s *businessService) GetMyBusinesses(ownerID string) ([]models.Business, error) {
-	return s.repo.FindBusinessesByOwnerID(ownerID)
+func (s *businessService) GetBusinessDetail(businessID string) (*models.Business, error) {
+	business, err := s.repo.FindBusinessByID(businessID)
+	if err != nil {
+		return nil, errors.New("business not found")
+	}
+
+	// 🪄 MAGIC: Hitung is_open_now secara live sebelum dikembalikan ke Frontend
+	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
+
+	return business, nil
 }
 
-func (s *businessService) UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (*models.Business, error) {
+func (s *businessService) UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (error) {
 	business, err := s.repo.FindBusinessByIDAndOwner(businessID, ownerID)
 	if err != nil {
-		return nil, errors.New("bisnis tidak ditemukan atau Anda tidak memiliki akses")
+		return errors.New("business is not found or you don't have access")
 	}
 
-	if input.Name != nil {
-		business.BusinessName = *input.Name
+	// Update field sederhana
+	if input.BusinessName != "" {
+		business.BusinessName = &input.BusinessName
 	}
-	if input.Handle != nil {
-		if s.repo.CheckHandleExists(*input.Handle, business.BusinessID) {
-			return nil, errors.New("handle sudah digunakan, silakan pilih yang lain")
+	if input.Handle != "" {
+		if s.repo.CheckHandleExists(input.Handle, business.BusinessID) {
+			return errors.New("handle already exists, please choose another one")
 		}
-		business.Handle = input.Handle
+		business.Handle = &input.Handle
+	}
+	if input.Email != "" {
+		business.Email = &input.Email
 	}
 
-	if input.Description != nil {
-		business.Description = input.Description
+	if input.BusinessDetails != "" {
+		business.BusinessDetails = &input.BusinessDetails
 	}
-	if input.Province != nil {
-		business.Province = input.Province
+	if input.Province != "" {
+		business.Province = &input.Province
 	}
-	if input.City != nil {
-		business.City = input.City
+	if input.City != "" {
+		business.City = &input.City
 	}
-	if input.AddressDetail != nil {
-		business.AddressDetail = input.AddressDetail
+	if input.AddressDetail != "" {
+		business.AddressDetail = &input.AddressDetail
 	}
-	if input.Address != nil {
-		business.Address = input.Address
+	
+	// Address, StartDate, EndDate dihapus karena tidak ada di model
+	
+	if input.Latitude != 0 {
+		business.Latitude = &input.Latitude
 	}
-	if input.Latitude != nil {
-		business.Latitude = input.Latitude
-	}
-	if input.Longitude != nil {
-		business.Longitude = input.Longitude
-	}
-
-	if input.StoreType != nil {
-		business.StoreType = input.StoreType
-	}
-	if input.StartDate != nil {
-		business.StartDate = parseDatePtr(*input.StartDate)
-	}
-	if input.EndDate != nil {
-		business.EndDate = parseDatePtr(*input.EndDate)
+	if input.Longitude != 0 {
+		business.Longitude = &input.Longitude
 	}
 
-	if input.PhoneContact != nil {
-		business.PhoneContact = input.PhoneContact
-	}
-	if input.WhatsappContact != nil {
-		business.WhatsappContact = input.WhatsappContact
-	}
-	if input.EmailContact != nil {
-		business.EmailContact = input.EmailContact
-	}
-	if input.SocialInstagram != nil {
-		business.SocialInstagram = input.SocialInstagram
-	}
-	if input.SocialTiktok != nil {
-		business.SocialTiktok = input.SocialTiktok
-	}
-	if input.LogoUrl != nil {
-		business.LogoURL = input.LogoUrl
+	if input.StoreType != "" {
+		business.StoreType = &input.StoreType
 	}
 
+	if input.PhoneContact != "" {
+		business.PhoneContact = &input.PhoneContact
+	}
+	if input.WhatsappContact != "" {
+		business.WhatsappContact = &input.WhatsappContact
+	}
+	if input.SocialInstagram != "" {
+		business.SocialInstagram = &input.SocialInstagram
+	}
+	if input.SocialTiktok != "" {
+		business.SocialTiktok = &input.SocialTiktok
+	}
+	if input.LogoURL != "" {
+		business.LogoURL = &input.LogoURL
+	}
+
+	// 🪄 Update Field JSONB
+	if len(input.BusinessImages) > 0 {
+		business.BusinessImages = input.BusinessImages
+	}
+	if len(input.SocialWebsites) > 0 {
+		business.SocialWebsites = input.SocialWebsites
+	}
+
+	// Update Hours (tetap butuh pointer ke array untuk di-pass ke repo)
 	var hoursToUpdate *[]models.BusinessHour
-	if input.Hours != nil {
+	if len(input.Hours) > 0 {
 		var mappedHours []models.BusinessHour
-		for _, h := range *input.Hours {
+		for _, h := range input.Hours {
 			hour := models.BusinessHour{
 				DayOfWeek: h.DayOfWeek,
 				IsClosed:  h.IsClosed,
@@ -190,45 +250,70 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 		hoursToUpdate = &mappedHours
 	}
 
-	var websitesToUpdate *[]models.BusinessWebsite
-	if input.Websites != nil {
-		var mappedWebsites []models.BusinessWebsite
-		for _, w := range *input.Websites {
-			if w != "" {
-				mappedWebsites = append(mappedWebsites, models.BusinessWebsite{URL: w})
-			}
-		}
-		websitesToUpdate = &mappedWebsites
+	// Looping Update Websites dan Images manual dihapus
+
+	// Lempar ke repository dengan jumlah parameter yang baru (array JSONB tidak perlu dilempar terpisah)
+	// Kita cukup melempar CategoryIDs dan TagIDs karena masih butuh update ke tabel pivot (many-to-many)
+	var catIDs *[]int64
+	if len(input.CategoryIDs) > 0 {
+		catIDs = &input.CategoryIDs
+	}
+	var tagIDs *[]int64
+	if len(input.TagIDs) > 0 {
+		tagIDs = &input.TagIDs
 	}
 
-	var imagesToUpdate *[]models.BusinessImage
-	if input.Images != nil {
-		var mappedImages []models.BusinessImage
-		for _, img := range *input.Images {
-			if img != "" {
-				mappedImages = append(mappedImages, models.BusinessImage{ImageURL: img})
-			}
-		}
-		imagesToUpdate = &mappedImages
+	if err := s.repo.UpdateBusiness(business, hoursToUpdate, catIDs, tagIDs); err != nil {
+		return errors.New("failed to update business data in the database")
 	}
 
-	if err := s.repo.UpdateBusiness(business, hoursToUpdate, input.CategoryIDs, input.TagIDs, websitesToUpdate, imagesToUpdate); err != nil {
-		return nil, errors.New("gagal memperbarui data bisnis di database")
-	}
-
-	updatedBusiness, err := s.repo.FindBusinessByIDAndOwnerWithPreload(businessID, ownerID)
-	if err != nil {
-		return business, nil
-	}
-
-	return updatedBusiness, nil
+	return nil
 }
 
 func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 	business, err := s.repo.FindBusinessByIDAndOwner(businessID, ownerID)
 	if err != nil {
-		return errors.New("bisnis tidak ditemukan atau Anda tidak memiliki akses")
+		return errors.New("business is not found or you don't have access")
 	}
 
 	return s.repo.DeleteBusiness(business)
+}
+
+func (s *businessService) ToggleStoreStatus(ownerID, businessID string) (bool, error) {
+	business, err := s.repo.FindBusinessByIDAndOwner(businessID, ownerID)
+	if err != nil {
+		return false, errors.New("business is not found or you don't have access")
+	}
+
+	// Nilai baru yang akan di-apply (Flip)
+	newStatus := !business.IsManuallyClosed
+
+	// 🚨 LOGIKA VALIDASI: Jika owner mau MEMBUKA toko (newStatus == false)
+	if newStatus == false {
+		loc, _ := time.LoadLocation("Asia/Jakarta")
+		currentDay := int(time.Now().In(loc).Weekday())
+
+		hasValidSchedule := false
+
+		// Cek apakah di array "Hours" ada jadwal untuk hari ini dan tidak libur
+		for _, h := range business.Hours {
+			if h.DayOfWeek == currentDay && !h.IsClosed {
+				hasValidSchedule = true
+				break
+			}
+		}
+
+		// Jika hari ini tidak ada jadwalnya, atau diset libur (is_closed: true)
+		if !hasValidSchedule {
+			return true, errors.New("Toko tidak bisa dibuka. Jadwal hari ini kosong atau diset libur. Silakan perbarui jadwal buka toko Anda terlebih dahulu")
+		}
+	}
+
+	// Jika validasi aman, simpan status barunya
+	business.IsManuallyClosed = newStatus
+	if err := s.repo.ToggleStoreStatus(business); err != nil {
+		return false, errors.New("failed to update store status")
+	}
+
+	return business.IsManuallyClosed, nil
 }

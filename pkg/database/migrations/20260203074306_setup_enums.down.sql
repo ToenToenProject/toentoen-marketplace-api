@@ -7,6 +7,7 @@ DROP TYPE IF EXISTS enum_business_status CASCADE;
 DROP TYPE IF EXISTS enum_subscription CASCADE;
 DROP TYPE IF EXISTS enum_stock CASCADE;
 DROP TYPE IF EXISTS enum_signal_status CASCADE;
+DROP TYPE IF EXISTS enum_stock CASCADE;
 DROP TYPE IF EXISTS enum_bookmark_target CASCADE;
 DROP TYPE IF EXISTS enum_like_target CASCADE;
 DROP TYPE IF EXISTS enum_comment_target CASCADE;

@@ -9,8 +9,8 @@ import (
 )
 
 type ProfileService interface {
-	UpdateUserProfile(accountID int64, input models.UpdateProfileUserInput) (*models.Account, error)
-	UpdateOwnerProfile(accountID int64, input models.UpdateProfileOwnerInput) (*models.Account, error)
+	UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error)
+	UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error)
 }
 
 type profileService struct {
@@ -53,7 +53,7 @@ func isAccountDataComplete(account *models.Account) string {
 	}
 }
 
-func (s *profileService) UpdateUserProfile(accountID int64, input models.UpdateProfileUserInput) (*models.Account, error) {
+func (s *profileService) UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error) {
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -78,33 +78,36 @@ func (s *profileService) UpdateUserProfile(accountID int64, input models.UpdateP
 		account.Gender = input.Gender
 	}
 
-	user, err := s.repo.GetUserByAccountID(accountID)
+	customer, err := s.repo.GetCustomerByAccountID(accountID)
 	if err != nil {
 		return nil, errors.New("user specific profile data not found")
 	}
 
 	if input.Bio != nil {
-		user.Bio = input.Bio
+		customer.Bio = input.Bio
 	}
 	if input.ProfilePictureUrl != nil {
-		user.ProfilePictureUrl = input.ProfilePictureUrl
+		customer.ProfilePictureUrl = input.ProfilePictureUrl
 	}
 	if input.BirthDate != nil {
 		if *input.BirthDate == "" {
-			user.BirthDate = nil
+			customer.BirthDate = nil
 		} else {
-			user.BirthDate = input.BirthDate
+			customer.BirthDate = input.BirthDate
 		}
 	}
 
-	if err := s.repo.SaveUserProfile(account, user); err != nil {
+	account.Customer = customer
+	account.AccountStatus = isAccountDataComplete(account)
+
+	if err := s.repo.SaveCustomerProfile(account, customer); err != nil {
 		return nil, errors.New("failed to save user profile data")
 	}
 
 	return account, nil
 }
 
-func (s *profileService) UpdateOwnerProfile(accountID int64, input models.UpdateProfileOwnerInput) (*models.Account, error) {
+func (s *profileService) UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error) {
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -146,6 +149,14 @@ func (s *profileService) UpdateOwnerProfile(accountID int64, input models.Update
 			owner.KtpPhotoUrl = nil
 		} else {
 			owner.KtpPhotoUrl = input.KtpPhotoUrl
+		}
+	}
+
+	if input.ReferralCode != nil {
+		if *input.ReferralCode == "" {
+			owner.ReferralCode = nil
+		} else {
+			owner.ReferralCode = input.ReferralCode
 		}
 	}
 

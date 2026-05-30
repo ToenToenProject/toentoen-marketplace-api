@@ -1,37 +1,15 @@
--- Business Posts
+-- 1. TABEL POSTINGAN (Diperbaiki)
 CREATE TABLE business_posts (
-    business_post_id BIGSERIAL PRIMARY KEY,
+    post_id VARCHAR(50) PRIMARY KEY, -- Ubah ke VARCHAR agar seragam (Misal: PST-12345)
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     content TEXT,
-    media_urls JSONB,
+    
+    -- Agar validasi 5 Gambar & 1 Video lebih mudah, pisahkan saja kolomnya
+    images JSONB DEFAULT '[]'::jsonb, 
+    video_url TEXT, 
+    
     like_count INT DEFAULT 0,
-    comment_count INT DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Reviews
-CREATE TABLE reviews (
-    review_id BIGSERIAL PRIMARY KEY,
-    account_id VARCHAR(50) REFERENCES users(account_id),
-    business_id VARCHAR(50) REFERENCES businesses(business_id),
-    product_id BIGINT REFERENCES products(product_id),
-    rating INT NOT NULL,
-    content TEXT,
-    media_urls JSONB,
-    like_count INT DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Comments (Polymorphic)
-CREATE TABLE comments (
-    comment_id BIGSERIAL PRIMARY KEY,
-    account_id VARCHAR(50) REFERENCES users(account_id) ON DELETE CASCADE,
-    business_id VARCHAR(50) REFERENCES businesses(business_id), -- Optional context
-    target_type enum_comment_target NOT NULL,
-    target_id BIGINT NOT NULL,
-    content TEXT,
-    media_urls JSONB,
-    reply_to_comment_id BIGINT REFERENCES comments(comment_id),
-    like_count INT DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    comment_count INT DEFAULT 0,       
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );

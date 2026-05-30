@@ -1,72 +1,255 @@
 package handlers
 
 import (
-	"net/http"
+	"strings"
+	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/models"
-	"toentoen-backend/pkg/database"
+	"toentoen-backend/internal/services"
+	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 )
 
-func CreateProduct(c *fiber.Ctx) error {
-	userToken := c.Locals("user").(*jwt.Token)
-	claims := userToken.Claims.(jwt.MapClaims)
-	userID := int64(claims["id"].(float64))
-	role := claims["role"].(string)
+type ProductHandler struct {
+	service services.ProductService
+}
+
+func NewProductHandler(service services.ProductService) *ProductHandler {
+	return &ProductHandler{service}
+}
+
+// Helper function untuk mengambil data requester dari Context
+func getRequesterInfo(c *fiber.Ctx) (string, string, error) {
+	accountIDValue := c.Locals("account_id")
+	roleValue := c.Locals("role")
+
+	if accountIDValue == nil || roleValue == nil {
+		return "", "", fiber.ErrUnauthorized
+	}
+
+	requesterID, ok1 := accountIDValue.(string)
+	requesterRole, ok2 := roleValue.(string)
+	if !ok1 || !ok2 {
+		return "", "", fiber.ErrInternalServerError
+	}
+
+	return requesterID, requesterRole, nil
+}
+
+// 1. CREATE PRODUCT
+func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Invalid session or unauthorized access", nil)
+	}
 
 	var input models.CreateProductInput
 	if err := c.BodyParser(&input); err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid Input " + err.Error()})
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request format", nil)
 	}
 
-	if input.Name == "" || input.Price <= 0 || input.BusinessID == 0 {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Name, Price, and BusinessID are required fields and must be valid."})
+	if strings.TrimSpace(input.ProductName) == "" || input.Price < 0 {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Product name is required and price cannot be negative", nil)
 	}
 
-	if role == "owner" {
-		var business models.Business
-		if err := database.DB.Where("id = ? AND account_id = ?", input.BusinessID, userID).First(&business).Error; err != nil {
-			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "You do not have permission to add products to this business."})
-		}
+	errSvc := h.service.CreateProduct(requesterID, requesterRole, businessID, input)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
 	}
 
-	tx := database.DB.Begin()
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Product created successfully", nil)
+}
 
-	newProduct := models.Product{
-		BusinessID:  input.BusinessID,
-		Name:        input.Name,
-		Description: input.Description,
-		Price:       input.Price,
-		StockStatus: input.StockStatus,
+// ==========================================
+// HANDLERS UNTUK PRODUCT VARIANTS
+// ==========================================
+
+func (h *ProductHandler) AddVariant(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productID := strings.TrimSpace(c.Params("product_id"))
+
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
 	}
 
-	if newProduct.StockStatus == "" {
-		newProduct.StockStatus = "in_stock"
+	var input models.CreateVariantInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body", nil)
 	}
 
-	for i, imgUrl := range input.Images {
-		newProduct.Images = append(newProduct.Images, models.ProductImage{
-			ImageURL:  imgUrl,
-			SortOrder: i,
-		})
+	if strings.TrimSpace(input.VariantName) == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Variant name is required", nil)
 	}
 
-	if len(input.TagIDs) > 0 {
-		var tags []models.Tag
-		tx.Where("id IN ?", input.TagIDs).Find(&tags)
-		newProduct.Tags = tags
+	if err := h.service.AddVariant(requesterID, requesterRole, businessID, productID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	if err := tx.Create(&newProduct).Error; err != nil {
-		tx.Rollback()
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product."})
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Variant added successfully", nil)
+}
+
+func (h *ProductHandler) UpdateVariant(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productID := strings.TrimSpace(c.Params("product_id"))
+	variantID := strings.TrimSpace(c.Params("variant_id"))
+
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
 	}
 
-	tx.Commit()
-	return c.Status(http.StatusCreated).JSON(fiber.Map{
-		"status":  "success",
-		"message": "Produk berhasil ditambahkan",
-		"data":    newProduct,
-	})
+	var input models.UpdateVariantInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body", nil)
+	}
+
+	if err := h.service.UpdateVariant(requesterID, requesterRole, businessID, productID, variantID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Variant updated successfully", nil)
+}
+
+func (h *ProductHandler) DeleteVariant(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productID := strings.TrimSpace(c.Params("product_id"))
+	variantID := strings.TrimSpace(c.Params("variant_id"))
+
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+	}
+
+	if err := h.service.RemoveVariant(requesterID, requesterRole, businessID, productID, variantID); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Variant deleted successfully", nil)
+}
+
+// 2. UPDATE PRODUCT
+func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productID := strings.TrimSpace(c.Params("product_id"))
+
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Invalid session or unauthorized access", nil)
+	}
+
+	var input models.UpdateProductInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request format", nil)
+	}
+
+	errSvc := h.service.UpdateProduct(requesterID, requesterRole, businessID, productID, input)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Product updated successfully", nil)
+}
+
+// 3. DELETE PRODUCT
+func (h *ProductHandler) DeleteProduct(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productID := strings.TrimSpace(c.Params("product_id"))
+
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Invalid session or unauthorized access", nil)
+	}
+
+	if errSvc := h.service.DeleteProduct(requesterID, requesterRole, businessID, productID); errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Product deleted successfully", nil)
+}
+
+// 4. GET DETAIL PRODUCT (Single)
+func (h *ProductHandler) GetProductDetail(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productID := strings.TrimSpace(c.Params("product_id"))
+
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Invalid session or unauthorized access", nil)
+	}
+
+	product, errSvc := h.service.GetProductDetail(requesterID, requesterRole, businessID, productID)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Successfully retrieved product details", product)
+}
+
+// ==========================================
+// HANDLER UNTUK KATALOG (NESTED)
+// ==========================================
+
+func (h *ProductHandler) GetCatalog(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+	}
+
+	// Panggil Service khusus Katalog
+	catalog, errSvc := h.service.GetCatalog(requesterID, requesterRole, businessID)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Catalog retrieved successfully", catalog)
+}
+
+// 6. BULK UPDATE STATUS
+func (h *ProductHandler) BulkUpdateStatus(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+	}
+
+	// Struct inline untuk menangkap body JSON array
+	var input struct {
+		ProductIDs []string `json:"product_ids"`
+		IsActive   bool     `json:"is_active"`
+	}
+	if err := c.BodyParser(&input); err != nil || len(input.ProductIDs) == 0 {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request format or empty product_ids", nil)
+	}
+
+	if err := h.service.BulkUpdateStatus(requesterID, requesterRole, businessID, input.ProductIDs, input.IsActive); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Products status updated successfully", nil)
+}
+
+// 7. BULK DELETE
+func (h *ProductHandler) BulkDelete(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	requesterID, requesterRole, err := getRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+	}
+
+	var input struct {
+		ProductIDs []string `json:"product_ids"`
+	}
+	if err := c.BodyParser(&input); err != nil || len(input.ProductIDs) == 0 {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request format or empty product_ids", nil)
+	}
+
+	if err := h.service.BulkDelete(requesterID, requesterRole, businessID, input.ProductIDs); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Products deleted successfully", nil)
 }

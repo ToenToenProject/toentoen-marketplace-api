@@ -15,23 +15,23 @@ func RequireAuth(c *fiber.Ctx) error {
 	tokenString = c.Cookies("auth_token")
 
 	if tokenString == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Token not found. Silakan login kembali."})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User token is not found, please retry login!"})
 	}
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("metode enkripsi tidak valid")
+			return nil, fmt.Errorf("Encription methode is not valid")
 		}
 		return []byte(config.Envs.JWTSecret), nil
 	})
 
 	if err != nil || !token.Valid {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid atau telah kedaluwarsa"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Session is not valid or expired"})
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Gagal membaca data sesi"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Failed to read session data"})
 	}
 
 	c.Locals("account_id", claims["account_id"])

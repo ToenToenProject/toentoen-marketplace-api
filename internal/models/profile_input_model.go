@@ -1,6 +1,6 @@
 package models
 
-type UpdateProfileUserInput struct {
+type UpdateProfileCustomerInput struct {
 	Fullname    *string `json:"fullname"`
 	Username    *string `json:"username"`
 	Email       *string `json:"email"`
@@ -23,4 +23,5 @@ type UpdateProfileOwnerInput struct {
 
 	KtpNumber   *string `json:"ktp_number"`
 	KtpPhotoUrl *string `json:"ktp_photo_url"`
+	ReferralCode *string `json:"referral_code"`
 }

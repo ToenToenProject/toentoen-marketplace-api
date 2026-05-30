@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS product_comments CASCADE;
+DROP TABLE IF EXISTS product_likes CASCADE;

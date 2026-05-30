@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS user_preferred_categories CASCADE;
+DROP TABLE IF EXISTS customer_preferred_categories CASCADE;
 
 DROP TABLE IF EXISTS tags CASCADE;
 

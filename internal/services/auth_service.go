@@ -17,6 +17,7 @@ import (
 
 type AuthService interface {
 	Register(input models.RegisterUnifiedInput) error
+	VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error
 	Login(input models.LoginUnifiedInput) error
 	VerifyLoginOTP(input models.VerifyLoginOTPInput) (*models.Account, string, error)
 	ForgotPassword(input models.ForgotPasswordInput) error
@@ -24,6 +25,7 @@ type AuthService interface {
 	ResetPassword(input models.ResetPasswordInput) error
 	ChangePassword(input models.ChangePasswordInput) error
 	CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error)
+	SaveFCMToken(accountID string, input models.RegisterFCMTokenInput) error
 }
 
 type authService struct {
@@ -39,10 +41,6 @@ func isEmail(identifier string) bool {
 }
 
 func (s *authService) Register(input models.RegisterUnifiedInput) error {
-	if input.Role == "business_admin" || input.Role == "platform_admin" {
-		return errors.New("invalid role")
-	}
-
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -50,12 +48,13 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	pwd := string(passwordHash)
 
 	account := models.Account{
-		AccountID:    utils.GenerateUUID("ACC"),
-		PasswordHash: &pwd,
-		Role:         input.Role,
-		Username:     utils.GenerateRandomUsername(input.Identifier),
-		Fullname:     "New Account",
-		AuthProvider: "local",
+		AccountID:     utils.GenerateUUID("ACC"),
+		PasswordHash:  &pwd,
+		Role:          input.Role,
+		Username:      utils.GenerateRandomUsername(input.Identifier),
+		Fullname:      "New Account",
+		AuthProvider:  "local",
+		AccountStatus: "inactive",
 	}
 
 	if isEmail(input.Identifier) {
@@ -64,7 +63,48 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		account.PhoneNumber = &input.Identifier
 	}
 
-	return s.repo.CreateAccountWithProfile(&account, input.Role)
+	// 1. Simpan Akun ke Database
+	if err := s.repo.CreateAccountWithProfile(&account, input.Role); err != nil {
+		return err
+	}
+
+	// 2. Generate OTP Pendaftaran
+	otp := utils.GenerateNumericOTP(6)
+	redisKey := fmt.Sprintf("register_otp:%s", input.Identifier)
+
+	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
+		return errors.New("failed to generate otp")
+	}
+
+	// 3. Kirim OTP via Email atau WA
+	if isEmail(input.Identifier) && account.Email != nil {
+		go utils.SendEmailOTP(*account.Email, otp)
+	} else if account.PhoneNumber != nil {
+		go utils.SendWAOTP(*account.PhoneNumber, otp)
+	}
+
+	return nil
+}
+
+// 👇 FUNGSI BARU UNTUK VERIFIKASI SAAT PENDAFTARAN
+func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error {
+	redisKey := fmt.Sprintf("register_otp:%s", input.Identifier)
+	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+
+	if err == redis.Nil || storedOTP != input.OTP {
+		return errors.New("invalid or expired otp")
+	}
+
+	// Hapus OTP dari Redis setelah diverifikasi
+	config.RDB.Del(config.Ctx, redisKey)
+
+	// Ubah status akun menjadi Active
+	err = s.repo.UpdateAccountStatus(input.Identifier, "active")
+	if err != nil {
+		return errors.New("failed to activate account")
+	}
+
+	return nil
 }
 
 func (s *authService) Login(input models.LoginUnifiedInput) error {
@@ -74,6 +114,16 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 			return errors.New("account not found")
 		}
 		return err
+	}
+
+	// 👇 PROTEKSI BERDASARKAN STATUS AKUN 👇
+	switch account.AccountStatus {
+	case "inactive":
+		return errors.New("Akun anda belum aktif. Silakan cek email/WA Anda untuk OTP verifikasi.")
+	case "suspended":
+		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+	case "banned":
+		return errors.New("Akun anda telah diblokir dari platform")
 	}
 
 	if account.PasswordHash == nil {
@@ -237,17 +287,18 @@ func (s *authService) ChangePassword(input models.ChangePasswordInput) error {
 func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
 	pwd := string(passwordHash)
 
 	account := models.Account{
-		AccountID:    utils.GenerateUUID("ACC"), 
-		PasswordHash: &pwd,
-		Role:         "business_admin",
-		Username:     utils.GenerateRandomUsername(input.Identifier),
-		Fullname:     "Business Admin",
-		AuthProvider: "local",
+		AccountID:     utils.GenerateUUID("ACC"),
+		PasswordHash:  &pwd,
+		Role:          "business_admin",
+		Username:      utils.GenerateRandomUsername(input.Identifier),
+		Fullname:      "Business Admin",
+		AuthProvider:  "local",
+		AccountStatus: "active", // Asumsi Admin langsung diaktifkan oleh Owner
 	}
 
 	if isEmail(input.Identifier) {
@@ -259,8 +310,12 @@ func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBus
 	if err := s.repo.CreateAccountWithProfile(&account, "business_admin", ownerID); err != nil {
 		return nil, err
 	}
-	
-	account.PasswordHash = nil 
+
+	account.PasswordHash = nil
 
 	return &account, nil
+}
+
+func (s *authService) SaveFCMToken(accountID string, input models.RegisterFCMTokenInput) error {
+	return s.repo.SaveDeviceToken(accountID, input.Token, input.DeviceType)
 }

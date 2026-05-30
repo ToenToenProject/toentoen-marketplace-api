@@ -1,4 +1,4 @@
-CREATE TYPE enum_account_roles as ENUM ('user', 'owner', 'business_admin', 
+CREATE TYPE enum_account_roles as ENUM ('customer', 'owner', 'business_admin', 
 'platform_admin');
 CREATE TYPE enum_account_status as ENUM ('active', 'inactive', 'suspended', 'banned');
 CREATE TYPE enum_gender AS ENUM ('male', 'female', 'other');

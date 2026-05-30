@@ -31,8 +31,29 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	if err := h.service.Register(input); err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to register account", fiber.Map{"error": err.Error()})
 	}
+	
+	responseData := fiber.Map{
+		"nextStep":  "OTP sent to your email/WA, please verify to continue",
+		"identifier": input.Identifier,
+	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Account registered successfully, please login to continue", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Akun anda sudah dibuat, silakan verifikasi OTP", responseData)
+}
+
+func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
+	var input models.VerifyRegisterOTPInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body", nil)
+	}
+
+	// Panggil service untuk mencocokkan OTP
+	if err := h.service.VerifyRegisterOTP(input); err != nil {
+		// Mengembalikan error 400 jika OTP salah atau kedaluwarsa
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	// Jika sukses, kembalikan response 200 OK
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun berhasil diverifikasi. Silakan login.", nil)
 }
 
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
@@ -162,4 +183,34 @@ func (h *AuthHandler) CreateBusinessAdmin(c *fiber.Ctx) error {
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Business admin created successfully", createdAdmin)
+}
+
+func (h *AuthHandler) RegisterFCMToken(c *fiber.Ctx) error {
+	// 1. Ambil account_id dari middleware JWT
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID sesi pengguna", nil)
+	}
+
+	// 2. Parse body request
+	var input models.RegisterFCMTokenInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body", nil)
+	}
+
+	if input.Token == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "FCM Token is required", nil)
+	}
+
+	// 3. Lempar ke Service layer
+	if err := h.service.SaveFCMToken(accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to save device token", fiber.Map{"error": err.Error()})
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Device token registered successfully", nil)
 }

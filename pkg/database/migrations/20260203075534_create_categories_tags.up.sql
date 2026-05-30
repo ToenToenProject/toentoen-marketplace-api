@@ -19,9 +19,9 @@ CREATE TABLE tags (
     name VARCHAR(255) NOT NULL
 );
 
--- User Preferred Categories (Relation)
-CREATE TABLE user_preferred_categories (
-    account_id VARCHAR(50) REFERENCES users(account_id) ON DELETE CASCADE,
+-- Customer Preferred Categories (Relation)
+CREATE TABLE customer_preferred_categories (
+    account_id VARCHAR(50) REFERENCES customers(account_id) ON DELETE CASCADE,
     category_id INT REFERENCES categories(category_id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (account_id, category_id)
