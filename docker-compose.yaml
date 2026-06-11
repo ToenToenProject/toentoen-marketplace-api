@@ -38,5 +38,17 @@ services:
     depends_on:
       - postgres-db
 
+migrator:
+    image: migrate/migrate
+    container_name: toentoen_migrator
+    depends_on:
+      - postgres-db
+    volumes:
+      - ./pkg/database/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://${DB_USER}:${DB_PASSWORD}@postgres-db:${DB_PORT}/${DB_NAME}?sslmode=disable
+      - up
+
 volumes:
   pgdata:
