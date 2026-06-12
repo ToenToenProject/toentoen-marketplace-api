@@ -49,7 +49,7 @@ func main() {
 
 	config.InitConfig()
 	database.ConnectDB()
-	// config.ConnectRedis()
+	config.ConnectRedis()
 	// config.InitFirebase()
 
 	// ==========================================
