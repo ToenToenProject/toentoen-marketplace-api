@@ -14,6 +14,13 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  redis-cache:
+    image: redis:7-alpine
+    container_name: toentoen_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
   api-server:
     build: .
     container_name: toentoen_api
@@ -35,8 +42,11 @@ services:
       - SMTP_EMAIL=${SMTP_EMAIL}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - FONNTE_TOKEN=${FONNTE_TOKEN}
+      - REDIS_HOST=redis-cache
+      - REDIS_PORT=6379
     depends_on:
       - postgres-db
+      - redis-cache
 
   migrator:
       image: migrate/migrate
