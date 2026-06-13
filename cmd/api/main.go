@@ -128,7 +128,6 @@ func main() {
 	authGroup.Post("/verify-forgot-otp", authHandler.VerifyForgotOTP)
 	authGroup.Post("/reset-password", authHandler.ResetPassword)
 	authGroup.Post("/change-password", middlewares.RequireAuth, authHandler.ChangePassword)
-	authGroup.Post("/fcm-token", middlewares.RequireAuth, authHandler.RegisterFCMToken)
 
 	// ==========================================
 	// ROUTES: USER PROFILE

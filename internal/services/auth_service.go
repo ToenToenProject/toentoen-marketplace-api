@@ -19,13 +19,12 @@ type AuthService interface {
 	Register(input models.RegisterUnifiedInput) error
 	VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error
 	Login(input models.LoginUnifiedInput) error
-	VerifyLoginOTP(input models.VerifyLoginOTPInput) (*models.Account, string, error)
+	VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error)
 	ForgotPassword(input models.ForgotPasswordInput) error
 	VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error)
 	ResetPassword(input models.ResetPasswordInput) error
 	ChangePassword(input models.ChangePasswordInput) error
 	CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error)
-	SaveFCMToken(accountID string, input models.RegisterFCMTokenInput) error
 }
 
 type authService struct {
@@ -40,30 +39,33 @@ func isEmail(identifier string) bool {
 	return strings.Contains(identifier, "@")
 }
 
+func (s *authService) sendOTP(identifier string, email *string, phoneNumber *string, redisPrefix string) error {
+	otp := utils.GenerateNumericOTP(6)
+	redisKey := fmt.Sprintf("%s:%s", redisPrefix, identifier)
+
+	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
+		return errors.New("Gagal memproses kode verifikasi")
+	}
+
+	if isEmail(identifier) && email != nil {
+		go utils.SendEmailOTP(*email, otp)
+	} else if phoneNumber != nil {
+		go utils.SendWAOTP(*phoneNumber, otp)
+	}
+
+	return nil
+}
+
 func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	existingAccount, err := s.repo.FindByIdentifier(input.Identifier)
-	
+
 	if err == nil {
 		switch existingAccount.AccountStatus {
 		case "active":
 			return errors.New("Akun dengan email/nomor ini sudah terdaftar dan aktif. Silakan langsung login.")
-			
 		case "inactive":
-			otp := utils.GenerateNumericOTP(6)
-			redisKey := fmt.Sprintf("register_otp:%s", input.Identifier)
-
-			if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
-				return errors.New("failed to generate new otp")
-			}
-
-			if isEmail(input.Identifier) && existingAccount.Email != nil {
-				go utils.SendEmailOTP(*existingAccount.Email, otp)
-			} else if existingAccount.PhoneNumber != nil {
-				go utils.SendWAOTP(*existingAccount.PhoneNumber, otp)
-			}
-			
+			s.sendOTP(input.Identifier, existingAccount.Email, existingAccount.PhoneNumber, "register_otp")
 			return errors.New("Akun sudah terdaftar namun belum aktif. Kami telah mengirimkan ulang kode verifikasi yang baru, silakan cek email/WA Anda.")
-			
 		default:
 			return errors.New("Akun ini tidak dapat digunakan. Silakan hubungi layanan bantuan.")
 		}
@@ -97,20 +99,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		return errors.New("Gagal menyimpan data akun baru")
 	}
 
-	otp := utils.GenerateNumericOTP(6)
-	redisKey := fmt.Sprintf("register_otp:%s", input.Identifier)
-
-	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
-		return errors.New("Gagal membuat kode verifikasi")
-	}
-
-	if isEmail(input.Identifier) && account.Email != nil {
-		go utils.SendEmailOTP(*account.Email, otp)
-	} else if account.PhoneNumber != nil {
-		go utils.SendWAOTP(*account.PhoneNumber, otp)
-	}
-
-	return nil
+	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "register_otp")
 }
 
 func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error {
@@ -118,14 +107,13 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
 	if err == redis.Nil || storedOTP != input.OTP {
-		return errors.New("invalid or expired otp")
+		return errors.New("OTP tidak valid atau sudah kadaluarsa")
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)
 
-	err = s.repo.UpdateAccountStatus(input.Identifier, "active")
-	if err != nil {
-		return errors.New("failed to activate account")
+	if err := s.repo.UpdateAccountStatus(input.Identifier, "active"); err != nil {
+		return errors.New("Gagal mengaktifkan akun")
 	}
 
 	return nil
@@ -135,9 +123,9 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.New("account not found")
+			return errors.New("Email atau password salah")
 		}
-		return err
+		return errors.New("Terjadi kesalahan sistem")
 	}
 
 	switch account.AccountStatus {
@@ -150,83 +138,54 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	}
 
 	if account.PasswordHash == nil {
-		return errors.New("google account")
+		return errors.New("Silakan login menggunakan Google")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.Password)); err != nil {
-		return errors.New("invalid credentials")
+		return errors.New("Email atau password salah")
 	}
 
-	otp := utils.GenerateNumericOTP(6)
-	redisKey := fmt.Sprintf("login_otp:%s", input.Identifier)
-
-	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
-		return errors.New("failed to generate otp")
-	}
-
-	if isEmail(input.Identifier) && account.Email != nil {
-		go utils.SendEmailOTP(*account.Email, otp)
-	} else if account.PhoneNumber != nil {
-		go utils.SendWAOTP(*account.PhoneNumber, otp)
-	} else if account.Email != nil {
-		go utils.SendEmailOTP(*account.Email, otp)
-	}
-	return nil
+	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "login_otp")
 }
 
-func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (*models.Account, string, error) {
+func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error) {
 	redisKey := fmt.Sprintf("login_otp:%s", input.Identifier)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
 	if err == redis.Nil || storedOTP != input.OTP {
-		return nil, "", errors.New("invalid or expired otp")
+		return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)
 
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
-		return nil, "", err
+		return "", errors.New("Gagal memuat data akun")
 	}
 
 	now := time.Now()
 	account.LastLoginAt = &now
 	s.repo.Update(account)
-	s.repo.LoadAssociations(account)
 
 	token, err := utils.GenerateToken(account.AccountID, account.Role)
 	if err != nil {
-		return nil, "", err
+		return "", errors.New("Gagal membuat sesi pengguna")
 	}
 
-	return account, token, nil
+	return token, nil
 }
 
 func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
-		return errors.New("account not found")
+		return errors.New("Akun tidak ditemukan")
 	}
 
 	if account.PasswordHash == nil {
-		return errors.New("google account")
+		return errors.New("Silakan reset password melalui layanan Google")
 	}
 
-	otp := utils.GenerateNumericOTP(6)
-	redisKey := fmt.Sprintf("forgot_otp:%s", input.Identifier)
-
-	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
-		return err
-	}
-
-	if isEmail(input.Identifier) && account.Email != nil {
-		go utils.SendEmailOTP(*account.Email, otp)
-	} else if account.PhoneNumber != nil {
-		go utils.SendWAOTP(*account.PhoneNumber, otp)
-	} else if account.Email != nil {
-		go utils.SendEmailOTP(*account.Email, otp)
-	}
-	return nil
+	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "forgot_otp")
 }
 
 func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error) {
@@ -234,7 +193,7 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
 	if err == redis.Nil || storedOTP != input.OTP {
-		return "", errors.New("invalid or expired otp")
+		return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)
@@ -248,25 +207,24 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 
 func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	if input.NewPassword != input.ConfirmNewPassword {
-		return errors.New("password mismatch")
+		return errors.New("Kata sandi dan konfirmasi kata sandi tidak cocok")
 	}
 
 	tokenRedisKey := fmt.Sprintf("reset_token:%s", input.Identifier)
 	storedToken, err := config.RDB.Get(config.Ctx, tokenRedisKey).Result()
 
 	if err == redis.Nil || storedToken != input.ResetToken {
-		return errors.New("invalid or expired reset token")
+		return errors.New("Sesi reset password tidak valid atau sudah kadaluarsa")
 	}
 
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
-		return errors.New("account not found")
+		return errors.New("Akun tidak ditemukan")
 	}
 
 	if account.PasswordHash != nil {
-		err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.NewPassword))
-		if err == nil {
-			return errors.New("new password must be different from previous password")
+		if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.NewPassword)); err == nil {
+			return errors.New("Kata sandi baru tidak boleh sama dengan kata sandi lama")
 		}
 	}
 
@@ -275,7 +233,7 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	account.PasswordHash = &pwd
 
 	if err := s.repo.Update(account); err != nil {
-		return err
+		return errors.New("Gagal memperbarui kata sandi")
 	}
 
 	config.RDB.Del(config.Ctx, tokenRedisKey)
@@ -285,19 +243,19 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 func (s *authService) ChangePassword(input models.ChangePasswordInput) error {
 	account, err := s.repo.FindByIdentifier(input.Email)
 	if err != nil {
-		return errors.New("account not found")
+		return errors.New("Akun tidak ditemukan")
 	}
 
 	if input.CurrentPassword == input.NewPassword {
-		return errors.New("New password must be different from current password")
+		return errors.New("Kata sandi baru tidak boleh sama dengan kata sandi saat ini")
 	}
 
 	if account.PasswordHash == nil {
-		return errors.New("google account")
+		return errors.New("Silakan atur kata sandi melalui layanan Google")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.CurrentPassword)); err != nil {
-		return errors.New("wrong current password")
+		return errors.New("Kata sandi saat ini salah")
 	}
 
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
@@ -310,7 +268,7 @@ func (s *authService) ChangePassword(input models.ChangePasswordInput) error {
 func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Gagal memproses kata sandi")
 	}
 	pwd := string(passwordHash)
 
@@ -331,14 +289,9 @@ func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBus
 	}
 
 	if err := s.repo.CreateAccountWithProfile(&account, "business_admin", ownerID); err != nil {
-		return nil, err
+		return nil, errors.New("Gagal membuat akun Business Admin")
 	}
 
 	account.PasswordHash = nil
-
 	return &account, nil
-}
-
-func (s *authService) SaveFCMToken(accountID string, input models.RegisterFCMTokenInput) error {
-	return s.repo.SaveDeviceToken(accountID, input.Token, input.DeviceType)
 }
