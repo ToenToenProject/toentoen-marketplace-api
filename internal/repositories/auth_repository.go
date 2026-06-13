@@ -1,21 +1,18 @@
 package repositories
 
 import (
-	"time"
 	"toentoen-backend/internal/models"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type AuthRepository interface {
 	CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error
-	UpdateAccountStatus(email string, status string) error
+	UpdateAccountStatus(identifier string, status string) error
 	FindByIdentifier(identifier string) (*models.Account, error)
-	FindByID(id string) (*models.Account, error) 
+	FindByID(id string) (*models.Account, error)
 	Update(account *models.Account) error
 	LoadAssociations(account *models.Account) error
-	SaveDeviceToken(accountID, fcmToken, deviceType string) error
 }
 
 type authRepository struct {
@@ -52,16 +49,15 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 	})
 }
 
-func (r *authRepository) UpdateAccountStatus(email string, status string) error {
-	// Query: UPDATE accounts SET account_status = 'active' WHERE email = 'xxx'
+func (r *authRepository) UpdateAccountStatus(identifier string, status string) error {
 	return r.db.Model(&models.Account{}).
-		Where("email = ?", email).
+		Where("email = ? OR phone_number = ?", identifier, identifier).
 		Update("account_status", status).Error
 }
 
 func (r *authRepository) FindByIdentifier(identifier string) (*models.Account, error) {
 	var account models.Account
-	err := r.db.Where("email = ?", identifier).Or("phone_number = ?", identifier).First(&account).Error
+	err := r.db.Where("email = ? OR phone_number = ?", identifier, identifier).First(&account).Error
 	return &account, err
 }
 
@@ -87,20 +83,4 @@ func (r *authRepository) LoadAssociations(account *models.Account) error {
 		r.db.Model(account).Association("PlatformAdmin").Find(&account.PlatformAdmin)
 	}
 	return nil
-}
-
-func (r *authRepository) SaveDeviceToken(accountID, fcmToken, deviceType string) error {
-	// Asumsi Anda menaruh struct DeviceToken di folder models
-	token := models.DeviceToken{
-		AccountID:  accountID,
-		FCMToken:   fcmToken,
-		DeviceType: deviceType,
-		UpdatedAt:  time.Now(),
-	}
-
-	// r.db adalah instance GORM bawaan dari struct authRepository Anda
-	return r.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "fcm_token"}},
-		DoUpdates: clause.AssignmentColumns([]string{"account_id", "updated_at"}),
-	}).Create(&token).Error
 }
