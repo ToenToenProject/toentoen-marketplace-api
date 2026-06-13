@@ -23,7 +23,9 @@ type AuthService interface {
 	ForgotPassword(input models.ForgotPasswordInput) error
 	VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error)
 	ResetPassword(input models.ResetPasswordInput) error
-	ChangePassword(input models.ChangePasswordInput) error
+	ChangePassword(accountID string, input models.ChangePasswordInput) error
+	RequestEmailChange(accountID string, input models.RequestEmailChangeInput) error
+	VerifyEmailChange(accountID string, input models.VerifyEmailChangeInput) error
 	CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error)
 }
 
@@ -240,18 +242,22 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	return nil
 }
 
-func (s *authService) ChangePassword(input models.ChangePasswordInput) error {
-	account, err := s.repo.FindByIdentifier(input.Email)
-	if err != nil {
-		return errors.New("Akun tidak ditemukan")
+func (s *authService) ChangePassword(accountID string, input models.ChangePasswordInput) error {
+	if input.NewPassword != input.ConfirmNewPassword {
+		return errors.New("Kata sandi baru dan konfirmasi kata sandi tidak cocok")
 	}
 
-	if input.CurrentPassword == input.NewPassword {
-		return errors.New("Kata sandi baru tidak boleh sama dengan kata sandi saat ini")
+	account, err := s.repo.FindByID(accountID)
+	if err != nil {
+		return errors.New("Sesi pengguna tidak valid")
 	}
 
 	if account.PasswordHash == nil {
 		return errors.New("Silakan atur kata sandi melalui layanan Google")
+	}
+
+	if input.CurrentPassword == input.NewPassword {
+		return errors.New("Kata sandi baru tidak boleh sama dengan kata sandi saat ini")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.CurrentPassword)); err != nil {
@@ -263,6 +269,53 @@ func (s *authService) ChangePassword(input models.ChangePasswordInput) error {
 	account.PasswordHash = &pwd
 
 	return s.repo.Update(account)
+}
+
+func (s *authService) RequestEmailChange(accountID string, input models.RequestEmailChangeInput) error {
+	account, err := s.repo.FindByID(accountID)
+	if err != nil {
+		return errors.New("Sesi pengguna tidak valid")
+	}
+
+	if account.Email != nil && *account.Email != input.CurrentEmail {
+		return errors.New("Email saat ini tidak cocok dengan data kami")
+	}
+
+	if input.CurrentEmail == input.NewEmail {
+		return errors.New("Email baru tidak boleh sama dengan email saat ini")
+	}
+
+	_, err = s.repo.FindByIdentifier(input.NewEmail)
+	if err == nil {
+		return errors.New("Email baru sudah terdaftar pada akun lain")
+	}
+
+	otp := utils.GenerateNumericOTP(6)
+	redisKey := fmt.Sprintf("change_email_otp:%s", input.NewEmail)
+
+	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
+		return errors.New("Gagal memproses kode verifikasi")
+	}
+
+	go utils.SendEmailOTP(input.NewEmail, otp)
+
+	return nil
+}
+
+func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEmailChangeInput) error {
+	redisKey := fmt.Sprintf("change_email_otp:%s", input.NewEmail)
+	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+
+	if err == redis.Nil || storedOTP != input.OTP {
+		return errors.New("OTP tidak valid atau sudah kadaluarsa")
+	}
+
+	if err := s.repo.UpdateEmail(accountID, input.NewEmail); err != nil {
+		return errors.New("Gagal memperbarui email")
+	}
+
+	config.RDB.Del(config.Ctx, redisKey)
+	return nil
 }
 
 func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {

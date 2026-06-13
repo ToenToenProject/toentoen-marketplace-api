@@ -12,6 +12,7 @@ type AuthRepository interface {
 	FindByIdentifier(identifier string) (*models.Account, error)
 	FindByID(id string) (*models.Account, error)
 	Update(account *models.Account) error
+	UpdateEmail(accountID string, newEmail string) error
 	LoadAssociations(account *models.Account) error
 }
 
@@ -69,6 +70,12 @@ func (r *authRepository) FindByID(id string) (*models.Account, error) {
 
 func (r *authRepository) Update(account *models.Account) error {
 	return r.db.Save(account).Error
+}
+
+func (r *authRepository) UpdateEmail(accountID string, newEmail string) error {
+	return r.db.Model(&models.Account{}).
+		Where("account_id = ?", accountID).
+		Update("email", newEmail).Error
 }
 
 func (r *authRepository) LoadAssociations(account *models.Account) error {

@@ -44,10 +44,20 @@ type ResetPasswordInput struct {
 	ConfirmNewPassword string `json:"confirm_new_password" `
 }
 
+type RequestEmailChangeInput struct {
+	CurrentEmail string `json:"current_email"`
+	NewEmail     string `json:"new_email"`
+}
+
+type VerifyEmailChangeInput struct {
+	NewEmail string `json:"new_email"`
+	OTP      string `json:"otp"`
+}
+
 type ChangePasswordInput struct {
-	Email           string `json:"email"`
-	CurrentPassword string `json:"current_password"`
-	NewPassword     string `json:"new_password" binding:"min=8"`
+	CurrentPassword    string `json:"current_password"`
+	NewPassword        string `json:"new_password"`
+	ConfirmNewPassword string `json:"confirm_new_password"`
 }
 
 type CreateBusinessAdminInput struct {

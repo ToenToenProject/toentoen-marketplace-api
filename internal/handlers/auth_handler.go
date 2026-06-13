@@ -124,16 +124,72 @@ func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) ChangePassword(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID sesi pengguna", nil)
+	}
+
 	var input models.ChangePasswordInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
-	if err := h.service.ChangePassword(input); err != nil {
+	if err := h.service.ChangePassword(accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kata sandi Anda telah berhasil diperbarui", nil)
+}
+
+func (h *AuthHandler) RequestEmailChange(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID sesi pengguna", nil)
+	}
+
+	var input models.RequestEmailChangeInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if err := h.service.RequestEmailChange(accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP telah dikirim ke email baru Anda", nil)
+}
+
+func (h *AuthHandler) VerifyEmailChange(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID sesi pengguna", nil)
+	}
+
+	var input models.VerifyEmailChangeInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if err := h.service.VerifyEmailChange(accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Email Anda telah berhasil diperbarui", nil)
 }
 
 func (h *AuthHandler) CreateBusinessAdmin(c *fiber.Ctx) error {

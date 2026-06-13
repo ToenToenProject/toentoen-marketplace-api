@@ -127,7 +127,9 @@ func main() {
 	authGroup.Post("/forgot-password", authHandler.ForgotPassword)
 	authGroup.Post("/verify-forgot-otp", authHandler.VerifyForgotOTP)
 	authGroup.Post("/reset-password", authHandler.ResetPassword)
-	authGroup.Post("/change-password", middlewares.RequireAuth, authHandler.ChangePassword)
+	authGroup.Post("/password/change", middlewares.RequireAuth, authHandler.ChangePassword)
+	authGroup.Post("/email/change/request", middlewares.RequireAuth, authHandler.RequestEmailChange)
+	authGroup.Post("/email/change/verify", middlewares.RequireAuth, authHandler.VerifyEmailChange)
 
 	// ==========================================
 	// ROUTES: USER PROFILE
