@@ -4,7 +4,8 @@ import (
 	"log"
 	"strings"
 	"time"
-	"toentoen-backend/internal/models"
+
+	"toentoen-backend/internal/domain/shared/models"
 )
 
 // CalculateStoreStatus menghitung apakah toko buka SECARA REAL TIME

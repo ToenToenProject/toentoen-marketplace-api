@@ -1,16 +1,26 @@
 package main
 
 import (
+	"toentoen-backend/internal/domain/account"
+	"toentoen-backend/internal/domain/auth"
+	"toentoen-backend/internal/domain/merchant/business"
+	"toentoen-backend/internal/domain/merchant/admin"
+	"toentoen-backend/internal/domain/merchant/catalog"
+	"toentoen-backend/internal/domain/merchant/post"
+	"toentoen-backend/internal/domain/merchant/analytics"
+	"toentoen-backend/internal/domain/customer/demand"
+	"toentoen-backend/internal/domain/customer/review"
+	"toentoen-backend/internal/domain/customer/interaction"
+	"toentoen-backend/internal/domain/customer/explore"
+	"toentoen-backend/internal/domain/customer/business_profile"
 	"log"
 	"os"
 	"time"
 
 	"toentoen-backend/internal/config"
-	"toentoen-backend/internal/handlers"
-	"toentoen-backend/internal/middlewares"
-	"toentoen-backend/internal/repositories"
-	"toentoen-backend/internal/services"
+	"toentoen-backend/internal/domain/shared/middlewares"
 	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/meilisearch"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -19,7 +29,7 @@ import (
 )
 
 // Pekerja Belakang Layar (Cron)
-func startMidnightResetWorker(businessRepo repositories.BusinessRepository) {
+func startMidnightResetWorker(businessRepo business.BusinessRepository) {
 	go func() {
 		for {
 			loc, _ := time.LoadLocation("Asia/Jakarta")
@@ -50,60 +60,69 @@ func main() {
 	config.InitConfig()
 	database.ConnectDB()
 	config.ConnectRedis()
+	meilisearch.ConnectMeilisearch()
 	// config.InitFirebase()
 
 	// ==========================================
 	// 2. INIT REPO, SERVICE, & HANDLER
 	// ==========================================
-	authRepo := repositories.NewAuthRepository(database.DB)
-	authService := services.NewAuthService(authRepo)
-	authHandler := handlers.NewAuthHandler(authService)
+	authRepo := auth.NewAuthRepository(database.DB)
+	authService := auth.NewAuthService(authRepo)
+	authHandler := auth.NewAuthHandler(authService)
 
-	profileRepo := repositories.NewProfileRepository(database.DB)
-	profileService := services.NewProfileService(profileRepo)
-	profileHandler := handlers.NewProfileHandler(profileService)
+	profileRepo := account.NewProfileRepository(database.DB)
+	profileService := account.NewProfileService(profileRepo)
+	profileHandler := account.NewProfileHandler(profileService)
 
-	businessRepo := repositories.NewBusinessRepository(database.DB)
+	businessRepo := business.NewBusinessRepository(database.DB)
 	startMidnightResetWorker(businessRepo) // Jalankan cron job
-	businessService := services.NewBusinessService(businessRepo)
-	businessHandler := handlers.NewBusinessHandler(businessService)
+	businessService := business.NewBusinessService(businessRepo)
+	businessHandler := business.NewBusinessHandler(businessService)
 
 	// 🪄 INIT BUSINESS ADMIN (BARU)
-	businessAdminRepo := repositories.NewBusinessAdminRepository(database.DB)
-	businessAdminService := services.NewBusinessAdminService(businessAdminRepo, businessRepo)
-	businessAdminHandler := handlers.NewBusinessAdminHandler(businessAdminService)
+	businessAdminRepo := admin.NewBusinessAdminRepository(database.DB)
+	businessAdminService := admin.NewBusinessAdminService(businessAdminRepo, businessRepo)
+	businessAdminHandler := admin.NewBusinessAdminHandler(businessAdminService)
 
-	productRepo := repositories.NewProductRepository(database.DB)
-	productService := services.NewProductService(productRepo)
-	productHandler := handlers.NewProductHandler(productService)
+	productRepo := catalog.NewProductRepository(database.DB)
+	productService := catalog.NewProductService(productRepo)
+	productHandler := catalog.NewProductHandler(productService)
 
-	productGroupRepo := repositories.NewProductGroupRepository(database.DB)
-	productGroupService := services.NewProductGroupService(productGroupRepo)
-	productGroupHandler := handlers.NewProductGroupHandler(productGroupService)
+	productGroupRepo := catalog.NewProductGroupRepository(database.DB)
+	productGroupService := catalog.NewProductGroupService(productGroupRepo)
+	productGroupHandler := catalog.NewProductGroupHandler(productGroupService)
 
-	productInteractionRepo := repositories.NewProductInteractionRepository(database.DB)
-	productInteractionService := services.NewProductInteractionService(productInteractionRepo)
-	productInteractionHandler := handlers.NewProductInteractionHandler(productInteractionService)
+	productInteractionRepo := interaction.NewProductInteractionRepository(database.DB)
+	productInteractionService := interaction.NewProductInteractionService(productInteractionRepo)
+	productInteractionHandler := interaction.NewProductInteractionHandler(productInteractionService)
 
-	postInteractionRepo := repositories.NewPostInteractionRepository(database.DB)
-	postInteractionService := services.NewPostInteractionService(postInteractionRepo)
-	postInteractionHandler := handlers.NewPostInteractionHandler(postInteractionService)
+	postInteractionRepo := interaction.NewPostInteractionRepository(database.DB)
+	postInteractionService := interaction.NewPostInteractionService(postInteractionRepo)
+	postInteractionHandler := interaction.NewPostInteractionHandler(postInteractionService)
 
-	businessPostRepo := repositories.NewBusinessPostRepository(database.DB)
-	businessPostService := services.NewBusinessPostService(businessPostRepo, productRepo)
-	businessPostHandler := handlers.NewBusinessPostHandler(businessPostService)
+	businessPostRepo := post.NewBusinessPostRepository(database.DB)
+	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo)
+	businessPostHandler := post.NewBusinessPostHandler(businessPostService)
 
-	demandRepo := repositories.NewDemandRepository(database.DB)
-	demandService := services.NewDemandService(demandRepo, businessRepo)
-	demandHandler := handlers.NewDemandHandler(demandService)
+	demandRepo := demand.NewDemandRepository(database.DB)
+	demandService := demand.NewDemandService(demandRepo, businessRepo)
+	demandHandler := demand.NewDemandHandler(demandService)
 
-	analyticsRepo := repositories.NewAnalyticsRepository(database.DB)
-	analyticsService := services.NewAnalyticsService(analyticsRepo, productRepo)
-	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
+	analyticsRepo := analytics.NewAnalyticsRepository(database.DB)
+	analyticsService := analytics.NewAnalyticsService(analyticsRepo, productRepo)
+	analyticsHandler := analytics.NewAnalyticsHandler(analyticsService)
 
-	reviewRepo := repositories.NewReviewRepository(database.DB)
-	reviewService := services.NewReviewService(reviewRepo, businessRepo)
-	reviewHandler := handlers.NewReviewHandler(reviewService)
+	reviewRepo := review.NewReviewRepository(database.DB)
+	reviewService := review.NewReviewService(reviewRepo, businessRepo)
+	reviewHandler := review.NewReviewHandler(reviewService)
+
+	exploreRepo := explore.NewExploreRepository()
+	exploreService := explore.NewExploreService(exploreRepo)
+	exploreHandler := explore.NewExploreHandler(exploreService)
+
+	businessProfileRepo := business_profile.NewRepository()
+	businessProfileService := business_profile.NewService(businessProfileRepo)
+	businessProfileHandler := business_profile.NewHandler(businessProfileService)
 
 	// ==========================================
 	// 3. FIBER APP SETUP
@@ -117,7 +136,7 @@ func main() {
 	// ==========================================
 	// ROUTES: AUTHENTICATION
 	// ==========================================
-	api.Post("/logout", handlers.Logout)
+	api.Post("/logout", auth.Logout)
 
 	authGroup := api.Group("/auth")
 	authGroup.Post("/register", authHandler.Register)
@@ -130,6 +149,13 @@ func main() {
 	authGroup.Post("/password/change", middlewares.RequireAuth, authHandler.ChangePassword)
 	authGroup.Post("/email/change/request", middlewares.RequireAuth, authHandler.RequestEmailChange)
 	authGroup.Post("/email/change/verify", middlewares.RequireAuth, authHandler.VerifyEmailChange)
+
+	// ==========================================
+	// ROUTES: CUSTOMER BUSINESS PROFILE
+	// ==========================================
+	customerBusinessGroup := api.Group("/customer/businesses")
+	customerBusinessGroup.Get("/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	customerBusinessGroup.Post("/:business_id/bookmark", middlewares.RequireAuth, businessProfileHandler.ToggleBookmark)
 
 	// ==========================================
 	// ROUTES: USER PROFILE
@@ -232,6 +258,12 @@ func main() {
 	reviewGroup := api.Group("/reviews", middlewares.RequireAuth, middlewares.AllowRoles("customer", "owner"))
 	reviewGroup.Get("/:review_id", reviewHandler.GetReviewDetail)
 	reviewGroup.Get("/business/:business_id", reviewHandler.GetAllReviews)
+
+	// ==========================================
+	// ROUTES: CUSTOMER EXPLORE
+	// ==========================================
+	customerExploreGroup := api.Group("/customer/explore")
+	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
 
 	// ==========================================
 	// 4. START SERVER

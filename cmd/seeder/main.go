@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"toentoen-backend/internal/config"
-	"toentoen-backend/internal/models"
+	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
 
 	"github.com/joho/godotenv"

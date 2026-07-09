@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"toentoen-backend/internal/config"
+	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -33,6 +34,11 @@ func ConnectDB() {
 	// Handle connection error
 	if err != nil {
 		log.Fatal("Failed to connect to database. \n", err)
+	}
+	
+	err = DB.AutoMigrate(&models.BusinessBookmark{})
+	if err != nil {
+		log.Fatal("Failed to migrate database. \n", err)
 	}
 
 	log.Println("🚀 Connected to Database successfully")

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres-db:
-    image: postgres:15-alpine
+    image: postgis/postgis:15-3.3-alpine
     container_name: toentoen_postgres
     restart: always
     environment:
@@ -20,6 +20,17 @@ services:
     restart: always
     ports:
       - "6379:6379"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.7
+    container_name: toentoen_meilisearch
+    restart: always
+    ports:
+      - "7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    volumes:
+      - meili_data:/meili_data
 
   api-server:
     build: .
@@ -44,9 +55,12 @@ services:
       - FONNTE_TOKEN=${FONNTE_TOKEN}
       - REDIS_HOST=redis-cache
       - REDIS_PORT=6379
+      - MEILI_HOST=http://meilisearch:7700
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     depends_on:
       - postgres-db
       - redis-cache
+      - meilisearch
 
   migrator:
       image: migrate/migrate
@@ -62,3 +76,4 @@ services:
 
 volumes:
   pgdata:
+  meili_data:

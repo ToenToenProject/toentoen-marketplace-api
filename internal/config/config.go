@@ -28,6 +28,9 @@ type AppConfig struct {
 	SMTPEmail   string
 	SMTPPass    string
 	FonnteToken string
+
+	MeiliHost      string
+	MeiliMasterKey string
 }
 
 var Envs *AppConfig
@@ -57,15 +60,18 @@ func InitConfig() {
 		SMTPEmail:   getEnvMust("SMTP_EMAIL"),
 		SMTPPass:    getEnvMust("SMTP_PASSWORD"),
 		FonnteToken: getEnvMust("FONNTE_TOKEN"),
+
+		MeiliHost:      getEnv("MEILI_HOST", "http://localhost:7700"),
+		MeiliMasterKey: getEnvMust("MEILI_MASTER_KEY"),
 	}
 }
 
 func getEnv(key, fallback string) string {
 	value, ok := os.LookupEnv(key)
 	if !ok || value == "" {
-		return value
+		return fallback
 	}
-	return fallback
+	return value
 }
 
 func getEnvMust(key string) string {
