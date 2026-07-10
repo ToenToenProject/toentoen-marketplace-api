@@ -76,3 +76,28 @@ func (h *PostInteractionHandler) GetPostComments(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Comments retrieved successfully", comments)
 }
+
+// 4. HANDLER REPORT POST
+func (h *PostInteractionHandler) ReportPost(c *fiber.Ctx) error {
+	postID := strings.TrimSpace(c.Params("post_id"))
+
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
+	}
+
+	var input models.CreatePostReportInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body format", nil)
+	}
+
+	if strings.TrimSpace(input.Reason) == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Reason cannot be empty", nil)
+	}
+
+	if err := h.service.ReportPost(postID, accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post reported successfully", nil)
+}

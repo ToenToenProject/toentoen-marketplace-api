@@ -13,6 +13,7 @@ type PostInteractionRepository interface {
 	GetPostCommentByID(commentID string) (*models.BusinessPostComment, error)
 	GetCommentsByPostID(postID string) ([]models.BusinessPostComment, error)
 	GetBusinessIDByPostID(postID string) (string, error)
+	CreatePostReport(report *models.BusinessPostReport) error
 }
 
 type postInteractionRepository struct {
@@ -108,4 +109,8 @@ func (r *postInteractionRepository) GetBusinessIDByPostID(postID string) (string
 	}
 	
 	return post.BusinessID, nil
+}
+
+func (r *postInteractionRepository) CreatePostReport(report *models.BusinessPostReport) error {
+	return r.db.Create(report).Error
 }

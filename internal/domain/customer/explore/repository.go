@@ -3,19 +3,24 @@ package explore
 import (
 	"fmt"
 	"log"
-
+	"toentoen-backend/internal/domain/shared/models"
 	myMeili "toentoen-backend/pkg/meilisearch"
 	"github.com/meilisearch/meilisearch-go"
+	"gorm.io/gorm"
 )
 
 type ExploreRepository interface {
 	SearchBusinesses(req SearchRequest) ([]MeiliBusinessDocument, int64, error)
+	GetTimelinePosts(limit, offset int) ([]models.BusinessPost, error)
+	GetPostLikesByAccount(accountID string, postIDs []string) (map[string]bool, error)
 }
 
-type exploreRepository struct{}
+type exploreRepository struct{
+	db *gorm.DB
+}
 
-func NewExploreRepository() ExploreRepository {
-	return &exploreRepository{}
+func NewExploreRepository(db *gorm.DB) ExploreRepository {
+	return &exploreRepository{db: db}
 }
 
 type SearchRequest struct {
@@ -98,4 +103,23 @@ func formatFloat(f float64) string {
 
 func formatInt(i int) string {
 	return fmt.Sprintf("%d", i)
+}
+
+func (r *exploreRepository) GetTimelinePosts(limit, offset int) ([]models.BusinessPost, error) {
+	var posts []models.BusinessPost
+	err := r.db.Preload("Business").Order("created_at desc").Limit(limit).Offset(offset).Find(&posts).Error
+	return posts, err
+}
+
+func (r *exploreRepository) GetPostLikesByAccount(accountID string, postIDs []string) (map[string]bool, error) {
+	likedMap := make(map[string]bool)
+	if len(postIDs) == 0 {
+		return likedMap, nil
+	}
+	var likes []models.BusinessPostLike
+	err := r.db.Where("account_id = ? AND post_id IN ?", accountID, postIDs).Find(&likes).Error
+	for _, like := range likes {
+		likedMap[like.PostID] = true
+	}
+	return likedMap, err
 }

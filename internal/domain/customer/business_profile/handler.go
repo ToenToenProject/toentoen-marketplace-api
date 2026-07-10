@@ -69,3 +69,67 @@ func (h *Handler) ToggleBookmark(c *fiber.Ctx) error {
 		"is_bookmarked": isBookmarked,
 	})
 }
+
+// GetBookmarks Handler untuk menarik daftar toko yang disimpan pengguna
+func (h *Handler) GetBookmarks(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, "Unauthorized", "A1", nil)
+	}
+
+	bookmarks, err := h.service.GetBookmarks(accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, err.Error(), "E1", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, "Bookmarks fetched successfully", "00", bookmarks)
+}
+
+func (h *Handler) GetProductGroups(c *fiber.Ctx) error {
+	businessID := c.Params("business_id")
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "Business ID is required", "D1", nil)
+	}
+
+	groups, err := h.service.GetAllProductGroups(businessID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, err.Error(), "E1", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, "Product groups fetched successfully", "00", groups)
+}
+
+func (h *Handler) GetProducts(c *fiber.Ctx) error {
+	businessID := c.Params("business_id")
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "Business ID is required", "D1", nil)
+	}
+
+	groupID := c.Query("group_id")
+
+	products, err := h.service.GetAllProducts(businessID, groupID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, err.Error(), "E1", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, "Products fetched successfully", "00", products)
+}
+
+func (h *Handler) GetPosts(c *fiber.Ctx) error {
+	businessID := c.Params("business_id")
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "Business ID is required", "D1", nil)
+	}
+
+	var accountID string
+	if id, ok := c.Locals("account_id").(string); ok {
+		accountID = id
+	}
+
+	posts, err := h.service.GetAllPosts(businessID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, err.Error(), "E1", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, "Posts fetched successfully", "00", posts)
+}

@@ -24,18 +24,29 @@ type ProductComment struct {
 	RepliedToAccountID   *string        `gorm:"column:replied_to_account_id" json:"replied_to_account_id"`
 	RepliedToAccountName *string        `gorm:"column:replied_to_account_name" json:"replied_to_account_name"`
 
+	// 🪄 DITAMBAHKAN: Fitur Review
+	Rating               *float64       `gorm:"column:rating" json:"rating"`
+	MediaURLs            []string       `gorm:"column:media_urls;type:jsonb;serializer:json;default:'[]'" json:"media_urls"`
+
 	LikeCount            int            `gorm:"default:0;column:like_count" json:"like_count"`
 	CreatedAt            time.Time      `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
 	Account *Account         `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+	Product *Product         `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
 	Replies []ProductComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID" json:"replies,omitempty"`
 }
 
 type ProductLike struct {
 	AccountID string    `gorm:"primaryKey;column:account_id" json:"account_id"`
 	ProductID string    `gorm:"primaryKey;column:product_id" json:"product_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+type ProductCommentLike struct {
+	AccountID string    `gorm:"primaryKey;column:account_id" json:"account_id"`
+	CommentID string    `gorm:"primaryKey;column:comment_id" json:"comment_id"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
@@ -63,6 +74,7 @@ type BusinessPostComment struct {
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
 	Account *Account               `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+	Post    *BusinessPost          `gorm:"foreignKey:PostID;references:PostID" json:"post,omitempty"`
 	Replies []BusinessPostComment  `gorm:"foreignKey:ReplyToCommentID;references:CommentID" json:"replies,omitempty"`
 }
 
@@ -78,12 +90,15 @@ type BusinessPostLike struct {
 
 // Karena strukturnya mirip, DTO Input bisa dipakai bersamaan untuk Product dan Post
 type CreateCommentInput struct {
-	Content              string  `json:"content" validate:"required"`
-	ReplyToCommentID     *string `json:"reply_to_comment_id"`
+	Content              string   `json:"content" validate:"required"`
+	ReplyToCommentID     *string  `json:"reply_to_comment_id"`
 	
 	// 🪄 DITAMBAHKAN: Agar Frontend bisa mengirim data user yang di-mention
-	RepliedToAccountID   *string `json:"replied_to_account_id"`
-	RepliedToAccountName *string `json:"replied_to_account_name"`
+	RepliedToAccountID   *string  `json:"replied_to_account_id"`
+	RepliedToAccountName *string  `json:"replied_to_account_name"`
+
+	Rating               *float64 `json:"rating,omitempty" validate:"omitempty,min=1,max=5"`
+	MediaURLs            []string `json:"media_urls,omitempty"`
 }
 
 // DTO Output (Response yang dikirim ke Frontend)
@@ -91,13 +106,24 @@ type CommentResponse struct {
 	CommentID            string            `json:"comment_id"`
 	AccountID            string            `json:"account_id"`
 	AccountName          string            `json:"account_name"`
+	AccountAvatar        *string           `json:"account_avatar,omitempty"`
 	Content              string            `json:"content"`
 	LikeCount            int               `json:"like_count"`
+	IsLikedByMe          bool              `json:"is_liked_by_me"`
+	Rating               *float64          `json:"rating,omitempty"`
+	MediaURLs            []string          `json:"media_urls,omitempty"`
 	CreatedAt            time.Time         `json:"created_at"`
 	
 	// 🪄 DITAMBAHKAN omitempty: Agar JSON rapi (tidak muncul "null") jika ini komentar utama
 	RepliedToAccountID   *string           `json:"replied_to_account_id,omitempty"`
 	RepliedToAccountName *string           `json:"replied_to_account_name,omitempty"`
 	
+	// 🪄 DITAMBAHKAN: Data Produk jika ini adalah Product Review (untuk halaman All Reviews)
+	ProductID            *string           `json:"product_id,omitempty"`
+	ProductName          *string           `json:"product_name,omitempty"`
+	ProductImage         *string           `json:"product_image,omitempty"`
+	ProductPrice         *float64          `json:"product_price,omitempty"`
+	ProductOriginalPrice *float64          `json:"product_original_price,omitempty"`
+
 	Replies              []CommentResponse `json:"replies,omitempty"`
 }

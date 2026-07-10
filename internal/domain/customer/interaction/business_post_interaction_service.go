@@ -10,6 +10,7 @@ type PostInteractionService interface {
 	TogglePostLike(postID, accountID string) (bool, error)
 	AddPostComment(postID, accountID string, input models.CreateCommentInput) error
 	GetPostComments(postID string) ([]models.CommentResponse, error)
+	ReportPost(postID, accountID string, input models.CreatePostReportInput) error
 }
 
 type postInteractionService struct {
@@ -137,4 +138,27 @@ func (s *postInteractionService) GetPostComments(postID string) ([]models.Commen
 	}
 
 	return finalComments, nil
+}
+
+func (s *postInteractionService) ReportPost(postID, accountID string, input models.CreatePostReportInput) error {
+	_, err := s.repo.GetBusinessIDByPostID(postID)
+	if err != nil {
+		return errors.New("postingan tidak ditemukan")
+	}
+
+	report := models.BusinessPostReport{
+		PostID:      postID,
+		AccountID:   accountID,
+		Reason:      input.Reason,
+		Description: input.Description,
+		Status:      "pending",
+	}
+
+	for _, ev := range input.Evidence {
+		report.Evidence = append(report.Evidence, models.BusinessPostReportEvidence{
+			FileURL: ev,
+		})
+	}
+
+	return s.repo.CreatePostReport(&report)
 }

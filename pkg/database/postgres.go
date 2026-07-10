@@ -36,7 +36,26 @@ func ConnectDB() {
 		log.Fatal("Failed to connect to database. \n", err)
 	}
 	
-	err = DB.AutoMigrate(&models.BusinessBookmark{})
+	err = DB.AutoMigrate(
+		&models.BusinessBookmark{},
+		&models.BusinessReport{},
+		&models.BusinessReportEvidence{},
+		&models.BusinessPostReport{},
+		&models.BusinessPostReportEvidence{},
+		&models.Review{},
+		&models.ProductComment{},
+		&models.ProductLike{},
+		&models.ProductCommentLike{},
+		&models.ProductCommentReport{},
+		&models.BusinessPostComment{},
+		&models.BusinessPostLike{},
+		&models.BusinessReviewLike{},
+		&models.BusinessReviewComment{},
+		&models.BusinessReviewCommentLike{},
+		&models.BusinessReviewReport{},
+		&models.BusinessReviewCommentReport{},
+		&models.ProductWishlist{},
+	)
 	if err != nil {
 		log.Fatal("Failed to migrate database. \n", err)
 	}

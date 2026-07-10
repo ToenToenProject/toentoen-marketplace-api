@@ -50,3 +50,22 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, 200, "00", "Success", res)
 }
+
+func (h *ExploreHandler) GetTimeline(c *fiber.Ctx) error {
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	
+	// Optional auth
+	var accountID string
+	authAccountID, _, errAuth := utils.GetRequesterInfo(c)
+	if errAuth == nil {
+		accountID = authAccountID
+	}
+
+	posts, err := h.service.GetTimelinePosts(page, limit, accountID)
+	if err != nil {
+		return utils.SendResponse(c, 500, "99", "Failed to get timeline posts", nil)
+	}
+
+	return utils.SendResponse(c, 200, "00", "Success", posts)
+}

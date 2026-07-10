@@ -23,3 +23,18 @@ type CreatePostInput struct {
 	Images   []string `json:"images"`
 	VideoURL string   `json:"video_url"`
 }
+
+type PostResponse struct {
+	PostID       string    `json:"post_id"`
+	BusinessID   string    `json:"business_id"`
+	Content      string    `json:"content"`
+	Images       []string  `json:"images"`
+	VideoURL     *string   `json:"video_url,omitempty"`
+	LikeCount    int       `json:"like_count"`
+	CommentCount int       `json:"comment_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+
+	IsLikedByMe  bool      `json:"is_liked_by_me"`
+	Business     *Business `json:"business,omitempty"`
+}

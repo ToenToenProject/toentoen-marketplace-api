@@ -1,21 +1,26 @@
 package main
 
 import (
-	"toentoen-backend/internal/domain/account"
-	"toentoen-backend/internal/domain/auth"
-	"toentoen-backend/internal/domain/merchant/business"
-	"toentoen-backend/internal/domain/merchant/admin"
-	"toentoen-backend/internal/domain/merchant/catalog"
-	"toentoen-backend/internal/domain/merchant/post"
-	"toentoen-backend/internal/domain/merchant/analytics"
-	"toentoen-backend/internal/domain/customer/demand"
-	"toentoen-backend/internal/domain/customer/review"
-	"toentoen-backend/internal/domain/customer/interaction"
-	"toentoen-backend/internal/domain/customer/explore"
-	"toentoen-backend/internal/domain/customer/business_profile"
 	"log"
 	"os"
 	"time"
+	"toentoen-backend/internal/domain/account"
+	"toentoen-backend/internal/domain/auth"
+	"toentoen-backend/internal/domain/customer/business_profile"
+	"toentoen-backend/internal/domain/customer/demand"
+	"toentoen-backend/internal/domain/customer/explore"
+	"toentoen-backend/internal/domain/customer/interaction"
+	"toentoen-backend/internal/domain/customer/my_activity"
+
+	"toentoen-backend/internal/domain/customer/product"
+	"toentoen-backend/internal/domain/customer/profile"
+	"toentoen-backend/internal/domain/customer/report"
+	"toentoen-backend/internal/domain/customer/review"
+	"toentoen-backend/internal/domain/merchant/admin"
+	"toentoen-backend/internal/domain/merchant/analytics"
+	"toentoen-backend/internal/domain/merchant/business"
+	"toentoen-backend/internal/domain/merchant/catalog"
+	"toentoen-backend/internal/domain/merchant/post"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -114,15 +119,31 @@ func main() {
 
 	reviewRepo := review.NewReviewRepository(database.DB)
 	reviewService := review.NewReviewService(reviewRepo, businessRepo)
-	reviewHandler := review.NewReviewHandler(reviewService)
+	reviewHandler := review.NewReviewHandler(reviewService, productInteractionService)
 
-	exploreRepo := explore.NewExploreRepository()
+	exploreRepo := explore.NewExploreRepository(database.DB)
 	exploreService := explore.NewExploreService(exploreRepo)
 	exploreHandler := explore.NewExploreHandler(exploreService)
 
 	businessProfileRepo := business_profile.NewRepository()
 	businessProfileService := business_profile.NewService(businessProfileRepo)
 	businessProfileHandler := business_profile.NewHandler(businessProfileService)
+
+	reportRepo := report.NewRepository()
+	reportService := report.NewService(reportRepo)
+	reportHandler := report.NewHandler(reportService)
+
+	productDetailRepo := product.NewProductDetailRepository(database.DB)
+	productDetailService := product.NewProductDetailService(productDetailRepo)
+	productDetailHandler := product.NewProductDetailHandler(productDetailService)
+
+	publicProfileRepo := profile.NewPublicProfileRepository(database.DB)
+	publicProfileService := profile.NewPublicProfileService(publicProfileRepo)
+	publicProfileHandler := profile.NewPublicProfileHandler(publicProfileService)
+
+	myActivityRepo := my_activity.NewMyActivityRepository(database.DB)
+	myActivityService := my_activity.NewMyActivityService(myActivityRepo)
+	myActivityHandler := my_activity.NewMyActivityHandler(myActivityService)
 
 	// ==========================================
 	// 3. FIBER APP SETUP
@@ -154,8 +175,15 @@ func main() {
 	// ROUTES: CUSTOMER BUSINESS PROFILE
 	// ==========================================
 	customerBusinessGroup := api.Group("/customer/businesses")
+	customerBusinessGroup.Get("/bookmarks", middlewares.RequireAuth, businessProfileHandler.GetBookmarks)
 	customerBusinessGroup.Get("/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerBusinessGroup.Post("/:business_id/bookmark", middlewares.RequireAuth, businessProfileHandler.ToggleBookmark)
+	customerBusinessGroup.Post("/:business_id/report", middlewares.RequireAuth, reportHandler.SubmitReport)
+
+	// Products
+	customerBusinessGroup.Get("/:business_id/product-groups", businessProfileHandler.GetProductGroups)
+	customerBusinessGroup.Get("/:business_id/products", businessProfileHandler.GetProducts)
+	customerBusinessGroup.Get("/:business_id/posts", middlewares.OptionalAuth, businessProfileHandler.GetPosts)
 
 	// ==========================================
 	// ROUTES: USER PROFILE
@@ -163,6 +191,16 @@ func main() {
 	protected := api.Group("/account", middlewares.RequireAuth)
 	protected.Put("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Put("/profile/owner", middlewares.AllowRoles("owner"), profileHandler.UpdateProfileOwner)
+
+	// My Activity
+	myActivityGroup := protected.Group("/my-activity")
+	myActivityGroup.Get("/summary", myActivityHandler.GetMyProfileSummary)
+	myActivityGroup.Get("/comments", myActivityHandler.GetMyComments)
+	myActivityGroup.Get("/reviews", myActivityHandler.GetMyBusinessReviews)
+	myActivityGroup.Get("/bookmarks", myActivityHandler.GetMyBookmarks)
+	myActivityGroup.Get("/wishlist", myActivityHandler.GetMyWishlists)
+
+	api.Post("/customer/wishlist/:product_id", middlewares.RequireAuth, myActivityHandler.ToggleWishlist)
 
 	// ==========================================
 	// ROUTES: CUSTOMER ACTIONS & INTERACTIONS
@@ -176,14 +214,18 @@ func main() {
 	demandGroup.Put("/signals/:signal_id/responses/:response_id/accept", demandHandler.AcceptOffer)
 
 	publicProductRoutes := api.Group("/products")
+	publicProductRoutes.Get("/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
 	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleLike)
-	publicProductRoutes.Post("/:product_id/comments", middlewares.RequireAuth, productInteractionHandler.AddProductComment)
-	publicProductRoutes.Get("/:product_id/comments", middlewares.RequireAuth, productInteractionHandler.GetProductComments)
+	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductComment)
+	publicProductRoutes.Get("/:product_id/reviews", middlewares.OptionalAuth, productInteractionHandler.GetProductComments)
+	publicProductRoutes.Post("/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleCommentLike)
+	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, productInteractionHandler.ReportComment)
 
 	publicPostRoutes := api.Group("/posts")
 	publicPostRoutes.Post("/:post_id/like", middlewares.RequireAuth, postInteractionHandler.ToggleLike)
 	publicPostRoutes.Post("/:post_id/comments", middlewares.RequireAuth, postInteractionHandler.AddPostComment)
 	publicPostRoutes.Get("/:post_id/comments", middlewares.RequireAuth, postInteractionHandler.GetPostComments)
+	publicPostRoutes.Post("/:post_id/report", middlewares.RequireAuth, postInteractionHandler.ReportPost)
 
 	// ==========================================
 	// ROUTES: BUSINESS OWNER / ADMIN ACTIONS
@@ -259,11 +301,27 @@ func main() {
 	reviewGroup.Get("/:review_id", reviewHandler.GetReviewDetail)
 	reviewGroup.Get("/business/:business_id", reviewHandler.GetAllReviews)
 
+	// Review Interactions
+	reviewGroup.Post("/:review_id/like", reviewHandler.ToggleReviewLike)
+	reviewGroup.Post("/:review_id/comments", reviewHandler.AddReviewComment)
+	reviewGroup.Get("/:review_id/comments", reviewHandler.GetReviewComments)
+	reviewGroup.Post("/:review_id/report", reviewHandler.ReportReview)
+
+	// Review Comment Interactions
+	reviewGroup.Post("/comments/:comment_id/like", reviewHandler.ToggleReviewCommentLike)
+	reviewGroup.Post("/comments/:comment_id/report", reviewHandler.ReportReviewComment)
+
 	// ==========================================
 	// ROUTES: CUSTOMER EXPLORE
 	// ==========================================
 	customerExploreGroup := api.Group("/customer/explore")
 	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
+	customerExploreGroup.Get("/timeline", middlewares.OptionalAuth, exploreHandler.GetTimeline)
+
+	// ==========================================
+	// ROUTES: CUSTOMER PROFILE
+	// ==========================================
+	api.Get("/customer/profile/:account_id/summary", middlewares.RequireAuth, publicProfileHandler.GetPublicProfileSummary)
 
 	// ==========================================
 	// 4. START SERVER

@@ -69,10 +69,55 @@ func (h *ProductInteractionHandler) GetProductComments(c *fiber.Ctx) error {
 	// Ambil product_id dari parameter URL (Flat Routing)
 	productID := strings.TrimSpace(c.Params("product_id"))
 
-	comments, err := h.service.GetProductComments(productID)
+	accountID, _ := c.Locals("account_id").(string)
+
+	comments, err := h.service.GetProductComments(productID, accountID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Comments retrieved successfully", comments)
+}
+
+func (h *ProductInteractionHandler) ToggleCommentLike(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
+	}
+
+	isLiked, err := h.service.ToggleCommentLike(commentID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	message := "Comment unliked successfully"
+	if isLiked {
+		message = "Comment liked successfully"
+	}
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
+}
+
+func (h *ProductInteractionHandler) ReportComment(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
+	}
+
+	var req struct {
+		Reason string `json:"reason" validate:"required"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body format", nil)
+	}
+	if strings.TrimSpace(req.Reason) == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Reason cannot be empty", nil)
+	}
+
+	if err := h.service.ReportComment(commentID, accountID, req.Reason); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to report comment", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Comment reported successfully", nil)
 }
