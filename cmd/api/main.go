@@ -246,6 +246,7 @@ func main() {
 	businessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
 	businessGroup.Post("/", businessHandler.CreateBusiness)
 	businessGroup.Get("/", businessHandler.GetMyBusinesses)
+	businessGroup.Get("/:business_id", businessHandler.GetBusinessDetail)
 	businessGroup.Put("/:id", businessHandler.UpdateBusiness)
 	businessGroup.Delete("/:id", businessHandler.DeleteBusiness)
 	businessGroup.Patch("/:business_id/toggle-status", businessHandler.ToggleStoreStatus)
