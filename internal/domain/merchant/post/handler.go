@@ -30,12 +30,12 @@ func (h *BusinessPostHandler) CreatePost(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request format", nil)
 	}
 
-	post, errSvc := h.service.CreatePost(requesterID, role, businessID, input)
+	_, errSvc := h.service.CreatePost(requesterID, role, businessID, input)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post created successfully", post)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post created successfully", nil)
 }
 
 func (h *BusinessPostHandler) GetPosts(c *fiber.Ctx) error {

@@ -232,8 +232,8 @@ func (r *businessRepository) FindBusinessByID(businessID string) (*models.Busine
 }
 
 func (r *businessRepository) ToggleStoreStatus(business *models.Business) error {
-	// Update kolom is_manually_closed di database
-	return r.db.Model(business).UpdateColumn("is_manually_closed", business.IsManuallyClosed).Error
+	// Update kolom is_manually_closed di database menggunakan Raw SQL agar GORM tidak mencoba save relasi (ON CONFLICT)
+	return r.db.Exec("UPDATE businesses SET is_manually_closed = ? WHERE business_id = ?", business.IsManuallyClosed, business.BusinessID).Error
 }
 
 func (r *businessRepository) ResetManualCloseStatus() error {

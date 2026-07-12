@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -39,7 +39,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DB_HOST=postgres-db 
+      - DB_HOST=postgres-db
       - DB_PORT=${DB_PORT}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
@@ -63,16 +63,16 @@ services:
       - meilisearch
 
   migrator:
-      image: migrate/migrate
-      container_name: toentoen_migrator
-      depends_on:
-        - postgres-db
-      volumes:
-        - ./pkg/database/migrations:/migrations
-      command:
-        - -path=/migrations
-        - -database=postgres://${DB_USER}:${DB_PASSWORD}@postgres-db:${DB_PORT}/${DB_NAME}?sslmode=disable
-        - up
+    image: migrate/migrate
+    container_name: toentoen_migrator
+    depends_on:
+      - postgres-db
+    volumes:
+      - ./pkg/database/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://${DB_USER}:${DB_PASSWORD}@postgres-db:${DB_PORT}/${DB_NAME}?sslmode=disable
+      - up
 
 volumes:
   pgdata:

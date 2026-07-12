@@ -2,6 +2,7 @@ package business
 
 import (
 	"errors"
+	"fmt"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -295,7 +296,9 @@ func (s *businessService) ToggleStoreStatus(ownerID, businessID string) (bool, e
 		hasValidSchedule := false
 
 		// Cek apakah di array "Hours" ada jadwal untuk hari ini dan tidak libur
+		fmt.Printf("DEBUG: currentDay=%d, HoursCount=%d\n", currentDay, len(business.Hours))
 		for _, h := range business.Hours {
+			fmt.Printf("DEBUG: Checking h.DayOfWeek=%d, isClosed=%v\n", h.DayOfWeek, h.IsClosed)
 			if h.DayOfWeek == currentDay && !h.IsClosed {
 				hasValidSchedule = true
 				break
