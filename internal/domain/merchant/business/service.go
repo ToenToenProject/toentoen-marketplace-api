@@ -279,7 +279,7 @@ func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 }
 
 func (s *businessService) ToggleStoreStatus(ownerID, businessID string) (bool, error) {
-	business, err := s.repo.FindBusinessByIDAndOwner(businessID, ownerID)
+	business, err := s.repo.FindBusinessByIDAndOwnerWithPreload(businessID, ownerID)
 	if err != nil {
 		return false, errors.New("business is not found or you don't have access")
 	}
