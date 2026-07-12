@@ -10,18 +10,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Eksekusi Deployment ke Server
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build API Docker Image
+        run: |
+          docker build -t toentoen-api:latest .
+          docker save toentoen-api:latest > api-image.tar
+
+      - name: Copy Image to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          source: "api-image.tar"
+          target: "~/"
+
+      - name: Load Image and Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
           script: |
+            # Pull latest changes (for docker-compose.yaml and other configs)
             cd ~/webapi-go
             git pull origin main
             
-            sudo docker-compose up -d --build api-server
+            # Load the pre-built image
+            sudo docker load < ~/api-image.tar
             
+            # Start containers but do NOT rebuild the API since it's already built!
+            sudo docker-compose up -d --no-build api-server
+            
+            # Start migrator
             sudo docker-compose up -d migrator
             
+            # Cleanup to save space
+            rm ~/api-image.tar
             sudo docker image prune -f
