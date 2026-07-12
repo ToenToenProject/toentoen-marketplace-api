@@ -24,7 +24,7 @@ func (h *PostInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 	// Ambil AccountID dari Locals yang diset oleh Middleware RequireAuth
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	isLiked, err := h.service.TogglePostLike(postID, accountID)
@@ -32,9 +32,9 @@ func (h *PostInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	message := "Post unliked successfully"
+	message := "Post berhasil di-unlike"
 	if isLiked {
-		message = "Post liked successfully"
+		message = "Post berhasil di-like"
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
@@ -46,23 +46,23 @@ func (h *PostInteractionHandler) AddPostComment(c *fiber.Ctx) error {
 	
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var input models.CreateCommentInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body format", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	if strings.TrimSpace(input.Content) == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Comment content cannot be empty", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Isi komentar tidak boleh kosong", nil)
 	}
 
 	if err := h.service.AddPostComment(postID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Comment added successfully", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Komentar berhasil ditambahkan", nil)
 }
 
 // 3. HANDLER GET COMMENTS (Menampilkan hasil 1-Level Nesting)
@@ -74,7 +74,7 @@ func (h *PostInteractionHandler) GetPostComments(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Comments retrieved successfully", comments)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Komentar berhasil diambil", comments)
 }
 
 // 4. HANDLER REPORT POST
@@ -83,21 +83,21 @@ func (h *PostInteractionHandler) ReportPost(c *fiber.Ctx) error {
 
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var input models.CreatePostReportInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body format", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	if strings.TrimSpace(input.Reason) == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Reason cannot be empty", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Alasan laporan tidak boleh kosong", nil)
 	}
 
 	if err := h.service.ReportPost(postID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post reported successfully", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post berhasil dilaporkan", nil)
 }

@@ -2,6 +2,7 @@ package report
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"toentoen-backend/internal/constants"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -19,30 +20,30 @@ func NewHandler(s Service) *Handler {
 func (h *Handler) SubmitReport(c *fiber.Ctx) error {
 	businessID := c.Params("business_id")
 	if businessID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, "Business ID is required", "D1", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
 	}
 
 	// Wajib login
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, "Unauthorized", "A1", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var req SubmitReportRequest
 	if err := c.BodyParser(&req); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, "Invalid request payload", "D1", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	err := h.service.SubmitReport(accountID, businessID, req)
 	if err != nil {
 		if err.Error() == "business not found" {
-			return utils.SendResponse(c, fiber.StatusNotFound, "Business not found", "D1", nil)
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Toko tidak ditemukan", nil)
 		}
 		if err.Error() == "reason is required" || err.Error() == "description is required when reason is 'Other'" {
-			return utils.SendResponse(c, fiber.StatusBadRequest, err.Error(), "D1", nil)
+			return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, err.Error(), "E1", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, "Report submitted successfully", "00", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Laporan berhasil dikirim", nil)
 }

@@ -21,36 +21,38 @@ func NewBusinessHandler(service BusinessService) *BusinessHandler {
 func (h *BusinessHandler) CreateBusiness(c *fiber.Ctx) error {
 	var input models.CreateBusinessInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Request format is not valid", fiber.Map{"error": err.Error()})
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid or you are not logged in yet", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var ownerID, ok = accountIDValue.(string)
 	if !ok {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to process user ID", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
-	err := h.service.CreateBusiness(ownerID, input)
+	businessID, err := h.service.CreateBusiness(ownerID, input)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to create business profile", fiber.Map{"error": err.Error()})
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal membuat profil toko", fiber.Map{"error": err.Error()})
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Business profile created and saved successfully", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Profil toko berhasil dibuat", fiber.Map{
+		"business_id": businessID,
+	})
 }
 
 func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid or you are not logged in yet", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var ownerID, ok = accountIDValue.(string)
 	if !ok {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to process user ID", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
 	// 1. Tangkap Parameter Pencarian dan Kursor
@@ -86,10 +88,10 @@ func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 	// 4. Lempar Semuanya ke Service
 	businessesResponse, err := h.service.GetMyBusinesses(ownerID, search, categoryID, tagIDs, cursor, limit)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to fetch business data", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil data toko", nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Successfully fetched list of businesses", businessesResponse)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar toko", businessesResponse)
 }
 
 func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
@@ -97,28 +99,28 @@ func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid or you are not logged in yet", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var ownerID, ok = accountIDValue.(string)
 	if !ok {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to process user ID", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
 	var input models.UpdateBusinessInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Request format is not valid", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	err := h.service.UpdateBusiness(ownerID, businessID, input)
 	if err != nil {
 		if err.Error() == "handle already exists" {
-			return utils.SendResponse(c, fiber.StatusConflict, constants.HandleTaken, err.Error(), nil)
+			return utils.SendResponse(c, fiber.StatusConflict, constants.HandleTaken, "Handle sudah digunakan, silakan pilih yang lain", nil)
 		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.ForbiddenAccess, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Business updated successfully", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data toko berhasil diperbarui", nil)
 }
 
 func (h *BusinessHandler) DeleteBusiness(c *fiber.Ctx) error {
@@ -126,19 +128,19 @@ func (h *BusinessHandler) DeleteBusiness(c *fiber.Ctx) error {
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Session is not valid or you are not logged in yet", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var ownerID, ok = accountIDValue.(string)
 	if !ok {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to process user ID", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
 
 	if err := h.service.DeleteBusiness(ownerID, businessID); err != nil {
-		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Toko tidak ditemukan atau Anda tidak memiliki akses", nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Business deleted successfully", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Toko berhasil dihapus", nil)
 }
 
 func (h *BusinessHandler) GetBusinessDetail(c *fiber.Ctx) error {
@@ -146,20 +148,18 @@ func (h *BusinessHandler) GetBusinessDetail(c *fiber.Ctx) error {
 
 	business, err := h.service.GetBusinessDetail(businessID)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusNotFound, "NOT_FOUND", err.Error(), nil)
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Toko tidak ditemukan", nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, "SUCCESS", "Business details retrieved successfully", business)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail toko berhasil diambil", business)
 }
 
 func (h *BusinessHandler) ToggleStoreStatus(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 
-	// Ambil ID owner dari token JWT 
-	// (Pastikan fungsi getRequesterInfo sudah ada di file handler lain dalam package yang sama, misal di product_handler.go)
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	isClosed, errSvc := h.service.ToggleStoreStatus(requesterID, businessID)
@@ -167,10 +167,9 @@ func (h *BusinessHandler) ToggleStoreStatus(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	// Jika isClosed == true, berarti toko ditutup manual
-	msg := "Store is now operating normally (Open)"
+	msg := "Toko sekarang berstatus Buka"
 	if isClosed {
-		msg = "Store is manually Closed"
+		msg = "Toko sekarang berstatus Tutup (manual)"
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, fiber.Map{

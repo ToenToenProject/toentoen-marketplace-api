@@ -22,12 +22,12 @@ func (h *BusinessPostHandler) CreatePost(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	requesterID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var input models.CreatePostInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request format", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	_, errSvc := h.service.CreatePost(requesterID, role, businessID, input)
@@ -35,7 +35,7 @@ func (h *BusinessPostHandler) CreatePost(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post created successfully", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post berhasil dibuat", nil)
 }
 
 func (h *BusinessPostHandler) GetPosts(c *fiber.Ctx) error {
@@ -45,14 +45,14 @@ func (h *BusinessPostHandler) GetPosts(c *fiber.Ctx) error {
 
 	posts, totalRows, errSvc := h.service.GetPosts(businessID, page, limit)
 	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to fetch posts", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil data post", nil)
 	}
 
 	responseData := fiber.Map{
 		"posts": posts,
 		"meta":  fiber.Map{"total_rows": totalRows, "page": page, "limit": limit},
 	}
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Successfully retrieved posts", responseData)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar post berhasil diambil", responseData)
 }
 
 func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
@@ -62,7 +62,7 @@ func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
 	// Ambil data user yang sedang login
 	requesterID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	// Panggil service untuk mengeksekusi penghapusan
@@ -70,5 +70,5 @@ func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Post deleted successfully", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Post berhasil dihapus", nil)
 }

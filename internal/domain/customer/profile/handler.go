@@ -23,5 +23,5 @@ func (h *PublicProfileHandler) GetPublicProfileSummary(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusNotFound, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Public profile summary retrieved successfully", summary)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ringkasan profil publik berhasil diambil", summary)
 }

@@ -9,7 +9,7 @@ import (
 )
 
 type BusinessService interface {
-	CreateBusiness(ownerID string, input models.CreateBusinessInput) (error)
+	CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error)
 	GetMyBusinesses(ownerID, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error)
 	GetBusinessDetail(businessID string) (*models.Business, error)
 	UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (error)
@@ -34,7 +34,7 @@ func toPointerOrNil(s string) *string {
 
 // parseDatePtr dihapus karena StartDate dan EndDate sudah tidak ada di model
 
-func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (error) {
+func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error) {
 	business := models.Business{
 		BusinessID:       utils.GenerateUUID("BUS"),
 		AccountID:        ownerID,
@@ -56,7 +56,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		SocialTiktok:     toPointerOrNil(input.SocialTiktok),
 		
 		// 🪄 MAGIC JSONB: Langsung masukkan array-nya, GORM akan mengurus sisanya
-		BusinessImages:           input.BusinessImages,
+		BusinessImages:   input.BusinessImages,
 		SocialWebsites:   input.SocialWebsites,
 		
 		IsActive:         true,
@@ -76,10 +76,10 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 
 	// Panggil Repository dengan 4 Argumen saja
 	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.TagIDs, hours); err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return business.BusinessID, nil
 }
 
 func (s *businessService) GetMyBusinesses(ownerID, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error) {

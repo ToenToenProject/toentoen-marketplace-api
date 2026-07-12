@@ -215,6 +215,7 @@ func (h *AuthHandler) CreateBusinessAdmin(c *fiber.Ctx) error {
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
+	_ = createdAdmin // data tersedia tapi tidak perlu dikembalikan ke client
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Akun Business Admin berhasil dibuat", createdAdmin)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Akun Business Admin berhasil dibuat", nil)
 }

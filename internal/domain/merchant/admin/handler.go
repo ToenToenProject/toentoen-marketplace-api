@@ -19,15 +19,14 @@ func NewBusinessAdminHandler(service BusinessAdminService) *BusinessAdminHandler
 
 // 1. OWNER MENGUNDANG CALON ADMIN
 func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
-	// Ambil requester ID dari token (Berperan sebagai Owner)
 	ownerID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var input models.InviteAdminInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	// Opsional: Jika BusinessID dikirim lewat parameter URL (/business/:business_id/admins/invite)
@@ -37,7 +36,7 @@ func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 	}
 
 	if strings.TrimSpace(input.Email) == "" || strings.TrimSpace(input.BusinessID) == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Email and business_id are required", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Email dan business_id wajib diisi", nil)
 	}
 
 	if err := h.service.InviteAdmin(ownerID, input); err != nil {
@@ -48,25 +47,24 @@ func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Invitation sent successfully", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Undangan berhasil dikirim", nil)
 }
 
 // 2. CALON ADMIN MERESPONS UNDANGAN (Terima / Tolak)
 func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
 	if assignmentID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID is required", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
 	}
 
-	// Ambil requester ID dari token (Berperan sebagai Calon Admin)
 	adminID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var input models.RespondInvitationInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	if err := h.service.RespondToInvitation(adminID, assignmentID, input); err != nil {
@@ -77,25 +75,24 @@ func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Invitation responded successfully", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Respons undangan berhasil disimpan", nil)
 }
 
 // 3. OWNER MENGUBAH ROLE / SHIFT / MEMECAT ADMIN
 func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
 	if assignmentID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID is required", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
 	}
 
-	// Ambil requester ID dari token (Berperan sebagai Owner)
 	ownerID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var input models.UpdateAssignmentInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	if err := h.service.UpdateAdminAssignment(ownerID, assignmentID, input); err != nil {
@@ -106,20 +103,19 @@ func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Admin assignment updated successfully", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data admin berhasil diperbarui", nil)
 }
 
 // 4. OWNER MELIHAT DAFTAR ADMIN DI TOKONYA
 func (h *BusinessAdminHandler) GetAdminsByBusiness(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID is required", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
 	}
 
-	// Ambil requester ID dari token (Berperan sebagai Owner)
 	ownerID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	admins, err := h.service.GetAdminsByBusiness(ownerID, businessID)
@@ -131,21 +127,20 @@ func (h *BusinessAdminHandler) GetAdminsByBusiness(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Successfully fetched business admins", admins)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar admin toko berhasil diambil", admins)
 }
 
 // 5. ADMIN MELIHAT DAFTAR UNDANGAN / TEMPAT KERJANYA SENDIRI
 func (h *BusinessAdminHandler) GetMyAssignments(c *fiber.Ctx) error {
-	// Ambil requester ID dari token (Berperan sebagai Admin)
 	adminID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	assignments, err := h.service.GetMyAssignments(adminID)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to fetch assignments", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil data penugasan", nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Successfully fetched my assignments", assignments)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar penugasan berhasil diambil", assignments)
 }
