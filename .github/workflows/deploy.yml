@@ -25,7 +25,7 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
           source: "api-image.tar"
-          target: "~/"
+          target: "/home/ubuntu/"
 
       - name: Load Image and Deploy
         uses: appleboy/ssh-action@v1.0.3
@@ -39,7 +39,7 @@ jobs:
             git pull origin main
             
             # Load the pre-built image
-            sudo docker load < ~/api-image.tar
+            sudo docker load < /home/ubuntu/api-image.tar
             
             # Start containers but do NOT rebuild the API since it's already built!
             sudo docker-compose up -d --no-build api-server
@@ -48,5 +48,5 @@ jobs:
             sudo docker-compose up -d migrator
             
             # Cleanup to save space
-            rm ~/api-image.tar
+            rm /home/ubuntu/api-image.tar
             sudo docker image prune -f
