@@ -34,7 +34,6 @@ services:
 
   api-server:
     build: .
-    image: toentoen-api:latest
     container_name: toentoen_api
     restart: always
     ports:
