@@ -31,6 +31,11 @@ type AppConfig struct {
 
 	MeiliHost      string
 	MeiliMasterKey string
+
+	AWSRegion      string
+	AWSAccessKey   string
+	AWSSecretKey   string
+	AWSS3Bucket    string
 }
 
 var Envs *AppConfig
@@ -63,6 +68,11 @@ func InitConfig() {
 
 		MeiliHost:      getEnv("MEILI_HOST", "http://localhost:7700"),
 		MeiliMasterKey: getEnvMust("MEILI_MASTER_KEY"),
+
+		AWSRegion:    getEnvMust("AWS_REGION"),
+		AWSAccessKey: getEnvMust("AWS_ACCESS_KEY_ID"),
+		AWSSecretKey: getEnvMust("AWS_SECRET_ACCESS_KEY"),
+		AWSS3Bucket:  getEnvMust("AWS_S3_BUCKET"),
 	}
 }
 

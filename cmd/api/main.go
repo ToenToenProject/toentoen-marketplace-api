@@ -24,8 +24,10 @@ import (
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
+	"toentoen-backend/internal/domain/upload"
 	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/meilisearch"
+	"toentoen-backend/pkg/storage"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -66,6 +68,7 @@ func main() {
 	database.ConnectDB()
 	config.ConnectRedis()
 	meilisearch.ConnectMeilisearch()
+	storage.InitS3Client()
 	// config.InitFirebase()
 
 	// ==========================================
@@ -145,6 +148,8 @@ func main() {
 	myActivityService := my_activity.NewMyActivityService(myActivityRepo)
 	myActivityHandler := my_activity.NewMyActivityHandler(myActivityService)
 
+	uploadHandler := upload.NewHandler()
+
 	// ==========================================
 	// 3. FIBER APP SETUP
 	// ==========================================
@@ -153,6 +158,12 @@ func main() {
 	app.Use(cors.New())
 
 	api := app.Group("/api/v1")
+
+	// ==========================================
+	// ROUTES: UPLOAD (S3 Presigned URL)
+	// ==========================================
+	uploadGroup := api.Group("/upload", middlewares.RequireAuth)
+	uploadGroup.Post("/presign", uploadHandler.GeneratePresignURL)
 
 	// ==========================================
 	// ROUTES: AUTHENTICATION
