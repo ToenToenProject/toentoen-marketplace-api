@@ -6,7 +6,7 @@ type BusinessAdmin struct {
 	AccountID string    `gorm:"primaryKey;column:account_id" json:"account_id"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 
-	Account     Account                   `gorm:"foreignKey:AccountID;references:AccountID" json:"account"`
+	Account     Account                   `json:"account"`
 	Assignments []BusinessAdminAssignment `gorm:"foreignKey:AdminID;references:AccountID" json:"assignments"`
 }
 

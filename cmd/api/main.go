@@ -7,7 +7,8 @@ import (
 	"toentoen-backend/internal/domain/account"
 	"toentoen-backend/internal/domain/auth"
 	"toentoen-backend/internal/domain/customer/business_profile"
-	"toentoen-backend/internal/domain/customer/demand"
+	"toentoen-backend/internal/domain/realtime"
+	"toentoen-backend/internal/domain/signal"
 	"toentoen-backend/internal/domain/customer/explore"
 	"toentoen-backend/internal/domain/customer/interaction"
 	"toentoen-backend/internal/domain/customer/my_activity"
@@ -32,6 +33,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/websocket/v2"
 	"github.com/joho/godotenv"
 )
 
@@ -69,7 +71,11 @@ func main() {
 	config.ConnectRedis()
 	meilisearch.ConnectMeilisearch()
 	storage.InitS3Client()
-	// config.InitFirebase()
+	config.InitFirebase()
+
+	// WebSocket Hub (Real-Time)
+	wsHub := realtime.NewHub(config.RDB)
+	go wsHub.Run()
 
 	// ==========================================
 	// 2. INIT REPO, SERVICE, & HANDLER
@@ -112,9 +118,12 @@ func main() {
 	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo)
 	businessPostHandler := post.NewBusinessPostHandler(businessPostService)
 
-	demandRepo := demand.NewDemandRepository(database.DB)
-	demandService := demand.NewDemandService(demandRepo, businessRepo)
-	demandHandler := demand.NewDemandHandler(demandService)
+	// Signal V2 (menggantikan demand lama) — dengan Real-Time Hub
+	signalRepo := signal.NewSignalRepository(database.DB)
+	signalService := signal.NewSignalService(signalRepo, businessRepo, wsHub)
+	customerSignalHandler := signal.NewCustomerHandler(signalService)
+	merchantSignalHandler := signal.NewMerchantHandler(signalService)
+	wsHandler := realtime.NewWSHandler(wsHub)
 
 	analyticsRepo := analytics.NewAnalyticsRepository(database.DB)
 	analyticsService := analytics.NewAnalyticsService(analyticsRepo, productRepo)
@@ -158,6 +167,11 @@ func main() {
 	app.Use(cors.New())
 
 	api := app.Group("/api/v1")
+
+	// ==========================================
+	// ROUTE: WEBSOCKET (Real-Time)
+	// ==========================================
+	api.Get("/ws", realtime.UpgradeCheck, websocket.New(wsHandler.Handle))
 
 	// ==========================================
 	// ROUTES: UPLOAD (S3 Presigned URL)
@@ -219,10 +233,18 @@ func main() {
 	customerReviewGroup := api.Group("/reviews/customer", middlewares.RequireAuth, middlewares.AllowRoles("customer"))
 	customerReviewGroup.Post("/", reviewHandler.CreateReview)
 
-	// Demand Signals
-	demandGroup := api.Group("/demands", middlewares.RequireAuth)
-	demandGroup.Post("/signals", demandHandler.CreateSignal)
-	demandGroup.Put("/signals/:signal_id/responses/:response_id/accept", demandHandler.AcceptOffer)
+	// ==========================================
+	// ROUTES: DEMAND SIGNAL V2 - CUSTOMER
+	// ==========================================
+	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth, middlewares.AllowRoles("customer"))
+	customerSignalGroup.Post("/", customerSignalHandler.CreateSignal)
+	customerSignalGroup.Get("/me", customerSignalHandler.GetMySignals)
+	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
+	customerSignalGroup.Put("/:signal_id/complete", customerSignalHandler.CompleteSignal)
+
+	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth, middlewares.AllowRoles("customer"))
+	customerConvGroup.Get("/:conversation_id/messages", customerSignalHandler.GetMessages)
+	customerConvGroup.Post("/:conversation_id/messages", customerSignalHandler.SendMessage)
 
 	publicProductRoutes := api.Group("/products")
 	publicProductRoutes.Get("/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
@@ -293,11 +315,17 @@ func main() {
 	postRoutes.Get("/", businessPostHandler.GetPosts)
 	postRoutes.Delete("/:post_id", businessPostHandler.DeletePost)
 
-	// -> Demands (Explore & Respond)
-	demandGroup.Get("/signals/explore", demandHandler.ExploreSignals)
-	demandGroup.Post("/signals/:signal_id/responses", demandHandler.SubmitResponse)
-	demandGroup.Get("/signals/active", middlewares.AllowRoles("owner"), demandHandler.GetActiveSignals)
-	demandGroup.Get("/signals/:signal_id", middlewares.AllowRoles("owner"), demandHandler.GetSignalDetail)
+	// ==========================================
+	// ROUTES: DEMAND SIGNAL V2 - MERCHANT
+	// ==========================================
+	merchantSignalGroup := api.Group("/merchant/signals", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	merchantSignalGroup.Get("/explore", merchantSignalHandler.ExploreSignals)
+	merchantSignalGroup.Get("/:signal_id", merchantSignalHandler.GetSignalDetail)
+	merchantSignalGroup.Post("/:signal_id/reply", merchantSignalHandler.ReplyToSignal)
+
+	merchantConvGroup := api.Group("/merchant/conversations", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	merchantConvGroup.Get("/:conversation_id/messages", merchantSignalHandler.GetMessages)
+	merchantConvGroup.Post("/:conversation_id/messages", merchantSignalHandler.SendMessage)
 
 	// -> Analytics
 	analyticsRoutes := api.Group("/business/:business_id/analytics", middlewares.RequireAuth, sharedAccess)

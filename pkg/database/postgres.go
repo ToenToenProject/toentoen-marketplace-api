@@ -37,6 +37,7 @@ func ConnectDB() {
 	}
 	
 	err = DB.AutoMigrate(
+		&models.Account{}, // Tambahkan ini di atas agar GORM tahu tabel utama
 		&models.BusinessBookmark{},
 		&models.BusinessReport{},
 		&models.BusinessReportEvidence{},
@@ -55,10 +56,21 @@ func ConnectDB() {
 		&models.BusinessReviewReport{},
 		&models.BusinessReviewCommentReport{},
 		&models.ProductWishlist{},
+
+		// Signal V2
+		&models.Signal{},
+		&models.SignalImage{},
+		&models.SignalConversation{},
+		&models.SignalMessage{},
 	)
 	if err != nil {
 		log.Fatal("Failed to migrate database. \n", err)
 	}
+
+	// PostGIS: Tambahkan kolom location geometry dan spatial index pada tabel signals
+	DB.Exec("SELECT 1 FROM pg_extension WHERE extname = 'postgis'") // pastikan ekstensi ada
+	DB.Exec("ALTER TABLE signals ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)")
+	DB.Exec("CREATE INDEX IF NOT EXISTS idx_signals_location ON signals USING GIST(location)")
 
 	log.Println("🚀 Connected to Database successfully")
 }

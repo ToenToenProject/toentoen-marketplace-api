@@ -33,7 +33,7 @@ type ProductComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account *Account         `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+	Account *Account         `json:"account,omitempty"`
 	Product *Product         `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
 	Replies []ProductComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID" json:"replies,omitempty"`
 }
@@ -73,7 +73,7 @@ type BusinessPostComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account *Account               `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+	Account *Account               `json:"account,omitempty"`
 	Post    *BusinessPost          `gorm:"foreignKey:PostID;references:PostID" json:"post,omitempty"`
 	Replies []BusinessPostComment  `gorm:"foreignKey:ReplyToCommentID;references:CommentID" json:"replies,omitempty"`
 }

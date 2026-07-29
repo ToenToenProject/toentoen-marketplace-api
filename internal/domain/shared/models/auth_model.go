@@ -17,10 +17,10 @@ type Account struct {
 	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 
-	Customer      *Customer      `gorm:"foreignKey:AccountID;references:AccountID" json:"customer,omitempty"`
-	Owner         *Owner         `gorm:"foreignKey:AccountID;references:AccountID" json:"owner,omitempty"`
-	BusinessAdmin *BusinessAdmin `gorm:"foreignKey:AccountID;references:AccountID" json:"business_admin,omitempty"`
-	PlatformAdmin *PlatformAdmin `gorm:"foreignKey:AccountID;references:AccountID" json:"platform_admin,omitempty"`
+	Customer      *Customer      `json:"customer,omitempty"`
+	Owner         *Owner         `json:"owner,omitempty"`
+	BusinessAdmin *BusinessAdmin `json:"business_admin,omitempty"`
+	PlatformAdmin *PlatformAdmin `json:"platform_admin,omitempty"`
 }
 
 type Customer struct {
