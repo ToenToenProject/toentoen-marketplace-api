@@ -63,6 +63,13 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		radiusKm = 5 // default 5 km
 	}
 
+	expiresInHours := input.ExpiresInHours
+	if expiresInHours <= 0 {
+		expiresInHours = 24 // default 24 hours
+	} else if expiresInHours > 72 {
+		expiresInHours = 72 // max 3 days
+	}
+
 	signal := models.Signal{
 		SignalID:    utils.GenerateUUID("SIG"),
 		CustomerID:  customerID,
@@ -73,7 +80,7 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		RadiusKm:    radiusKm,
 		IsUrgent:    input.IsUrgent,
 		Status:      "active",
-		ExpiresAt:   time.Now().Add(24 * time.Hour),
+		ExpiresAt:   time.Now().Add(time.Duration(expiresInHours) * time.Hour),
 	}
 
 	// 1. Simpan signal ke database

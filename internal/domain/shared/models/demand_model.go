@@ -46,8 +46,9 @@ type CreateSignalInput struct {
 	ImageURLs   []string `json:"image_urls"`
 	Latitude    float64  `json:"latitude"`
 	Longitude   float64  `json:"longitude"`
-	RadiusKm    int      `json:"radius_km"`
-	IsUrgent    bool     `json:"is_urgent"`
+	RadiusKm       int      `json:"radius_km"`
+	IsUrgent       bool     `json:"is_urgent"`
+	ExpiresInHours int      `json:"expires_in_hours"`
 }
 
 type CreateResponseInput struct {
