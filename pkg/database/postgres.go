@@ -67,8 +67,8 @@ func ConnectDB() {
 		log.Fatal("Failed to migrate database. \n", err)
 	}
 
-	// PostGIS: Tambahkan kolom location geometry dan spatial index pada tabel signals
-	DB.Exec("SELECT 1 FROM pg_extension WHERE extname = 'postgis'") // pastikan ekstensi ada
+	// PostGIS: Pastikan ekstensi postgis aktif sebelum membuat kolom location
+	DB.Exec("CREATE EXTENSION IF NOT EXISTS postgis")
 	DB.Exec("ALTER TABLE signals ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)")
 	DB.Exec("CREATE INDEX IF NOT EXISTS idx_signals_location ON signals USING GIST(location)")
 
