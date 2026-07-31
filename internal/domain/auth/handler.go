@@ -23,8 +23,8 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
-	if input.Identifier == "" || input.Password == "" || input.Role == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Identifier, password, dan role wajib diisi", nil)
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	if err := h.service.Register(input); err != nil {
@@ -40,6 +40,10 @@ func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if err := h.service.VerifyRegisterOTP(input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
@@ -53,6 +57,10 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if err := h.service.Login(input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedAuth, err.Error(), nil)
 	}
@@ -64,6 +72,10 @@ func (h *AuthHandler) VerifyLoginOTP(c *fiber.Ctx) error {
 	var input models.VerifyLoginOTPInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	token, err := h.service.VerifyLoginOTP(input)
@@ -88,6 +100,10 @@ func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if err := h.service.ForgotPassword(input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
@@ -99,6 +115,10 @@ func (h *AuthHandler) VerifyForgotOTP(c *fiber.Ctx) error {
 	var input models.VerifyForgotOTPInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	resetToken, err := h.service.VerifyForgotOTP(input)
@@ -113,6 +133,10 @@ func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
 	var input models.ResetPasswordInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	if err := h.service.ResetPassword(input); err != nil {
@@ -138,6 +162,10 @@ func (h *AuthHandler) ChangePassword(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if err := h.service.ChangePassword(accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
@@ -159,6 +187,10 @@ func (h *AuthHandler) RequestEmailChange(c *fiber.Ctx) error {
 	var input models.RequestEmailChangeInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	if err := h.service.RequestEmailChange(accountID, input); err != nil {
@@ -184,6 +216,10 @@ func (h *AuthHandler) VerifyEmailChange(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if err := h.service.VerifyEmailChange(accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
@@ -197,8 +233,8 @@ func (h *AuthHandler) CreateBusinessAdmin(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
-	if input.Identifier == "" || input.Password == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Identifier dan kata sandi wajib diisi", nil)
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	accountIDValue := c.Locals("account_id")

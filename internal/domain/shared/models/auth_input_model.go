@@ -1,9 +1,9 @@
 package models
 
 type RegisterUnifiedInput struct {
-	Identifier string  `json:"identifier"`
-	Password   string  `json:"password"`
-	Role       string  `json:"role"`
+	Identifier string  `json:"identifier" validate:"required"`
+	Password   string  `json:"password" validate:"required,min=6"`
+	Role       string  `json:"role" validate:"required"`
 	FromRole   *string `json:"from_role"`
 }
 
@@ -13,13 +13,13 @@ type VerifyRegisterOTPInput struct {
 }
 
 type LoginUnifiedInput struct {
-	Identifier string `json:"identifier"`
-	Password   string `json:"password"`
+	Identifier string `json:"identifier" validate:"required"`
+	Password   string `json:"password" validate:"required"`
 }
 
 type VerifyLoginOTPInput struct {
-	Identifier string `json:"identifier"`
-	OTP        string `json:"otp"`
+	Identifier string `json:"identifier" validate:"required"`
+	OTP        string `json:"otp" validate:"required"`
 }
 
 type GoogleAuthInput struct {
@@ -29,38 +29,38 @@ type GoogleAuthInput struct {
 }
 
 type ForgotPasswordInput struct {
-	Identifier string `json:"identifier"`
+	Identifier string `json:"identifier" validate:"required"`
 }
 
 type VerifyForgotOTPInput struct {
-	Identifier string `json:"identifier"`
-	OTP        string `json:"otp"`
+	Identifier string `json:"identifier" validate:"required"`
+	OTP        string `json:"otp" validate:"required"`
 }
 
 type ResetPasswordInput struct {
-	Identifier         string `json:"identifier"`
-	ResetToken         string `json:"reset_token"`
-	NewPassword        string `json:"new_password" binding:"min=8"`
-	ConfirmNewPassword string `json:"confirm_new_password" `
+	Identifier         string `json:"identifier" validate:"required"`
+	ResetToken         string `json:"reset_token" validate:"required"`
+	NewPassword        string `json:"new_password" validate:"required,min=6"`
+	ConfirmNewPassword string `json:"confirm_new_password" validate:"required,eqfield=NewPassword"`
 }
 
 type RequestEmailChangeInput struct {
-	CurrentEmail string `json:"current_email"`
-	NewEmail     string `json:"new_email"`
+	CurrentEmail string `json:"current_email" validate:"required,email"`
+	NewEmail     string `json:"new_email" validate:"required,email"`
 }
 
 type VerifyEmailChangeInput struct {
-	NewEmail string `json:"new_email"`
-	OTP      string `json:"otp"`
+	NewEmail string `json:"new_email" validate:"required,email"`
+	OTP      string `json:"otp" validate:"required"`
 }
 
 type ChangePasswordInput struct {
-	CurrentPassword    string `json:"current_password"`
-	NewPassword        string `json:"new_password"`
-	ConfirmNewPassword string `json:"confirm_new_password"`
+	CurrentPassword    string `json:"current_password" validate:"required"`
+	NewPassword        string `json:"new_password" validate:"required,min=6"`
+	ConfirmNewPassword string `json:"confirm_new_password" validate:"required,eqfield=NewPassword"`
 }
 
 type CreateBusinessAdminInput struct {
-	Identifier string `json:"identifier"`
-	Password   string `json:"password"`
+	Identifier string `json:"identifier" validate:"required"`
+	Password   string `json:"password" validate:"required,min=6"`
 }

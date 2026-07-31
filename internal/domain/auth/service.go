@@ -267,7 +267,10 @@ func (s *authService) ChangePassword(accountID string, input models.ChangePasswo
 	pwd := string(passwordHash)
 	account.PasswordHash = &pwd
 
-	return s.repo.Update(account)
+	if err := s.repo.Update(account); err != nil {
+		return errors.New("Gagal memperbarui kata sandi")
+	}
+	return nil
 }
 
 func (s *authService) RequestEmailChange(accountID string, input models.RequestEmailChangeInput) error {
