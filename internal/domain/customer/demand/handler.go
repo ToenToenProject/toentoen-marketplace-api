@@ -34,6 +34,10 @@ func (h *DemandHandler) CreateSignal(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	signal, errSvc := h.service.CreateSignal(accID, input)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errSvc.Error(), nil)
@@ -65,6 +69,10 @@ func (h *DemandHandler) SubmitResponse(c *fiber.Ctx) error {
 	var input models.CreateResponseInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	response, errSvc := h.service.SubmitResponse(accID, role, signalID, input)

@@ -48,6 +48,10 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&req); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	// Validasi folder
 	folder := strings.TrimSpace(req.Folder)
 	if folder == "" {

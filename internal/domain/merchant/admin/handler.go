@@ -29,6 +29,10 @@ func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	// Opsional: Jika BusinessID dikirim lewat parameter URL (/business/:business_id/admins/invite)
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID != "" {
@@ -67,6 +71,10 @@ func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if err := h.service.RespondToInvitation(adminID, assignmentID, input); err != nil {
 		status := fiber.StatusBadRequest
 		if strings.Contains(err.Error(), "forbidden") {
@@ -93,6 +101,10 @@ func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 	var input models.UpdateAssignmentInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	if err := h.service.UpdateAdminAssignment(ownerID, assignmentID, input); err != nil {

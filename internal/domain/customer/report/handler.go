@@ -34,6 +34,10 @@ func (h *Handler) SubmitReport(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&req); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	err := h.service.SubmitReport(accountID, businessID, req)
 	if err != nil {
 		if err.Error() == "business not found" {

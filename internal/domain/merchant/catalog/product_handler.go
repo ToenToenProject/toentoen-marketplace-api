@@ -30,6 +30,10 @@ func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if strings.TrimSpace(input.ProductName) == "" || input.Price < 0 {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Nama produk wajib diisi dan harga tidak boleh negatif", nil)
 	}
@@ -60,6 +64,10 @@ func (h *ProductHandler) AddVariant(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if strings.TrimSpace(input.VariantName) == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Nama varian wajib diisi", nil)
 	}
@@ -84,6 +92,10 @@ func (h *ProductHandler) UpdateVariant(c *fiber.Ctx) error {
 	var input models.UpdateVariantInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	if err := h.service.UpdateVariant(requesterID, requesterRole, businessID, productID, variantID, input); err != nil {
@@ -123,6 +135,10 @@ func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
 	var input models.UpdateProductInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	errSvc := h.service.UpdateProduct(requesterID, requesterRole, businessID, productID, input)

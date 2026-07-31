@@ -54,6 +54,10 @@ func (h *PostInteractionHandler) AddPostComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
 	if strings.TrimSpace(input.Content) == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Isi komentar tidak boleh kosong", nil)
 	}
@@ -89,6 +93,10 @@ func (h *PostInteractionHandler) ReportPost(c *fiber.Ctx) error {
 	var input models.CreatePostReportInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	if strings.TrimSpace(input.Reason) == "" {
