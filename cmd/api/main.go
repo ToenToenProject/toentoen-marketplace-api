@@ -22,6 +22,7 @@ import (
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/merchant/catalog"
 	"toentoen-backend/internal/domain/merchant/post"
+	"toentoen-backend/internal/domain/meta"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -159,6 +160,10 @@ func main() {
 
 	uploadHandler := upload.NewHandler()
 
+	metaRepo := meta.NewMetaRepository(database.DB)
+	metaService := meta.NewMetaService(metaRepo)
+	metaHandler := meta.NewMetaHandler(metaService)
+
 	// ==========================================
 	// 3. FIBER APP SETUP
 	// ==========================================
@@ -167,6 +172,13 @@ func main() {
 	app.Use(cors.New())
 
 	api := app.Group("/api/v1")
+
+	// ==========================================
+	// ROUTES: PUBLIC METADATA (Categories, Tags)
+	// ==========================================
+	metaGroup := api.Group("/meta")
+	metaGroup.Get("/categories", metaHandler.GetCategories)
+	metaGroup.Get("/tags", metaHandler.GetTags)
 
 	// ==========================================
 	// ROUTE: WEBSOCKET (Real-Time)
