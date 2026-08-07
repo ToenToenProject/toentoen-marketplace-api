@@ -179,15 +179,19 @@ func main() {
 
 	// CORS Configuration
 	corsConfig := cors.Config{
-		AllowOrigins:     os.Getenv("FRONTEND_URL"), // Misal: "https://toentoen.com"
+		AllowOrigins:     os.Getenv("FRONTEND_URL"),
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
 		AllowCredentials: true,
 	}
+	
 	// Fallback jika FRONTEND_URL kosong
 	if corsConfig.AllowOrigins == "" {
 		corsConfig.AllowOrigins = "*"
+		// Fiber v2 akan PANIC jika AllowOrigins="*" dan AllowCredentials=true
+		corsConfig.AllowCredentials = false 
 	}
+	
 	app.Use(cors.New(corsConfig))
 
 	// Rate Limiting
