@@ -265,6 +265,9 @@ func main() {
 	protected.Put("/profile/owner", middlewares.AllowRoles("owner"), profileHandler.UpdateProfileOwner)
 	protected.Post("/delete/request", profileHandler.RequestDeleteOTP)
 	protected.Delete("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
+	
+	// Khusus untuk pengujian / backdoor menghapus berdasarkan identifier:
+	api.Post("/account/force-delete", profileHandler.ForceDeleteAccount)
 
 	// My Activity
 	myActivityGroup := protected.Group("/my-activity")

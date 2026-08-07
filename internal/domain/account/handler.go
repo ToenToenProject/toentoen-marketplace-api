@@ -106,3 +106,19 @@ func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun dan seluruh jejak Anda telah berhasil dihapus secara permanen.", nil)
 }
+
+func (h *ProfileHandler) ForceDeleteAccount(c *fiber.Ctx) error {
+	var input models.ForceDeleteAccountInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
+	}
+	if errs := utils.ValidateStruct(&input); errs != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Input tidak lengkap", errs)
+	}
+
+	if err := h.service.ForceDeleteAccount(input.Identifier); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun " + input.Identifier + " telah dihapus secara permanen.", nil)
+}

@@ -8,6 +8,7 @@ import (
 
 type ProfileRepository interface {
 	GetAccountByID(accountID string) (*models.Account, error)
+	GetAccountByIdentifier(identifier string) (*models.Account, error)
 	GetCustomerByAccountID(accountID string) (*models.Customer, error)
 	GetOwnerByAccountID(accountID string) (*models.Owner, error)
 	GetBusinessAdminByAccountID(accountID string) (*models.BusinessAdmin, error)
@@ -30,6 +31,12 @@ func NewProfileRepository(db *gorm.DB) ProfileRepository {
 func (r *profileRepository) GetAccountByID(accountID string) (*models.Account, error) {
 	var account models.Account
 	err := r.db.Where("account_id = ?", accountID).First(&account).Error
+	return &account, err
+}
+
+func (r *profileRepository) GetAccountByIdentifier(identifier string) (*models.Account, error) {
+	var account models.Account
+	err := r.db.Where("email = ? OR phone_number = ?", identifier, identifier).First(&account).Error
 	return &account, err
 }
 

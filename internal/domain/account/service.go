@@ -17,6 +17,7 @@ type ProfileService interface {
 	UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error)
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
+	ForceDeleteAccount(identifier string) error
 }
 
 type profileService struct {
@@ -162,6 +163,33 @@ func (s *profileService) VerifyDeleteOTPAndExecute(accountID string, otp string)
 
 	// Clean up Redis
 	config.RDB.Del(config.Ctx, redisKey)
+
+	// Clean up Meilisearch
+	if len(deletedBusinessIDs) > 0 || len(deletedProductIDs) > 0 {
+		go func() {
+			for _, bID := range deletedBusinessIDs {
+				meilisearch.Client.Index("businesses").DeleteDocument(bID, nil)
+			}
+			for _, pID := range deletedProductIDs {
+				meilisearch.Client.Index("products").DeleteDocument(pID, nil)
+			}
+		}()
+	}
+
+	return nil
+}
+
+func (s *profileService) ForceDeleteAccount(identifier string) error {
+	account, err := s.repo.GetAccountByIdentifier(identifier)
+	if err != nil {
+		return errors.New("akun tidak ditemukan")
+	}
+
+	// Execute deletion in a transaction
+	deletedBusinessIDs, deletedProductIDs, err := s.repo.DeleteAccountTx(account.AccountID, account.Role)
+	if err != nil {
+		return errors.New("Gagal menghapus akun: " + err.Error())
+	}
 
 	// Clean up Meilisearch
 	if len(deletedBusinessIDs) > 0 || len(deletedProductIDs) > 0 {
