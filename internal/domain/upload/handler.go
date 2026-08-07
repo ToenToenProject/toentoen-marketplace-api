@@ -11,22 +11,28 @@ import (
 
 // Folder yang diizinkan untuk upload — mencegah client upload ke sembarang folder
 var allowedFolders = map[string]bool{
-	"businesses/logos":   true,
-	"businesses/images":  true,
-	"accounts/avatars":   true,
-	"products/images":    true,
-	"posts/images":       true,
-	"reviews/images":     true,
+	"businesses/logos":    true,
+	"businesses/images":   true,
+	"accounts/avatars":    true,
+	"products/images":     true,
+	"products/videos":     true,
+	"posts/images":        true,
+	"posts/videos":        true,
+	"reviews/images":      true,
+	"reviews/videos":      true,
 	"demands/attachments": true,
 }
 
 // allowedContentTypes — mencegah upload file berbahaya
 var allowedContentTypes = map[string]bool{
-	"image/jpeg": true,
-	"image/jpg":  true,
-	"image/png":  true,
-	"image/webp": true,
-	"image/gif":  true,
+	"image/jpeg":      true,
+	"image/jpg":       true,
+	"image/png":       true,
+	"image/webp":      true,
+	"image/gif":       true,
+	"video/mp4":       true,
+	"video/webm":      true,
+	"video/quicktime": true, // Untuk perekaman dari iOS (.mov)
 }
 
 type Handler struct{}
@@ -59,7 +65,7 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 	}
 	if !allowedFolders[folder] {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation,
-			"Folder tidak valid. Pilihan: businesses/logos, businesses/images, accounts/avatars, products/images, posts/images, reviews/images, demands/attachments", nil)
+			"Folder tidak valid. Pilihan: businesses/logos, businesses/images, accounts/avatars, products/images, products/videos, posts/images, posts/videos, reviews/images, reviews/videos, demands/attachments", nil)
 	}
 
 	// Validasi filename
@@ -75,7 +81,7 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 	}
 	if !allowedContentTypes[contentType] {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation,
-			"Tipe file tidak diizinkan. Hanya JPEG, PNG, WebP, dan GIF yang diperbolehkan", nil)
+			"Tipe file tidak diizinkan. Hanya JPEG, PNG, WebP, GIF, MP4, WebM, dan MOV yang diperbolehkan", nil)
 	}
 
 	// Generate presigned URL dari S3
