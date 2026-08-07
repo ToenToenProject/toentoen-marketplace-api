@@ -72,3 +72,37 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", account)
 }
+
+func (h *ProfileHandler) RequestDeleteOTP(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	if err := h.service.RequestDeleteOTP(accountID); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "OTP penghapusan akun telah dikirim", nil)
+}
+
+func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	var input models.VerifyDeleteOTPInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
+	}
+	if errs := utils.ValidateStruct(&input); errs != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Input tidak lengkap", errs)
+	}
+
+	if err := h.service.VerifyDeleteOTPAndExecute(accountID, input.OTP); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun dan seluruh jejak Anda telah berhasil dihapus secara permanen.", nil)
+}

@@ -263,6 +263,8 @@ func main() {
 	protected := api.Group("/account", middlewares.RequireAuth)
 	protected.Put("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Put("/profile/owner", middlewares.AllowRoles("owner"), profileHandler.UpdateProfileOwner)
+	protected.Post("/delete/request", profileHandler.RequestDeleteOTP)
+	protected.Delete("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
 
 	// My Activity
 	myActivityGroup := protected.Group("/my-activity")

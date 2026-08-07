@@ -25,3 +25,7 @@ type UpdateProfileOwnerInput struct {
 	KtpPhotoUrl *string `json:"ktp_photo_url"`
 	ReferralCode *string `json:"referral_code"`
 }
+
+type VerifyDeleteOTPInput struct {
+	OTP string `json:"otp" validate:"required"`
+}
