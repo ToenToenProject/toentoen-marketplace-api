@@ -47,6 +47,10 @@ func isAccountDataComplete(account *models.Account) string {
 		}
 		return "inactive"
 
+	case "customer":
+		// Akun customer sudah aktif sejak OTP, jangan sampai ditimpa jadi inactive
+		return "active"
+
 	default:
 		return "inactive"
 	}
