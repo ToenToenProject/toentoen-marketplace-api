@@ -525,10 +525,6 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 	response := &models.GetProductsResponse{
 		Products: responseList,
 		Summary:  *summary,
-		Pagination: models.PaginationMeta{
-			NextCursor: nextCursor,
-			HasMore:    hasMore,
-		},
 	}
 
 	return response, nil

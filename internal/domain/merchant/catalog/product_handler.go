@@ -206,15 +206,14 @@ func (h *ProductHandler) GetCatalog(c *fiber.Ctx) error {
 }
 
 // ==========================================
-// HANDLER UNTUK LIST FLAT (PAGINATED + FILTER)
+// HANDLER UNTUK LIST FLAT (FILTER)
 // ==========================================
 
 func (h *ProductHandler) GetFlatProducts(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	search := strings.TrimSpace(c.Query("search", ""))
-	productGroupID := strings.TrimSpace(c.Query("group_id", "")) // Using group_id query param
+	productGroupID := strings.TrimSpace(c.Query("product_group_id", ""))
 	stockType := strings.TrimSpace(c.Query("stock_type", ""))
-	cursor := strings.TrimSpace(c.Query("cursor", ""))
 	sort := strings.TrimSpace(c.Query("sort", ""))
 	limit := c.QueryInt("limit", 20)
 
@@ -229,7 +228,7 @@ func (h *ProductHandler) GetFlatProducts(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	response, errSvc := h.service.GetAllProducts(requesterID, requesterRole, businessID, search, productGroupID, stockType, isActive, sort, cursor, limit)
+	response, errSvc := h.service.GetAllProducts(requesterID, requesterRole, businessID, search, productGroupID, stockType, isActive, sort, "", limit)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
