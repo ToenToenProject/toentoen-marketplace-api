@@ -84,7 +84,7 @@ func (h *ProductInteractionHandler) GetProductComments(c *fiber.Ctx) error {
 }
 
 func (h *ProductInteractionHandler) ToggleCommentLike(c *fiber.Ctx) error {
-	commentID := strings.TrimSpace(c.Params("comment_id"))
+	commentID := strings.TrimSpace(c.Params("review_id"))
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
@@ -103,7 +103,7 @@ func (h *ProductInteractionHandler) ToggleCommentLike(c *fiber.Ctx) error {
 }
 
 func (h *ProductInteractionHandler) ReportComment(c *fiber.Ctx) error {
-	commentID := strings.TrimSpace(c.Params("comment_id"))
+	commentID := strings.TrimSpace(c.Params("review_id"))
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
