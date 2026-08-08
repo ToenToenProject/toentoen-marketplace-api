@@ -342,6 +342,7 @@ func main() {
 	// -> Products
 	productRoutes := api.Group("/business/:business_id/products", middlewares.RequireAuth, sharedAccess)
 	productRoutes.Post("/", productHandler.CreateProduct)
+	productRoutes.Get("/", productHandler.GetFlatProducts)
 	productRoutes.Post("/:product_id/variants", middlewares.RequireAuth, productHandler.AddVariant)
 	productRoutes.Patch("/:product_id/variants/:variant_id", middlewares.RequireAuth, productHandler.UpdateVariant)
 	productRoutes.Delete("/:product_id/variants/:variant_id", middlewares.RequireAuth, productHandler.DeleteVariant)

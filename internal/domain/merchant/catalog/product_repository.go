@@ -21,6 +21,7 @@ type ProductRepository interface {
 
 	// FUNGSI DIPERBARUI: Menggunakan Cursor dan Preload
 	GetProducts(businessID, search, productGroupID, stockType string, isActive *bool, sort string, cursor string, limit int) ([]models.Product, error)
+	GetProductSummary(businessID, search, productGroupID string, isActive *bool) (*models.ProductSummary, error)
 
 	UpdateProduct(product *models.Product) error
 	DeleteProduct(productID, businessID string) error
@@ -235,4 +236,42 @@ func (r *productRepository) BulkDelete(businessID string, productIDs []string) e
 	// Menggunakan fitur Soft-Delete GORM (hanya mengisi deleted_at, tidak menghapus permanen dari DB)
 	return r.db.Where("business_id = ? AND product_id IN ?", businessID, productIDs).
 		Delete(&models.Product{}).Error
+}
+
+func (r *productRepository) GetProductSummary(businessID, search, productGroupID string, isActive *bool) (*models.ProductSummary, error) {
+	var summary models.ProductSummary
+
+	query := r.db.Model(&models.Product{}).Where("business_id = ?", businessID)
+
+	if search != "" {
+		searchTerms := strings.Fields(search)
+		searchQuery := r.db.Where("")
+
+		for _, term := range searchTerms {
+			wildcardTerm := "%" + term + "%"
+			searchQuery = searchQuery.Or(
+				"product_name ILIKE ? OR product_description ILIKE ? OR tags::text ILIKE ?",
+				wildcardTerm, wildcardTerm, wildcardTerm,
+			)
+		}
+		query = query.Where(searchQuery)
+	}
+
+	if productGroupID != "" && productGroupID != "all" {
+		query = query.Where("product_group_id = ?", productGroupID)
+	}
+
+	if isActive != nil {
+		query = query.Where("is_active = ?", *isActive)
+	}
+
+	err := query.Select(`
+		COUNT(product_id) as total_all,
+		SUM(CASE WHEN stock_type = 'in_stock' THEN 1 ELSE 0 END) as total_in_stock,
+		SUM(CASE WHEN stock_type = 'pre_order' THEN 1 ELSE 0 END) as total_pre_order,
+		SUM(CASE WHEN stock_type = 'limited' THEN 1 ELSE 0 END) as total_limited,
+		SUM(CASE WHEN stock_type = 'out_of_stock' THEN 1 ELSE 0 END) as total_out_of_stock
+	`).Scan(&summary).Error
+
+	return &summary, err
 }

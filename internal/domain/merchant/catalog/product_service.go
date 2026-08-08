@@ -440,6 +440,11 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 		return nil, err
 	}
 
+	summary, err := s.repo.GetProductSummary(businessID, search, productGroupID, isActive)
+	if err != nil {
+		return nil, err
+	}
+
 	var responseList []models.ProductListItem
 	hasMore := false
 	nextCursor := ""
@@ -519,6 +524,7 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 
 	response := &models.GetProductsResponse{
 		Products: responseList,
+		Summary:  *summary,
 		Pagination: models.PaginationMeta{
 			NextCursor: nextCursor,
 			HasMore:    hasMore,

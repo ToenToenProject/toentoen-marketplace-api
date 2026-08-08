@@ -128,6 +128,16 @@ type PaginationMeta struct {
 	HasMore    bool   `json:"has_more"`
 }
 
+type ProductSummary struct {
+	TotalAll       int64 `json:"total_all"`
+	TotalInStock   int64 `json:"total_in_stock"`
+	TotalPreOrder  int64 `json:"total_pre_order"`
+	TotalLimited   int64 `json:"total_limited"`
+	TotalOutOfStock int64 `json:"total_out_of_stock"`
+}
+
+
+
 type ProductListItem struct {
 	ProductID   string `json:"product_id"`
 	ProductName string `json:"product_name"`
@@ -156,6 +166,7 @@ type ProductListItem struct {
 
 type GetProductsResponse struct {
 	Products   []ProductListItem `json:"products"`
+	Summary    ProductSummary    `json:"summary"`
 	Pagination PaginationMeta    `json:"pagination"`
 }
 

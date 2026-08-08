@@ -205,6 +205,38 @@ func (h *ProductHandler) GetCatalog(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Katalog berhasil diambil", catalog)
 }
 
+// ==========================================
+// HANDLER UNTUK LIST FLAT (PAGINATED + FILTER)
+// ==========================================
+
+func (h *ProductHandler) GetFlatProducts(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	search := strings.TrimSpace(c.Query("search", ""))
+	productGroupID := strings.TrimSpace(c.Query("group_id", "")) // Using group_id query param
+	stockType := strings.TrimSpace(c.Query("stock_type", ""))
+	cursor := strings.TrimSpace(c.Query("cursor", ""))
+	sort := strings.TrimSpace(c.Query("sort", ""))
+	limit := c.QueryInt("limit", 20)
+
+	var isActive *bool
+	if isActiveStr := c.Query("is_active"); isActiveStr != "" {
+		active := isActiveStr == "true"
+		isActive = &active
+	}
+
+	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	response, errSvc := h.service.GetAllProducts(requesterID, requesterRole, businessID, search, productGroupID, stockType, isActive, sort, cursor, limit)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar produk berhasil diambil", response)
+}
+
 // 6. BULK UPDATE STATUS
 func (h *ProductHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
