@@ -125,5 +125,6 @@ type CommentResponse struct {
 	ProductPrice         *float64          `json:"product_price,omitempty"`
 	ProductOriginalPrice *float64          `json:"product_original_price,omitempty"`
 
+	RepliesCount         int               `json:"replies_count"`
 	Replies              []CommentResponse `json:"replies,omitempty"`
 }

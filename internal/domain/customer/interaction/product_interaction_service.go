@@ -150,6 +150,7 @@ func (s *productInteractionService) GetProductComments(productID, currentAccount
 		if rc.ReplyToCommentID != nil {
 			if parentItem, exists := commentMap[*rc.ReplyToCommentID]; exists {
 				parentItem.Replies = append(parentItem.Replies, *currentItem)
+				parentItem.RepliesCount = len(parentItem.Replies)
 			}
 		}
 	}
@@ -194,6 +195,7 @@ func (s *productInteractionService) GetAllProductCommentsByBusinessID(businessID
 			CreatedAt:            rc.CreatedAt,
 			RepliedToAccountID:   rc.RepliedToAccountID,
 			RepliedToAccountName: rc.RepliedToAccountName,
+			RepliesCount:         len(rc.Replies),
 		}
 
 		if rc.Product != nil {

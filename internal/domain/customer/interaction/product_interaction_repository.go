@@ -132,7 +132,7 @@ func (r *productInteractionRepository) GetAllProductCommentsByBusinessID(busines
 	// We only want root comments (which are the actual product reviews, typically ReplyToCommentID is null)
 	// But let's fetch all product comments tied to the business. Usually a review is ReplyToCommentID IS NULL
 	// But let's just fetch everything or only root comments. "review" means rating is not null or reply_to is null.
-	err := r.db.Preload("Account.Customer").Preload("Product").Where("business_id = ? AND reply_to_comment_id IS NULL", businessID).Order("created_at DESC").Find(&comments).Error
+	err := r.db.Preload("Account.Customer").Preload("Product").Preload("Replies").Where("business_id = ? AND reply_to_comment_id IS NULL", businessID).Order("created_at DESC").Find(&comments).Error
 	return comments, err
 }
 
