@@ -446,8 +446,11 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 	}
 
 	var responseList []models.ProductListItem
+	hasMore := false
+	nextCursor := ""
 
 	if len(products) > limit {
+		hasMore = true
 		products = products[:limit]
 	}
 
@@ -515,9 +518,17 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 		})
 	}
 
+	if len(responseList) > 0 && hasMore {
+		nextCursor = responseList[len(responseList)-1].ProductID
+	}
+
 	response := &models.GetProductsResponse{
 		Products: responseList,
 		Summary:  *summary,
+		Pagination: models.PaginationMeta{
+			NextCursor: nextCursor,
+			HasMore:    hasMore,
+		},
 	}
 
 	return response, nil

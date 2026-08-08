@@ -165,8 +165,9 @@ type ProductListItem struct {
 }
 
 type GetProductsResponse struct {
-	Products []ProductListItem `json:"products"`
-	Summary  ProductSummary    `json:"summary"`
+	Products   []ProductListItem `json:"products"`
+	Summary    ProductSummary    `json:"summary"`
+	Pagination PaginationMeta    `json:"pagination"`
 }
 
 type CatalogGroupResponse struct {
