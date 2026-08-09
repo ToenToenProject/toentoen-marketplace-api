@@ -96,6 +96,9 @@ type CreateProductInput struct {
 	ProductName        string   `json:"product_name" validate:"required"`
 	ProductDescription string   `json:"product_description"`
 	Price              float64  `json:"price" validate:"required,min=0"`
+	Discount           float64  `json:"discount"`
+	DiscountStartAt    *time.Time `json:"discount_start_at"`
+	DiscountEndAt      *time.Time `json:"discount_end_at"`
 
 	StockType         string `json:"stock_type"` // in_stock, out_of_stock, limited
 	StockQuantity     int    `json:"stock_quantity"`
