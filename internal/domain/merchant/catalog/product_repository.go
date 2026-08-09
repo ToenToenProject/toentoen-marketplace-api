@@ -165,8 +165,8 @@ func (r *productRepository) GetProducts(businessID, search, productGroupID, stoc
 		for _, term := range searchTerms {
 			wildcardTerm := "%" + term + "%"
 			searchQuery = searchQuery.Or(
-				"product_name ILIKE ? OR product_description ILIKE ? OR tags::text ILIKE ?",
-				wildcardTerm, wildcardTerm, wildcardTerm,
+				"product_name ILIKE ? OR tags::text ILIKE ?",
+				wildcardTerm, wildcardTerm,
 			)
 		}
 		query = query.Where(searchQuery)
@@ -250,8 +250,8 @@ func (r *productRepository) GetProductSummary(businessID, search, productGroupID
 		for _, term := range searchTerms {
 			wildcardTerm := "%" + term + "%"
 			searchQuery = searchQuery.Or(
-				"product_name ILIKE ? OR product_description ILIKE ? OR tags::text ILIKE ?",
-				wildcardTerm, wildcardTerm, wildcardTerm,
+				"product_name ILIKE ? OR tags::text ILIKE ?",
+				wildcardTerm, wildcardTerm,
 			)
 		}
 		query = query.Where(searchQuery)

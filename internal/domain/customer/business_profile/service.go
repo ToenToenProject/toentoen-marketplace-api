@@ -265,7 +265,7 @@ func mapToSimpleProduct(p models.Product) SimpleProductResponse {
 	}
 
 	stockStatus := "Out of Stock"
-	if p.StockQuantity > 0 || p.StockType == "always_available" || p.StockType == "in_stock" {
+	if p.StockType == "always_available" || p.StockType == "in_stock" {
 		stockStatus = "In Stock"
 	}
 

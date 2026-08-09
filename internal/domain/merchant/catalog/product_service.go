@@ -53,14 +53,11 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		ProductGroupID:     input.ProductGroupID,
 		ProductImages:      input.ProductImages,
 		ProductName:        input.ProductName,
-		ProductDescription: input.ProductDescription,
 		Price:              input.Price,
 		Discount:           input.Discount,
 		DiscountStartAt:    input.DiscountStartAt,
 		DiscountEndAt:      input.DiscountEndAt,
 		StockType:          input.StockType,
-		StockQuantity:      input.StockQuantity,
-		LowStockThreshold:  input.LowStockThreshold,
 		Tags:               input.Tags,
 		IsActive:           isActive,
 	}
@@ -164,9 +161,6 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	if input.ProductName != nil {
 		product.ProductName = *input.ProductName
 	}
-	if input.ProductDescription != nil {
-		product.ProductDescription = *input.ProductDescription
-	}
 	if input.Price != nil {
 		product.Price = *input.Price
 	}
@@ -189,9 +183,6 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	}
 	if input.StockType != nil {
 		product.StockType = *input.StockType
-	}
-	if input.StockQuantity != nil {
-		product.StockQuantity = *input.StockQuantity
 	}
 	if input.IsActive != nil {
 		product.IsActive = *input.IsActive
@@ -276,12 +267,10 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		ProductGroupID:     p.ProductGroupID,
 		ProductImages:      p.ProductImages,
 		ProductName:        p.ProductName,
-		ProductDescription: p.ProductDescription,
-		
-		Price:           p.Price,
-		Discount:        p.Discount,
-		DiscountStartAt: p.DiscountStartAt,
-		DiscountEndAt:   p.DiscountEndAt,
+		Price:              p.Price,
+		Discount:           p.Discount,
+		DiscountStartAt:    p.DiscountStartAt,
+		DiscountEndAt:      p.DiscountEndAt,
 
 		HasVariants:      p.HasVariants,
 		OriginalMinPrice: originalMinPrice,
@@ -290,11 +279,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		FinalMaxPrice:    finalMaxPrice,
 		IsDiscounted:     isDiscounted,
 
-		StockType:         p.StockType,
-		StockQuantity:     p.StockQuantity,
-		LowStockThreshold: p.LowStockThreshold,
-		IsLowStock:        (p.StockType == "in_stock" && p.StockQuantity <= p.LowStockThreshold),
-		
+		StockType:    p.StockType,
 		Tags:         p.Tags,
 		IsActive:     p.IsActive,
 		Rating:       p.AverageRating,
@@ -390,8 +375,6 @@ func (s *productService) GetCatalog(requesterID, role, businessID string) ([]mod
 			IsDiscounted:     isDiscounted,
 
 			StockType:     p.StockType,
-			StockQuantity: p.StockQuantity,
-			IsLowStock:    (p.StockType == "in_stock" && p.StockQuantity <= p.LowStockThreshold),
 			Rating:        p.AverageRating,
 			LikeCount:     p.LikeCount,
 			CommentCount:  p.CommentCount,
@@ -513,8 +496,6 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 			IsDiscounted:     isDiscounted,
 
 			StockType:     p.StockType,
-			StockQuantity: p.StockQuantity,
-			IsLowStock:    (p.StockType == "in_stock" && p.StockQuantity <= p.LowStockThreshold),
 			Rating:        p.AverageRating,
 			LikeCount:     p.LikeCount,
 			CommentCount:  p.CommentCount,

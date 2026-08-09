@@ -52,7 +52,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 	}
 
 	stockStatus := "In Stock"
-	if prod.StockType == "out_of_stock" || prod.StockQuantity == 0 {
+	if prod.StockType == "out_of_stock" {
 		stockStatus = "Out of Stock"
 	}
 
@@ -65,7 +65,6 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		ProductID:          prod.ProductID,
 		ProductName:        prod.ProductName,
 		ProductImages:      prod.ProductImages,
-		ProductDescription: prod.ProductDescription,
 		Rating:             prod.AverageRating,
 		ReviewCount:        prod.ReviewCount,
 		Price:              finalPrice,
@@ -96,7 +95,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		}
 		
 		st := "In Stock"
-		if sim.StockType == "out_of_stock" || sim.StockQuantity == 0 {
+		if sim.StockType == "out_of_stock" {
 			st = "Out of Stock"
 		}
 		
@@ -109,8 +108,6 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 			FinalMinPrice:    simPrice,
 			IsDiscounted:     sim.Discount > 0,
 			StockType:        st,
-			StockQuantity:    sim.StockQuantity,
-			IsLowStock:       sim.StockQuantity > 0 && sim.StockQuantity <= sim.LowStockThreshold,
 			Rating:           sim.AverageRating,
 			LikeCount:        sim.LikeCount,
 		})
