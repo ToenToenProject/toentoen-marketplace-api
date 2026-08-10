@@ -8,8 +8,9 @@ import (
 type ProductDetailResponse struct {
 	ProductID          string   `json:"product_id"`
 	ProductName        string   `json:"product_name"`
+	ProductOrigin      string   `json:"product_origin"`
+	ImportedFrom       string   `json:"imported_from"`
 	ProductImages      []string `json:"product_images"`
-	ProductDescription string   `json:"product_description"`
 	Rating             float64  `json:"rating"`
 	ReviewCount        int      `json:"review_count"`
 	Price              float64  `json:"price"`
@@ -64,6 +65,8 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 	res := ProductDetailResponse{
 		ProductID:          prod.ProductID,
 		ProductName:        prod.ProductName,
+		ProductOrigin:      prod.ProductOrigin,
+		ImportedFrom:       prod.ImportedFrom,
 		ProductImages:      prod.ProductImages,
 		Rating:             prod.AverageRating,
 		ReviewCount:        prod.ReviewCount,
