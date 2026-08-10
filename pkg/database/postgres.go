@@ -67,6 +67,10 @@ func ConnectDB() {
 		log.Fatal("Failed to migrate database. \n", err)
 	}
 
+	// Manual Migration for Products (Aman dari bentrok GORM Relations)
+	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_origin varchar(50) DEFAULT 'domestic'")
+	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS imported_from varchar(100)")
+
 	// PostGIS: Pastikan ekstensi postgis aktif sebelum membuat kolom location
 	DB.Exec("CREATE EXTENSION IF NOT EXISTS postgis")
 	DB.Exec("ALTER TABLE signals ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)")
