@@ -139,7 +139,7 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	}
 
 	if account.PasswordHash == nil {
-		return errors.New("Silakan login menggunakan Google")
+		return errors.New("Akun ini tidak memiliki kata sandi, silakan gunakan fitur Lupa Password untuk membuat sandi baru.")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.Password)); err != nil {
@@ -183,7 +183,7 @@ func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 	}
 
 	if account.PasswordHash == nil {
-		return errors.New("Silakan reset password melalui layanan Google")
+		return errors.New("Akun ini tidak memiliki kata sandi. Lanjutkan untuk membuat sandi baru.")
 	}
 
 	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "forgot_otp")
@@ -232,6 +232,8 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
 	pwd := string(passwordHash)
 	account.PasswordHash = &pwd
+	now := time.Now()
+	account.LastLoginAt = &now
 
 	if err := s.repo.Update(account); err != nil {
 		return errors.New("Gagal memperbarui kata sandi")
@@ -252,7 +254,7 @@ func (s *authService) ChangePassword(accountID string, input models.ChangePasswo
 	}
 
 	if account.PasswordHash == nil {
-		return errors.New("Silakan atur kata sandi melalui layanan Google")
+		return errors.New("Akun Anda belum memiliki kata sandi sebelumnya")
 	}
 
 	if input.CurrentPassword == input.NewPassword {
@@ -266,6 +268,8 @@ func (s *authService) ChangePassword(accountID string, input models.ChangePasswo
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
 	pwd := string(passwordHash)
 	account.PasswordHash = &pwd
+	now := time.Now()
+	account.LastLoginAt = &now
 
 	if err := s.repo.Update(account); err != nil {
 		return errors.New("Gagal memperbarui kata sandi")

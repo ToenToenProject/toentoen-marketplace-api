@@ -22,12 +22,6 @@ type VerifyLoginOTPInput struct {
 	OTP        string `json:"otp" validate:"required"`
 }
 
-type GoogleAuthInput struct {
-	GoogleID string `json:"google_id"`
-	Email    string `json:"email"`
-	Fullname string `json:"fullname"`
-}
-
 type ForgotPasswordInput struct {
 	Identifier string `json:"identifier" validate:"required"`
 }

@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"toentoen-backend/internal/config"
+	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
@@ -50,6 +52,22 @@ func UpgradeCheck(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Gagal membaca data token",
 			})
+		}
+
+		accountID, ok := claims["account_id"].(string)
+		if ok {
+			var account models.Account
+			if err := database.DB.Select("last_login_at").Where("account_id = ?", accountID).First(&account).Error; err == nil {
+				if account.LastLoginAt != nil {
+					if iatFloat, ok := claims["iat"].(float64); ok {
+						if int64(iatFloat) < account.LastLoginAt.Unix() {
+							return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+								"error": "Session is no longer valid, please login again",
+							})
+						}
+					}
+				}
+			}
 		}
 
 		// Simpan data user ke Locals agar bisa diakses di handler WS
