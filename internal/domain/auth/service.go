@@ -201,7 +201,7 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 
 	resetToken := utils.GenerateNumericOTP(6)
 	tokenRedisKey := fmt.Sprintf("reset_token:%s", input.Identifier)
-	config.RDB.Set(config.Ctx, tokenRedisKey, resetToken, 15*time.Minute)
+	config.RDB.Set(config.Ctx, tokenRedisKey, resetToken, 5*time.Minute)
 
 	return resetToken, nil
 }

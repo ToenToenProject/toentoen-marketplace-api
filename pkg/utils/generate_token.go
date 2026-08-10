@@ -12,6 +12,7 @@ func GenerateToken(id string, role string) (string, error) {
 		"account_id": id,
 		"role":       role,
 		"iat":        time.Now().Unix(),
+		"exp":        time.Now().Add(30 * 24 * time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 

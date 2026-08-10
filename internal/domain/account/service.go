@@ -127,7 +127,7 @@ func (s *profileService) RequestDeleteOTP(accountID string) error {
 	otp := utils.GenerateNumericOTP(6)
 	redisKey := fmt.Sprintf("delete_otp:%s", accountID)
 
-	if err := config.RDB.Set(config.Ctx, redisKey, otp, 10*time.Minute).Err(); err != nil {
+	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
 		return errors.New("Gagal memproses kode OTP")
 	}
 
