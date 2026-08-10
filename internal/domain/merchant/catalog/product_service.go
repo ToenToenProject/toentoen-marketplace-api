@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
@@ -65,7 +66,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 	}
 
 	if err := s.repo.CreateProduct(&product); err != nil {
-		return errors.New("failed to create product")
+		return fmt.Errorf("failed to create product: %w", err)
 	}
 	return nil
 }

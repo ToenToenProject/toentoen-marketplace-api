@@ -40,7 +40,10 @@ func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
 
 	errSvc := h.service.CreateProduct(requesterID, requesterRole, businessID, input)
 	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		if strings.Contains(errSvc.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errSvc.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Produk berhasil dibuat", nil)
