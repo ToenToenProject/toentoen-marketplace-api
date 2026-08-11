@@ -1,4 +1,4 @@
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
     review_id VARCHAR(50) PRIMARY KEY,
     business_id VARCHAR(50) NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,
     account_id VARCHAR(50) NOT NULL, -- ID Customer yang mereview
@@ -16,4 +16,4 @@ CREATE TABLE reviews (
 );
 
 -- Index agar load data review ngebut
-CREATE INDEX idx_reviews_business ON reviews(business_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_business ON reviews(business_id);

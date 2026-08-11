@@ -1,4 +1,4 @@
-CREATE TABLE analytics_business_daily (
+CREATE TABLE IF NOT EXISTS analytics_business_daily (
     analytics_id BIGSERIAL PRIMARY KEY,
     date DATE NOT NULL,
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
@@ -7,7 +7,7 @@ CREATE TABLE analytics_business_daily (
     UNIQUE(date, business_id)
 );
 
-CREATE TABLE analytics_search_keywords (
+CREATE TABLE IF NOT EXISTS analytics_search_keywords (
     id BIGSERIAL PRIMARY KEY,
     keyword VARCHAR(255),
     latitude DECIMAL(10,8),
@@ -15,7 +15,7 @@ CREATE TABLE analytics_search_keywords (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     notification_id BIGSERIAL PRIMARY KEY,
     recipient_account_id VARCHAR(50) REFERENCES customers(account_id),
     recipient_business_id VARCHAR(50) REFERENCES businesses(business_id),

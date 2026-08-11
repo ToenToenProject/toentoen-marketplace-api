@@ -1,4 +1,4 @@
-CREATE TABLE merchant_analytics (
+CREATE TABLE IF NOT EXISTS merchant_analytics (
     log_id BIGSERIAL PRIMARY KEY,
     business_id VARCHAR(50) NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,
     event_type VARCHAR(20) NOT NULL, 
@@ -9,4 +9,4 @@ CREATE TABLE merchant_analytics (
 );
 
 -- Index agar sistem tidak lemot saat menghitung data hari ini
-CREATE INDEX idx_analytics_time ON merchant_analytics(business_id, event_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_analytics_time ON merchant_analytics(business_id, event_type, created_at);

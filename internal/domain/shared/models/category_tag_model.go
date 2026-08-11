@@ -12,9 +12,10 @@ type Category struct {
 }
 
 type Tag struct {
-	TagID    int64   `gorm:"primaryKey;autoIncrement;column:tag_id" json:"tag_id"`
-	Name     string  `gorm:"not null;column:name" json:"name"`
-	ParentID *int64  `gorm:"column:parent_id" json:"parent_id"`
+	TagID      int64   `gorm:"primaryKey;autoIncrement;column:tag_id" json:"tag_id"`
+	Name       string  `gorm:"not null;column:name" json:"name"`
+	CategoryID *int64  `gorm:"column:category_id" json:"category_id"`
+	ParentID   *int64  `gorm:"column:parent_id" json:"parent_id"`
 
 	Children []Tag `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }

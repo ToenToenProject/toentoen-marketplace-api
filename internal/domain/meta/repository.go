@@ -8,7 +8,7 @@ import (
 
 type MetaRepository interface {
 	GetAllCategories() ([]models.Category, error)
-	GetAllTags() ([]models.Tag, error)
+	GetAllTags(categoryID *int64) ([]models.Tag, error)
 }
 
 type metaRepository struct {
@@ -25,8 +25,12 @@ func (r *metaRepository) GetAllCategories() ([]models.Category, error) {
 	return categories, err
 }
 
-func (r *metaRepository) GetAllTags() ([]models.Tag, error) {
+func (r *metaRepository) GetAllTags(categoryID *int64) ([]models.Tag, error) {
 	var tags []models.Tag
-	err := r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").Where("parent_id IS NULL").Find(&tags).Error
+	query := r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").Where("parent_id IS NULL")
+	if categoryID != nil {
+		query = query.Where("category_id = ?", *categoryID)
+	}
+	err := query.Find(&tags).Error
 	return tags, err
 }

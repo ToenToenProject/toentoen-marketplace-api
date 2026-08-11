@@ -1,5 +1,5 @@
 -- Tabel Product Likes
-CREATE TABLE product_likes (
+CREATE TABLE IF NOT EXISTS product_likes (
     account_id VARCHAR(50) NOT NULL,
     product_id VARCHAR(50) NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -7,7 +7,7 @@ CREATE TABLE product_likes (
 );
 
 -- Tabel Product Comments
-CREATE TABLE product_comments (
+CREATE TABLE IF NOT EXISTS product_comments (
     comment_id VARCHAR(50) PRIMARY KEY,
     product_id VARCHAR(50) NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
     business_id VARCHAR(50) NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,

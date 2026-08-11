@@ -1,5 +1,5 @@
 -- 1. Tabel Profil Admin (Menyimpan data KYC/Pribadi)
-CREATE TABLE business_admins (
+CREATE TABLE IF NOT EXISTS business_admins (
     account_id VARCHAR(50) PRIMARY KEY REFERENCES accounts(account_id) ON DELETE CASCADE,
     ktp_number VARCHAR(50) UNIQUE,
     ktp_photo_url TEXT,
@@ -8,7 +8,7 @@ CREATE TABLE business_admins (
 );
 
 -- 2. Tabel Undangan & Penugasan (Relasi Many-to-Many)
-CREATE TABLE business_admin_assignments (
+CREATE TABLE IF NOT EXISTS business_admin_assignments (
     assignment_id VARCHAR(50) PRIMARY KEY, -- Menggunakan ID unik (UUID) lebih aman untuk sistem undangan
     admin_id VARCHAR(50) REFERENCES business_admins(account_id) ON DELETE CASCADE,
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,

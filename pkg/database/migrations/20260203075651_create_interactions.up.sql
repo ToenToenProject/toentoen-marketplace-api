@@ -1,4 +1,4 @@
-CREATE TABLE bookmarks (
+CREATE TABLE IF NOT EXISTS bookmarks (
     bookmark_id BIGSERIAL PRIMARY KEY,
     account_id VARCHAR(50) REFERENCES customers(account_id) ON DELETE CASCADE,
     target_type enum_bookmark_target NOT NULL,
@@ -7,7 +7,7 @@ CREATE TABLE bookmarks (
     UNIQUE(account_id, target_type, target_id)
 );
 
-CREATE TABLE likes (
+CREATE TABLE IF NOT EXISTS likes (
     like_id BIGSERIAL PRIMARY KEY,
     account_id VARCHAR(50) REFERENCES customers(account_id) ON DELETE CASCADE,
     business_id VARCHAR(50) REFERENCES businesses(business_id), -- Optional context

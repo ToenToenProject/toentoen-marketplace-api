@@ -1,4 +1,4 @@
-CREATE TABLE business_post_likes (
+CREATE TABLE IF NOT EXISTS business_post_likes (
     account_id VARCHAR(50) NOT NULL,
     post_id VARCHAR(50) NOT NULL REFERENCES business_posts(post_id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -6,7 +6,7 @@ CREATE TABLE business_post_likes (
 );
 
 -- Tabel Business Post Comments
-CREATE TABLE business_post_comments (
+CREATE TABLE IF NOT EXISTS business_post_comments (
     comment_id VARCHAR(50) PRIMARY KEY,
     post_id VARCHAR(50) NOT NULL, -- Tambahkan REFERENCES business_posts(post_id) ON DELETE CASCADE jika tabelnya sudah ada
     business_id VARCHAR(50) NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,

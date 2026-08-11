@@ -1,1 +1,1 @@
-ALTER TABLE "businesses" ADD COLUMN "location" geometry(Point, 4326);
+ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "location" geometry(Point, 4326);

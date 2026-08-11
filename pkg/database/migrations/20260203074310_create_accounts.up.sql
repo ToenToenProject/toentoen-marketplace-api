@@ -1,4 +1,4 @@
-CREATE TABLE accounts (
+CREATE TABLE IF NOT EXISTS accounts (
   account_id VARCHAR(50) PRIMARY KEY,
   auth_provider VARCHAR(50) NOT NULL DEFAULT 'local',
   email VARCHAR(255) UNIQUE,

@@ -1,4 +1,4 @@
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
     product_id VARCHAR(50) PRIMARY KEY,
     business_id VARCHAR(50) NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,
     product_group_id VARCHAR(50) REFERENCES product_groups(product_group_id) ON DELETE SET NULL,
@@ -38,7 +38,7 @@ CREATE TABLE products (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE TABLE product_variants (
+CREATE TABLE IF NOT EXISTS product_variants (
     variant_id VARCHAR(50) PRIMARY KEY,
     product_id VARCHAR(50) NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
     

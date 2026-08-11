@@ -1,4 +1,4 @@
-CREATE TABLE ad_campaigns (
+CREATE TABLE IF NOT EXISTS ad_campaigns (
     ad_campaign_id BIGSERIAL PRIMARY KEY,
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     target_type enum_ad_target,
@@ -9,7 +9,7 @@ CREATE TABLE ad_campaigns (
     budget_limit DECIMAL(15,2)
 );
 
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
     transaction_id BIGSERIAL PRIMARY KEY,
     business_id VARCHAR(50) REFERENCES businesses(business_id),
     amount DECIMAL(15,2),

@@ -6,7 +6,7 @@ import (
 
 type MetaService interface {
 	GetCategories() ([]models.Category, error)
-	GetTags() ([]models.Tag, error)
+	GetTags(categoryID *int64) ([]models.Tag, error)
 }
 
 type metaService struct {
@@ -21,6 +21,6 @@ func (s *metaService) GetCategories() ([]models.Category, error) {
 	return s.metaRepo.GetAllCategories()
 }
 
-func (s *metaService) GetTags() ([]models.Tag, error) {
-	return s.metaRepo.GetAllTags()
+func (s *metaService) GetTags(categoryID *int64) ([]models.Tag, error) {
+	return s.metaRepo.GetAllTags(categoryID)
 }

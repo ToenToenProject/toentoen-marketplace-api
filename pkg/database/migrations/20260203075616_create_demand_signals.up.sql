@@ -1,5 +1,5 @@
 -- 1. Demand Signals
-CREATE TABLE demand_signals (
+CREATE TABLE IF NOT EXISTS demand_signals (
     signal_id VARCHAR(50) PRIMARY KEY,
     account_id VARCHAR(50) REFERENCES accounts(account_id) ON DELETE CASCADE,
     category VARCHAR(100) NOT NULL, -- (e.g., 'bengkel', 'tambal_ban', 'medis')
@@ -16,7 +16,7 @@ CREATE TABLE demand_signals (
 );
 
 -- 2. Demand Responses (Tawaran/Bantuan dari Owner)
-CREATE TABLE demand_responses (
+CREATE TABLE IF NOT EXISTS demand_responses (
     response_id VARCHAR(50) PRIMARY KEY,
     signal_id VARCHAR(50) REFERENCES demand_signals(signal_id) ON DELETE CASCADE,
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,

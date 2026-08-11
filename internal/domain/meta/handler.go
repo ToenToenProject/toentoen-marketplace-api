@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"strconv"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/pkg/utils"
 
@@ -25,7 +26,14 @@ func (h *MetaHandler) GetCategories(c *fiber.Ctx) error {
 }
 
 func (h *MetaHandler) GetTags(c *fiber.Ctx) error {
-	tags, err := h.service.GetTags()
+	var categoryID *int64
+	if catIDStr := c.Query("category_id"); catIDStr != "" {
+		if id, err := strconv.ParseInt(catIDStr, 10, 64); err == nil {
+			categoryID = &id
+		}
+	}
+
+	tags, err := h.service.GetTags(categoryID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar tag", nil)
 	}

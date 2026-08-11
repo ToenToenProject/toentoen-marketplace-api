@@ -1,4 +1,4 @@
-CREATE TABLE "business_bookmarks" (
+CREATE TABLE IF NOT EXISTS "business_bookmarks" (
     "account_id" varchar NOT NULL,
     "business_id" varchar NOT NULL,
     "created_at" timestamptz DEFAULT (now()),

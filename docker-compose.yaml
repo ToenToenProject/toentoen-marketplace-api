@@ -75,7 +75,7 @@ services:
       - ./pkg/database/migrations:/migrations
     command:
       - -path=/migrations
-      - -database=postgres://${DB_USER}:${DB_PASSWORD}@postgres-db:${DB_PORT}/${DB_NAME}?sslmode=disable
+      - -database=postgres://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}?sslmode=disable
       - up
 
 volumes:

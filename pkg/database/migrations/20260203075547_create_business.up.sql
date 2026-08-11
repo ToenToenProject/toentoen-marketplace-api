@@ -1,4 +1,4 @@
-CREATE TABLE businesses (
+CREATE TABLE IF NOT EXISTS businesses (
     business_id VARCHAR(50) PRIMARY KEY,
     account_id VARCHAR(50) REFERENCES owners(account_id),
 
@@ -41,7 +41,7 @@ CREATE TABLE businesses (
 -- ==========================================
 
 -- Business Hours
-CREATE TABLE business_hours (
+CREATE TABLE IF NOT EXISTS business_hours (
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     day_of_week INT,
     open_time TIME,
@@ -50,14 +50,14 @@ CREATE TABLE business_hours (
 );
 
 -- Pivot Categories
-CREATE TABLE business_categories (
+CREATE TABLE IF NOT EXISTS business_categories (
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     category_id INT REFERENCES categories(category_id) ON DELETE CASCADE,
     PRIMARY KEY (business_id, category_id)
 );
 
 -- Pivot Tags
-CREATE TABLE business_tags (
+CREATE TABLE IF NOT EXISTS business_tags (
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE CASCADE,
     tag_id BIGINT REFERENCES tags(tag_id) ON DELETE CASCADE,
     PRIMARY KEY (business_id, tag_id)
