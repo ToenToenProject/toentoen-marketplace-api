@@ -213,7 +213,6 @@ func main() {
 	// ==========================================
 	metaGroup := api.Group("/meta")
 	metaGroup.Get("/categories", metaHandler.GetCategories)
-	metaGroup.Get("/tags", metaHandler.GetTags)
 
 	// ==========================================
 	// ROUTE: WEBSOCKET (Real-Time)

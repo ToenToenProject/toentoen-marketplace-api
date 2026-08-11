@@ -75,6 +75,9 @@ func ConnectDB() {
 	DB.Exec("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS tags jsonb DEFAULT '[]'::jsonb")
 	DB.Exec("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS certificates jsonb DEFAULT '[]'::jsonb")
 
+	// Meta Categories and Tags Restructuring
+	DB.Exec("DROP TABLE IF EXISTS tag_groups CASCADE")
+
 	// PostGIS
 	DB.Exec("CREATE EXTENSION IF NOT EXISTS postgis")
 	DB.Exec("ALTER TABLE signals ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)")

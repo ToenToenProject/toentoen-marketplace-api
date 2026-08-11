@@ -8,7 +8,6 @@ import (
 
 type MetaRepository interface {
 	GetAllCategories() ([]models.Category, error)
-	GetAllTagGroups() ([]models.TagGroup, error)
 }
 
 type metaRepository struct {
@@ -21,12 +20,7 @@ func NewMetaRepository(db *gorm.DB) MetaRepository {
 
 func (r *metaRepository) GetAllCategories() ([]models.Category, error) {
 	var categories []models.Category
-	err := r.db.Preload("Subcategories").Where("parent_id IS NULL").Find(&categories).Error
+	// We don't filter by parent_id since we dropped the recursive Category-to-Category tree for this feature
+	err := r.db.Preload("Subcategories").Find(&categories).Error
 	return categories, err
-}
-
-func (r *metaRepository) GetAllTagGroups() ([]models.TagGroup, error) {
-	var tagGroups []models.TagGroup
-	err := r.db.Preload("Tags").Find(&tagGroups).Error
-	return tagGroups, err
 }
