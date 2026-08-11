@@ -5,7 +5,6 @@ import "time"
 type Category struct {
 	CategoryID int64   `gorm:"primaryKey;autoIncrement;column:category_id" json:"category_id"`
 	Name       string  `gorm:"not null;column:name" json:"name"`
-	IconURL    *string `gorm:"column:icon_url" json:"icon_url"`
 	ParentID   *int64  `gorm:"column:parent_id" json:"parent_id"`
 
 	Children []Category `gorm:"foreignKey:ParentID" json:"children,omitempty"`
