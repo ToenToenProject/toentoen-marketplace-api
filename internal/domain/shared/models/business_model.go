@@ -51,9 +51,9 @@ type Business struct {
 	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
 
-	Hours         []BusinessHour `gorm:"foreignKey:BusinessID" json:"hours"`
-	Categories    []Category     `gorm:"many2many:business_has_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
-	Subcategories []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"subcategories"` // mapped to old tags table
+	Hours      []BusinessHour `gorm:"foreignKey:BusinessID" json:"hours"`
+	Categories []Category     `gorm:"many2many:business_has_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
+	Tags       []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"tags"` // mapped to old tags table
 }
 
 type BusinessHour struct {
@@ -75,7 +75,7 @@ type CreateBusinessInput struct {
 	Certificates   []BusinessCertificate `json:"certificates" validate:"max=5"`
 
 	CategoryIDs     []int64  `json:"category_ids"`
-	SubcategoryIDs  []int64  `json:"subcategory_ids"`
+	Tags            []int64  `json:"tags"`
 	BusinessDetails string   `json:"business_details" validate:"max=2000"`
 
 	NIB             string  `json:"nib"`
@@ -114,7 +114,7 @@ type UpdateBusinessInput struct {
 	Certificates   []BusinessCertificate `json:"certificates" validate:"max=5"`
 
 	CategoryIDs     []int64  `json:"category_ids"`
-	SubcategoryIDs  []int64  `json:"subcategory_ids"`
+	Tags            []int64  `json:"tags"`
 	BusinessDetails string   `json:"business_details" validate:"max=2000"`
 
 	NIB             string  `json:"nib"`

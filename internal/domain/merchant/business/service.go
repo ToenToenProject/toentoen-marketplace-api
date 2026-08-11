@@ -79,7 +79,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 	// Looping Websites dan Images manual dihapus
 
 	// Panggil Repository dengan 4 Argumen saja
-	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.SubcategoryIDs, hours); err != nil {
+	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.Tags, hours); err != nil {
 		return "", err
 	}
 
@@ -275,8 +275,8 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 		catIDs = &input.CategoryIDs
 	}
 	var tagIDs *[]int64
-	if len(input.SubcategoryIDs) > 0 {
-		tagIDs = &input.SubcategoryIDs
+	if len(input.Tags) > 0 {
+		tagIDs = &input.Tags
 	}
 
 	if err := s.repo.UpdateBusiness(business, hoursToUpdate, catIDs, tagIDs); err != nil {
