@@ -71,6 +71,10 @@ func ConnectDB() {
 	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_origin varchar(50)")
 	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_description varchar(300)")
 
+	// Manual Migration for Businesses
+	DB.Exec("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS tags jsonb DEFAULT '[]'::jsonb")
+	DB.Exec("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS certificates jsonb DEFAULT '[]'::jsonb")
+
 	// PostGIS
 	DB.Exec("CREATE EXTENSION IF NOT EXISTS postgis")
 	DB.Exec("ALTER TABLE signals ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)")

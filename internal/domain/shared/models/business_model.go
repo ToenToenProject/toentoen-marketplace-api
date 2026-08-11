@@ -4,6 +4,12 @@ import (
 	"time"
 )
 
+type BusinessCertificate struct {
+	Type     string `json:"type"`
+	Number   string `json:"number"`
+	ImageURL string `json:"image_url"`
+}
+
 type Business struct {
 	BusinessID string `gorm:"primaryKey;column:business_id" json:"business_id"`
 	AccountID  string `gorm:"column:account_id" json:"account_id"`
@@ -16,8 +22,9 @@ type Business struct {
 	Status           string `gorm:"default:'draft';column:status" json:"status"`
 	SubscriptionTier string `gorm:"default:'free';column:subscription_tier" json:"subscription_tier"`
 
-	BusinessImages          []string `gorm:"type:jsonb;serializer:json;column:business_images" json:"business_images"`
-	BusinessDetails *string  `gorm:"column:business_details" json:"business_details"`
+	BusinessImages          []string              `gorm:"type:jsonb;serializer:json;column:business_images" json:"business_images"`
+	Certificates            []BusinessCertificate `gorm:"type:jsonb;serializer:json;column:certificates;default:'[]'" json:"certificates"`
+	BusinessDetails         *string               `gorm:"column:business_details" json:"business_details"`
 
 	Province      *string  `gorm:"column:province" json:"province"`
 	City          *string  `gorm:"column:city" json:"city"`
@@ -41,9 +48,10 @@ type Business struct {
 	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
 
-	Hours      []BusinessHour `gorm:"foreignKey:BusinessID" json:"hours"`
-	Categories []Category     `gorm:"many2many:business_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
-	Tags       []Tag          `gorm:"many2many:business_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"tags"`
+	Hours         []BusinessHour `gorm:"foreignKey:BusinessID" json:"hours"`
+	Categories    []Category     `gorm:"many2many:business_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
+	Subcategories []Tag          `gorm:"many2many:business_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"subcategories"` // mapped to old tags table
+	Tags          []string       `gorm:"type:jsonb;serializer:json;column:tags;default:'[]'" json:"tags"`
 }
 
 type BusinessHour struct {
@@ -61,11 +69,13 @@ type CreateBusinessInput struct {
 	BusinessName string `json:"business_name"`
 	Email        string `json:"email"`
 
-	BusinessImages []string `json:"business_images"`
+	BusinessImages []string `json:"business_images" validate:"max=5"`
+	Certificates   []BusinessCertificate `json:"certificates" validate:"max=5"`
 
-	CategoryIDs     []int64 `json:"category_ids"`
-	TagIDs          []int64 `json:"tag_ids"`
-	BusinessDetails string  `json:"business_details"`
+	CategoryIDs     []int64  `json:"category_ids"`
+	SubcategoryIDs  []int64  `json:"subcategory_ids"`
+	Tags            []string `json:"tags"`
+	BusinessDetails string   `json:"business_details"`
 
 	Province      string  `json:"province"`
 	City          string  `json:"city"`
@@ -96,11 +106,13 @@ type UpdateBusinessInput struct {
 	Handle       string `json:"handle"`
 	Email        string `json:"email"`
 
-	BusinessImages []string `json:"business_images"`
+	BusinessImages []string `json:"business_images" validate:"max=5"`
+	Certificates   []BusinessCertificate `json:"certificates" validate:"max=5"`
 
-	CategoryIDs     []int64 `json:"category_ids"`
-	TagIDs          []int64 `json:"tag_ids"`
-	BusinessDetails string  `json:"business_details"`
+	CategoryIDs     []int64  `json:"category_ids"`
+	SubcategoryIDs  []int64  `json:"subcategory_ids"`
+	Tags            []string `json:"tags"`
+	BusinessDetails string   `json:"business_details"`
 
 	Province      string  `json:"province"`
 	City          string  `json:"city"`

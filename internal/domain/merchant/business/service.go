@@ -57,6 +57,8 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		
 		// 🪄 MAGIC JSONB: Langsung masukkan array-nya, GORM akan mengurus sisanya
 		BusinessImages:   input.BusinessImages,
+		Certificates:     input.Certificates,
+		Tags:             input.Tags,
 		SocialWebsites:   input.SocialWebsites,
 		
 		IsActive:         true,
@@ -75,7 +77,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 	// Looping Websites dan Images manual dihapus
 
 	// Panggil Repository dengan 4 Argumen saja
-	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.TagIDs, hours); err != nil {
+	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.SubcategoryIDs, hours); err != nil {
 		return "", err
 	}
 
@@ -228,6 +230,12 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 	if len(input.BusinessImages) > 0 {
 		business.BusinessImages = input.BusinessImages
 	}
+	if len(input.Certificates) > 0 {
+		business.Certificates = input.Certificates
+	}
+	if len(input.Tags) > 0 {
+		business.Tags = input.Tags
+	}
 	if len(input.SocialWebsites) > 0 {
 		business.SocialWebsites = input.SocialWebsites
 	}
@@ -259,8 +267,8 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 		catIDs = &input.CategoryIDs
 	}
 	var tagIDs *[]int64
-	if len(input.TagIDs) > 0 {
-		tagIDs = &input.TagIDs
+	if len(input.SubcategoryIDs) > 0 {
+		tagIDs = &input.SubcategoryIDs
 	}
 
 	if err := s.repo.UpdateBusiness(business, hoursToUpdate, catIDs, tagIDs); err != nil {
