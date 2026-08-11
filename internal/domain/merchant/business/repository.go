@@ -64,7 +64,7 @@ func (r *businessRepository) CreateBusinessWithRelations(business *models.Busine
 					"category_id": catID,
 				})
 			}
-			if err := tx.Table("business_categories").Create(&businessCategories).Error; err != nil {
+			if err := tx.Table("business_has_categories").Create(&businessCategories).Error; err != nil {
 				return err
 			}
 		}
@@ -78,7 +78,7 @@ func (r *businessRepository) CreateBusinessWithRelations(business *models.Busine
 					"tag_id":      tagID,
 				})
 			}
-			if err := tx.Table("business_tags").Create(&businessTags).Error; err != nil {
+			if err := tx.Table("business_has_tags").Create(&businessTags).Error; err != nil {
 				return err
 			}
 		}
@@ -149,7 +149,7 @@ func (r *businessRepository) UpdateBusiness(business *models.Business, newHours 
 		// Blok delete & recreate newWebsites dan newImages telah dihapus
 
 		if newCategoryIDs != nil {
-			if err := tx.Exec("DELETE FROM business_categories WHERE business_id = ?", business.BusinessID).Error; err != nil {
+			if err := tx.Exec("DELETE FROM business_has_categories WHERE business_id = ?", business.BusinessID).Error; err != nil {
 				return err
 			}
 			if len(*newCategoryIDs) > 0 {
@@ -160,14 +160,14 @@ func (r *businessRepository) UpdateBusiness(business *models.Business, newHours 
 						"category_id": catID,
 					})
 				}
-				if err := tx.Table("business_categories").Create(&businessCategories).Error; err != nil {
+				if err := tx.Table("business_has_categories").Create(&businessCategories).Error; err != nil {
 					return err
 				}
 			}
 		}
 
 		if newTagIDs != nil {
-			if err := tx.Exec("DELETE FROM business_tags WHERE business_id = ?", business.BusinessID).Error; err != nil {
+			if err := tx.Exec("DELETE FROM business_has_tags WHERE business_id = ?", business.BusinessID).Error; err != nil {
 				return err
 			}
 			if len(*newTagIDs) > 0 {
@@ -178,7 +178,7 @@ func (r *businessRepository) UpdateBusiness(business *models.Business, newHours 
 						"tag_id":      tagID,
 					})
 				}
-				if err := tx.Table("business_tags").Create(&businessTags).Error; err != nil {
+				if err := tx.Table("business_has_tags").Create(&businessTags).Error; err != nil {
 					return err
 				}
 			}
