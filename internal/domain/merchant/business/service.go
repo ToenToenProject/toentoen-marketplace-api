@@ -44,9 +44,12 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		Status:           "draft",
 		SubscriptionTier: "free",
 		BusinessDetails:  toPointerOrNil(input.BusinessDetails),
+		NIB:              toPointerOrNil(input.NIB),
+		Country:          toPointerOrNil(input.Country),
 		Province:         toPointerOrNil(input.Province),
 		City:             toPointerOrNil(input.City),
 		AddressDetail:    toPointerOrNil(input.AddressDetail),
+		GoogleMapsLink:   toPointerOrNil(input.GoogleMapsLink),
 		Latitude:         &input.Latitude,
 		Longitude:        &input.Longitude,
 		StoreType:        toPointerOrNil(input.StoreType),
@@ -58,7 +61,6 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		// 🪄 MAGIC JSONB: Langsung masukkan array-nya, GORM akan mengurus sisanya
 		BusinessImages:   input.BusinessImages,
 		Certificates:     input.Certificates,
-		Tags:             input.Tags,
 		SocialWebsites:   input.SocialWebsites,
 		
 		IsActive:         true,
@@ -187,6 +189,12 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 	if input.BusinessDetails != "" {
 		business.BusinessDetails = &input.BusinessDetails
 	}
+	if input.NIB != "" {
+		business.NIB = &input.NIB
+	}
+	if input.Country != "" {
+		business.Country = &input.Country
+	}
 	if input.Province != "" {
 		business.Province = &input.Province
 	}
@@ -195,6 +203,9 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 	}
 	if input.AddressDetail != "" {
 		business.AddressDetail = &input.AddressDetail
+	}
+	if input.GoogleMapsLink != "" {
+		business.GoogleMapsLink = &input.GoogleMapsLink
 	}
 	
 	// Address, StartDate, EndDate dihapus karena tidak ada di model
@@ -232,9 +243,6 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 	}
 	if len(input.Certificates) > 0 {
 		business.Certificates = input.Certificates
-	}
-	if len(input.Tags) > 0 {
-		business.Tags = input.Tags
 	}
 	if len(input.SocialWebsites) > 0 {
 		business.SocialWebsites = input.SocialWebsites

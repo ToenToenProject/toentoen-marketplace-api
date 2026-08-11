@@ -26,11 +26,14 @@ type Business struct {
 	Certificates            []BusinessCertificate `gorm:"type:jsonb;serializer:json;column:certificates;default:'[]'" json:"certificates"`
 	BusinessDetails         *string               `gorm:"column:business_details" json:"business_details"`
 
+	NIB           *string  `gorm:"column:nib" json:"nib"`
+	Country       *string  `gorm:"column:country;default:'Indonesia'" json:"country"`
 	Province      *string  `gorm:"column:province" json:"province"`
 	City          *string  `gorm:"column:city" json:"city"`
-	AddressDetail *string  `gorm:"column:address_detail" json:"address_detail"`
-	Latitude      *float64 `gorm:"column:latitude" json:"latitude"`
-	Longitude     *float64 `gorm:"column:longitude" json:"longitude"`
+	AddressDetail  *string  `gorm:"column:address_detail" json:"address_detail"`
+	GoogleMapsLink *string  `gorm:"column:google_maps_link" json:"google_maps_link"`
+	Latitude       *float64 `gorm:"column:latitude" json:"latitude"`
+	Longitude      *float64 `gorm:"column:longitude" json:"longitude"`
 
 	StoreType *string `gorm:"default:'regular';column:store_type" json:"store_type"`
 
@@ -51,7 +54,6 @@ type Business struct {
 	Hours         []BusinessHour `gorm:"foreignKey:BusinessID" json:"hours"`
 	Categories    []Category     `gorm:"many2many:business_has_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
 	Subcategories []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"subcategories"` // mapped to old tags table
-	Tags          []string       `gorm:"type:jsonb;serializer:json;column:tags;default:'[]'" json:"tags"`
 }
 
 type BusinessHour struct {
@@ -74,14 +76,16 @@ type CreateBusinessInput struct {
 
 	CategoryIDs     []int64  `json:"category_ids"`
 	SubcategoryIDs  []int64  `json:"subcategory_ids"`
-	Tags            []string `json:"tags"`
-	BusinessDetails string   `json:"business_details"`
+	BusinessDetails string   `json:"business_details" validate:"max=2000"`
 
-	Province      string  `json:"province"`
-	City          string  `json:"city"`
-	AddressDetail string  `json:"address_detail"`
-	Latitude      float64 `json:"latitude"`
-	Longitude     float64 `json:"longitude"`
+	NIB             string  `json:"nib"`
+	Country         string  `json:"country"`
+	Province        string  `json:"province"`
+	City            string  `json:"city"`
+	AddressDetail   string  `json:"address_detail"`
+	GoogleMapsLink  string  `json:"google_maps_link"`
+	Latitude        float64 `json:"latitude"`
+	Longitude       float64 `json:"longitude"`
 
 	StoreType string              `json:"store_type"`
 	Hours     []BusinessHourInput `json:"hours"`
@@ -111,14 +115,16 @@ type UpdateBusinessInput struct {
 
 	CategoryIDs     []int64  `json:"category_ids"`
 	SubcategoryIDs  []int64  `json:"subcategory_ids"`
-	Tags            []string `json:"tags"`
-	BusinessDetails string   `json:"business_details"`
+	BusinessDetails string   `json:"business_details" validate:"max=2000"`
 
-	Province      string  `json:"province"`
-	City          string  `json:"city"`
-	AddressDetail string  `json:"address_detail"`
-	Latitude      float64 `json:"latitude"`
-	Longitude     float64 `json:"longitude"`
+	NIB             string  `json:"nib"`
+	Country         string  `json:"country"`
+	Province        string  `json:"province"`
+	City            string  `json:"city"`
+	AddressDetail   string  `json:"address_detail"`
+	GoogleMapsLink  string  `json:"google_maps_link"`
+	Latitude        float64 `json:"latitude"`
+	Longitude       float64 `json:"longitude"`
 
 	StoreType string              `json:"store_type"`
 	Hours     []BusinessHourInput `json:"hours"`

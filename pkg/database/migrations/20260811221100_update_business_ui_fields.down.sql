@@ -1,0 +1,4 @@
+ALTER TABLE businesses DROP COLUMN IF EXISTS nib;
+ALTER TABLE businesses DROP COLUMN IF EXISTS country;
+ALTER TABLE businesses DROP COLUMN IF EXISTS google_maps_link;
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
