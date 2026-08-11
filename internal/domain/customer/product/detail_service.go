@@ -9,7 +9,7 @@ type ProductDetailResponse struct {
 	ProductID          string   `json:"product_id"`
 	ProductName        string   `json:"product_name"`
 	ProductOrigin      string   `json:"product_origin"`
-	ImportedFrom       string   `json:"imported_from"`
+	ProductDescription string   `json:"product_description"`
 	ProductImages      []string `json:"product_images"`
 	Rating             float64  `json:"rating"`
 	ReviewCount        int      `json:"review_count"`
@@ -66,7 +66,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		ProductID:          prod.ProductID,
 		ProductName:        prod.ProductName,
 		ProductOrigin:      prod.ProductOrigin,
-		ImportedFrom:       prod.ImportedFrom,
+		ProductDescription: prod.ProductDescription,
 		ProductImages:      prod.ProductImages,
 		Rating:             prod.AverageRating,
 		ReviewCount:        prod.ReviewCount,

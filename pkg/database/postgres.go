@@ -35,7 +35,7 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatal("Failed to connect to database. \n", err)
 	}
-	
+
 	err = DB.AutoMigrate(
 		&models.Account{}, // Tambahkan ini di atas agar GORM tahu tabel utama
 		&models.BusinessBookmark{},
@@ -67,11 +67,11 @@ func ConnectDB() {
 		log.Fatal("Failed to migrate database. \n", err)
 	}
 
-	// Manual Migration for Products (Aman dari bentrok GORM Relations)
-	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_origin varchar(50) DEFAULT 'domestic'")
-	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS imported_from varchar(100)")
+	// Manual Migration for Products
+	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_origin varchar(50)")
+	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_description varchar(300)")
 
-	// PostGIS: Pastikan ekstensi postgis aktif sebelum membuat kolom location
+	// PostGIS
 	DB.Exec("CREATE EXTENSION IF NOT EXISTS postgis")
 	DB.Exec("ALTER TABLE signals ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)")
 	DB.Exec("CREATE INDEX IF NOT EXISTS idx_signals_location ON signals USING GIST(location)")

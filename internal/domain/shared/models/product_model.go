@@ -19,7 +19,7 @@ type Product struct {
 	ProductImages      []string `gorm:"column:product_images;type:jsonb;serializer:json;default:'[]'" json:"product_images"`
 	ProductName        string   `gorm:"column:product_name" json:"product_name"`
 	ProductOrigin      string   `gorm:"column:product_origin;default:'domestic'" json:"product_origin"`
-	ImportedFrom       string   `gorm:"column:imported_from" json:"imported_from"`
+	ProductDescription string   `gorm:"column:product_description" json:"product_description"`
 
 	Price           float64    `gorm:"column:price" json:"price"`
 	Discount        float64    `gorm:"column:discount;default:0" json:"discount"`
@@ -91,10 +91,10 @@ type UpdateVariantInput struct {
 
 type CreateProductInput struct {
 	ProductGroupID     *string  `json:"product_group_id"`
-	ProductImages      []string `json:"product_images"`
+	ProductImages      []string `json:"product_images" validate:"max=5"`
 	ProductName        string   `json:"product_name" validate:"required"`
-	ProductOrigin      string   `json:"product_origin" validate:"omitempty,oneof=domestic imported"`
-	ImportedFrom       string   `json:"imported_from"`
+	ProductOrigin      string   `json:"product_origin"`
+	ProductDescription string   `json:"product_description" validate:"max=300"`
 	Price              float64  `json:"price" validate:"required,min=0"`
 	Discount           float64  `json:"discount"`
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
@@ -108,10 +108,10 @@ type CreateProductInput struct {
 
 type UpdateProductInput struct {
 	ProductGroupID     *string    `json:"product_group_id"`
-	ProductImages      *[]string  `json:"product_images"`
+	ProductImages      *[]string  `json:"product_images" validate:"max=5"`
 	ProductName        *string    `json:"product_name"`
-	ProductOrigin      *string    `json:"product_origin" validate:"omitempty,oneof=domestic imported"`
-	ImportedFrom       *string    `json:"imported_from"`
+	ProductOrigin      *string    `json:"product_origin"`
+	ProductDescription *string    `json:"product_description" validate:"max=300"`
 	Price              *float64   `json:"price"`
 	Discount           *float64   `json:"discount"`
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
@@ -188,7 +188,7 @@ type ProductDetailResponse struct {
 	ProductImages      []string `json:"product_images"`
 	ProductName        string   `json:"product_name"`
 	ProductOrigin      string   `json:"product_origin"`
-	ImportedFrom       string   `json:"imported_from"`
+	ProductDescription string   `json:"product_description"`
 
 	Price           float64    `json:"price"` // Harga dasar di DB (opsional untuk referensi)
 	Discount        float64    `json:"discount"`

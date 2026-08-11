@@ -55,7 +55,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		ProductImages:      input.ProductImages,
 		ProductName:        input.ProductName,
 		ProductOrigin:      input.ProductOrigin,
-		ImportedFrom:       input.ImportedFrom,
+		ProductDescription: input.ProductDescription,
 		Price:              input.Price,
 		Discount:           input.Discount,
 		DiscountStartAt:    input.DiscountStartAt,
@@ -167,8 +167,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	if input.ProductOrigin != nil {
 		product.ProductOrigin = *input.ProductOrigin
 	}
-	if input.ImportedFrom != nil {
-		product.ImportedFrom = *input.ImportedFrom
+	if input.ProductDescription != nil {
+		product.ProductDescription = *input.ProductDescription
 	}
 	if input.Price != nil {
 		product.Price = *input.Price
@@ -277,7 +277,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		ProductImages:      p.ProductImages,
 		ProductName:        p.ProductName,
 		ProductOrigin:      p.ProductOrigin,
-		ImportedFrom:       p.ImportedFrom,
+		ProductDescription: p.ProductDescription,
 		Price:              p.Price,
 		Discount:           p.Discount,
 		DiscountStartAt:    p.DiscountStartAt,
