@@ -35,13 +35,6 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatal("Failed to connect to database. \n", err)
 	}
-	// Rename old mapping tables first to avoid clash with new master tables
-	DB.Exec("ALTER TABLE IF EXISTS business_categories RENAME TO business_has_categories")
-	DB.Exec("ALTER TABLE IF EXISTS business_tags RENAME TO business_has_tags")
-
-	// Rename master tables
-	DB.Exec("ALTER TABLE IF EXISTS categories RENAME TO business_categories")
-	DB.Exec("ALTER TABLE IF EXISTS tags RENAME TO business_tags")
 
 	err = DB.AutoMigrate(
 		&models.Category{},
@@ -75,23 +68,6 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatal("Failed to migrate database. \n", err)
 	}
-
-	// Manual Migration for Products
-	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_origin varchar(50)")
-	DB.Exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS product_description varchar(300)")
-
-	// Manual Migration for Businesses
-	DB.Exec("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS tags jsonb DEFAULT '[]'::jsonb")
-	DB.Exec("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS certificates jsonb DEFAULT '[]'::jsonb")
-
-	// Meta Categories and Tags Restructuring
-	DB.Exec("DROP TABLE IF EXISTS tag_groups CASCADE")
-	DB.Exec("ALTER TABLE categories DROP COLUMN IF EXISTS icon_url CASCADE")
-
-	// PostGIS
-	DB.Exec("CREATE EXTENSION IF NOT EXISTS postgis")
-	DB.Exec("ALTER TABLE signals ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)")
-	DB.Exec("CREATE INDEX IF NOT EXISTS idx_signals_location ON signals USING GIST(location)")
 
 	log.Println("🚀 Connected to Database successfully")
 }
