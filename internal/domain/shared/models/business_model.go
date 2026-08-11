@@ -49,8 +49,8 @@ type Business struct {
 	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
 
 	Hours         []BusinessHour `gorm:"foreignKey:BusinessID" json:"hours"`
-	Categories    []Category     `gorm:"many2many:business_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
-	Subcategories []Tag          `gorm:"many2many:business_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"subcategories"` // mapped to old tags table
+	Categories    []Category     `gorm:"many2many:business_has_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
+	Subcategories []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"subcategories"` // mapped to old tags table
 	Tags          []string       `gorm:"type:jsonb;serializer:json;column:tags;default:'[]'" json:"tags"`
 }
 

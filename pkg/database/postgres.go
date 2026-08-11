@@ -35,6 +35,13 @@ func ConnectDB() {
 	if err != nil {
 		log.Fatal("Failed to connect to database. \n", err)
 	}
+	// Rename old mapping tables first to avoid clash with new master tables
+	DB.Exec("ALTER TABLE IF EXISTS business_categories RENAME TO business_has_categories")
+	DB.Exec("ALTER TABLE IF EXISTS business_tags RENAME TO business_has_tags")
+
+	// Rename master tables
+	DB.Exec("ALTER TABLE IF EXISTS categories RENAME TO business_categories")
+	DB.Exec("ALTER TABLE IF EXISTS tags RENAME TO business_tags")
 
 	err = DB.AutoMigrate(
 		&models.Category{},

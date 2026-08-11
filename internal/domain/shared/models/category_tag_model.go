@@ -10,6 +10,10 @@ type Category struct {
 	Children []Category `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
+func (Category) TableName() string {
+	return "business_categories"
+}
+
 type Tag struct {
 	TagID      int64   `gorm:"primaryKey;autoIncrement;column:tag_id" json:"tag_id"`
 	Name       string  `gorm:"not null;column:name" json:"name"`
@@ -19,18 +23,30 @@ type Tag struct {
 	Children []Tag `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
+func (Tag) TableName() string {
+	return "business_tags"
+}
+
 type UserPreferredCategory struct {
 	AccountID  string     `gorm:"primaryKey;column:account_id" json:"account_id"`
 	CategoryID string     `gorm:"primaryKey;column:category_id" json:"category_id"`
 	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }
 
-type BusinessCategory struct {
+type BusinessHasCategory struct {
 	BusinessID string `gorm:"primaryKey;column:business_id" json:"business_id"`
 	CategoryID int64 `gorm:"primaryKey;column:category_id" json:"category_id"`
 }
 
-type BusinessTag struct {
+func (BusinessHasCategory) TableName() string {
+	return "business_has_categories"
+}
+
+type BusinessHasTag struct {
 	BusinessID string `gorm:"primaryKey;column:business_id" json:"business_id"`
 	TagID      int64 `gorm:"primaryKey;column:tag_id" json:"tag_id"`
+}
+
+func (BusinessHasTag) TableName() string {
+	return "business_has_tags"
 }
