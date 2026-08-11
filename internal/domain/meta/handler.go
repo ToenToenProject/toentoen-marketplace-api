@@ -23,3 +23,12 @@ func (h *MetaHandler) GetCategories(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar kategori", categories)
 }
+
+func (h *MetaHandler) GetTags(c *fiber.Ctx) error {
+	tags, err := h.service.GetTags()
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar tag", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar tag", tags)
+}

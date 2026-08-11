@@ -6,14 +6,17 @@ type Category struct {
 	CategoryID int64   `gorm:"primaryKey;autoIncrement;column:category_id" json:"category_id"`
 	Name       string  `gorm:"not null;column:name" json:"name"`
 	IconURL    *string `gorm:"column:icon_url" json:"icon_url"`
+	ParentID   *int64  `gorm:"column:parent_id" json:"parent_id"`
 
-	Subcategories []Tag `gorm:"foreignKey:CategoryID" json:"subcategories,omitempty"`
+	Children []Category `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
 type Tag struct {
-	TagID      int64  `gorm:"primaryKey;autoIncrement;column:tag_id" json:"subcategory_id"`
-	CategoryID int64  `gorm:"not null;column:category_id" json:"category_id"`
-	Name       string `gorm:"not null;column:name" json:"name"`
+	TagID    int64   `gorm:"primaryKey;autoIncrement;column:tag_id" json:"tag_id"`
+	Name     string  `gorm:"not null;column:name" json:"name"`
+	ParentID *int64  `gorm:"column:parent_id" json:"parent_id"`
+
+	Children []Tag `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
 type UserPreferredCategory struct {

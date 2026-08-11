@@ -77,6 +77,7 @@ func ConnectDB() {
 
 	// Meta Categories and Tags Restructuring
 	DB.Exec("DROP TABLE IF EXISTS tag_groups CASCADE")
+	DB.Exec("ALTER TABLE tags DROP COLUMN IF EXISTS category_id CASCADE")
 
 	// PostGIS
 	DB.Exec("CREATE EXTENSION IF NOT EXISTS postgis")
