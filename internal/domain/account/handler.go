@@ -62,7 +62,7 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Tipe data sesi tidak valid", nil)
 	}
 
-	account, err := h.service.UpdateOwnerProfile(accountID, input)
+	_, err := h.service.UpdateOwnerProfile(accountID, input)
 	if err != nil {
 		if err.Error() == "akun tidak ditemukan" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
@@ -70,7 +70,26 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", account)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", nil)
+}
+
+func (h *ProfileHandler) GetMyProfile(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akses ditolak, sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Tipe data sesi tidak valid", nil)
+	}
+
+	account, err := h.service.GetMyProfile(accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil data profil", account)
 }
 
 func (h *ProfileHandler) RequestDeleteOTP(c *fiber.Ctx) error {

@@ -261,6 +261,7 @@ func main() {
 	// ROUTES: USER PROFILE
 	// ==========================================
 	protected := api.Group("/account", middlewares.RequireAuth)
+	protected.Get("/profile/me", profileHandler.GetMyProfile)
 	protected.Put("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Put("/profile/owner", middlewares.AllowRoles("owner"), profileHandler.UpdateProfileOwner)
 	protected.Post("/delete/request", profileHandler.RequestDeleteOTP)

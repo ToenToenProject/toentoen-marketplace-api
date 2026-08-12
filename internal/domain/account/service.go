@@ -16,6 +16,7 @@ import (
 type ProfileService interface {
 	UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error)
 	UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error)
+	GetMyProfile(accountID string) (*models.Account, error)
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
 	ForceDeleteAccount(identifier string) error
@@ -63,6 +64,26 @@ func isAccountDataComplete(account *models.Account) string {
 	default:
 		return "inactive"
 	}
+}
+
+func (s *profileService) GetMyProfile(accountID string) (*models.Account, error) {
+	account, err := s.repo.GetAccountByID(accountID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New("akun tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	if account.Role == "customer" {
+		customer, _ := s.repo.GetCustomerByAccountID(accountID)
+		account.Customer = customer
+	} else if account.Role == "owner" {
+		owner, _ := s.repo.GetOwnerByAccountID(accountID)
+		account.Owner = owner
+	}
+
+	return account, nil
 }
 
 func (s *profileService) UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error) {
