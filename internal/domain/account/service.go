@@ -37,7 +37,7 @@ func isAccountDataComplete(account *models.Account) string {
 	case "owner":
 		if account.Email != nil &&
 			account.PhoneNumber != nil &&
-			account.Fullname != "" &&
+			account.FirstName != "" &&
 			account.Username != "" &&
 			account.PasswordHash != nil &&
 			account.Gender != nil &&
@@ -73,8 +73,11 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 		return nil, err
 	}
 
-	if input.Fullname != nil {
-		account.Fullname = *input.Fullname
+	if input.FirstName != nil {
+		account.FirstName = *input.FirstName
+	}
+	if input.LastName != nil {
+		account.LastName = *input.LastName
 	}
 	if input.Username != nil {
 		account.Username = *input.Username
@@ -98,7 +101,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 		customer.Bio = input.Bio
 	}
 	if input.ProfilePictureUrl != nil {
-		customer.ProfilePictureUrl = input.ProfilePictureUrl
+		account.ProfilePictureUrl = input.ProfilePictureUrl
 	}
 	if input.BirthDate != nil {
 		if *input.BirthDate == "" {
@@ -215,8 +218,14 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 		return nil, err
 	}
 
-	if input.Fullname != nil {
-		account.Fullname = *input.Fullname
+	if input.FirstName != nil {
+		account.FirstName = *input.FirstName
+	}
+	if input.LastName != nil {
+		account.LastName = *input.LastName
+	}
+	if input.ProfilePictureUrl != nil {
+		account.ProfilePictureUrl = input.ProfilePictureUrl
 	}
 	if input.Username != nil {
 		account.Username = *input.Username
@@ -257,6 +266,42 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 		} else {
 			owner.ReferralCode = input.ReferralCode
 		}
+	}
+	if input.Country != nil {
+		owner.Country = input.Country
+	}
+	if input.KtpName != nil {
+		owner.KtpName = input.KtpName
+	}
+	if input.KtpBirthPlace != nil {
+		owner.KtpBirthPlace = input.KtpBirthPlace
+	}
+	if input.KtpBirthDate != nil {
+		owner.KtpBirthDate = input.KtpBirthDate
+	}
+	if input.KtpGender != nil {
+		owner.KtpGender = input.KtpGender
+	}
+	if input.KtpAddress != nil {
+		owner.KtpAddress = input.KtpAddress
+	}
+	if input.KtpRtRw != nil {
+		owner.KtpRtRw = input.KtpRtRw
+	}
+	if input.KtpVillage != nil {
+		owner.KtpVillage = input.KtpVillage
+	}
+	if input.KtpDistrict != nil {
+		owner.KtpDistrict = input.KtpDistrict
+	}
+	if input.KtpReligion != nil {
+		owner.KtpReligion = input.KtpReligion
+	}
+	if input.KtpOccupation != nil {
+		owner.KtpOccupation = input.KtpOccupation
+	}
+	if input.KtpCitizenship != nil {
+		owner.KtpCitizenship = input.KtpCitizenship
 	}
 
 	account.Owner = owner

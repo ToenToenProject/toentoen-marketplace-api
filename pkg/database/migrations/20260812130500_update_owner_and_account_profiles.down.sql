@@ -1,0 +1,19 @@
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS fullname VARCHAR(255);
+ALTER TABLE accounts DROP COLUMN IF EXISTS first_name;
+ALTER TABLE accounts DROP COLUMN IF EXISTS last_name;
+ALTER TABLE accounts DROP COLUMN IF EXISTS profile_picture_url;
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS profile_picture_url TEXT;
+
+ALTER TABLE owners DROP COLUMN IF EXISTS country;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_name;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_birth_place;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_birth_date;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_gender;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_address;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_rt_rw;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_village;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_district;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_religion;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_occupation;
+ALTER TABLE owners DROP COLUMN IF EXISTS ktp_citizenship;

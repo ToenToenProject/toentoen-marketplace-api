@@ -36,13 +36,13 @@ func (s *publicProfileService) GetPublicProfileSummary(accountID string) (*model
 		recentReviews = []models.RecentActivityResponse{}
 	}
 
-	var avatar *string
-	if account.Customer != nil {
-		avatar = account.Customer.ProfilePictureUrl
+	var avatarUrl *string
+	if account.ProfilePictureUrl != nil {
+		avatarUrl = account.ProfilePictureUrl
 	}
 	
 	// If the user's fullname is empty, use username or a default
-	name := account.Fullname
+	name := account.FirstName + " " + account.LastName
 	if name == "" {
 		name = account.Username
 	}
@@ -53,7 +53,7 @@ func (s *publicProfileService) GetPublicProfileSummary(accountID string) (*model
 	response := &models.PublicProfileSummaryResponse{
 		AccountID:            account.AccountID,
 		Username:             name,
-		ProfilePictureURL:    avatar,
+		ProfilePictureURL:    avatarUrl,
 		TotalCommentsReviews: totalCommentsReviews,
 		RecentReviews:        recentReviews,
 	}

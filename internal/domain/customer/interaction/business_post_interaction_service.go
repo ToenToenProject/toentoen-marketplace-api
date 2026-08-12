@@ -67,7 +67,7 @@ func (s *postInteractionService) AddPostComment(postID, accountID string, input 
 			if parentComment.Account != nil {
 				// Sesuaikan .Name dengan field di struct Account Anda
 				// Jika struct Account Anda pakai FullName, ganti jadi parentComment.Account.FullName
-				name := parentComment.Account.Fullname 
+				name := parentComment.Account.FirstName + " " + parentComment.Account.LastName 
 				comment.RepliedToAccountName = &name
 			}
 		}
@@ -97,7 +97,7 @@ func (s *postInteractionService) GetPostComments(postID string) ([]models.Commen
 		// Ambil nama user dari relasi (Preload)
 		accName := "User"
 		if rc.Account != nil {
-			accName = rc.Account.Fullname // Sesuaikan dengan field nama di struct Account
+			accName = rc.Account.FirstName + " " + rc.Account.LastName // Sesuaikan dengan field nama di struct Account
 		}
 
 		item := &models.CommentResponse{

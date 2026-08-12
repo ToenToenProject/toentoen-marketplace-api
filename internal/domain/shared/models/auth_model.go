@@ -5,10 +5,12 @@ import "time"
 type Account struct {
 	AccountID     string     `gorm:"primaryKey" json:"accountId"`
 	AuthProvider  string     `gorm:"default:'local'" json:"authProvider"`
-	Email         *string    `gorm:"unique;" json:"email"`
-	PhoneNumber   *string    `gorm:"unique;" json:"phoneNumber"`
-	Fullname      string     `json:"fullname"`
-	Username      string     `gorm:"unique;" json:"username"`
+	Email             *string    `gorm:"unique;" json:"email"`
+	PhoneNumber       *string    `gorm:"unique;" json:"phoneNumber"`
+	FirstName         string     `json:"firstName"`
+	LastName          string     `json:"lastName"`
+	Username          string     `gorm:"unique;" json:"username"`
+	ProfilePictureUrl *string    `json:"profilePictureUrl"`
 	PasswordHash  *string    `json:"-"`
 	Role          string     `json:"role"`
 	Gender        *string    `json:"gender"`
@@ -26,7 +28,6 @@ type Account struct {
 type Customer struct {
 	AccountID         string    `gorm:"primaryKey" json:"accountId"`
 	Bio               *string   `json:"bio"`
-	ProfilePictureUrl *string   `json:"profilePictureUrl"`
 	BirthDate         *string   `gorm:"type:date" json:"birthDate"`
 	LastLatitude      float64   `json:"lastLatitude"`
 	LastLongitude     float64   `json:"lastLongitude"`
@@ -34,11 +35,23 @@ type Customer struct {
 }
 
 type Owner struct {
-	AccountID    string    `gorm:"primaryKey" json:"accountId"`
-	KtpNumber    *string   `json:"ktpNumber"`
-	KtpPhotoUrl  *string   `json:"ktpPhotoUrl"`
-	ReferralCode *string   `json:"referralCode" `
-	CreatedAt    time.Time `json:"createdAt"`
+	AccountID      string    `gorm:"primaryKey" json:"accountId"`
+	KtpNumber      *string   `json:"ktpNumber"`
+	KtpPhotoUrl    *string   `json:"ktpPhotoUrl"`
+	ReferralCode   *string   `json:"referralCode"`
+	Country        *string   `json:"country"`
+	KtpName        *string   `json:"ktpName"`
+	KtpBirthPlace  *string   `json:"ktpBirthPlace"`
+	KtpBirthDate   *string   `gorm:"type:date" json:"ktpBirthDate"`
+	KtpGender      *string   `json:"ktpGender"`
+	KtpAddress     *string   `json:"ktpAddress"`
+	KtpRtRw        *string   `json:"ktpRtRw"`
+	KtpVillage     *string   `json:"ktpVillage"`
+	KtpDistrict    *string   `json:"ktpDistrict"`
+	KtpReligion    *string   `json:"ktpReligion"`
+	KtpOccupation  *string   `json:"ktpOccupation"`
+	KtpCitizenship *string   `json:"ktpCitizenship"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 type PlatformAdmin struct {

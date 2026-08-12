@@ -64,7 +64,7 @@ func (s *productInteractionService) AddProductComment(productID, accountID strin
 			comment.ReplyToCommentID = parentComment.ReplyToCommentID
 			comment.RepliedToAccountID = &parentComment.AccountID
 			if parentComment.Account != nil {
-				name := parentComment.Account.Fullname 
+				name := parentComment.Account.FirstName + " " + parentComment.Account.LastName 
 				comment.RepliedToAccountName = &name
 			}
 		}
@@ -118,9 +118,9 @@ func (s *productInteractionService) GetProductComments(productID, currentAccount
 		accName := "Pengguna" // Default nama jika relasi Account tidak ditemukan
 		var accAvatar *string
 		if rc.Account != nil {
-			accName = rc.Account.Fullname // Sesuaikan 'Name' dengan field di struct Account Anda
-			if rc.Account.Customer != nil {
-				accAvatar = rc.Account.Customer.ProfilePictureUrl
+			accName = rc.Account.FirstName + " " + rc.Account.LastName // Sesuaikan 'Name' dengan field di struct Account Anda
+			if rc.Account.ProfilePictureUrl != nil {
+				accAvatar = rc.Account.ProfilePictureUrl
 			}
 		}
 
@@ -176,9 +176,9 @@ func (s *productInteractionService) GetAllProductCommentsByBusinessID(businessID
 		accName := "Pengguna"
 		var accAvatar *string
 		if rc.Account != nil {
-			accName = rc.Account.Fullname
-			if rc.Account.Customer != nil {
-				accAvatar = rc.Account.Customer.ProfilePictureUrl
+			accName = rc.Account.FirstName + " " + rc.Account.LastName
+			if rc.Account.ProfilePictureUrl != nil {
+				accAvatar = rc.Account.ProfilePictureUrl
 			}
 		}
 

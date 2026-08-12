@@ -127,7 +127,7 @@ func (s *reviewService) AddReviewComment(reviewID, accountID string, input model
 			comment.ReplyToCommentID = parentComment.ReplyToCommentID
 			comment.RepliedToAccountID = &parentComment.AccountID
 			if parentComment.Account != nil {
-				name := parentComment.Account.Fullname
+				name := parentComment.Account.FirstName + " " + parentComment.Account.LastName
 				comment.RepliedToAccountName = &name
 			}
 		}
@@ -169,9 +169,9 @@ func (s *reviewService) GetReviewComments(reviewID, currentAccountID string) ([]
 		accName := "Pengguna"
 		var accAvatar *string
 		if rc.Account != nil {
-			accName = rc.Account.Fullname
-			if rc.Account.Customer != nil {
-				accAvatar = rc.Account.Customer.ProfilePictureUrl
+			accName = rc.Account.FirstName + " " + rc.Account.LastName
+			if rc.Account.ProfilePictureUrl != nil {
+				accAvatar = rc.Account.ProfilePictureUrl
 			}
 		}
 

@@ -38,12 +38,12 @@ func (s *myActivityService) GetMyProfileSummary(accountID string) (MyProfileSumm
 	totalReviews, _ := s.repo.GetTotalReviews(accountID)
 	totalComments, _ := s.repo.GetTotalComments(accountID)
 
-	fullName := account.Fullname
+	fullName := account.FirstName + " " + account.LastName
 	username := account.Username
 
 	avatarUrl := ""
-	if account.Customer != nil && account.Customer.ProfilePictureUrl != nil {
-		avatarUrl = *account.Customer.ProfilePictureUrl
+	if account.ProfilePictureUrl != nil {
+		avatarUrl = *account.ProfilePictureUrl
 	}
 
 	return MyProfileSummaryResponse{

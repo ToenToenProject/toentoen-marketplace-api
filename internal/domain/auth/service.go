@@ -85,7 +85,8 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		PasswordHash:  &pwd,
 		Role:          input.Role,
 		Username:      utils.GenerateRandomUsername(input.Identifier),
-		Fullname:      "New Account",
+		FirstName:     "New",
+		LastName:      "Account",
 		AuthProvider:  "local",
 		AccountStatus: "inactive",
 	}
@@ -336,7 +337,8 @@ func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBus
 		PasswordHash:  &pwd,
 		Role:          "business_admin",
 		Username:      utils.GenerateRandomUsername(input.Identifier),
-		Fullname:      "Business Admin",
+		FirstName:     "Business",
+		LastName:      "Admin",
 		AuthProvider:  "local",
 		AccountStatus: "active",
 	}
