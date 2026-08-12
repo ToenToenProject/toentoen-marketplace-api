@@ -3,6 +3,7 @@ package account
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
@@ -236,8 +237,17 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	if input.PhoneNumber != nil {
 		account.PhoneNumber = input.PhoneNumber
 	}
-	if input.Gender != nil {
-		account.Gender = input.Gender
+	if input.Title != nil {
+		title := strings.ToLower(*input.Title)
+		var gender string
+		if title == "mr" || title == "mr." {
+			gender = "male"
+		} else if title == "mrs" || title == "mrs." || title == "ms" || title == "ms." || title == "miss" {
+			gender = "female"
+		} else {
+			gender = "other"
+		}
+		account.Gender = &gender
 	}
 
 	owner, err := s.repo.GetOwnerByAccountID(accountID)
