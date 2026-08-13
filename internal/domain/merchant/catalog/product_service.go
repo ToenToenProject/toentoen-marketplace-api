@@ -295,7 +295,6 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		IsActive:     p.IsActive,
 		Rating:       p.AverageRating,
 		LikeCount:    p.LikeCount,
-		CommentCount: p.CommentCount,
 		CreatedAt:    p.CreatedAt,
 		UpdatedAt:    p.UpdatedAt,
 		Group:        p.Group,
@@ -388,7 +387,7 @@ func (s *productService) GetCatalog(requesterID, role, businessID string) ([]mod
 			StockType:     p.StockType,
 			Rating:        p.AverageRating,
 			LikeCount:     p.LikeCount,
-			CommentCount:  p.CommentCount,
+			ReviewCount:   p.ReviewCount,
 		}
 
 		if p.Group != nil {
@@ -509,7 +508,6 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 			StockType:     p.StockType,
 			Rating:        p.AverageRating,
 			LikeCount:     p.LikeCount,
-			CommentCount:  p.CommentCount,
 		})
 	}
 

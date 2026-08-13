@@ -28,10 +28,6 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bo
 	// 3. Filter Sistem: Cek jadwal hari ini
 	for _, h := range hours {
 		if h.DayOfWeek == currentDay {
-			if h.IsClosed {
-				return false // Toko libur di hari ini
-			}
-
 			// Parse OpenTime dan CloseTime (Format dari DB biasanya "15:00:00" atau "15:00")
 			if h.OpenTime != nil && h.CloseTime != nil {
 				openStr := strings.Split(*h.OpenTime, ":")

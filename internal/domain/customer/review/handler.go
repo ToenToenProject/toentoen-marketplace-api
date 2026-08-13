@@ -74,8 +74,8 @@ func (h *ReviewHandler) GetAllReviews(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	// 2. Ambil list product review
-	productReviews, err := h.productService.GetAllProductCommentsByBusinessID(businessID)
+	// Fetch all product reviews
+	productReviews, err := h.productService.GetAllProductReviewsByBusinessID(businessID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}

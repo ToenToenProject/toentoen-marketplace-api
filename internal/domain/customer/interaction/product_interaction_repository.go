@@ -9,15 +9,15 @@ import (
 
 type ProductInteractionRepository interface {
 	ToggleProductLike(productID, accountID string) (bool, error)
-	CreateProductComment(comment *models.ProductComment) error
-	GetProductCommentByID(commentID string) (*models.ProductComment, error)
-	GetCommentsByProductID(productID string) ([]models.ProductComment, error)
-	GetAllProductCommentsByBusinessID(businessID string) ([]models.ProductComment, error)
+	CreateProductReview(review *models.ProductReview) error
+	GetProductReviewByID(reviewID string) (*models.ProductReview, error)
+	GetReviewsByProductID(productID string) ([]models.ProductReview, error)
+	GetAllProductReviewsByBusinessID(businessID string) ([]models.ProductReview, error)
 	GetBusinessIDByProductID(productID string) (string, error)
 
-	ToggleCommentLike(commentID, accountID string) (bool, error)
-	CreateCommentReport(report *models.ProductCommentReport) error
-	GetCommentLikes(commentID string) ([]models.ProductCommentLike, error)
+	ToggleReviewLike(reviewID, accountID string) (bool, error)
+	CreateReviewReport(report *models.ProductReviewReport) error
+	GetReviewLikes(reviewID string) ([]models.ProductReviewLike, error)
 }
 
 type productInteractionRepository struct {
@@ -80,60 +80,59 @@ func (r *productInteractionRepository) ToggleProductLike(productID, accountID st
 	return isLiked, err
 }
 
-// 2. CREATE KOMENTAR / BALASAN PRODUK
-func (r *productInteractionRepository) CreateProductComment(comment *models.ProductComment) error {
+// 2. CREATE REVIEW / BALASAN PRODUK
+func (r *productInteractionRepository) CreateProductReview(review *models.ProductReview) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Simpan data komentar ke dalam tabel product_comments
-		if err := tx.Create(comment).Error; err != nil {
+		// Simpan data review ke dalam tabel product_reviews
+		if err := tx.Create(review).Error; err != nil {
 			return err
 		}
 		
-		// Ubah menjadi comment_count dan gunakan Updates dengan map
-		updateFields := map[string]interface{}{
-			"comment_count": gorm.Expr("comment_count + 1"),
-		}
+		updateFields := map[string]interface{}{}
 
-		if comment.Rating != nil && *comment.Rating > 0 {
+		if review.Rating != nil && *review.Rating > 0 {
 			// Jika ada rating, kita update review_count dan kalkulasi ulang average_rating
 			// 1. Dapatkan produk saat ini
 			var prod models.Product
-			if err := tx.Select("average_rating", "review_count").Where("product_id = ?", comment.ProductID).First(&prod).Error; err != nil {
+			if err := tx.Select("average_rating", "review_count").Where("product_id = ?", review.ProductID).First(&prod).Error; err != nil {
 				return err
 			}
 			
 			newReviewCount := prod.ReviewCount + 1
-			newAverage := ((prod.AverageRating * float64(prod.ReviewCount)) + *comment.Rating) / float64(newReviewCount)
+			newAverage := ((prod.AverageRating * float64(prod.ReviewCount)) + *review.Rating) / float64(newReviewCount)
 			
 			updateFields["review_count"] = newReviewCount
 			updateFields["average_rating"] = newAverage
 		}
 
-		return tx.Model(&models.Product{}).Where("product_id = ?", comment.ProductID).
-			Updates(updateFields).Error
+		if len(updateFields) > 0 {
+			return tx.Model(&models.Product{}).Where("product_id = ?", review.ProductID).
+				Updates(updateFields).Error
+		}
+
+		return nil
 	})
 }
 
-// 3. AMBIL DATA SATU KOMENTAR BERDASARKAN ID
-func (r *productInteractionRepository) GetProductCommentByID(commentID string) (*models.ProductComment, error) {
-	var comment models.ProductComment
-	err := r.db.Preload("Account.Customer").Where("comment_id = ?", commentID).First(&comment).Error
-	return &comment, err
+// 3. AMBIL DATA SATU REVIEW BERDASARKAN ID
+func (r *productInteractionRepository) GetProductReviewByID(reviewID string) (*models.ProductReview, error) {
+	var review models.ProductReview
+	err := r.db.Preload("Account.Customer").Where("review_id = ?", reviewID).First(&review).Error
+	return &review, err
 }
 
-// 4. AMBIL SEMUA KOMENTAR DALAM SATU PRODUK
-func (r *productInteractionRepository) GetCommentsByProductID(productID string) ([]models.ProductComment, error) {
-	var comments []models.ProductComment
-	err := r.db.Preload("Account.Customer").Where("product_id = ?", productID).Order("created_at ASC").Find(&comments).Error
-	return comments, err
+// 4. AMBIL SEMUA REVIEW DALAM SATU PRODUK
+func (r *productInteractionRepository) GetReviewsByProductID(productID string) ([]models.ProductReview, error) {
+	var reviews []models.ProductReview
+	err := r.db.Preload("Account.Customer").Where("product_id = ?", productID).Order("created_at ASC").Find(&reviews).Error
+	return reviews, err
 }
 
-func (r *productInteractionRepository) GetAllProductCommentsByBusinessID(businessID string) ([]models.ProductComment, error) {
-	var comments []models.ProductComment
-	// We only want root comments (which are the actual product reviews, typically ReplyToCommentID is null)
-	// But let's fetch all product comments tied to the business. Usually a review is ReplyToCommentID IS NULL
-	// But let's just fetch everything or only root comments. "review" means rating is not null or reply_to is null.
-	err := r.db.Preload("Account.Customer").Preload("Product").Preload("Replies").Where("business_id = ? AND reply_to_comment_id IS NULL", businessID).Order("created_at DESC").Find(&comments).Error
-	return comments, err
+func (r *productInteractionRepository) GetAllProductReviewsByBusinessID(businessID string) ([]models.ProductReview, error) {
+	var reviews []models.ProductReview
+	// We only want root reviews (which are the actual product reviews, typically ReplyToReviewID is null)
+	err := r.db.Preload("Account.Customer").Preload("Product").Preload("Replies").Where("business_id = ? AND reply_to_review_id IS NULL", businessID).Order("created_at DESC").Find(&reviews).Error
+	return reviews, err
 }
 
 // 5. AMBIL BUSINESS ID BERDASARKAN PRODUCT ID (Mencegah Error Foreign Key)
@@ -149,18 +148,18 @@ func (r *productInteractionRepository) GetBusinessIDByProductID(productID string
 	return product.BusinessID, nil
 }
 
-func (r *productInteractionRepository) ToggleCommentLike(commentID, accountID string) (bool, error) {
-	var like models.ProductCommentLike
+func (r *productInteractionRepository) ToggleReviewLike(reviewID, accountID string) (bool, error) {
+	var like models.ProductReviewLike
 	var isLiked bool
 
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("comment_id = ? AND account_id = ?", commentID, accountID).First(&like)
+		result := tx.Where("review_id = ? AND account_id = ?", reviewID, accountID).First(&like)
 
 		if result.Error == nil {
 			if err := tx.Delete(&like).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.ProductComment{}).Where("comment_id = ?", commentID).
+			if err := tx.Model(&models.ProductReview{}).Where("review_id = ?", reviewID).
 				Updates(map[string]interface{}{
 					"like_count": gorm.Expr("like_count - 1"),
 				}).Error; err != nil {
@@ -168,14 +167,14 @@ func (r *productInteractionRepository) ToggleCommentLike(commentID, accountID st
 			}
 			isLiked = false
 		} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			newLike := models.ProductCommentLike{
-				CommentID: commentID,
+			newLike := models.ProductReviewLike{
+				ReviewID: reviewID,
 				AccountID: accountID,
 			}
 			if err := tx.Create(&newLike).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.ProductComment{}).Where("comment_id = ?", commentID).
+			if err := tx.Model(&models.ProductReview{}).Where("review_id = ?", reviewID).
 				Updates(map[string]interface{}{
 					"like_count": gorm.Expr("like_count + 1"),
 				}).Error; err != nil {
@@ -191,12 +190,12 @@ func (r *productInteractionRepository) ToggleCommentLike(commentID, accountID st
 	return isLiked, err
 }
 
-func (r *productInteractionRepository) CreateCommentReport(report *models.ProductCommentReport) error {
+func (r *productInteractionRepository) CreateReviewReport(report *models.ProductReviewReport) error {
 	return r.db.Create(report).Error
 }
 
-func (r *productInteractionRepository) GetCommentLikes(commentID string) ([]models.ProductCommentLike, error) {
-	var likes []models.ProductCommentLike
-	err := r.db.Where("comment_id = ?", commentID).Find(&likes).Error
+func (r *productInteractionRepository) GetReviewLikes(reviewID string) ([]models.ProductReviewLike, error) {
+	var likes []models.ProductReviewLike
+	err := r.db.Where("review_id = ?", reviewID).Find(&likes).Error
 	return likes, err
 }

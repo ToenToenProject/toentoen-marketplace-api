@@ -94,7 +94,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string) (BusinessProf
 
 		for _, h := range business.Hours {
 			if h.DayOfWeek == currentDayInt {
-				if !h.IsClosed && h.OpenTime != nil && h.CloseTime != nil {
+				if h.OpenTime != nil && h.CloseTime != nil {
 					openT, _ := time.Parse("15:04", *h.OpenTime)
 					closeT, _ := time.Parse("15:04", *h.CloseTime)
 					nowT, _ := time.Parse("15:04", fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()))
@@ -202,7 +202,7 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 
 			for _, h := range business.Hours {
 				if h.DayOfWeek == currentDayInt {
-					if !h.IsClosed && h.OpenTime != nil && h.CloseTime != nil {
+					if h.OpenTime != nil && h.CloseTime != nil {
 						openT, _ := time.Parse("15:04", *h.OpenTime)
 						closeT, _ := time.Parse("15:04", *h.CloseTime)
 						nowT, _ := time.Parse("15:04", fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()))

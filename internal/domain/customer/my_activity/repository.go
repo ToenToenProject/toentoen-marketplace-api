@@ -35,7 +35,7 @@ func (r *myActivityRepository) GetCustomerInfo(accountID string) (*models.Accoun
 func (r *myActivityRepository) GetTotalReviews(accountID string) (int64, error) {
 	var businessReviewCount, productReviewCount int64
 	r.db.Model(&models.Review{}).Where("account_id = ?", accountID).Count(&businessReviewCount)
-	r.db.Model(&models.ProductComment{}).Where("account_id = ?", accountID).Count(&productReviewCount)
+	r.db.Model(&models.ProductReview{}).Where("account_id = ?", accountID).Count(&productReviewCount)
 	return businessReviewCount + productReviewCount, nil
 }
 

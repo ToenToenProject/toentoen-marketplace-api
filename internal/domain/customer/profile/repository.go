@@ -34,7 +34,7 @@ func (r *publicProfileRepository) GetTotalCommentsAndReviews(accountID string) (
 	r.db.Model(&models.Review{}).Where("account_id = ?", accountID).Count(&count1)
 
 	var count2 int64
-	r.db.Model(&models.ProductComment{}).Where("account_id = ?", accountID).Count(&count2)
+	r.db.Model(&models.ProductReview{}).Where("account_id = ?", accountID).Count(&count2)
 
 	var count3 int64
 	r.db.Model(&models.BusinessReviewComment{}).Where("account_id = ?", accountID).Count(&count3)
@@ -63,7 +63,7 @@ func (r *publicProfileRepository) GetRecentReviews(accountID string, limit int) 
 	}
 
 	// Get recent product reviews
-	var productReviews []models.ProductComment
+	var productReviews []models.ProductReview
 	r.db.Where("account_id = ? AND rating IS NOT NULL", accountID).Order("created_at desc").Limit(limit).Find(&productReviews)
 
 	for _, review := range productReviews {

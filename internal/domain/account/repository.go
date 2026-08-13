@@ -139,7 +139,7 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 				return err
 			}
 
-			if err := del("account_id = ?", accountID, &models.ProductComment{}); err != nil {
+			if err := del("account_id = ?", accountID, &models.ProductReview{}); err != nil {
 				return err
 			}
 			if err := del("account_id = ?", accountID, &models.BusinessPostComment{}); err != nil {
@@ -222,7 +222,7 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 					if err := del("product_id = ?", p.ProductID, &models.ProductWishlist{}); err != nil {
 						return err
 					}
-					if err := del("product_id = ?", p.ProductID, &models.ProductComment{}); err != nil {
+					if err := del("product_id = ?", p.ProductID, &models.ProductReview{}); err != nil {
 						return err
 					}
 				}

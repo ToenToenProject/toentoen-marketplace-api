@@ -68,10 +68,11 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 
 	var hours []models.BusinessHour
 	for _, h := range input.Hours {
-		hour := models.BusinessHour{DayOfWeek: h.DayOfWeek, IsClosed: h.IsClosed}
-		if !h.IsClosed {
-			hour.OpenTime = toPointerOrNil(h.OpenTime)
-			hour.CloseTime = toPointerOrNil(h.CloseTime)
+		hour := models.BusinessHour{
+			DayOfWeek: h.DayOfWeek,
+			OpenTime:  toPointerOrNil(h.OpenTime),
+			CloseTime: toPointerOrNil(h.CloseTime),
+			// IsClosed diabaikan, diasumsikan open jika masuk list
 		}
 		hours = append(hours, hour)
 	}
@@ -255,11 +256,8 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 		for _, h := range input.Hours {
 			hour := models.BusinessHour{
 				DayOfWeek: h.DayOfWeek,
-				IsClosed:  h.IsClosed,
-			}
-			if !h.IsClosed {
-				hour.OpenTime = toPointerOrNil(h.OpenTime)
-				hour.CloseTime = toPointerOrNil(h.CloseTime)
+				OpenTime:  toPointerOrNil(h.OpenTime),
+				CloseTime: toPointerOrNil(h.CloseTime),
 			}
 			mappedHours = append(mappedHours, hour)
 		}
@@ -311,19 +309,19 @@ func (s *businessService) ToggleStoreStatus(ownerID, businessID string) (bool, e
 
 		hasValidSchedule := false
 
-		// Cek apakah di array "Hours" ada jadwal untuk hari ini dan tidak libur
+		// Cek apakah di array "Hours" ada jadwal untuk hari ini (berarti buka)
 		fmt.Printf("DEBUG: currentDay=%d, HoursCount=%d\n", currentDay, len(business.Hours))
 		for _, h := range business.Hours {
-			fmt.Printf("DEBUG: Checking h.DayOfWeek=%d, isClosed=%v\n", h.DayOfWeek, h.IsClosed)
-			if h.DayOfWeek == currentDay && !h.IsClosed {
+			fmt.Printf("DEBUG: Checking h.DayOfWeek=%d\n", h.DayOfWeek)
+			if h.DayOfWeek == currentDay {
 				hasValidSchedule = true
 				break
 			}
 		}
 
-		// Jika hari ini tidak ada jadwalnya, atau diset libur (is_closed: true)
+		// Jika hari ini tidak ada jadwalnya (berarti libur)
 		if !hasValidSchedule {
-			return true, errors.New("Toko tidak bisa dibuka. Jadwal hari ini kosong atau diset libur. Silakan perbarui jadwal buka toko Anda terlebih dahulu")
+			return true, errors.New("Toko tidak bisa dibuka. Jadwal hari ini kosong (toko libur). Silakan perbarui jadwal buka toko Anda terlebih dahulu")
 		}
 	}
 

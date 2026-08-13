@@ -21,7 +21,6 @@ func NewProductInteractionHandler(service ProductInteractionService) *ProductInt
 func (h *ProductInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 
-	// Ambil AccountID dari Locals yang diset oleh Middleware RequireAuth
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
@@ -40,18 +39,15 @@ func (h *ProductInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
 }
 
-// 2. HANDLER CREATE KOMENTAR / BALASAN PRODUK
-func (h *ProductInteractionHandler) AddProductComment(c *fiber.Ctx) error {
-	// 1. Cukup ambil product_id dari URL (Flat Routing)
+// 2. HANDLER CREATE REVIEW / BALASAN PRODUK
+func (h *ProductInteractionHandler) AddProductReview(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 
-	// 2. Ambil AccountID dari Auth Middleware
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
 	}
 
-	// 3. Parse Body JSON
 	var input models.CreateCommentInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invalid request body format", nil)
@@ -61,49 +57,48 @@ func (h *ProductInteractionHandler) AddProductComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.AddProductComment(productID, accountID, input); err != nil {
+	if err := h.service.AddProductReview(productID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Comment added successfully", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Review added successfully", nil)
 }
 
-// 3. HANDLER GET KOMENTAR PRODUK (Struktur 1-Level Nesting)
-func (h *ProductInteractionHandler) GetProductComments(c *fiber.Ctx) error {
-	// Ambil product_id dari parameter URL (Flat Routing)
+// 3. HANDLER GET REVIEW PRODUK
+func (h *ProductInteractionHandler) GetProductReviews(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 
 	accountID, _ := c.Locals("account_id").(string)
 
-	comments, err := h.service.GetProductComments(productID, accountID)
+	reviews, err := h.service.GetProductReviews(productID, accountID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Comments retrieved successfully", comments)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Reviews retrieved successfully", reviews)
 }
 
-func (h *ProductInteractionHandler) ToggleCommentLike(c *fiber.Ctx) error {
-	commentID := strings.TrimSpace(c.Params("review_id"))
+func (h *ProductInteractionHandler) ToggleReviewLike(c *fiber.Ctx) error {
+	reviewID := strings.TrimSpace(c.Params("review_id"))
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
 	}
 
-	isLiked, err := h.service.ToggleCommentLike(commentID, accountID)
+	isLiked, err := h.service.ToggleReviewLike(reviewID, accountID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	message := "Comment unliked successfully"
+	message := "Review unliked successfully"
 	if isLiked {
-		message = "Comment liked successfully"
+		message = "Review liked successfully"
 	}
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
 }
 
-func (h *ProductInteractionHandler) ReportComment(c *fiber.Ctx) error {
-	commentID := strings.TrimSpace(c.Params("review_id"))
+func (h *ProductInteractionHandler) ReportReview(c *fiber.Ctx) error {
+	reviewID := strings.TrimSpace(c.Params("review_id"))
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized access", nil)
@@ -123,9 +118,9 @@ func (h *ProductInteractionHandler) ReportComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Reason cannot be empty", nil)
 	}
 
-	if err := h.service.ReportComment(commentID, accountID, req.Reason); err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to report comment", nil)
+	if err := h.service.ReportReview(reviewID, accountID, req.Reason); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Failed to report review", nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Comment reported successfully", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Review reported successfully", nil)
 }

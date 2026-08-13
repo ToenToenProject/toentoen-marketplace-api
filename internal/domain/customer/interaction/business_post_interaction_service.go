@@ -2,6 +2,8 @@ package interaction
 
 import (
 	"errors"
+	"toentoen-backend/internal/domain/merchant/business"
+	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 )
@@ -14,17 +16,44 @@ type PostInteractionService interface {
 }
 
 type postInteractionService struct {
-	repo PostInteractionRepository
+	repo         PostInteractionRepository
+	businessRepo business.BusinessRepository
+	notifService notification.NotificationService
 }
 
-func NewPostInteractionService(repo PostInteractionRepository) PostInteractionService {
-	return &postInteractionService{repo}
+func NewPostInteractionService(repo PostInteractionRepository, businessRepo business.BusinessRepository, notifService notification.NotificationService) PostInteractionService {
+	return &postInteractionService{repo, businessRepo, notifService}
 }
 
 // 1. TOGGLE LIKE POSTINGAN
 func (s *postInteractionService) TogglePostLike(postID, accountID string) (bool, error) {
-	// Validasi tambahan bisa ditaruh di sini (misal: cek apakah post-nya masih aktif)
-	return s.repo.TogglePostLike(postID, accountID)
+	isLiked, err := s.repo.TogglePostLike(postID, accountID)
+	if err == nil && isLiked {
+		go func() {
+			businessID, errB := s.repo.GetBusinessIDByPostID(postID)
+			if errB == nil {
+				staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
+				
+				data := map[string]interface{}{
+					"post_id":      postID,
+					"business_id":  businessID,
+					"trigger_name": "Seseorang",
+				}
+				
+				s.notifService.SendNotification(
+					staffIDs,
+					accountID,
+					"post_like",
+					postID,
+					"Postingan Anda disukai!",
+					"Seseorang menyukai postingan Anda.",
+					data,
+					nil,
+				)
+			}
+		}()
+	}
+	return isLiked, err
 }
 
 // 2. CREATE KOMENTAR / BALASAN (Sihir 1-Level Nesting)
@@ -77,6 +106,27 @@ func (s *postInteractionService) AddPostComment(postID, accountID string, input 
 	if err := s.repo.CreatePostComment(&comment); err != nil {
 		return errors.New("gagal menambahkan komentar")
 	}
+
+	go func() {
+		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
+		data := map[string]interface{}{
+			"post_id":      postID,
+			"business_id":  businessID,
+			"comment_id":   comment.CommentID,
+			"trigger_name": "Seseorang",
+		}
+		
+		s.notifService.SendNotification(
+			staffIDs,
+			accountID,
+			"post_comment",
+			comment.CommentID,
+			"Komentar Baru!",
+			"Ada pelanggan yang mengomentari postingan Anda.",
+			data,
+			nil,
+		)
+	}()
 
 	return nil
 }

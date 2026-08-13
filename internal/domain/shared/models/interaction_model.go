@@ -10,17 +10,17 @@ import (
 // 1. INTERAKSI UNTUK PRODUK
 // ==========================================
 
-type ProductComment struct {
-	CommentID            string         `gorm:"primaryKey;column:comment_id" json:"comment_id"`
+type ProductReview struct {
+	ReviewID             string         `gorm:"primaryKey;column:review_id" json:"review_id"`
 	ProductID            string         `gorm:"column:product_id;index" json:"product_id"` // 👈 Foreign Key ke Product
 	BusinessID           string         `gorm:"column:business_id;index" json:"business_id"`
 	AccountID            string         `gorm:"column:account_id" json:"account_id"`
 	Content              string         `gorm:"column:content" json:"content"`
 	
 	// Kunci Nesting Level 1
-	ReplyToCommentID     *string        `gorm:"column:reply_to_comment_id;index" json:"reply_to_comment_id"`
+	ReplyToReviewID      *string        `gorm:"column:reply_to_review_id;index" json:"reply_to_review_id"`
 	
-	// 🪄 DITAMBAHKAN: Fitur Mention/Tagging (Untuk membalas child comment)
+	// 🪄 DITAMBAHKAN: Fitur Mention/Tagging (Untuk membalas child review)
 	RepliedToAccountID   *string        `gorm:"column:replied_to_account_id" json:"replied_to_account_id"`
 	RepliedToAccountName *string        `gorm:"column:replied_to_account_name" json:"replied_to_account_name"`
 
@@ -33,9 +33,9 @@ type ProductComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account *Account         `json:"account,omitempty"`
-	Product *Product         `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
-	Replies []ProductComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID" json:"replies,omitempty"`
+	Account *Account        `json:"account,omitempty"`
+	Product *Product        `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
+	Replies []ProductReview `gorm:"foreignKey:ReplyToReviewID;references:ReviewID" json:"replies,omitempty"`
 }
 
 type ProductLike struct {
@@ -44,9 +44,9 @@ type ProductLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-type ProductCommentLike struct {
+type ProductReviewLike struct {
 	AccountID string    `gorm:"primaryKey;column:account_id" json:"account_id"`
-	CommentID string    `gorm:"primaryKey;column:comment_id" json:"comment_id"`
+	ReviewID  string    `gorm:"primaryKey;column:review_id" json:"review_id"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

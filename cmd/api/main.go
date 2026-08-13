@@ -23,6 +23,7 @@ import (
 	"toentoen-backend/internal/domain/merchant/catalog"
 	"toentoen-backend/internal/domain/merchant/post"
 	"toentoen-backend/internal/domain/meta"
+	"toentoen-backend/internal/domain/notification"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -110,12 +111,17 @@ func main() {
 	productGroupService := catalog.NewProductGroupService(productGroupRepo)
 	productGroupHandler := catalog.NewProductGroupHandler(productGroupService)
 
+	// 🔔 INIT NOTIFICATION SERVICE
+	notifRepo := notification.NewNotificationRepository(database.DB)
+	notifService := notification.NewNotificationService(notifRepo, wsHub)
+	notifHandler := notification.NewNotificationHandler(notifService)
+
 	productInteractionRepo := interaction.NewProductInteractionRepository(database.DB)
-	productInteractionService := interaction.NewProductInteractionService(productInteractionRepo)
+	productInteractionService := interaction.NewProductInteractionService(productInteractionRepo, businessRepo, notifService)
 	productInteractionHandler := interaction.NewProductInteractionHandler(productInteractionService)
 
 	postInteractionRepo := interaction.NewPostInteractionRepository(database.DB)
-	postInteractionService := interaction.NewPostInteractionService(postInteractionRepo)
+	postInteractionService := interaction.NewPostInteractionService(postInteractionRepo, businessRepo, notifService)
 	postInteractionHandler := interaction.NewPostInteractionHandler(postInteractionService)
 
 	businessPostRepo := post.NewBusinessPostRepository(database.DB)
@@ -266,6 +272,11 @@ func main() {
 	protected.Put("/profile/owner", middlewares.AllowRoles("owner"), profileHandler.UpdateProfileOwner)
 	protected.Post("/delete/request", profileHandler.RequestDeleteOTP)
 	protected.Delete("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
+
+	// Notifications
+	notifGroup := protected.Group("/notifications")
+	notifGroup.Get("/", notifHandler.GetMyNotifications)
+	notifGroup.Put("/:id/read", notifHandler.MarkAsRead)
 	
 	// Khusus untuk pengujian / backdoor menghapus berdasarkan identifier:
 	api.Post("/account/force-delete", profileHandler.ForceDeleteAccount)
@@ -302,10 +313,10 @@ func main() {
 	publicProductRoutes := api.Group("/products")
 	publicProductRoutes.Get("/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
 	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleLike)
-	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductComment)
-	publicProductRoutes.Get("/:product_id/reviews", middlewares.OptionalAuth, productInteractionHandler.GetProductComments)
-	publicProductRoutes.Post("/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleCommentLike)
-	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, productInteractionHandler.ReportComment)
+	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductReview)
+	publicProductRoutes.Get("/:product_id/reviews", middlewares.OptionalAuth, productInteractionHandler.GetProductReviews)
+	publicProductRoutes.Post("/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleReviewLike)
+	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, productInteractionHandler.ReportReview)
 
 	publicPostRoutes := api.Group("/posts")
 	publicPostRoutes.Post("/:post_id/like", middlewares.RequireAuth, postInteractionHandler.ToggleLike)

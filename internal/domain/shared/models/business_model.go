@@ -61,7 +61,6 @@ type BusinessHour struct {
 	DayOfWeek  int     `gorm:"primaryKey;column:day_of_week" json:"day_of_week"`
 	OpenTime   *string `gorm:"column:open_time" json:"open_time"`
 	CloseTime  *string `gorm:"column:close_time" json:"close_time"`
-	IsClosed   bool    `gorm:"default:false;column:is_closed" json:"is_closed"`
 }
 
 func (BusinessHour) TableName() string { return "business_hours" }
@@ -101,7 +100,6 @@ type BusinessHourInput struct {
 	DayOfWeek int    `json:"day_of_week"`
 	OpenTime  string `json:"open_time"`
 	CloseTime string `json:"close_time"`
-	IsClosed  bool   `json:"is_closed"`
 }
 
 type UpdateBusinessInput struct {

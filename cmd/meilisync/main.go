@@ -72,7 +72,7 @@ func main() {
 		if !b.IsManuallyClosed {
 			for _, h := range b.Hours {
 				if h.DayOfWeek == currentDayInt {
-					if !h.IsClosed && h.OpenTime != nil && h.CloseTime != nil {
+					if h.OpenTime != nil && h.CloseTime != nil {
 						openT, _ := time.Parse("15:04", *h.OpenTime)
 						closeT, _ := time.Parse("15:04", *h.CloseTime)
 

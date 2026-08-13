@@ -26,6 +26,7 @@ type BusinessRepository interface {
 	ResetManualCloseStatus() error
 	UpdateBusinessRating(businessID string, avgRating float64, totalReviews int) error
 	GetBusinessListWithPreviews(ownerID string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error)
+	GetBusinessStaffAccountIDs(businessID string) ([]string, error)
 }
 
 type businessRepository struct {
@@ -336,4 +337,25 @@ func (r *businessRepository) GetBusinessListWithPreviews(ownerID string, search 
 	}
 
 	return result, nil
+}
+
+func (r *businessRepository) GetBusinessStaffAccountIDs(businessID string) ([]string, error) {
+	var accountIDs []string
+
+	// 1. Ambil owner (AccountID di tabel businesses)
+	var business models.Business
+	if err := r.db.Select("account_id").Where("business_id = ?", businessID).First(&business).Error; err != nil {
+		return nil, err
+	}
+	accountIDs = append(accountIDs, business.AccountID)
+
+	// 2. Ambil admins (admin_id di tabel business_admin_assignments)
+	var assignments []models.BusinessAdminAssignment
+	if err := r.db.Select("admin_id").Where("business_id = ? AND status = 'accepted'", businessID).Find(&assignments).Error; err == nil {
+		for _, a := range assignments {
+			accountIDs = append(accountIDs, a.AdminID)
+		}
+	}
+
+	return accountIDs, nil
 }

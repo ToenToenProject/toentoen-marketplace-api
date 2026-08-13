@@ -42,7 +42,6 @@ type Product struct {
 	AverageRating float64 `gorm:"column:average_rating;default:0" json:"average_rating"`
 	ReviewCount   int     `gorm:"column:review_count;default:0" json:"review_count"`
 	LikeCount     int     `gorm:"column:like_count;default:0" json:"like_count"`
-	CommentCount  int     `gorm:"column:comment_count;default:0" json:"comment_count"`
 
 	CreatedAt time.Time      `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"column:updated_at" json:"updated_at"`
@@ -157,7 +156,7 @@ type ProductListItem struct {
 	StockType     string  `json:"stock_type"`
 	Rating        float64 `json:"rating"`
 	LikeCount     int     `json:"like_count"`
-	CommentCount  int     `json:"comment_count"`
+	ReviewCount   int     `json:"review_count"`
 
 	// Digunakan jika detail varian ingin disertakan pada response tertentu
 	Variants []ProductVariant `json:"variants,omitempty"`
@@ -209,7 +208,7 @@ type ProductDetailResponse struct {
 	IsActive     bool             `json:"is_active"`
 	Rating       float64          `json:"rating"`
 	LikeCount    int              `json:"like_count"`
-	CommentCount int              `json:"comment_count"`
+	ReviewCount  int              `json:"review_count"`
 	CreatedAt    time.Time        `json:"created_at"`
 	UpdatedAt    time.Time        `json:"updated_at"`
 	Group        *ProductGroup    `json:"product_group,omitempty"`

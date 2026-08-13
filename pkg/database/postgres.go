@@ -46,10 +46,10 @@ func ConnectDB() {
 		&models.BusinessPostReport{},
 		&models.BusinessPostReportEvidence{},
 		&models.Review{},
-		&models.ProductComment{},
+		&models.ProductReview{},
 		&models.ProductLike{},
-		&models.ProductCommentLike{},
-		&models.ProductCommentReport{},
+		&models.ProductReviewLike{},
+		&models.ProductReviewReport{},
 		&models.BusinessPostComment{},
 		&models.BusinessPostLike{},
 		&models.BusinessReviewLike{},
@@ -64,6 +64,9 @@ func ConnectDB() {
 		&models.SignalImage{},
 		&models.SignalConversation{},
 		&models.SignalMessage{},
+		
+		// Notifications
+		&models.UserNotification{},
 	)
 	if err != nil {
 		log.Fatal("Failed to migrate database. \n", err)
