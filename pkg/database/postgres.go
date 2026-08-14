@@ -40,6 +40,8 @@ func ConnectDB() {
 		&models.Category{},
 		&models.Tag{},
 		&models.Account{}, // Tambahkan ini di atas agar GORM tahu tabel utama
+		&models.Business{}, // Tambahkan Business agar kolom barunya ter-AutoMigrate
+		&models.BusinessHour{},
 		&models.BusinessBookmark{},
 		&models.BusinessReport{},
 		&models.BusinessReportEvidence{},
