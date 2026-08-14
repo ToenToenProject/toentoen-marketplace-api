@@ -10,6 +10,12 @@ type BusinessCertificate struct {
 	ImageURL string `json:"image_url"`
 }
 
+type EventSchedule struct {
+	Date      string `json:"date"`
+	OpenTime  string `json:"open_time"`
+	CloseTime string `json:"close_time"`
+}
+
 type Business struct {
 	BusinessID string `gorm:"primaryKey;column:business_id" json:"business_id"`
 	AccountID  string `gorm:"column:account_id" json:"account_id"`
@@ -34,6 +40,12 @@ type Business struct {
 	GoogleMapsLink *string  `gorm:"column:google_maps_link" json:"google_maps_link"`
 	Latitude       *float64 `gorm:"column:latitude" json:"latitude"`
 	Longitude      *float64 `gorm:"column:longitude" json:"longitude"`
+
+	IsLocationShared bool    `gorm:"column:is_location_shared;default:false" json:"is_location_shared"`
+	VenueName        *string `gorm:"column:venue_name" json:"venue_name"`
+	EventStartDate   *time.Time `gorm:"column:event_start_date" json:"event_start_date"`
+	EventEndDate     *time.Time `gorm:"column:event_end_date" json:"event_end_date"`
+	EventSchedules   []EventSchedule `gorm:"type:jsonb;serializer:json;column:event_schedules;default:'[]'" json:"event_schedules"`
 
 	StoreType *string `gorm:"default:'regular';column:store_type" json:"store_type"`
 
@@ -85,6 +97,12 @@ type CreateBusinessInput struct {
 	GoogleMapsLink  string  `json:"google_maps_link"`
 	Latitude        float64 `json:"latitude"`
 	Longitude       float64 `json:"longitude"`
+	
+	IsLocationShared bool    `json:"is_location_shared"`
+	VenueName        string  `json:"venue_name"`
+	EventStartDate   string  `json:"event_start_date"`
+	EventEndDate     string  `json:"event_end_date"`
+	EventSchedules   []EventSchedule `json:"event_schedules"`
 
 	StoreType string              `json:"store_type"`
 	Hours     []BusinessHourInput `json:"hours"`
@@ -123,6 +141,12 @@ type UpdateBusinessInput struct {
 	GoogleMapsLink  string  `json:"google_maps_link"`
 	Latitude        float64 `json:"latitude"`
 	Longitude       float64 `json:"longitude"`
+
+	IsLocationShared bool    `json:"is_location_shared"`
+	VenueName        string  `json:"venue_name"`
+	EventStartDate   string  `json:"event_start_date"`
+	EventEndDate     string  `json:"event_end_date"`
+	EventSchedules   []EventSchedule `json:"event_schedules"`
 
 	StoreType string              `json:"store_type"`
 	Hours     []BusinessHourInput `json:"hours"`

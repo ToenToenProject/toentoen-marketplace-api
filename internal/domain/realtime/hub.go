@@ -17,6 +17,17 @@ type WSEvent struct {
 	Data interface{} `json:"data"`
 }
 
+// MessageHandler adalah interface untuk handler pesan masuk dari WebSocket
+type MessageHandler interface {
+	HandleMessage(client *Client, msgType string, rawData json.RawMessage)
+}
+
+// incomingMessage adalah format pesan masuk dari client WebSocket
+type incomingMessage struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data,omitempty"`
+}
+
 // Hub mengelola semua koneksi WebSocket aktif
 type Hub struct {
 	// clients: map[accountID] → set of *Client
@@ -27,15 +38,53 @@ type Hub struct {
 	unregister chan *Client
 
 	rdb *redis.Client
+
+	// Message handlers yang terdaftar (key: prefix tipe pesan)
+	messageHandlers map[string]MessageHandler
+	handlerMu       sync.RWMutex
 }
 
 // NewHub membuat Hub baru dengan koneksi Redis untuk Pub/Sub
 func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
-		clients:    make(map[string]map[*Client]bool),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		rdb:        rdb,
+		clients:         make(map[string]map[*Client]bool),
+		register:        make(chan *Client),
+		unregister:      make(chan *Client),
+		rdb:             rdb,
+		messageHandlers: make(map[string]MessageHandler),
+	}
+}
+
+// RegisterMessageHandler mendaftarkan handler untuk tipe pesan tertentu
+// Contoh: hub.RegisterMessageHandler("location", locationWSHandler)
+// Akan menangani pesan dengan type: "LOCATION_UPDATE", "SUBSCRIBE_AREA", dll.
+func (h *Hub) RegisterMessageHandler(name string, handler MessageHandler) {
+	h.handlerMu.Lock()
+	defer h.handlerMu.Unlock()
+	h.messageHandlers[name] = handler
+	log.Printf("📡 WS message handler registered: %s", name)
+}
+
+// HandleIncomingMessage meroute pesan masuk dari client ke handler yang sesuai
+func (h *Hub) HandleIncomingMessage(client *Client, rawMsg []byte) {
+	var msg incomingMessage
+	if err := json.Unmarshal(rawMsg, &msg); err != nil {
+		log.Printf("⚠️ WS: invalid message format from %s: %v", client.AccountID, err)
+		return
+	}
+
+	if msg.Type == "" {
+		return
+	}
+
+	// Route pesan berdasarkan tipe
+	h.handlerMu.RLock()
+	defer h.handlerMu.RUnlock()
+
+	// Cari handler yang cocok (semua handler menerima semua tipe, 
+	// handler sendiri yang memutuskan apakah tipe ini relevan)
+	for _, handler := range h.messageHandlers {
+		handler.HandleMessage(client, msg.Type, msg.Data)
 	}
 }
 
@@ -176,3 +225,4 @@ func (h *Hub) IsOnline(accountID string) bool {
 	conns, ok := h.clients[accountID]
 	return ok && len(conns) > 0
 }
+

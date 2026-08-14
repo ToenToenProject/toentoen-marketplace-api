@@ -32,7 +32,16 @@ func toPointerOrNil(s string) *string {
 	return &s
 }
 
-// parseDatePtr dihapus karena StartDate dan EndDate sudah tidak ada di model
+func parseDatePointer(dateStr string) *time.Time {
+	if dateStr == "" {
+		return nil
+	}
+	t, err := time.Parse(time.DateOnly, dateStr)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
 
 func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error) {
 	business := models.Business{
@@ -52,6 +61,13 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		GoogleMapsLink:   toPointerOrNil(input.GoogleMapsLink),
 		Latitude:         &input.Latitude,
 		Longitude:        &input.Longitude,
+		
+		IsLocationShared: input.IsLocationShared,
+		VenueName:        toPointerOrNil(input.VenueName),
+		EventStartDate:   parseDatePointer(input.EventStartDate),
+		EventEndDate:     parseDatePointer(input.EventEndDate),
+		EventSchedules:   input.EventSchedules,
+
 		StoreType:        toPointerOrNil(input.StoreType),
 		PhoneContact:     toPointerOrNil(input.PhoneContact),
 		WhatsappContact:  toPointerOrNil(input.WhatsappContact),
@@ -216,6 +232,21 @@ func (s *businessService) UpdateBusiness(ownerID, businessID string, input model
 	}
 	if input.Longitude != 0 {
 		business.Longitude = &input.Longitude
+	}
+
+	business.IsLocationShared = input.IsLocationShared
+	
+	if input.VenueName != "" {
+		business.VenueName = &input.VenueName
+	}
+	if input.EventStartDate != "" {
+		business.EventStartDate = parseDatePointer(input.EventStartDate)
+	}
+	if input.EventEndDate != "" {
+		business.EventEndDate = parseDatePointer(input.EventEndDate)
+	}
+	if len(input.EventSchedules) > 0 {
+		business.EventSchedules = input.EventSchedules
 	}
 
 	if input.StoreType != "" {

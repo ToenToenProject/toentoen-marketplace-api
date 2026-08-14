@@ -12,6 +12,7 @@ import (
 	"toentoen-backend/internal/domain/customer/explore"
 	"toentoen-backend/internal/domain/customer/interaction"
 	"toentoen-backend/internal/domain/customer/my_activity"
+	"toentoen-backend/internal/domain/location"
 
 	"toentoen-backend/internal/domain/customer/product"
 	"toentoen-backend/internal/domain/customer/profile"
@@ -81,6 +82,18 @@ func main() {
 	// WebSocket Hub (Real-Time)
 	wsHub := realtime.NewHub(config.RDB)
 	go wsHub.Run()
+
+	// 📍 INIT LIVE LOCATION
+	locationStore := location.NewRedisLocationStore(config.RDB)
+	locationService := location.NewLocationService(locationStore, wsHub, database.DB)
+	locationWSHandler := location.NewWSLocationHandler(locationService)
+	locationHTTPHandler := location.NewHTTPLocationHandler(locationService)
+
+	// Daftarkan WS handler untuk Live Location
+	wsHub.RegisterMessageHandler("location", locationWSHandler)
+
+	// Sinkronisasi lokasi merchant dari PostgreSQL ke Redis setiap 15 menit
+	locationService.StartPeriodicSync(15 * time.Minute)
 
 	// ==========================================
 	// 2. INIT REPO, SERVICE, & HANDLER
@@ -220,6 +233,7 @@ func main() {
 	metaGroup := api.Group("/meta")
 	metaGroup.Get("/categories", metaHandler.GetCategories)
 	metaGroup.Get("/tags", metaHandler.GetTags)
+	metaGroup.Get("/store-types", metaHandler.GetStoreTypes)
 
 	// ==========================================
 	// ROUTE: WEBSOCKET (Real-Time)
@@ -422,6 +436,14 @@ func main() {
 	customerExploreGroup := api.Group("/customer/explore")
 	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
 	customerExploreGroup.Get("/timeline", middlewares.OptionalAuth, exploreHandler.GetTimeline)
+
+	// ==========================================
+	// ROUTES: LIVE LOCATION
+	// ==========================================
+	locationGroup := api.Group("/location")
+	locationGroup.Get("/nearby", middlewares.OptionalAuth, locationHTTPHandler.GetNearbyMerchants)
+	locationGroup.Get("/track/:merchant_id", middlewares.OptionalAuth, locationHTTPHandler.TrackMerchant)
+	locationGroup.Post("/update", middlewares.RequireAuth, locationHTTPHandler.UpdateLocationHTTP)
 
 	// ==========================================
 	// ROUTES: CUSTOMER PROFILE

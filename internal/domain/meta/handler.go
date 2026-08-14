@@ -40,3 +40,8 @@ func (h *MetaHandler) GetTags(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar tag", tags)
 }
+
+func (h *MetaHandler) GetStoreTypes(c *fiber.Ctx) error {
+	storeTypes := h.service.GetStoreTypes()
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil tipe bisnis", storeTypes)
+}
