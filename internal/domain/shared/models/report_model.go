@@ -11,13 +11,17 @@ type BusinessReport struct {
 	Status      string     `gorm:"not null;column:status;default:'pending'" json:"status"`
 	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 
-	Evidence []BusinessReportEvidence `gorm:"foreignKey:ReportID" json:"evidence,omitempty"`
+	Evidence []BusinessReportEvidence `gorm:"foreignKey:ReportID;references:ReportID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"evidence,omitempty"`
+	Business *Business                `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Account  *Account                 `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
 }
 
 type BusinessReportEvidence struct {
 	EvidenceID int64  `gorm:"primaryKey;autoIncrement;column:evidence_id" json:"evidence_id"`
 	ReportID   int64  `gorm:"not null;column:report_id" json:"report_id"`
 	FileURL    string `gorm:"not null;column:file_url" json:"file_url"`
+
+	Report *BusinessReport `gorm:"foreignKey:ReportID;references:ReportID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"report,omitempty"`
 }
 
 type ProductReviewReport struct {

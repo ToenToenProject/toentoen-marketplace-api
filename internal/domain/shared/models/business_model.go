@@ -63,7 +63,7 @@ type Business struct {
 	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
 
-	Hours      []BusinessHour `gorm:"foreignKey:BusinessID" json:"hours"`
+	Hours      []BusinessHour `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"hours"`
 	Categories []Category     `gorm:"many2many:business_has_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
 	Tags       []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"tags"` // mapped to old tags table
 }
@@ -73,6 +73,8 @@ type BusinessHour struct {
 	DayOfWeek  int     `gorm:"primaryKey;column:day_of_week" json:"day_of_week"`
 	OpenTime   *string `gorm:"column:open_time" json:"open_time"`
 	CloseTime  *string `gorm:"column:close_time" json:"close_time"`
+
+	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 }
 
 func (BusinessHour) TableName() string { return "business_hours" }

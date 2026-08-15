@@ -48,8 +48,9 @@ type Product struct {
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"` // Disembunyikan dari JSON response
 
 	// Relasi GORM (Otomatis ditarik saat Preload)
-	Group    *ProductGroup    `gorm:"foreignKey:ProductGroupID;references:ProductGroupID" json:"product_group,omitempty"`
-	Variants []ProductVariant `gorm:"foreignKey:ProductID" json:"variants,omitempty"`
+	Business *Business        `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Group    *ProductGroup    `gorm:"foreignKey:ProductGroupID;references:ProductGroupID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"product_group,omitempty"`
+	Variants []ProductVariant `gorm:"foreignKey:ProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"variants,omitempty"`
 }
 
 type ProductVariant struct {

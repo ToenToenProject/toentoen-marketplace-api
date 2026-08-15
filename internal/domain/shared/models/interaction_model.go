@@ -33,9 +33,10 @@ type ProductReview struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account *Account        `json:"account,omitempty"`
-	Product *Product        `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
-	Replies []ProductReview `gorm:"foreignKey:ReplyToReviewID;references:ReviewID" json:"replies,omitempty"`
+	Account  *Account        `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Product  *Product        `gorm:"foreignKey:ProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"product,omitempty"`
+	Business *Business       `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Replies  []ProductReview `gorm:"foreignKey:ReplyToReviewID;references:ReviewID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`
 }
 
 type ProductLike struct {
@@ -73,9 +74,10 @@ type BusinessPostComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account *Account               `json:"account,omitempty"`
-	Post    *BusinessPost          `gorm:"foreignKey:PostID;references:PostID" json:"post,omitempty"`
-	Replies []BusinessPostComment  `gorm:"foreignKey:ReplyToCommentID;references:CommentID" json:"replies,omitempty"`
+	Account  *Account              `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Post     *BusinessPost         `gorm:"foreignKey:PostID;references:PostID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"post,omitempty"`
+	Business *Business             `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Replies  []BusinessPostComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`
 }
 
 type BusinessPostLike struct {

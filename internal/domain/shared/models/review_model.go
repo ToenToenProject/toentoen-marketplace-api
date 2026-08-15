@@ -20,9 +20,9 @@ type Review struct {
 	CreatedAt    time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt    time.Time  `gorm:"column:updated_at" json:"updated_at"`
 
-	Account  *Account                `json:"account,omitempty"`
-	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
-	Comments []BusinessReviewComment `gorm:"foreignKey:ReviewID;references:ReviewID" json:"comments,omitempty"`
+	Account  *Account                `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Comments []BusinessReviewComment `gorm:"foreignKey:ReviewID;references:ReviewID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"comments,omitempty"`
 }
 
 type BusinessReviewLike struct {
@@ -45,8 +45,9 @@ type BusinessReviewComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account *Account                `json:"account,omitempty"`
-	Replies []BusinessReviewComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID" json:"replies,omitempty"`
+	Account  *Account                `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Replies  []BusinessReviewComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`
 }
 
 type BusinessReviewCommentLike struct {

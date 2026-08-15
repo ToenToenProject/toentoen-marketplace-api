@@ -36,6 +36,22 @@ func ConnectDB() {
 		log.Fatal("Failed to connect to database. \n", err)
 	}
 
+	// Bersihkan data orphan pada tabel signal jika ada data bisnis yang sudah terhapus sebelumnya
+	_ = DB.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'signal_conversations') AND
+			   EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'businesses') THEN
+				IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'signal_messages') THEN
+					DELETE FROM signal_messages WHERE conversation_id IN (
+						SELECT conversation_id FROM signal_conversations WHERE business_id NOT IN (SELECT business_id FROM businesses)
+					);
+				END IF;
+				DELETE FROM signal_conversations WHERE business_id NOT IN (SELECT business_id FROM businesses);
+			END IF;
+		END $$;
+	`)
+
 	err = DB.AutoMigrate(
 		&models.Category{},
 		&models.Tag{},

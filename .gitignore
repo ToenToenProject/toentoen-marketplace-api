@@ -83,3 +83,7 @@ go.work.sum
 
 # env file
 .env
+
+# Temporary and build files
+tmp/
+server

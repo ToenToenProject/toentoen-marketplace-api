@@ -28,8 +28,8 @@ type BusinessAdminAssignment struct {
 	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 
 	// Relasi
-	Business *Business      `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
-	Admin    *BusinessAdmin `gorm:"foreignKey:AdminID;references:AccountID" json:"admin,omitempty"`
+	Business *Business      `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Admin    *BusinessAdmin `gorm:"foreignKey:AdminID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"admin,omitempty"`
 }
 
 type InviteAdminInput struct {

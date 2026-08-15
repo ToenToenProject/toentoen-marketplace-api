@@ -10,6 +10,8 @@ type ProductGroup struct {
 	IsActive       bool      `gorm:"column:is_active;default:true" json:"is_active"`
 	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+
+	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 }
 
 // DTO untuk Input

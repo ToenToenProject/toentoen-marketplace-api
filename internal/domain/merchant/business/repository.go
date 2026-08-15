@@ -190,7 +190,9 @@ func (r *businessRepository) UpdateBusiness(business *models.Business, newHours 
 }
 
 func (r *businessRepository) DeleteBusiness(business *models.Business) error {
-	return r.db.Delete(business).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return tx.Delete(business).Error
+	})
 }
 
 func (r *businessRepository) CheckBusinessNameExists(ownerID, name string) bool {

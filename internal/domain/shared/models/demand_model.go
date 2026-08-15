@@ -21,8 +21,8 @@ type DemandSignal struct {
 	ExpiresAt   time.Time  `json:"expires_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 
-	Account   *Account         `json:"account,omitempty"`
-	Responses []DemandResponse `gorm:"foreignKey:SignalID;references:SignalID" json:"responses,omitempty"`
+	Account   *Account         `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Responses []DemandResponse `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"responses,omitempty"`
 }
 
 type DemandResponse struct {
@@ -34,7 +34,7 @@ type DemandResponse struct {
 	IsAccepted bool      `gorm:"default:false" json:"is_accepted"`
 	CreatedAt  time.Time `json:"created_at"`
 
-	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
+	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 }
 
 // --- LEGACY V1 INPUT STRUCTS (masih dipakai oleh package demand lama) ---
@@ -79,9 +79,9 @@ type Signal struct {
 	// location geometry(Point, 4326)
 
 	// Relations
-	Account       *Account             `gorm:"foreignKey:CustomerID" json:"account,omitempty"`
-	Images        []SignalImage        `gorm:"foreignKey:SignalID;references:SignalID" json:"images,omitempty"`
-	Conversations []SignalConversation `gorm:"foreignKey:SignalID;references:SignalID" json:"conversations,omitempty"`
+	Account       *Account             `gorm:"foreignKey:CustomerID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Images        []SignalImage        `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"images,omitempty"`
+	Conversations []SignalConversation `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"conversations,omitempty"`
 }
 
 func (Signal) TableName() string { return "signals" }
@@ -105,9 +105,9 @@ type SignalConversation struct {
 	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
 
 	// Relations
-	Business *Business       `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
-	Merchant *Account        `gorm:"foreignKey:MerchantID" json:"merchant,omitempty"`
-	Messages []SignalMessage `gorm:"foreignKey:ConversationID;references:ConversationID" json:"messages,omitempty"`
+	Business *Business       `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Merchant *Account        `gorm:"foreignKey:MerchantID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"merchant,omitempty"`
+	Messages []SignalMessage `gorm:"foreignKey:ConversationID;references:ConversationID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"messages,omitempty"`
 }
 
 func (SignalConversation) TableName() string { return "signal_conversations" }
@@ -122,6 +122,8 @@ type SignalMessage struct {
 	AttachmentURL  *string   `gorm:"column:attachment_url" json:"attachment_url"`
 	IsRead         bool      `gorm:"default:false;column:is_read" json:"is_read"`
 	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
+
+	Conversation *SignalConversation `gorm:"foreignKey:ConversationID;references:ConversationID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"conversation,omitempty"`
 }
 
 func (SignalMessage) TableName() string { return "signal_messages" }
