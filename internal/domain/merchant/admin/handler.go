@@ -17,14 +17,57 @@ func NewBusinessAdminHandler(service BusinessAdminService) *BusinessAdminHandler
 	return &BusinessAdminHandler{service}
 }
 
-// 1. OWNER MENGUNDANG CALON ADMIN
+// 1. REKRUT / INVITE ADMIN (Owner atau Supervisor)
 func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
+	}
+
+	var input models.InviteAdminInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	input.BusinessID = businessID
+	if strings.TrimSpace(input.InvitationCode) == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Invitation Code wajib diisi", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.InviteAdmin(requesterID, businessID, input); err != nil {
+		status := fiber.StatusBadRequest
+		if strings.Contains(err.Error(), "forbidden") {
+			status = fiber.StatusForbidden
+		}
+		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Undangan / pengajuan admin berhasil diproses", nil)
+}
+
+// 2. OWNER MERESPONS APPROVAL INVITASI DARI SUPERVISOR
+func (h *BusinessAdminHandler) RespondOwnerApproval(c *fiber.Ctx) error {
 	ownerID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var input models.InviteAdminInput
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
+	if businessID == "" || assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID dan Assignment ID wajib diisi", nil)
+	}
+
+	var input models.RespondOwnerApprovalInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
@@ -33,17 +76,7 @@ func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	// Opsional: Jika BusinessID dikirim lewat parameter URL (/business/:business_id/admins/invite)
-	businessID := strings.TrimSpace(c.Params("business_id"))
-	if businessID != "" {
-		input.BusinessID = businessID
-	}
-
-	if strings.TrimSpace(input.Email) == "" || strings.TrimSpace(input.BusinessID) == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Email dan business_id wajib diisi", nil)
-	}
-
-	if err := h.service.InviteAdmin(ownerID, input); err != nil {
+	if err := h.service.RespondOwnerApproval(ownerID, businessID, assignmentID, input); err != nil {
 		status := fiber.StatusBadRequest
 		if strings.Contains(err.Error(), "forbidden") {
 			status = fiber.StatusForbidden
@@ -51,10 +84,15 @@ func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Undangan berhasil dikirim", nil)
+	msg := "Pengajuan penambahan admin telah disetujui dan undangan diteruskan ke calon admin"
+	if input.Action == "reject" {
+		msg = "Pengajuan penambahan admin telah ditolak"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, nil)
 }
 
-// 2. CALON ADMIN MERESPONS UNDANGAN (Terima / Tolak)
+// 3. CALON ADMIN MERESPONS UNDANGAN (Accept / Reject)
 func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
 	if assignmentID == "" {
@@ -83,19 +121,25 @@ func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Respons undangan berhasil disimpan", nil)
-}
-
-// 3. OWNER MENGUBAH ROLE / SHIFT / MEMECAT ADMIN
-func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
-	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
-	if assignmentID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
+	msg := "Anda berhasil bergabung dengan toko"
+	if input.Action == "reject" {
+		msg = "Undangan telah ditolak"
 	}
 
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, nil)
+}
+
+// 4. OWNER MEMPERBARUI PERAN / SHIFT / SUPERVISOR ADMIN
+func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 	ownerID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
+	if businessID == "" || assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID dan Assignment ID wajib diisi", nil)
 	}
 
 	var input models.UpdateAssignmentInput
@@ -107,7 +151,7 @@ func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.UpdateAdminAssignment(ownerID, assignmentID, input); err != nil {
+	if err := h.service.UpdateAdminAssignment(ownerID, businessID, assignmentID, input); err != nil {
 		status := fiber.StatusBadRequest
 		if strings.Contains(err.Error(), "forbidden") {
 			status = fiber.StatusForbidden
@@ -115,22 +159,92 @@ func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data admin berhasil diperbarui", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Penugasan admin berhasil diperbarui", nil)
 }
 
-// 4. OWNER MELIHAT DAFTAR ADMIN DI TOKONYA
-func (h *BusinessAdminHandler) GetAdminsByBusiness(c *fiber.Ctx) error {
+// 5. MEMBERHENTIKAN ADMIN OLEH OWNER/SPV (Grace Period 3 Hari, Read-Only)
+func (h *BusinessAdminHandler) TerminateAdmin(c *fiber.Ctx) error {
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
+	if businessID == "" || assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID dan Assignment ID wajib diisi", nil)
+	}
+
+	if err := h.service.TerminateAdmin(requesterID, businessID, assignmentID); err != nil {
+		status := fiber.StatusBadRequest
+		if strings.Contains(err.Error(), "forbidden") {
+			status = fiber.StatusForbidden
+		}
+		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pemberhentian admin berhasil dijadwalkan dengan masa tenggang 3 hari (Read-Only)", nil)
+}
+
+// 6. ADMIN RESIGN MANDIRI DARI TOKO (Grace Period 3 Hari, Read-Only)
+func (h *BusinessAdminHandler) ResignFromBusiness(c *fiber.Ctx) error {
+	adminID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
+	if assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
+	}
+
+	if err := h.service.ResignFromBusiness(adminID, assignmentID); err != nil {
+		status := fiber.StatusBadRequest
+		if strings.Contains(err.Error(), "forbidden") {
+			status = fiber.StatusForbidden
+		}
+		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pengunduran diri berhasil diajukan dengan masa tenggang 3 hari (Read-Only)", nil)
+}
+
+// 7. BATALKAN PENGHENTIAN AKSES (Cancel Termination / Resign)
+func (h *BusinessAdminHandler) CancelTermination(c *fiber.Ctx) error {
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
+	if assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
+	}
+
+	if err := h.service.CancelTermination(requesterID, assignmentID); err != nil {
+		status := fiber.StatusBadRequest
+		if strings.Contains(err.Error(), "forbidden") {
+			status = fiber.StatusForbidden
+		}
+		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Penghentian akses berhasil dibatalkan. Status admin kembali aktif normal.", nil)
+}
+
+// 8. LIHAT STRUKTUR ADMIN TREE (Owner -> Supervisors -> Staff)
+func (h *BusinessAdminHandler) GetAdminTree(c *fiber.Ctx) error {
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
 	}
 
-	ownerID, _, err := utils.GetRequesterInfo(c)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
-	}
-
-	admins, err := h.service.GetAdminsByBusiness(ownerID, businessID)
+	tree, err := h.service.GetAdminTree(requesterID, businessID)
 	if err != nil {
 		status := fiber.StatusInternalServerError
 		if strings.Contains(err.Error(), "forbidden") {
@@ -139,10 +253,25 @@ func (h *BusinessAdminHandler) GetAdminsByBusiness(c *fiber.Ctx) error {
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar admin toko berhasil diambil", admins)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Struktur pohon admin berhasil diambil", tree)
 }
 
-// 5. ADMIN MELIHAT DAFTAR UNDANGAN / TEMPAT KERJANYA SENDIRI
+// 9. OWNER MELIHAT DAFTAR ADMIN DI SELURUH TOKONYA
+func (h *BusinessAdminHandler) GetAdminsByOwner(c *fiber.Ctx) error {
+	ownerID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	adminsTree, err := h.service.GetAdminsByOwner(ownerID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar admin seluruh toko berhasil diambil", adminsTree)
+}
+
+// 10. ADMIN MELIHAT DAFTAR TEMPAT KERJA / UNDANGANNYA
 func (h *BusinessAdminHandler) GetMyAssignments(c *fiber.Ctx) error {
 	adminID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {

@@ -114,7 +114,17 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 
 	config.RDB.Del(config.Ctx, redisKey)
 
-	if err := s.repo.UpdateAccountStatus(input.Identifier, "active"); err != nil {
+	account, err := s.repo.FindByIdentifier(input.Identifier)
+	if err != nil {
+		return errors.New("Akun tidak ditemukan")
+	}
+
+	newStatus := "active"
+	if account.Role == "owner" || account.Role == "business_admin" {
+		newStatus = "inactive"
+	}
+
+	if err := s.repo.UpdateAccountStatus(input.Identifier, newStatus); err != nil {
 		return errors.New("Gagal mengaktifkan akun")
 	}
 
@@ -132,7 +142,9 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 
 	switch account.AccountStatus {
 	case "inactive":
-		return errors.New("Akun anda belum aktif. Silakan cek email/WA Anda untuk OTP verifikasi.")
+		if account.Role != "owner" && account.Role != "business_admin" {
+			return errors.New("Akun anda belum aktif. Silakan cek email/WA Anda untuk OTP verifikasi.")
+		}
 	case "suspended":
 		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	case "banned":

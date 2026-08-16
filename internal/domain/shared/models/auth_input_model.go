@@ -8,7 +8,7 @@ type RegisterUnifiedInput struct {
 }
 
 type VerifyRegisterOTPInput struct {
-	Identifier string `json:"identifier" validate:"required,email"`
+	Identifier string `json:"identifier" validate:"required"`
 	OTP        string `json:"otp" validate:"required,len=6"`
 }
 

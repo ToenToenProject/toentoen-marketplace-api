@@ -13,7 +13,7 @@ type BusinessReport struct {
 
 	Evidence []BusinessReportEvidence `gorm:"foreignKey:ReportID;references:ReportID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"evidence,omitempty"`
 	Business *Business                `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
-	Account  *Account                 `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Account  *Account                 `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 }
 
 type BusinessReportEvidence struct {

@@ -34,15 +34,18 @@ func (h *ProfileHandler) UpdateProfileCustomer(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Tipe data sesi tidak valid", nil)
 	}
 
-	account, err := h.service.UpdateCustomerProfile(accountID, input)
+	_, err := h.service.UpdateCustomerProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "akun tidak ditemukan" {
+		if err.Error() == "email already in use" || err.Error() == "phone number already in use" {
+			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
+		}
+		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", account)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", nil)
 }
 
 func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
@@ -64,13 +67,46 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 
 	_, err := h.service.UpdateOwnerProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "akun tidak ditemukan" {
+		if err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "ktp number already in use" {
+			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
+		}
+		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", nil)
+}
+
+func (h *ProfileHandler) UpdateProfileBusinessAdmin(c *fiber.Ctx) error {
+	var input models.UpdateBusinessAdminKYCInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", fiber.Map{"error": err.Error()})
+	}
+
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akses ditolak, sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Tipe data sesi tidak valid", nil)
+	}
+
+	_, err := h.service.UpdateBusinessAdminProfile(accountID, input)
+	if err != nil {
+		if err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "ktp number already in use" {
+			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
+		}
+		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil admin dan data KYC berhasil diperbarui", nil)
 }
 
 func (h *ProfileHandler) GetMyProfile(c *fiber.Ctx) error {

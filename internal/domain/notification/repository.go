@@ -14,6 +14,7 @@ type NotificationRepository interface {
 	GetMyNotifications(accountID string, page, limit int) ([]models.UserNotification, int64, error)
 	MarkAsRead(accountID, notifID string) error
 	MarkAllAsRead(accountID string) error
+	GetFCMTokensByAccountID(accountID string) ([]string, error)
 }
 
 type notificationRepository struct {
@@ -81,3 +82,12 @@ func (r *notificationRepository) MarkAllAsRead(accountID string) error {
 		Where("recipient_account_id = ? AND is_read = false", accountID).
 		Update("is_read", true).Error
 }
+
+func (r *notificationRepository) GetFCMTokensByAccountID(accountID string) ([]string, error) {
+	var tokens []string
+	err := r.db.Model(&models.DeviceToken{}).
+		Where("account_id = ?", accountID).
+		Pluck("fcm_token", &tokens).Error
+	return tokens, err
+}
+

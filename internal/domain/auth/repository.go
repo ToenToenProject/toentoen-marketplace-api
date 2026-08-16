@@ -2,6 +2,7 @@ package auth
 
 import (
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/utils"
 
 	"gorm.io/gorm"
 )
@@ -42,7 +43,11 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 			}
 
 		case "business_admin":
-			if err := tx.Create(&models.BusinessAdmin{AccountID: account.AccountID}).Error; err != nil {
+			inviteCode := "ADM-" + utils.GenerateRandomString(6)
+			if err := tx.Create(&models.BusinessAdmin{
+				AccountID:      account.AccountID,
+				InvitationCode: &inviteCode,
+			}).Error; err != nil {
 				return err
 			}
 		}

@@ -16,6 +16,7 @@ import (
 type ProfileService interface {
 	UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error)
 	UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error)
+	UpdateBusinessAdminProfile(accountID string, input models.UpdateBusinessAdminKYCInput) (*models.Account, error)
 	GetMyProfile(accountID string) (*models.Account, error)
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
@@ -43,6 +44,7 @@ func isAccountDataComplete(account *models.Account) string {
 			account.Username != "" &&
 			account.PasswordHash != nil &&
 			account.Gender != nil &&
+			account.Owner != nil &&
 			account.Owner.KtpNumber != nil &&
 			*account.Owner.KtpNumber != "" &&
 			account.Owner.KtpPhotoUrl != nil &&
@@ -52,7 +54,9 @@ func isAccountDataComplete(account *models.Account) string {
 		return "inactive"
 
 	case "business_admin":
-		if account.Gender != nil && account.Email != nil {
+		if account.BusinessAdmin != nil &&
+			account.BusinessAdmin.KtpNumber != nil && *account.BusinessAdmin.KtpNumber != "" &&
+			account.BusinessAdmin.KtpPhotoUrl != nil && *account.BusinessAdmin.KtpPhotoUrl != "" {
 			return "active"
 		}
 		return "inactive"
@@ -81,6 +85,9 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 	} else if account.Role == "owner" {
 		owner, _ := s.repo.GetOwnerByAccountID(accountID)
 		account.Owner = owner
+	} else if account.Role == "business_admin" {
+		admin, _ := s.repo.GetBusinessAdminByAccountID(accountID)
+		account.BusinessAdmin = admin
 	}
 
 	return account, nil
@@ -104,10 +111,24 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 	if input.Username != nil {
 		account.Username = *input.Username
 	}
-	if input.Email != nil {
+	if input.Email != nil && *input.Email != "" {
+		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("email already in use")
+		}
 		account.Email = input.Email
 	}
-	if input.PhoneNumber != nil {
+	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
+		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("phone number already in use")
+		}
 		account.PhoneNumber = input.PhoneNumber
 	}
 	if input.Gender != nil {
@@ -252,10 +273,24 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	if input.Username != nil {
 		account.Username = *input.Username
 	}
-	if input.Email != nil {
+	if input.Email != nil && *input.Email != "" {
+		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("email already in use")
+		}
 		account.Email = input.Email
 	}
-	if input.PhoneNumber != nil {
+	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
+		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("phone number already in use")
+		}
 		account.PhoneNumber = input.PhoneNumber
 	}
 	if input.Title != nil {
@@ -280,6 +315,13 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 		if *input.KtpNumber == "" {
 			owner.KtpNumber = nil
 		} else {
+			exists, err := s.repo.CheckKtpNumberExists(*input.KtpNumber, accountID)
+			if err != nil {
+				return nil, err
+			}
+			if exists {
+				return nil, errors.New("ktp number already in use")
+			}
 			owner.KtpNumber = input.KtpNumber
 		}
 	}
@@ -343,3 +385,134 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	}
 	return account, nil
 }
+
+func (s *profileService) UpdateBusinessAdminProfile(accountID string, input models.UpdateBusinessAdminKYCInput) (*models.Account, error) {
+	account, err := s.repo.GetAccountByID(accountID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New("account not found")
+		}
+		return nil, err
+	}
+
+	if input.FirstName != nil && *input.FirstName != "" {
+		account.FirstName = *input.FirstName
+	}
+	if input.LastName != nil {
+		account.LastName = *input.LastName
+	}
+	if input.ProfilePictureUrl != nil {
+		account.ProfilePictureUrl = input.ProfilePictureUrl
+	}
+	if input.Username != nil {
+		account.Username = *input.Username
+	}
+	if input.Email != nil && *input.Email != "" {
+		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("email already in use")
+		}
+		account.Email = input.Email
+	}
+	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
+		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("phone number already in use")
+		}
+		account.PhoneNumber = input.PhoneNumber
+	}
+	if input.Title != nil {
+		title := strings.ToLower(*input.Title)
+		var gender string
+		if title == "mr" || title == "mr." {
+			gender = "male"
+		} else if title == "mrs" || title == "mrs." || title == "ms" || title == "ms." || title == "miss" {
+			gender = "female"
+		} else {
+			gender = "other"
+		}
+		account.Gender = &gender
+	}
+
+	admin, err := s.repo.GetBusinessAdminByAccountID(accountID)
+	if err != nil {
+		admin = &models.BusinessAdmin{AccountID: accountID}
+	}
+
+	if input.KtpNumber != nil {
+		if *input.KtpNumber == "" {
+			admin.KtpNumber = nil
+		} else {
+			exists, err := s.repo.CheckKtpNumberExists(*input.KtpNumber, accountID)
+			if err != nil {
+				return nil, err
+			}
+			if exists {
+				return nil, errors.New("ktp number already in use")
+			}
+			admin.KtpNumber = input.KtpNumber
+		}
+	}
+	if input.KtpPhotoUrl != nil {
+		if *input.KtpPhotoUrl == "" {
+			admin.KtpPhotoUrl = nil
+		} else {
+			admin.KtpPhotoUrl = input.KtpPhotoUrl
+		}
+	}
+	if input.Country != nil {
+		// Country disimpan di tabel owners, untuk admin kita skip atau bisa disimpan di account level jika ada kolom
+		// Sementara diabaikan karena tidak ada kolom country di business_admins
+		_ = input.Country
+	}
+	if input.KtpName != nil {
+		admin.KtpName = input.KtpName
+	}
+	if input.KtpBirthPlace != nil {
+		admin.KtpBirthPlace = input.KtpBirthPlace
+	}
+	if input.KtpBirthDate != nil {
+		admin.KtpBirthDate = input.KtpBirthDate
+	}
+	if input.KtpGender != nil {
+		admin.KtpGender = input.KtpGender
+	}
+	if input.KtpAddress != nil {
+		admin.KtpAddress = input.KtpAddress
+	}
+	if input.KtpRtRw != nil {
+		admin.KtpRtRw = input.KtpRtRw
+	}
+	if input.KtpVillage != nil {
+		admin.KtpVillage = input.KtpVillage
+	}
+	if input.KtpDistrict != nil {
+		admin.KtpDistrict = input.KtpDistrict
+	}
+	if input.KtpReligion != nil {
+		admin.KtpReligion = input.KtpReligion
+	}
+	if input.KtpOccupation != nil {
+		admin.KtpOccupation = input.KtpOccupation
+	}
+	if input.KtpCitizenship != nil {
+		admin.KtpCitizenship = input.KtpCitizenship
+	}
+
+	account.BusinessAdmin = admin
+	account.AccountStatus = isAccountDataComplete(account)
+
+	if err := s.repo.SaveBusinessAdminProfile(account, admin); err != nil {
+		return nil, errors.New("failed to save business admin profile data")
+	}
+
+	return account, nil
+}
+
+

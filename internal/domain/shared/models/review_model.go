@@ -20,7 +20,7 @@ type Review struct {
 	CreatedAt    time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt    time.Time  `gorm:"column:updated_at" json:"updated_at"`
 
-	Account  *Account                `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Account  *Account                `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 	Comments []BusinessReviewComment `gorm:"foreignKey:ReviewID;references:ReviewID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"comments,omitempty"`
 }
@@ -45,7 +45,7 @@ type BusinessReviewComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account  *Account                `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Account  *Account                `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 	Replies  []BusinessReviewComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`
 }

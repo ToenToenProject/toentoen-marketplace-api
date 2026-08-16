@@ -21,7 +21,7 @@ type DemandSignal struct {
 	ExpiresAt   time.Time  `json:"expires_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 
-	Account   *Account         `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Account   *Account         `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 	Responses []DemandResponse `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"responses,omitempty"`
 }
 

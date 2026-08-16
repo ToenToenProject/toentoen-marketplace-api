@@ -18,6 +18,9 @@ type ProfileRepository interface {
 	SaveBusinessAdminProfile(account *models.Account, businessAdmin *models.BusinessAdmin) error
 
 	DeleteAccountTx(accountID string, role string) ([]string, []string, error)
+	CheckEmailExists(email string, excludeAccountID string) (bool, error)
+	CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error)
+	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
 }
 
 type profileRepository struct {
@@ -54,7 +57,12 @@ func (r *profileRepository) GetOwnerByAccountID(accountID string) (*models.Owner
 
 func (r *profileRepository) GetBusinessAdminByAccountID(accountID string) (*models.BusinessAdmin, error) {
 	var businessAdmin models.BusinessAdmin
-	err := r.db.Where("account_id = ?", accountID).First(&businessAdmin).Error
+	err := r.db.
+		Preload("Assignments").
+		Preload("Assignments.Business").
+		Preload("Assignments.Shifts").
+		Where("account_id = ?", accountID).
+		First(&businessAdmin).Error
 	return &businessAdmin, err
 }
 
@@ -98,6 +106,29 @@ func (r *profileRepository) SaveBusinessAdminProfile(account *models.Account, bu
 }
 
 // DeleteAccountTx deletes the account and all associated data, returning lists of deleted business IDs and product IDs for Meilisearch cleanup
+func (r *profileRepository) CheckEmailExists(email string, excludeAccountID string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Account{}).Where("email = ? AND account_id != ?", email, excludeAccountID).Count(&count).Error
+	return count > 0, err
+}
+
+func (r *profileRepository) CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Account{}).Where("phone_number = ? AND account_id != ?", phone, excludeAccountID).Count(&count).Error
+	return count > 0, err
+}
+
+func (r *profileRepository) CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error) {
+	var countOwner, countAdmin int64
+	if err := r.db.Model(&models.Owner{}).Where("ktp_number = ? AND account_id != ?", ktp, excludeAccountID).Count(&countOwner).Error; err != nil {
+		return false, err
+	}
+	if err := r.db.Model(&models.BusinessAdmin{}).Where("ktp_number = ? AND account_id != ?", ktp, excludeAccountID).Count(&countAdmin).Error; err != nil {
+		return false, err
+	}
+	return (countOwner + countAdmin) > 0, nil
+}
+
 func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]string, []string, error) {
 	var deletedBusinessIDs []string
 	var deletedProductIDs []string

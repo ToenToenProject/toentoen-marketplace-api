@@ -111,11 +111,6 @@ func main() {
 	businessService := business.NewBusinessService(businessRepo)
 	businessHandler := business.NewBusinessHandler(businessService)
 
-	// 🪄 INIT BUSINESS ADMIN (BARU)
-	businessAdminRepo := admin.NewBusinessAdminRepository(database.DB)
-	businessAdminService := admin.NewBusinessAdminService(businessAdminRepo, businessRepo)
-	businessAdminHandler := admin.NewBusinessAdminHandler(businessAdminService)
-
 	productRepo := catalog.NewProductRepository(database.DB)
 	productService := catalog.NewProductService(productRepo)
 	productHandler := catalog.NewProductHandler(productService)
@@ -128,6 +123,12 @@ func main() {
 	notifRepo := notification.NewNotificationRepository(database.DB)
 	notifService := notification.NewNotificationService(notifRepo, wsHub)
 	notifHandler := notification.NewNotificationHandler(notifService)
+
+	// 🪄 INIT BUSINESS ADMIN (BARU)
+	businessAdminRepo := admin.NewBusinessAdminRepository(database.DB)
+	businessAdminService := admin.NewBusinessAdminService(businessAdminRepo, businessRepo, notifService)
+	businessAdminHandler := admin.NewBusinessAdminHandler(businessAdminService)
+	admin.StartGracePeriodWorker(businessAdminRepo, 30*time.Minute)
 
 	productInteractionRepo := interaction.NewProductInteractionRepository(database.DB)
 	productInteractionService := interaction.NewProductInteractionService(productInteractionRepo, businessRepo, notifService)
@@ -284,6 +285,7 @@ func main() {
 	protected.Get("/profile/me", profileHandler.GetMyProfile)
 	protected.Put("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Put("/profile/owner", middlewares.AllowRoles("owner"), profileHandler.UpdateProfileOwner)
+	protected.Put("/profile/admin", middlewares.AllowRoles("business_admin"), profileHandler.UpdateProfileBusinessAdmin)
 	protected.Post("/delete/request", profileHandler.RequestDeleteOTP)
 	protected.Delete("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
 
@@ -342,16 +344,28 @@ func main() {
 	// ROUTES: BUSINESS OWNER / ADMIN ACTIONS
 	// ==========================================
 
-	// 🪄 Admin Management (Hanya Owner)
-	ownerAdminGroup := api.Group("/business/:business_id/admins", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
-	ownerAdminGroup.Post("/invite", businessAdminHandler.InviteAdmin)
-	ownerAdminGroup.Get("/", businessAdminHandler.GetAdminsByBusiness)
-	ownerAdminGroup.Put("/:assignment_id", businessAdminHandler.UpdateAdminAssignment)
+	// 🪄 Admin Management (Owner & Supervisor)
+	adminGroup := api.Group("/business/:business_id/admins", middlewares.RequireAuth, middlewares.AllowRoles("owner", "business_admin"), middlewares.BusinessAccessGuard())
+	adminGroup.Post("/invite", businessAdminHandler.InviteAdmin)
+	adminGroup.Post("/assignments/:assignment_id/approve", middlewares.AllowRoles("owner"), businessAdminHandler.RespondOwnerApproval)
+	adminGroup.Get("", businessAdminHandler.GetAdminTree)
+	adminGroup.Get("/", businessAdminHandler.GetAdminTree)
+	adminGroup.Put("/:assignment_id", middlewares.AllowRoles("owner"), businessAdminHandler.UpdateAdminAssignment)
+	adminGroup.Delete("/:assignment_id", businessAdminHandler.TerminateAdmin)
+	adminGroup.Post("/:assignment_id/cancel-termination", businessAdminHandler.CancelTermination)
 
-	// 🪄 Rute Personal Calon Admin (Lihat Undangan & Terima/Tolak)
-	workerGroup := api.Group("/my-jobs", middlewares.RequireAuth)
+	// 🪄 Rute Personal Calon Admin (Lihat Undangan, Terima/Tolak, Resign)
+	workerGroup := api.Group("/my-jobs", middlewares.RequireAuth, middlewares.AllowRoles("business_admin"))
+	workerGroup.Get("", businessAdminHandler.GetMyAssignments)
 	workerGroup.Get("/", businessAdminHandler.GetMyAssignments)
-	workerGroup.Put("/:assignment_id/respond", businessAdminHandler.RespondToInvitation)
+	workerGroup.Post("/:assignment_id/respond", businessAdminHandler.RespondToInvitation)
+	workerGroup.Put("/:assignment_id/respond", businessAdminHandler.RespondToInvitation) // Backward compatibility
+	workerGroup.Post("/:assignment_id/resign", businessAdminHandler.ResignFromBusiness)
+	workerGroup.Post("/:assignment_id/cancel-resign", businessAdminHandler.CancelTermination)
+
+	// Owner Management (All Businesses)
+	ownerGroup := api.Group("/owner", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	ownerGroup.Get("/admins", businessAdminHandler.GetAdminsByOwner)
 
 	// Business Management
 	businessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
@@ -362,25 +376,25 @@ func main() {
 	businessGroup.Delete("/:id", businessHandler.DeleteBusiness)
 	businessGroup.Patch("/:business_id/toggle-status", businessHandler.ToggleStoreStatus)
 
-	// Admin / Owner Shared Access (Products, Posts, Analytics)
+	// Admin / Owner Shared Access (Products, Posts, Analytics) dengan BusinessAccessGuard
 	sharedAccess := middlewares.AllowRoles("owner", "business_admin")
 
 	// -> Products
-	productRoutes := api.Group("/business/:business_id/products", middlewares.RequireAuth, sharedAccess)
+	productRoutes := api.Group("/business/:business_id/products", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
 	productRoutes.Post("/", productHandler.CreateProduct)
 	productRoutes.Get("/", productHandler.GetFlatProducts)
-	productRoutes.Post("/:product_id/variants", middlewares.RequireAuth, productHandler.AddVariant)
-	productRoutes.Patch("/:product_id/variants/:variant_id", middlewares.RequireAuth, productHandler.UpdateVariant)
-	productRoutes.Delete("/:product_id/variants/:variant_id", middlewares.RequireAuth, productHandler.DeleteVariant)
-	productRoutes.Get("/catalog", middlewares.RequireAuth, productHandler.GetCatalog)
+	productRoutes.Post("/:product_id/variants", productHandler.AddVariant)
+	productRoutes.Patch("/:product_id/variants/:variant_id", productHandler.UpdateVariant)
+	productRoutes.Delete("/:product_id/variants/:variant_id", productHandler.DeleteVariant)
+	productRoutes.Get("/catalog", productHandler.GetCatalog)
 	productRoutes.Get("/:product_id", productHandler.GetProductDetail)
 	productRoutes.Put("/:product_id", productHandler.UpdateProduct)
 	productRoutes.Delete("/:product_id", productHandler.DeleteProduct)
-	productRoutes.Patch("/bulk-status", middlewares.RequireAuth, productHandler.BulkUpdateStatus)
-	productRoutes.Delete("/bulk-delete", middlewares.RequireAuth, productHandler.BulkDelete)
+	productRoutes.Patch("/bulk-status", productHandler.BulkUpdateStatus)
+	productRoutes.Delete("/bulk-delete", productHandler.BulkDelete)
 
 	// -> Product Groups
-	productGroupRoutes := api.Group("/business/:business_id/product-groups", middlewares.RequireAuth, sharedAccess)
+	productGroupRoutes := api.Group("/business/:business_id/product-groups", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
 	productGroupRoutes.Patch("/reorder", productGroupHandler.ReorderGroups)
 	productGroupRoutes.Patch("/:product_group_id/contents", productGroupHandler.UpdateContents)
 	productGroupRoutes.Post("/", productGroupHandler.CreateGroup)
@@ -389,7 +403,7 @@ func main() {
 	productGroupRoutes.Delete("/:product_group_id", productGroupHandler.DeleteGroup)
 
 	// -> Posts & Comments
-	postRoutes := api.Group("/business/:business_id/posts", middlewares.RequireAuth, sharedAccess)
+	postRoutes := api.Group("/business/:business_id/posts", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
 	postRoutes.Post("/", businessPostHandler.CreatePost)
 	postRoutes.Get("/", businessPostHandler.GetPosts)
 	postRoutes.Delete("/:post_id", businessPostHandler.DeletePost)
@@ -407,7 +421,7 @@ func main() {
 	merchantConvGroup.Post("/:conversation_id/messages", merchantSignalHandler.SendMessage)
 
 	// -> Analytics
-	analyticsRoutes := api.Group("/business/:business_id/analytics", middlewares.RequireAuth, sharedAccess)
+	analyticsRoutes := api.Group("/business/:business_id/analytics", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
 	analyticsRoutes.Get("/daily", analyticsHandler.GetDailyAnalytics)
 	analyticsRoutes.Get("/history", analyticsHandler.GetHistoryAnalytics)
 	analyticsRoutes.Get("/explore", analyticsHandler.GetExploreAnalytics)

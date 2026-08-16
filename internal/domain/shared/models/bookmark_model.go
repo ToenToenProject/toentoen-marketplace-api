@@ -8,7 +8,7 @@ type BusinessBookmark struct {
 	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
 
 	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
-	Account  *Account  `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Account  *Account  `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 }
 
 func (BusinessBookmark) TableName() string {
@@ -21,7 +21,7 @@ type ProductWishlist struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 
 	Product *Product `gorm:"foreignKey:ProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"product,omitempty"`
-	Account *Account `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	Account *Account `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 }
 
 func (ProductWishlist) TableName() string {

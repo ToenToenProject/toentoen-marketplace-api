@@ -129,9 +129,14 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 				Data: notifToSave, // Send the updated or new notification
 			}
 			s.hub.SendToUser(recipientID, event)
-		} else if isNew || notifType == "product_like" {
-			// 3. Fallback Push Notification via FCM jika Offline
+		}
+
+		// 3. Push Notification via FCM
+		if isNew || notifType == "product_like" {
 			tokens := fcmTokensMap[recipientID]
+			if len(tokens) == 0 {
+				tokens, _ = s.repo.GetFCMTokensByAccountID(recipientID)
+			}
 			if len(tokens) > 0 {
 				stringData := make(map[string]string)
 				for k, v := range data {
@@ -140,8 +145,6 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 				stringData["notification_id"] = notifToSave.ID
 				stringData["type"] = notifType
 
-				// Hindari push beruntun jika ini cuma update like ke-N (opsional)
-				// Di sini kita tetap kirim push untuk update terbaru.
 				_ = config.SendPushNotification(tokens, notifToSave.Title, notifToSave.Body, stringData)
 			}
 		}
