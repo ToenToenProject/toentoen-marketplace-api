@@ -4,8 +4,8 @@ ALTER TABLE business_admins
 
 -- 2. Hapus kolom shift sederhana di penugasan
 ALTER TABLE business_admin_assignments
-    DROP COLUMN IF NOT EXISTS shift_start,
-    DROP COLUMN IF NOT EXISTS shift_end;
+    DROP COLUMN IF EXISTS shift_start,
+    DROP COLUMN IF EXISTS shift_end;
 
 -- 3. Buat tabel shift multi-hari
 CREATE TABLE IF NOT EXISTS business_admin_shifts (
