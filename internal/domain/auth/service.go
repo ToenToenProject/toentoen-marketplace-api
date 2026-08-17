@@ -36,6 +36,18 @@ func NewAuthService(repo AuthRepository) AuthService {
 	return &authService{repo}
 }
 
+func cleanIdentifier(identifier string) string {
+	identifier = strings.TrimSpace(identifier)
+	if strings.Contains(identifier, "@") {
+		return strings.ToLower(identifier)
+	}
+	// Bersihkan karakter spasi, tanda strip, atau simbol dari nomor telepon
+	identifier = strings.ReplaceAll(identifier, " ", "")
+	identifier = strings.ReplaceAll(identifier, "-", "")
+	identifier = strings.ReplaceAll(identifier, "+", "")
+	return identifier
+}
+
 func isEmail(identifier string) bool {
 	return strings.Contains(identifier, "@")
 }
@@ -51,13 +63,20 @@ func (s *authService) sendOTP(identifier string, email *string, phoneNumber *str
 	if isEmail(identifier) && email != nil {
 		go utils.SendEmailOTP(*email, otp)
 	} else if phoneNumber != nil {
-		go utils.SendWAOTP(*phoneNumber, otp)
+		go func(phone, code string) {
+			if err := utils.SendWAOTP(phone, code); err != nil {
+				fmt.Printf("❌ Gagal mengirim WA OTP ke %s: %v\n", phone, err)
+			} else {
+				fmt.Printf("✅ WA OTP berhasil dikirim ke %s\n", phone)
+			}
+		}(*phoneNumber, otp)
 	}
 
 	return nil
 }
 
 func (s *authService) Register(input models.RegisterUnifiedInput) error {
+	input.Identifier = cleanIdentifier(input.Identifier)
 	existingAccount, err := s.repo.FindByIdentifier(input.Identifier)
 
 	if err == nil {
@@ -105,6 +124,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 }
 
 func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error {
+	input.Identifier = cleanIdentifier(input.Identifier)
 	redisKey := fmt.Sprintf("register_otp:%s", input.Identifier)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
@@ -132,6 +152,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 }
 
 func (s *authService) Login(input models.LoginUnifiedInput) error {
+	input.Identifier = cleanIdentifier(input.Identifier)
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -163,6 +184,7 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 }
 
 func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error) {
+	input.Identifier = cleanIdentifier(input.Identifier)
 	redisKey := fmt.Sprintf("login_otp:%s", input.Identifier)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
@@ -190,6 +212,7 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 }
 
 func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
+	input.Identifier = cleanIdentifier(input.Identifier)
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
 		return errors.New("Akun tidak ditemukan")
@@ -203,6 +226,7 @@ func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 }
 
 func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error) {
+	input.Identifier = cleanIdentifier(input.Identifier)
 	redisKey := fmt.Sprintf("forgot_otp:%s", input.Identifier)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
@@ -220,6 +244,7 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 }
 
 func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
+	input.Identifier = cleanIdentifier(input.Identifier)
 	if input.NewPassword != input.ConfirmNewPassword {
 		return errors.New("Kata sandi dan konfirmasi kata sandi tidak cocok")
 	}
