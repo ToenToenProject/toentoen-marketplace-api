@@ -1,0 +1,6 @@
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS is_location_shared BOOLEAN DEFAULT false;
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS venue_name VARCHAR(255);
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS event_start_date TIMESTAMPTZ;
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS event_end_date TIMESTAMPTZ;
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS event_schedules JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE businesses ALTER COLUMN business_details TYPE TEXT;
