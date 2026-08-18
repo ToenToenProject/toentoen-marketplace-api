@@ -67,7 +67,7 @@ func (h *BusinessPostHandler) GetPostDetail(c *fiber.Ctx) error {
 
 	post, err := h.service.GetPostByID(postID)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusNotFound, constants.NotFound, "Post tidak ditemukan", nil)
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Post tidak ditemukan", nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail post berhasil diambil", post)
