@@ -406,6 +406,7 @@ func main() {
 	postRoutes := api.Group("/business/:business_id/posts", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
 	postRoutes.Post("/", businessPostHandler.CreatePost)
 	postRoutes.Get("/", businessPostHandler.GetPosts)
+	postRoutes.Get("/:post_id", businessPostHandler.GetPostDetail)
 	postRoutes.Delete("/:post_id", businessPostHandler.DeletePost)
 
 	// ==========================================

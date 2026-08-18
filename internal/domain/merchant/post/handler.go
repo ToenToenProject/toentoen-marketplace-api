@@ -59,6 +59,20 @@ func (h *BusinessPostHandler) GetPosts(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar post berhasil diambil", responseData)
 }
 
+func (h *BusinessPostHandler) GetPostDetail(c *fiber.Ctx) error {
+	postID := strings.TrimSpace(c.Params("post_id"))
+	if postID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Post ID wajib diisi", nil)
+	}
+
+	post, err := h.service.GetPostByID(postID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.NotFound, "Post tidak ditemukan", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail post berhasil diambil", post)
+}
+
 func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	postID := strings.TrimSpace(c.Params("post_id"))
