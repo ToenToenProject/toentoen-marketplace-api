@@ -1,26 +1,34 @@
 package review
 
 import (
-	"toentoen-backend/internal/domain/shared/models"
-	"gorm.io/gorm"
 	"errors"
+	"toentoen-backend/internal/domain/shared/models"
+
+	"gorm.io/gorm"
 )
 
 type ReviewRepository interface {
 	CreateReview(review *models.Review) error
 	GetReviewByID(reviewID string) (*models.Review, error)
 	UpdateReview(review *models.Review) error
+	DeleteReview(reviewID string) error
+	HasUserReviewedBusiness(businessID, accountID string) (bool, error)
+	GetReviewByBusinessAndAccount(businessID, accountID string) (*models.Review, error)
+	GetReviewsPaginated(businessID string, ratingFilter int, sort string, page, limit int) ([]models.Review, int64, error)
 	GetAllReviews(businessID string) ([]models.Review, error)
+	GetEligibleReviewsForSmartDisplay(businessID string) ([]models.Review, error)
 	GetReviewSummary(businessID string) (*models.ReviewSummary, error)
 
+	GetReviewLikes(reviewID string) ([]models.BusinessReviewLike, error)
 	ToggleReviewLike(reviewID, accountID string) (bool, error)
 	CreateReviewComment(comment *models.BusinessReviewComment) error
 	GetReviewComments(reviewID string) ([]models.BusinessReviewComment, error)
 	GetReviewCommentByID(commentID string) (*models.BusinessReviewComment, error)
+	DeleteReviewComment(commentID string) error
 	ToggleReviewCommentLike(commentID, accountID string) (bool, error)
+	GetReviewCommentLikes(commentID string) ([]models.BusinessReviewCommentLike, error)
 	CreateReviewReport(report *models.BusinessReviewReport) error
 	CreateReviewCommentReport(report *models.BusinessReviewCommentReport) error
-	GetReviewCommentLikes(commentID string) ([]models.BusinessReviewCommentLike, error)
 }
 
 type reviewRepository struct {
@@ -37,12 +45,68 @@ func (r *reviewRepository) CreateReview(review *models.Review) error {
 
 func (r *reviewRepository) GetReviewByID(reviewID string) (*models.Review, error) {
 	var review models.Review
-	err := r.db.Where("review_id = ?", reviewID).First(&review).Error
+	err := r.db.Preload("Account").Preload("Business").Where("review_id = ?", reviewID).First(&review).Error
 	return &review, err
 }
 
 func (r *reviewRepository) UpdateReview(review *models.Review) error {
 	return r.db.Save(review).Error
+}
+
+func (r *reviewRepository) DeleteReview(reviewID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("review_id = ?", reviewID).Delete(&models.BusinessReviewLike{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("review_id = ?", reviewID).Delete(&models.BusinessReviewComment{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("review_id = ?", reviewID).Delete(&models.Review{}).Error
+	})
+}
+
+func (r *reviewRepository) HasUserReviewedBusiness(businessID, accountID string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Review{}).Where("business_id = ? AND account_id = ?", businessID, accountID).Count(&count).Error
+	return count > 0, err
+}
+
+func (r *reviewRepository) GetReviewByBusinessAndAccount(businessID, accountID string) (*models.Review, error) {
+	var review models.Review
+	err := r.db.Preload("Account").Where("business_id = ? AND account_id = ?", businessID, accountID).First(&review).Error
+	return &review, err
+}
+
+func (r *reviewRepository) GetReviewsPaginated(businessID string, ratingFilter int, sort string, page, limit int) ([]models.Review, int64, error) {
+	var reviews []models.Review
+	var total int64
+
+	query := r.db.Model(&models.Review{}).Where("business_id = ?", businessID)
+
+	if ratingFilter >= 1 && ratingFilter <= 5 {
+		query = query.Where("rating = ?", ratingFilter)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	switch sort {
+	case "highest":
+		query = query.Order("rating DESC, created_at DESC")
+	case "lowest":
+		query = query.Order("rating ASC, created_at DESC")
+	case "most_liked":
+		query = query.Order("like_count DESC, created_at DESC")
+	case "oldest":
+		query = query.Order("created_at ASC")
+	default: // "newest"
+		query = query.Order("created_at DESC")
+	}
+
+	offset := (page - 1) * limit
+	err := query.Preload("Account").Offset(offset).Limit(limit).Find(&reviews).Error
+	return reviews, total, err
 }
 
 func (r *reviewRepository) GetAllReviews(businessID string) ([]models.Review, error) {
@@ -53,23 +117,29 @@ func (r *reviewRepository) GetAllReviews(businessID string) ([]models.Review, er
 		query = query.Where("business_id = ?", businessID)
 	}
 
-	err := query.Order("created_at DESC").Find(&reviews).Error
+	err := query.Preload("Account").Order("created_at DESC").Find(&reviews).Error
 	return reviews, err
 }
 
-// --- Implementasinya ---
+func (r *reviewRepository) GetEligibleReviewsForSmartDisplay(businessID string) ([]models.Review, error) {
+	var reviews []models.Review
+	err := r.db.Preload("Account").
+		Where("business_id = ?", businessID).
+		Order("created_at DESC").
+		Find(&reviews).Error
+	return reviews, err
+}
+
 func (r *reviewRepository) GetReviewSummary(businessID string) (*models.ReviewSummary, error) {
 	var summary models.ReviewSummary
-	var total float64 // Untuk menghitung rata-rata
+	var total float64
 
-	// Struct sementara untuk menangkap hasil GROUP BY SQL
 	type Result struct {
 		Rating int
 		Count  int64
 	}
 	var results []Result
 
-	// Query 1: Review Bisnis
 	err := r.db.Model(&models.Review{}).
 		Select("rating, count(*) as count").
 		Where("business_id = ?", businessID).
@@ -79,26 +149,36 @@ func (r *reviewRepository) GetReviewSummary(businessID string) (*models.ReviewSu
 		return nil, err
 	}
 
-	// Petakan hasil ke dalam struct Distribution
 	for _, res := range results {
 		summary.TotalReviews += res.Count
 		total += float64(res.Rating) * float64(res.Count)
 
 		switch res.Rating {
-		case 5: summary.Distribution.Star5 += res.Count
-		case 4: summary.Distribution.Star4 += res.Count
-		case 3: summary.Distribution.Star3 += res.Count
-		case 2: summary.Distribution.Star2 += res.Count
-		case 1: summary.Distribution.Star1 += res.Count
+		case 5:
+			summary.Distribution.Star5 += res.Count
+		case 4:
+			summary.Distribution.Star4 += res.Count
+		case 3:
+			summary.Distribution.Star3 += res.Count
+		case 2:
+			summary.Distribution.Star2 += res.Count
+		case 1:
+			summary.Distribution.Star1 += res.Count
 		}
 	}
 
 	if summary.TotalReviews > 0 {
 		summary.AverageRating = total / float64(summary.TotalReviews)
-		summary.AverageRating = float64(int(summary.AverageRating*10)) / 10 
+		summary.AverageRating = float64(int(summary.AverageRating*10)) / 10
 	}
 
 	return &summary, nil
+}
+
+func (r *reviewRepository) GetReviewLikes(reviewID string) ([]models.BusinessReviewLike, error) {
+	var likes []models.BusinessReviewLike
+	err := r.db.Where("review_id = ?", reviewID).Find(&likes).Error
+	return likes, err
 }
 
 func (r *reviewRepository) ToggleReviewLike(reviewID, accountID string) (bool, error) {
@@ -113,7 +193,7 @@ func (r *reviewRepository) ToggleReviewLike(reviewID, accountID string) (bool, e
 				return err
 			}
 			if err := tx.Model(&models.Review{}).Where("review_id = ?", reviewID).
-				Updates(map[string]interface{}{"like_count": gorm.Expr("like_count - 1")}).Error; err != nil {
+				Updates(map[string]interface{}{"like_count": gorm.Expr("GREATEST(like_count - 1, 0)")}).Error; err != nil {
 				return err
 			}
 			isLiked = false
@@ -151,14 +231,31 @@ func (r *reviewRepository) CreateReviewComment(comment *models.BusinessReviewCom
 
 func (r *reviewRepository) GetReviewComments(reviewID string) ([]models.BusinessReviewComment, error) {
 	var comments []models.BusinessReviewComment
-	err := r.db.Preload("Account.Customer").Where("review_id = ?", reviewID).Order("created_at ASC").Find(&comments).Error
+	err := r.db.Preload("Account").Where("review_id = ?", reviewID).Order("created_at ASC").Find(&comments).Error
 	return comments, err
 }
 
 func (r *reviewRepository) GetReviewCommentByID(commentID string) (*models.BusinessReviewComment, error) {
 	var comment models.BusinessReviewComment
-	err := r.db.Preload("Account.Customer").Where("comment_id = ?", commentID).First(&comment).Error
+	err := r.db.Preload("Account").Where("comment_id = ?", commentID).First(&comment).Error
 	return &comment, err
+}
+
+func (r *reviewRepository) DeleteReviewComment(commentID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var comment models.BusinessReviewComment
+		if err := tx.Where("comment_id = ?", commentID).First(&comment).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("comment_id = ?", commentID).Delete(&models.BusinessReviewCommentLike{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("comment_id = ?", commentID).Delete(&models.BusinessReviewComment{}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.Review{}).Where("review_id = ?", comment.ReviewID).
+			Updates(map[string]interface{}{"comment_count": gorm.Expr("GREATEST(comment_count - 1, 0)")}).Error
+	})
 }
 
 func (r *reviewRepository) ToggleReviewCommentLike(commentID, accountID string) (bool, error) {
@@ -173,7 +270,7 @@ func (r *reviewRepository) ToggleReviewCommentLike(commentID, accountID string) 
 				return err
 			}
 			if err := tx.Model(&models.BusinessReviewComment{}).Where("comment_id = ?", commentID).
-				Updates(map[string]interface{}{"like_count": gorm.Expr("like_count - 1")}).Error; err != nil {
+				Updates(map[string]interface{}{"like_count": gorm.Expr("GREATEST(like_count - 1, 0)")}).Error; err != nil {
 				return err
 			}
 			isLiked = false

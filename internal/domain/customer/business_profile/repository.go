@@ -147,7 +147,7 @@ func (r *repository) GetSimilarBusinesses(category string, city string, currentB
 
 func (r *repository) GetRecentTopReviews(businessID string, limit int) ([]models.Review, error) {
 	var reviews []models.Review
-	err := r.db.Where("business_id = ?", businessID).
+	err := r.db.Preload("Account").Where("business_id = ?", businessID).
 		Order("rating DESC, created_at DESC").
 		Limit(limit).
 		Find(&reviews).Error

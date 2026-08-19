@@ -2,6 +2,7 @@ package models
 
 import (
 	"time"
+
 	"gorm.io/gorm"
 )
 
@@ -56,21 +57,36 @@ type BusinessReviewCommentLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-// Struct untuk Customer membuat review
+// Struct untuk Customer membuat review bisnis
 type CreateReviewInput struct {
-	BusinessID string  `json:"business_id" validate:"required"`
-	Rating     int     `json:"rating" validate:"required,min=1,max=5"`
-	Comment    string  `json:"comment" validate:"required"`
-	ReviewImages []string `json:"review_images" validate:"max=5"` 
+	BusinessID   string   `json:"business_id" validate:"required"`
+	Rating       int      `json:"rating" validate:"required,min=1,max=5"`
+	Comment      string   `json:"comment" validate:"required"`
+	ReviewImages []string `json:"review_images" validate:"max=5"`
 	ReviewVideo  *string  `json:"review_video"`
 }
 
-// Struct untuk Owner membalas review
+// Struct untuk Customer mengedit review bisnis
+type UpdateReviewInput struct {
+	Rating       int      `json:"rating" validate:"required,min=1,max=5"`
+	Comment      string   `json:"comment" validate:"required"`
+	ReviewImages []string `json:"review_images" validate:"max=5"`
+	ReviewVideo  *string  `json:"review_video"`
+}
+
+// Struct untuk membalas review bisnis
+type CreateReviewReplyInput struct {
+	Content              string  `json:"content" validate:"required"`
+	ReplyToCommentID     *string `json:"reply_to_comment_id"`
+	RepliedToAccountID   *string `json:"replied_to_account_id"`
+	RepliedToAccountName *string `json:"replied_to_account_name"`
+}
+
+// Struct untuk Owner membalas review langsung
 type ReplyReviewInput struct {
 	ReplyComment string `json:"reply_comment" validate:"required"`
 }
 
-// Tambahkan di bawah struct Review
 type RatingDistribution struct {
 	Star5 int64 `json:"5"`
 	Star4 int64 `json:"4"`
@@ -83,4 +99,45 @@ type ReviewSummary struct {
 	AverageRating float64            `json:"average_rating"`
 	TotalReviews  int64              `json:"total_reviews"`
 	Distribution  RatingDistribution `json:"distribution"`
+}
+
+// DTO Output Response
+type BusinessReviewResponse struct {
+	ReviewID               string                          `json:"review_id"`
+	BusinessID             string                          `json:"business_id"`
+	AccountID              string                          `json:"account_id"`
+	AccountName            string                          `json:"account_name"`
+	AccountAvatar          *string                         `json:"account_avatar,omitempty"`
+	Rating                 int                             `json:"rating"`
+	Comment                string                          `json:"comment"`
+	ReviewImages           []string                        `json:"review_images"`
+	ReviewVideo            *string                         `json:"review_video,omitempty"`
+	LikeCount              int                             `json:"like_count"`
+	CommentCount           int                             `json:"comment_count"`
+	IsLikedByMe            bool                            `json:"is_liked_by_me"`
+	IsOwnerLiked           bool                            `json:"is_owner_liked"`
+	IsOwnerReplied         bool                            `json:"is_owner_replied"`
+	OwnerInteractionLabel  string                          `json:"owner_interaction_label,omitempty"`
+	Replies                []BusinessReviewCommentResponse `json:"replies,omitempty"`
+	CreatedAt              time.Time                       `json:"created_at"`
+	UpdatedAt              time.Time                       `json:"updated_at"`
+}
+
+type BusinessReviewCommentResponse struct {
+	CommentID              string                          `json:"comment_id"`
+	ReviewID               string                          `json:"review_id"`
+	AccountID              string                          `json:"account_id"`
+	AccountName            string                          `json:"account_name"`
+	AccountAvatar          *string                         `json:"account_avatar,omitempty"`
+	Content                string                          `json:"content"`
+	LikeCount              int                             `json:"like_count"`
+	IsLikedByMe            bool                            `json:"is_liked_by_me"`
+	IsByOwner              bool                            `json:"is_by_owner"`
+	IsOwnerLiked           bool                            `json:"is_owner_liked"`
+	OwnerInteractionLabel  string                          `json:"owner_interaction_label,omitempty"`
+	ReplyToCommentID       *string                         `json:"reply_to_comment_id,omitempty"`
+	RepliedToAccountID     *string                         `json:"replied_to_account_id,omitempty"`
+	RepliedToAccountName   *string                         `json:"replied_to_account_name,omitempty"`
+	Replies                []BusinessReviewCommentResponse `json:"replies,omitempty"`
+	CreatedAt              time.Time                       `json:"created_at"`
 }

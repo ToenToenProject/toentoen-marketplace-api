@@ -2,6 +2,7 @@ package interaction
 
 import (
 	"errors"
+	"fmt"
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
@@ -11,7 +12,10 @@ import (
 type PostInteractionService interface {
 	TogglePostLike(postID, accountID string) (bool, error)
 	AddPostComment(postID, accountID string, input models.CreateCommentInput) error
-	GetPostComments(postID string) ([]models.CommentResponse, error)
+	EditPostComment(postID, commentID, accountID string, input models.UpdateCommentInput) error
+	DeletePostComment(postID, commentID, requesterID string) error
+	GetPostComments(postID, currentAccountID string) ([]models.CommentResponse, error)
+	TogglePostCommentLike(commentID, accountID string) (bool, error)
 	ReportPost(postID, accountID string, input models.CreatePostReportInput) error
 }
 
@@ -33,13 +37,10 @@ func (s *postInteractionService) TogglePostLike(postID, accountID string) (bool,
 			businessID, errB := s.repo.GetBusinessIDByPostID(postID)
 			if errB == nil {
 				staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
-				
 				data := map[string]interface{}{
-					"post_id":      postID,
-					"business_id":  businessID,
-					"trigger_name": "Seseorang",
+					"post_id":     postID,
+					"business_id": businessID,
 				}
-				
 				s.notifService.SendNotification(
 					staffIDs,
 					accountID,
@@ -56,7 +57,7 @@ func (s *postInteractionService) TogglePostLike(postID, accountID string) (bool,
 	return isLiked, err
 }
 
-// 2. CREATE KOMENTAR / BALASAN (Sihir 1-Level Nesting)
+// 2. CREATE KOMENTAR / BALASAN POSTINGAN
 func (s *postInteractionService) AddPostComment(postID, accountID string, input models.CreateCommentInput) error {
 	businessID, err := s.repo.GetBusinessIDByPostID(postID)
 	if err != nil {
@@ -71,116 +72,198 @@ func (s *postInteractionService) AddPostComment(postID, accountID string, input 
 		Content:    input.Content,
 	}
 
-	// ==========================================
-	// LOGIKA VALIDASI 1-LEVEL NESTING
-	// ==========================================
+	var parentComment *models.BusinessPostComment
 	if input.ReplyToCommentID != nil && *input.ReplyToCommentID != "" {
-		parentComment, err := s.repo.GetPostCommentByID(*input.ReplyToCommentID)
-		if err != nil {
+		parent, errP := s.repo.GetPostCommentByID(*input.ReplyToCommentID)
+		if errP != nil {
 			return errors.New("komentar yang ingin dibalas tidak ditemukan")
 		}
+		parentComment = parent
 
-		if parentComment.ReplyToCommentID == nil {
-			// KASUS A: Membalas Komentar Utama (Root)
-			// Biarkan statusnya sebagai anak langsung
+		if parent.ReplyToCommentID == nil {
 			comment.ReplyToCommentID = input.ReplyToCommentID
 		} else {
-			// KASUS B: Membalas Balasan (Child membalas Child)
-			// PAKSA komentar ini menjadi saudara kandung dari parentComment (menginduk ke Root yang sama)
-			comment.ReplyToCommentID = parentComment.ReplyToCommentID
-			
-			// Tambahkan info mention agar UI tahu siapa yang sedang diajak bicara
-			comment.RepliedToAccountID = &parentComment.AccountID
-			
-			// Asumsi model Account Anda memiliki field 'Name' atau 'FullName'
-			if parentComment.Account != nil {
-				// Sesuaikan .Name dengan field di struct Account Anda
-				// Jika struct Account Anda pakai FullName, ganti jadi parentComment.Account.FullName
-				name := parentComment.Account.FirstName + " " + parentComment.Account.LastName 
+			comment.ReplyToCommentID = parent.ReplyToCommentID
+			comment.RepliedToAccountID = &parent.AccountID
+			if parent.Account != nil {
+				name := parent.Account.FirstName + " " + parent.Account.LastName
 				comment.RepliedToAccountName = &name
 			}
 		}
 	}
 
-	// Simpan ke database
 	if err := s.repo.CreatePostComment(&comment); err != nil {
 		return errors.New("gagal menambahkan komentar")
 	}
 
+	// Kirim Notifikasi
 	go func() {
-		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
-		data := map[string]interface{}{
-			"post_id":      postID,
-			"business_id":  businessID,
-			"comment_id":   comment.CommentID,
-			"trigger_name": "Seseorang",
+		if input.ReplyToCommentID != nil && parentComment != nil {
+			recipientID := parentComment.AccountID
+			if comment.RepliedToAccountID != nil && *comment.RepliedToAccountID != "" {
+				recipientID = *comment.RepliedToAccountID
+			}
+
+			data := map[string]interface{}{
+				"post_id":     postID,
+				"business_id": businessID,
+				"comment_id":  comment.CommentID,
+			}
+			s.notifService.SendNotification(
+				[]string{recipientID},
+				accountID,
+				"post_reply",
+				postID,
+				"Balasan Komentar Baru",
+				fmt.Sprintf("Ada yang membalas komentar Anda: %s", utils.TruncateString(input.Content, 50)),
+				data,
+				nil,
+			)
+		} else {
+			staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
+			data := map[string]interface{}{
+				"post_id":     postID,
+				"business_id": businessID,
+				"comment_id":  comment.CommentID,
+			}
+			s.notifService.SendNotification(
+				staffIDs,
+				accountID,
+				"post_comment",
+				postID,
+				"Komentar Baru!",
+				fmt.Sprintf("Ada pelanggan yang mengomentari postingan Anda: %s", utils.TruncateString(input.Content, 50)),
+				data,
+				nil,
+			)
 		}
-		
-		s.notifService.SendNotification(
-			staffIDs,
-			accountID,
-			"post_comment",
-			comment.CommentID,
-			"Komentar Baru!",
-			"Ada pelanggan yang mengomentari postingan Anda.",
-			data,
-			nil,
-		)
 	}()
 
 	return nil
 }
 
-// 3. GET KOMENTAR (Mengubah Array Datar menjadi JSON Nested)
-func (s *postInteractionService) GetPostComments(postID string) ([]models.CommentResponse, error) {
+// 3. EDIT KOMENTAR POSTINGAN
+func (s *postInteractionService) EditPostComment(postID, commentID, accountID string, input models.UpdateCommentInput) error {
+	comment, err := s.repo.GetPostCommentByID(commentID)
+	if err != nil {
+		return errors.New("komentar tidak ditemukan")
+	}
+
+	if comment.AccountID != accountID {
+		return errors.New("Anda tidak memiliki izin untuk mengedit komentar ini")
+	}
+
+	comment.Content = input.Content
+	return s.repo.UpdatePostComment(comment)
+}
+
+// 4. DELETE KOMENTAR POSTINGAN
+func (s *postInteractionService) DeletePostComment(postID, commentID, requesterID string) error {
+	comment, err := s.repo.GetPostCommentByID(commentID)
+	if err != nil {
+		return errors.New("komentar tidak ditemukan")
+	}
+
+	isAuthorized := comment.AccountID == requesterID
+	if !isAuthorized {
+		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(comment.BusinessID)
+		for _, sid := range staffIDs {
+			if sid == requesterID {
+				isAuthorized = true
+				break
+			}
+		}
+	}
+
+	if !isAuthorized {
+		return errors.New("Anda tidak memiliki izin untuk menghapus komentar ini")
+	}
+
+	return s.repo.DeletePostComment(commentID)
+}
+
+// 5. GET KOMENTAR POSTINGAN (TREE + BADGES)
+func (s *postInteractionService) GetPostComments(postID, currentAccountID string) ([]models.CommentResponse, error) {
 	rawComments, err := s.repo.GetCommentsByPostID(postID)
 	if err != nil {
 		return nil, errors.New("gagal mengambil data komentar")
 	}
 
-	// Map pointer untuk menyusun hierarki
-	commentMap := make(map[string]*models.CommentResponse)
-	var finalComments []models.CommentResponse
-
-	// Looping 1: Pindahkan data mentah ke bentuk DTO (Format Response Frontend)
-	for _, rc := range rawComments {
-		// Ambil nama user dari relasi (Preload)
-		accName := "User"
-		if rc.Account != nil {
-			accName = rc.Account.FirstName + " " + rc.Account.LastName // Sesuaikan dengan field nama di struct Account
-		}
-
-		item := &models.CommentResponse{
-			CommentID:            rc.CommentID,
-			AccountID:            rc.AccountID,
-			AccountName:          accName,
-			Content:              rc.Content,
-			LikeCount:            rc.LikeCount,
-			CreatedAt:            rc.CreatedAt,
-			RepliedToAccountID:   rc.RepliedToAccountID,
-			RepliedToAccountName: rc.RepliedToAccountName,
-			Replies:              []models.CommentResponse{},
-		}
-		commentMap[rc.CommentID] = item
+	if len(rawComments) == 0 {
+		return []models.CommentResponse{}, nil
 	}
 
-	// Looping 2: Susun relasi Induk dan Anak
-	for _, rc := range rawComments {
-		currentItem := commentMap[rc.CommentID]
+	businessID, _ := s.repo.GetBusinessIDByPostID(postID)
+	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
+	staffMap := make(map[string]bool)
+	for _, sid := range staffIDs {
+		staffMap[sid] = true
+	}
 
-		if rc.ReplyToCommentID == nil {
-			// Jika tidak ada parent, ini adalah komentar utama (Level 1)
-			// Kita biarkan dulu di map, nanti ditarik di akhir
-			continue
-		} else {
-			// Jika ini balasan, masukkan ke array Replies milik induknya
-			if parentItem, exists := commentMap[*rc.ReplyToCommentID]; exists {
-				parentItem.Replies = append(parentItem.Replies, *currentItem)
+	likedCommentIDs := make(map[string]bool)
+	ownerLikedCommentIDs := make(map[string]bool)
+	for _, rc := range rawComments {
+		likes, _ := s.repo.GetPostCommentLikes(rc.CommentID)
+		for _, l := range likes {
+			if currentAccountID != "" && l.AccountID == currentAccountID {
+				likedCommentIDs[rc.CommentID] = true
+			}
+			if staffMap[l.AccountID] {
+				ownerLikedCommentIDs[rc.CommentID] = true
 			}
 		}
 	}
 
-	// Looping 3: Kumpulkan semua komentar Root (beserta balasan yang sudah bersarang di dalamnya)
+	commentMap := make(map[string]*models.CommentResponse)
+	var finalComments []models.CommentResponse
+
+	for _, rc := range rawComments {
+		accName := "Pengguna"
+		var accAvatar *string
+		if rc.Account != nil {
+			accName = rc.Account.FirstName + " " + rc.Account.LastName
+			accAvatar = rc.Account.ProfilePictureUrl
+		}
+
+		isByOwner := staffMap[rc.AccountID]
+		isOwnerLiked := ownerLikedCommentIDs[rc.CommentID]
+
+		item := &models.CommentResponse{
+			CommentID:             rc.CommentID,
+			AccountID:             rc.AccountID,
+			AccountName:           accName,
+			AccountAvatar:         accAvatar,
+			Content:               rc.Content,
+			LikeCount:             rc.LikeCount,
+			IsLikedByMe:           likedCommentIDs[rc.CommentID],
+			IsByOwner:             isByOwner,
+			IsOwnerLiked:          isOwnerLiked,
+			OwnerInteractionLabel: getOwnerInteractionLabel(isOwnerLiked, false, isByOwner),
+			CreatedAt:             rc.CreatedAt,
+			RepliedToAccountID:    rc.RepliedToAccountID,
+			RepliedToAccountName:  rc.RepliedToAccountName,
+			Replies:               []models.CommentResponse{},
+		}
+		commentMap[rc.CommentID] = item
+	}
+
+	for _, rc := range rawComments {
+		currentItem := commentMap[rc.CommentID]
+
+		if rc.ReplyToCommentID != nil {
+			if parentItem, exists := commentMap[*rc.ReplyToCommentID]; exists {
+				parentItem.Replies = append(parentItem.Replies, *currentItem)
+				parentItem.RepliesCount = len(parentItem.Replies)
+				parentItem.CommentCount = len(parentItem.Replies)
+
+				if currentItem.IsByOwner {
+					parentItem.IsOwnerReplied = true
+					parentItem.OwnerInteractionLabel = getOwnerInteractionLabel(parentItem.IsOwnerLiked, true, parentItem.IsByOwner)
+				}
+			}
+		}
+	}
+
 	for _, rc := range rawComments {
 		if rc.ReplyToCommentID == nil {
 			finalComments = append(finalComments, *commentMap[rc.CommentID])
@@ -188,6 +271,33 @@ func (s *postInteractionService) GetPostComments(postID string) ([]models.Commen
 	}
 
 	return finalComments, nil
+}
+
+// 6. TOGGLE LIKE KOMENTAR POST
+func (s *postInteractionService) TogglePostCommentLike(commentID, accountID string) (bool, error) {
+	isLiked, err := s.repo.TogglePostCommentLike(commentID, accountID)
+	if err == nil && isLiked {
+		go func() {
+			comment, errC := s.repo.GetPostCommentByID(commentID)
+			if errC == nil && comment.AccountID != accountID {
+				data := map[string]interface{}{
+					"post_id":    comment.PostID,
+					"comment_id": commentID,
+				}
+				s.notifService.SendNotification(
+					[]string{comment.AccountID},
+					accountID,
+					"post_comment_like",
+					comment.PostID,
+					"Komentar Anda disukai!",
+					"Seseorang menyukai komentar postingan Anda.",
+					data,
+					nil,
+				)
+			}
+		}()
+	}
+	return isLiked, err
 }
 
 func (s *postInteractionService) ReportPost(postID, accountID string, input models.CreatePostReportInput) error {

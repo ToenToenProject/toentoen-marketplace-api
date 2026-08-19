@@ -154,7 +154,7 @@ func main() {
 	analyticsHandler := analytics.NewAnalyticsHandler(analyticsService)
 
 	reviewRepo := review.NewReviewRepository(database.DB)
-	reviewService := review.NewReviewService(reviewRepo, businessRepo)
+	reviewService := review.NewReviewService(reviewRepo, businessRepo, notifService)
 	reviewHandler := review.NewReviewHandler(reviewService, productInteractionService)
 
 	exploreRepo := explore.NewExploreRepository(database.DB)
@@ -308,12 +308,6 @@ func main() {
 	api.Post("/customer/wishlist/:product_id", middlewares.RequireAuth, myActivityHandler.ToggleWishlist)
 
 	// ==========================================
-	// ROUTES: CUSTOMER ACTIONS & INTERACTIONS
-	// ==========================================
-	customerReviewGroup := api.Group("/reviews/customer", middlewares.RequireAuth, middlewares.AllowRoles("customer"))
-	customerReviewGroup.Post("/", reviewHandler.CreateReview)
-
-	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - CUSTOMER
 	// ==========================================
 	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth, middlewares.AllowRoles("customer"))
@@ -330,6 +324,8 @@ func main() {
 	publicProductRoutes.Get("/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
 	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleLike)
 	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductReview)
+	publicProductRoutes.Put("/:product_id/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.EditProductComment)
+	publicProductRoutes.Delete("/:product_id/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductComment)
 	publicProductRoutes.Get("/:product_id/reviews", middlewares.OptionalAuth, productInteractionHandler.GetProductReviews)
 	publicProductRoutes.Post("/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleReviewLike)
 	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, productInteractionHandler.ReportReview)
@@ -337,7 +333,10 @@ func main() {
 	publicPostRoutes := api.Group("/posts")
 	publicPostRoutes.Post("/:post_id/like", middlewares.RequireAuth, postInteractionHandler.ToggleLike)
 	publicPostRoutes.Post("/:post_id/comments", middlewares.RequireAuth, postInteractionHandler.AddPostComment)
-	publicPostRoutes.Get("/:post_id/comments", middlewares.RequireAuth, postInteractionHandler.GetPostComments)
+	publicPostRoutes.Put("/:post_id/comments/:comment_id", middlewares.RequireAuth, postInteractionHandler.EditPostComment)
+	publicPostRoutes.Delete("/:post_id/comments/:comment_id", middlewares.RequireAuth, postInteractionHandler.DeletePostComment)
+	publicPostRoutes.Get("/:post_id/comments", middlewares.OptionalAuth, postInteractionHandler.GetPostComments)
+	publicPostRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, postInteractionHandler.ToggleCommentLike)
 	publicPostRoutes.Post("/:post_id/report", middlewares.RequireAuth, postInteractionHandler.ReportPost)
 
 	// ==========================================
@@ -427,23 +426,27 @@ func main() {
 	analyticsRoutes.Get("/history", analyticsHandler.GetHistoryAnalytics)
 	analyticsRoutes.Get("/explore", analyticsHandler.GetExploreAnalytics)
 
-	// -> Merchant Review Reply
-	merchantGroup := api.Group("/reviews/merchant", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
-	merchantGroup.Patch("/:review_id/reply", reviewHandler.ReplyReview)
+	// ==========================================
+	// ROUTES: BUSINESS REVIEWS & SMART DISPLAY
+	// ==========================================
+	reviewGroup := api.Group("/reviews")
+	// Review Toko (Customer Buat, Edit, Hapus)
+	reviewGroup.Post("/business/:business_id", middlewares.RequireAuth, reviewHandler.CreateReview)
+	reviewGroup.Put("/business/reviews/:review_id", middlewares.RequireAuth, reviewHandler.UpdateReview)
+	reviewGroup.Delete("/business/reviews/:review_id", middlewares.RequireAuth, reviewHandler.DeleteReview)
 
-	reviewGroup := api.Group("/reviews", middlewares.RequireAuth, middlewares.AllowRoles("customer", "owner"))
-	reviewGroup.Get("/:review_id", reviewHandler.GetReviewDetail)
-	reviewGroup.Get("/business/:business_id", reviewHandler.GetAllReviews)
+	// Get Reviews Toko (Smart display 5 review, Paginated list, Detail)
+	reviewGroup.Get("/business/:business_id/smart", middlewares.OptionalAuth, reviewHandler.GetSmartDisplayReviews)
+	reviewGroup.Get("/business/:business_id", middlewares.OptionalAuth, reviewHandler.GetAllReviews)
+	reviewGroup.Get("/business/detail/:review_id", middlewares.OptionalAuth, reviewHandler.GetReviewDetail)
 
-	// Review Interactions
-	reviewGroup.Post("/:review_id/like", reviewHandler.ToggleReviewLike)
-	reviewGroup.Post("/:review_id/comments", reviewHandler.AddReviewComment)
-	reviewGroup.Get("/:review_id/comments", reviewHandler.GetReviewComments)
-	reviewGroup.Post("/:review_id/report", reviewHandler.ReportReview)
-
-	// Review Comment Interactions
-	reviewGroup.Post("/comments/:comment_id/like", reviewHandler.ToggleReviewCommentLike)
-	reviewGroup.Post("/comments/:comment_id/report", reviewHandler.ReportReviewComment)
+	// Balasan & Like Review Toko (Customer & Merchant)
+	reviewGroup.Post("/business/reviews/:review_id/replies", middlewares.RequireAuth, reviewHandler.ReplyReview)
+	reviewGroup.Delete("/business/replies/:comment_id", middlewares.RequireAuth, reviewHandler.DeleteReviewComment)
+	reviewGroup.Post("/business/reviews/:review_id/like", middlewares.RequireAuth, reviewHandler.ToggleReviewLike)
+	reviewGroup.Post("/business/replies/:comment_id/like", middlewares.RequireAuth, reviewHandler.ToggleReviewCommentLike)
+	reviewGroup.Post("/business/reviews/:review_id/report", middlewares.RequireAuth, reviewHandler.ReportReview)
+	reviewGroup.Post("/business/replies/:comment_id/report", middlewares.RequireAuth, reviewHandler.ReportReviewComment)
 
 	// ==========================================
 	// ROUTES: CUSTOMER EXPLORE
