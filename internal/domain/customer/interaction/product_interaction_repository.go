@@ -167,7 +167,7 @@ func (r *productInteractionRepository) GetProductReviewsByProductID(productID st
 	var reviews []models.ProductReview
 	query := r.db.Preload("Account").Preload("Comments", func(db *gorm.DB) *gorm.DB {
 		return db.Preload("Account").Order("created_at ASC")
-	}).Where("product_id = ?", productID)
+	}).Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID))
 
 	if rating != nil && *rating >= 1 && *rating <= 5 {
 		query = query.Where("rating >= ? AND rating < ?", float64(*rating), float64(*rating)+1.0)
@@ -411,7 +411,7 @@ func (r *productInteractionRepository) GetProductCommentByID(commentID string) (
 
 func (r *productInteractionRepository) GetProductCommentsByProductID(productID string) ([]models.ProductComment, error) {
 	var comments []models.ProductComment
-	err := r.db.Preload("Account").Where("product_id = ?", productID).Order("created_at ASC").Find(&comments).Error
+	err := r.db.Preload("Account").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID)).Order("created_at ASC").Find(&comments).Error
 	return comments, err
 }
 

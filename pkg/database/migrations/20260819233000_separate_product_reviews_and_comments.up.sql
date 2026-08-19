@@ -53,8 +53,11 @@ CREATE TABLE IF NOT EXISTS product_review_comments (
     replied_to_account_name VARCHAR(100),
     like_count INT DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
 );
+
+ALTER TABLE product_review_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
 -- 4. TABEL LIKE UNTUK BALASAN REVIEW PRODUK
 CREATE TABLE IF NOT EXISTS product_review_comment_likes (

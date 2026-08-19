@@ -2,6 +2,7 @@ package profile
 
 import (
 	"toentoen-backend/internal/domain/shared/models"
+
 	"gorm.io/gorm"
 )
 
