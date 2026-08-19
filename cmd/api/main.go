@@ -385,7 +385,6 @@ func main() {
 	productRoutes.Post("/:product_id/variants", productHandler.AddVariant)
 	productRoutes.Patch("/:product_id/variants/:variant_id", productHandler.UpdateVariant)
 	productRoutes.Delete("/:product_id/variants/:variant_id", productHandler.DeleteVariant)
-	productRoutes.Get("/catalog", productHandler.GetCatalog)
 	productRoutes.Get("/:product_id", productHandler.GetProductDetail)
 	productRoutes.Put("/:product_id", productHandler.UpdateProduct)
 	productRoutes.Delete("/:product_id", productHandler.DeleteProduct)
