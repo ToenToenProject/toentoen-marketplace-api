@@ -323,6 +323,11 @@ func main() {
 	// 4. UNIFIED ROUTES (UNIVERSAL REPORTS, LIKES, COMMENTS, REVIEWS)
 	reportsGroup := api.Group("/reports", middlewares.RequireAuth)
 	reportsGroup.Post("/", reportHandler.CreateReport)
+	reportsGroup.Get("/", reportHandler.GetAllReports)
+	reportsGroup.Get("/my", reportHandler.GetMyReports)
+	reportsGroup.Get("/:report_id", reportHandler.GetReportDetail)
+	reportsGroup.Delete("/:report_id", reportHandler.DeleteReport)
+	reportsGroup.Patch("/:report_id/status", reportHandler.UpdateReportStatus)
 
 	commentsGroup := api.Group("/comments", middlewares.RequireAuth)
 	commentsGroup.Post("/:comment_id/like", productInteractionHandler.ToggleUnifiedCommentLike)

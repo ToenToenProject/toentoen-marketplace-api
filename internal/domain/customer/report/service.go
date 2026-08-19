@@ -18,6 +18,11 @@ type SubmitReportRequest struct {
 type Service interface {
 	SubmitReport(accountID, businessID string, req SubmitReportRequest) error
 	CreateUniversalReport(accountID string, input models.CreateReportInput) error
+	GetReports(filter models.ReportFilterQuery) ([]models.ReportResponse, int64, error)
+	GetUserReports(accountID string, page, limit int) ([]models.ReportResponse, int64, error)
+	GetReportDetail(reportID string) (*models.ReportResponse, error)
+	DeleteReport(reportID, requesterAccountID, role string) error
+	UpdateReportStatus(reportID, status string) error
 }
 
 type service struct {
@@ -69,6 +74,7 @@ func (s *service) SubmitReport(accountID, businessID string, req SubmitReportReq
 }
 
 func (s *service) CreateUniversalReport(accountID string, input models.CreateReportInput) error {
+	accountID = strings.TrimSpace(accountID)
 	targetID := strings.TrimSpace(input.TargetID)
 	if targetID == "" {
 		return errors.New("target_id wajib diisi")
@@ -93,7 +99,13 @@ func (s *service) CreateUniversalReport(accountID string, input models.CreateRep
 		}
 	}
 
-	// Validasi target existence
+	// 1. Cek apakah user sudah pernah melaporkan target ini sebelumnya
+	hasReported, errReported := s.repo.HasUserReportedTarget(accountID, targetID)
+	if errReported == nil && hasReported {
+		return errors.New("Anda sudah pernah melaporkan konten ini sebelumnya")
+	}
+
+	// 2. Validasi target existence
 	exists, err := s.repo.CheckTargetExists(targetType, targetID)
 	if err != nil {
 		return err
@@ -123,4 +135,110 @@ func (s *service) CreateUniversalReport(accountID string, input models.CreateRep
 	}
 
 	return s.repo.CreateUniversalReport(report)
+}
+
+func (s *service) toReportResponse(r models.Report) models.ReportResponse {
+	reporterName := "Pengguna"
+	var reporterAvatar *string
+	if r.Account != nil {
+		reporterName = strings.TrimSpace(r.Account.FirstName + " " + r.Account.LastName)
+		if reporterName == "" {
+			reporterName = "Pengguna"
+		}
+		reporterAvatar = r.Account.ProfilePictureUrl
+	}
+
+	evidences := r.Evidence
+	if evidences == nil {
+		evidences = []string{}
+	}
+
+	return models.ReportResponse{
+		ReportID:       r.ReportID,
+		AccountID:      r.AccountID,
+		ReporterName:   reporterName,
+		ReporterAvatar: reporterAvatar,
+		TargetType:     r.TargetType,
+		TargetID:       r.TargetID,
+		Reason:         r.Reason,
+		Description:    r.Description,
+		Evidence:       evidences,
+		Status:         r.Status,
+		CreatedAt:      r.CreatedAt,
+		UpdatedAt:      r.UpdatedAt,
+	}
+}
+
+func (s *service) GetReports(filter models.ReportFilterQuery) ([]models.ReportResponse, int64, error) {
+	reports, total, err := s.repo.GetReportsPaginated(filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	responses := make([]models.ReportResponse, 0, len(reports))
+	for _, r := range reports {
+		responses = append(responses, s.toReportResponse(r))
+	}
+	return responses, total, nil
+}
+
+func (s *service) GetUserReports(accountID string, page, limit int) ([]models.ReportResponse, int64, error) {
+	reports, total, err := s.repo.GetUserReports(accountID, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	responses := make([]models.ReportResponse, 0, len(reports))
+	for _, r := range reports {
+		responses = append(responses, s.toReportResponse(r))
+	}
+	return responses, total, nil
+}
+
+func (s *service) GetReportDetail(reportID string) (*models.ReportResponse, error) {
+	report, err := s.repo.GetReportByID(reportID)
+	if err != nil {
+		return nil, errors.New("laporan tidak ditemukan")
+	}
+
+	resp := s.toReportResponse(*report)
+	return &resp, nil
+}
+
+func (s *service) DeleteReport(reportID, requesterAccountID, role string) error {
+	report, err := s.repo.GetReportByID(reportID)
+	if err != nil {
+		return errors.New("laporan tidak ditemukan")
+	}
+
+	isOwner := strings.EqualFold(strings.TrimSpace(report.AccountID), strings.TrimSpace(requesterAccountID))
+	isAdmin := strings.EqualFold(role, "admin") || strings.EqualFold(role, "platform_admin") || strings.EqualFold(role, "superadmin")
+
+	if !isOwner && !isAdmin {
+		return errors.New("tidak memiliki izin untuk menghapus laporan ini")
+	}
+
+	return s.repo.DeleteReport(reportID)
+}
+
+func (s *service) UpdateReportStatus(reportID, status string) error {
+	_, err := s.repo.GetReportByID(reportID)
+	if err != nil {
+		return errors.New("laporan tidak ditemukan")
+	}
+
+	validStatuses := map[string]bool{
+		"pending":   true,
+		"in_review": true,
+		"resolved":  true,
+		"rejected":  true,
+		"dismissed": true,
+	}
+
+	cleanStatus := strings.ToLower(strings.TrimSpace(status))
+	if !validStatuses[cleanStatus] {
+		return errors.New("status laporan tidak valid (pending, in_review, resolved, rejected, dismissed)")
+	}
+
+	return s.repo.UpdateReportStatus(reportID, cleanStatus)
 }

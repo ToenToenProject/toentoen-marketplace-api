@@ -56,6 +56,9 @@ func (h *Handler) CreateReport(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.CreateUniversalReport(accountID, input); err != nil {
+		if strings.Contains(err.Error(), "sudah pernah melaporkan") {
+			return utils.SendResponse(c, fiber.StatusBadRequest, constants.DuplicateData, err.Error(), nil)
+		}
 		if strings.Contains(err.Error(), "tidak ditemukan") {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
 		}
@@ -66,6 +69,137 @@ func (h *Handler) CreateReport(c *fiber.Ctx) error {
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Laporan berhasil dikirim", nil)
+}
+
+// GetAllReports Mengambil daftar semua laporan dengan pagination dan filter
+func (h *Handler) GetAllReports(c *fiber.Ctx) error {
+	var query models.ReportFilterQuery
+	if err := c.QueryParser(&query); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Parameter query tidak valid", nil)
+	}
+
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.Limit < 1 {
+		query.Limit = 20
+	}
+
+	reports, total, err := h.service.GetReports(query)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	totalPages := int((total + int64(query.Limit) - 1) / int64(query.Limit))
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar laporan berhasil diambil", fiber.Map{
+		"reports": reports,
+		"meta": fiber.Map{
+			"total":        total,
+			"page":         query.Page,
+			"limit":        query.Limit,
+			"total_pages":  totalPages,
+		},
+	})
+}
+
+// GetMyReports Mengambil daftar laporan yang dibuat oleh pengguna yang sedang login
+func (h *Handler) GetMyReports(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 20)
+
+	reports, total, err := h.service.GetUserReports(accountID, page, limit)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Riwayat laporan Anda berhasil diambil", fiber.Map{
+		"reports": reports,
+		"meta": fiber.Map{
+			"total":       total,
+			"page":        page,
+			"limit":       limit,
+			"total_pages": totalPages,
+		},
+	})
+}
+
+// GetReportDetail Mengambil detail 1 laporan berdasarkan report_id
+func (h *Handler) GetReportDetail(c *fiber.Ctx) error {
+	reportID := strings.TrimSpace(c.Params("report_id"))
+	if reportID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Report ID wajib diisi", nil)
+	}
+
+	report, err := h.service.GetReportDetail(reportID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail laporan berhasil diambil", report)
+}
+
+// DeleteReport Menghapus laporan (oleh pembuat laporan atau admin)
+func (h *Handler) DeleteReport(c *fiber.Ctx) error {
+	reportID := strings.TrimSpace(c.Params("report_id"))
+	if reportID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Report ID wajib diisi", nil)
+	}
+
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	role, _ := c.Locals("role").(string)
+
+	if err := h.service.DeleteReport(reportID, accountID, role); err != nil {
+		if strings.Contains(err.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+		}
+		if strings.Contains(err.Error(), "tidak memiliki izin") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan berhasil dihapus", nil)
+}
+
+// UpdateReportStatus Memperbarui status laporan (oleh Admin)
+func (h *Handler) UpdateReportStatus(c *fiber.Ctx) error {
+	reportID := strings.TrimSpace(c.Params("report_id"))
+	if reportID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Report ID wajib diisi", nil)
+	}
+
+	var input models.UpdateReportStatusInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.UpdateReportStatus(reportID, input.Status); err != nil {
+		if strings.Contains(err.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Status laporan berhasil diperbarui", fiber.Map{
+		"report_id": reportID,
+		"status":    input.Status,
+	})
 }
 
 // SubmitReport Handler legacy untuk kompatibilitas route bisnis

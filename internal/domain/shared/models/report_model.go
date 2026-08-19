@@ -40,6 +40,33 @@ func (Report) TableName() string {
 	return "reports"
 }
 
+type ReportResponse struct {
+	ReportID      string    `json:"report_id"`
+	AccountID     string    `json:"account_id"`
+	ReporterName  string    `json:"reporter_name"`
+	ReporterAvatar *string  `json:"reporter_avatar,omitempty"`
+	TargetType    string    `json:"target_type"`
+	TargetID      string    `json:"target_id"`
+	Reason        string    `json:"reason"`
+	Description   *string   `json:"description"`
+	Evidence      []string  `json:"evidence"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type UpdateReportStatusInput struct {
+	Status string `json:"status" validate:"required,oneof=pending in_review resolved rejected dismissed"`
+}
+
+type ReportFilterQuery struct {
+	Status     string `query:"status"`
+	TargetType string `query:"target_type"`
+	TargetID   string `query:"target_id"`
+	Page       int    `query:"page"`
+	Limit      int    `query:"limit"`
+}
+
 // ==========================================
 // 3. MODEL PELAPORAN BISNIS LAMA (UNTUK KOMPATIBILITAS)
 // ==========================================
