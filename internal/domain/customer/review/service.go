@@ -325,18 +325,24 @@ func (s *reviewService) ToggleReviewCommentLike(commentID, accountID string) (bo
 // 8. Report Review & Comment
 func (s *reviewService) ReportReview(reviewID, accountID string, input models.CreatePostReportInput) error {
 	report := models.BusinessReviewReport{
-		AccountID: accountID,
-		ReviewID:  reviewID,
-		Reason:    input.Reason,
+		AccountID:   accountID,
+		ReviewID:    reviewID,
+		Reason:      input.Reason,
+		Description: input.Description,
+		Evidence:    input.Evidence,
+		Status:      "pending",
 	}
 	return s.reviewRepo.CreateReviewReport(&report)
 }
 
 func (s *reviewService) ReportReviewComment(commentID, accountID string, input models.CreatePostReportInput) error {
 	report := models.BusinessReviewCommentReport{
-		AccountID: accountID,
-		CommentID: commentID,
-		Reason:    input.Reason,
+		AccountID:   accountID,
+		CommentID:   commentID,
+		Reason:      input.Reason,
+		Description: input.Description,
+		Evidence:    input.Evidence,
+		Status:      "pending",
 	}
 	return s.reviewRepo.CreateReviewCommentReport(&report)
 }

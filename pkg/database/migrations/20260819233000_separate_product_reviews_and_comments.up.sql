@@ -95,16 +95,30 @@ CREATE TABLE IF NOT EXISTS product_review_reports (
     review_id VARCHAR(50) NOT NULL REFERENCES product_reviews(review_id) ON DELETE CASCADE,
     account_id VARCHAR(50) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
     reason TEXT NOT NULL,
+    description TEXT,
+    evidence TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE product_review_reports ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE product_review_reports ADD COLUMN IF NOT EXISTS evidence TEXT DEFAULT '[]';
+ALTER TABLE product_review_reports ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
 
 CREATE TABLE IF NOT EXISTS product_review_comment_reports (
     report_id VARCHAR(50) PRIMARY KEY,
     comment_id VARCHAR(50) NOT NULL REFERENCES product_review_comments(comment_id) ON DELETE CASCADE,
     account_id VARCHAR(50) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
     reason TEXT NOT NULL,
+    description TEXT,
+    evidence TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE product_review_comment_reports ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE product_review_comment_reports ADD COLUMN IF NOT EXISTS evidence TEXT DEFAULT '[]';
+ALTER TABLE product_review_comment_reports ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
 
 -- 6. TABEL BARU: PRODUCT_COMMENTS (KHUSUS DISKUSI / TANYA-JAWAB / Q&A PRODUK)
 CREATE TABLE IF NOT EXISTS product_comments (
@@ -136,8 +150,15 @@ CREATE TABLE IF NOT EXISTS product_comment_reports (
     comment_id VARCHAR(50) NOT NULL REFERENCES product_comments(comment_id) ON DELETE CASCADE,
     account_id VARCHAR(50) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
     reason TEXT NOT NULL,
+    description TEXT,
+    evidence TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'pending',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE product_comment_reports ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE product_comment_reports ADD COLUMN IF NOT EXISTS evidence TEXT DEFAULT '[]';
+ALTER TABLE product_comment_reports ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
 
 -- INDEXES FOR MAXIMUM QUERY PERFORMANCE
 CREATE INDEX IF NOT EXISTS idx_product_reviews_product_id ON product_reviews(product_id);

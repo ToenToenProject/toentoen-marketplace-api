@@ -48,14 +48,6 @@ type ProductCommentLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-type ProductCommentReport struct {
-	ReportID  string    `gorm:"primaryKey;column:report_id" json:"report_id"`
-	CommentID string    `gorm:"column:comment_id" json:"comment_id"`
-	AccountID string    `gorm:"column:account_id" json:"account_id"`
-	Reason    string    `gorm:"column:reason" json:"reason"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
 // ==========================================
 // 2. INTERAKSI UNTUK POST
 // ==========================================
@@ -94,14 +86,6 @@ type BusinessPostLike struct {
 type BusinessPostCommentLike struct {
 	AccountID string    `gorm:"primaryKey;column:account_id" json:"account_id"`
 	CommentID string    `gorm:"primaryKey;column:comment_id" json:"comment_id"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
-type BusinessPostCommentReport struct {
-	ReportID  string    `gorm:"primaryKey;column:report_id" json:"report_id"`
-	CommentID string    `gorm:"column:comment_id" json:"comment_id"`
-	AccountID string    `gorm:"column:account_id" json:"account_id"`
-	Reason    string    `gorm:"column:reason" json:"reason"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

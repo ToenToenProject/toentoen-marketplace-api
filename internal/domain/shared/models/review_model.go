@@ -155,14 +155,6 @@ type ProductReviewCommentLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-type ProductReviewCommentReport struct {
-	ReportID  string    `gorm:"primaryKey;column:report_id" json:"report_id"`
-	CommentID string    `gorm:"column:comment_id" json:"comment_id"`
-	AccountID string    `gorm:"column:account_id" json:"account_id"`
-	Reason    string    `gorm:"column:reason" json:"reason"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-}
-
 // DTO Input untuk Review Produk
 type CreateProductReviewInput struct {
 	Rating       float64  `json:"rating" validate:"required,min=1,max=5"`

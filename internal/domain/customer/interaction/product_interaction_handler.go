@@ -225,9 +225,7 @@ func (h *ProductInteractionHandler) ReportReview(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var input struct {
-		Reason string `json:"reason" validate:"required"`
-	}
+	var input models.CreateReportInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
@@ -236,7 +234,7 @@ func (h *ProductInteractionHandler) ReportReview(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.ReportReview(reviewID, accountID, input.Reason); err != nil {
+	if err := h.service.ReportReview(reviewID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
@@ -250,9 +248,7 @@ func (h *ProductInteractionHandler) ReportReviewReply(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var input struct {
-		Reason string `json:"reason" validate:"required"`
-	}
+	var input models.CreateReportInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
@@ -261,7 +257,7 @@ func (h *ProductInteractionHandler) ReportReviewReply(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.ReportReviewReply(commentID, accountID, input.Reason); err != nil {
+	if err := h.service.ReportReviewReply(commentID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
@@ -374,9 +370,7 @@ func (h *ProductInteractionHandler) ReportProductComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var input struct {
-		Reason string `json:"reason" validate:"required"`
-	}
+	var input models.CreateReportInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
@@ -385,7 +379,7 @@ func (h *ProductInteractionHandler) ReportProductComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.ReportProductComment(commentID, accountID, input.Reason); err != nil {
+	if err := h.service.ReportProductComment(commentID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 

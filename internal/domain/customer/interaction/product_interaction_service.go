@@ -24,8 +24,8 @@ type ProductInteractionService interface {
 	AddReviewReply(reviewID, accountID string, input models.CreateProductReviewReplyInput) error
 	DeleteReviewReply(commentID, requesterID string) error
 	ToggleReviewReplyLike(commentID, accountID string) (bool, error)
-	ReportReview(reviewID, accountID, reason string) error
-	ReportReviewReply(commentID, accountID, reason string) error
+	ReportReview(reviewID, accountID string, input models.CreateReportInput) error
+	ReportReviewReply(commentID, accountID string, input models.CreateReportInput) error
 
 	// 3. Komentar Diskusi / Q&A Produk
 	AddProductComment(productID, accountID string, input models.CreateProductCommentInput) error
@@ -33,7 +33,7 @@ type ProductInteractionService interface {
 	DeleteProductComment(commentID, requesterID string) error
 	GetProductComments(productID, currentAccountID string) ([]models.CommentResponse, error)
 	ToggleProductCommentLike(commentID, accountID string) (bool, error)
-	ReportProductComment(commentID, accountID, reason string) error
+	ReportProductComment(commentID, accountID string, input models.CreateReportInput) error
 }
 
 type productInteractionService struct {
@@ -567,22 +567,28 @@ func (s *productInteractionService) ToggleReviewReplyLike(commentID, accountID s
 	return isLiked, err
 }
 
-func (s *productInteractionService) ReportReview(reviewID, accountID, reason string) error {
+func (s *productInteractionService) ReportReview(reviewID, accountID string, input models.CreateReportInput) error {
 	report := &models.ProductReviewReport{
-		ReportID:  utils.GenerateUUID("PRR"),
-		ReviewID:  reviewID,
-		AccountID: accountID,
-		Reason:    reason,
+		ReportID:    utils.GenerateUUID("PRR"),
+		ReviewID:    reviewID,
+		AccountID:   accountID,
+		Reason:      input.Reason,
+		Description: input.Description,
+		Evidence:    input.Evidence,
+		Status:      "pending",
 	}
 	return s.repo.CreateReviewReport(report)
 }
 
-func (s *productInteractionService) ReportReviewReply(commentID, accountID, reason string) error {
+func (s *productInteractionService) ReportReviewReply(commentID, accountID string, input models.CreateReportInput) error {
 	report := &models.ProductReviewCommentReport{
-		ReportID:  utils.GenerateUUID("PCR"),
-		CommentID: commentID,
-		AccountID: accountID,
-		Reason:    reason,
+		ReportID:    utils.GenerateUUID("PCR"),
+		CommentID:   commentID,
+		AccountID:   accountID,
+		Reason:      input.Reason,
+		Description: input.Description,
+		Evidence:    input.Evidence,
+		Status:      "pending",
 	}
 	return s.repo.CreateReviewReplyReport(report)
 }
@@ -817,12 +823,15 @@ func (s *productInteractionService) ToggleProductCommentLike(commentID, accountI
 	return isLiked, err
 }
 
-func (s *productInteractionService) ReportProductComment(commentID, accountID, reason string) error {
+func (s *productInteractionService) ReportProductComment(commentID, accountID string, input models.CreateReportInput) error {
 	report := &models.ProductCommentReport{
-		ReportID:  utils.GenerateUUID("PCR"),
-		CommentID: commentID,
-		AccountID: accountID,
-		Reason:    reason,
+		ReportID:    utils.GenerateUUID("PCR"),
+		CommentID:   commentID,
+		AccountID:   accountID,
+		Reason:      input.Reason,
+		Description: input.Description,
+		Evidence:    input.Evidence,
+		Status:      "pending",
 	}
 	return s.repo.CreateProductCommentReport(report)
 }

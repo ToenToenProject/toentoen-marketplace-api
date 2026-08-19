@@ -2,6 +2,23 @@ package models
 
 import "time"
 
+// ==========================================
+// 1. DTO INPUT PELAPORAN UNIVERSAL
+// ==========================================
+
+type CreateReportInput struct {
+	Reason      string   `json:"reason" validate:"required"`
+	Description *string  `json:"description,omitempty"`
+	Evidence    []string `json:"evidence,omitempty"`
+}
+
+// Alias untuk kompatibilitas kode lain
+type CreatePostReportInput = CreateReportInput
+
+// ==========================================
+// 2. MODEL PELAPORAN BISNIS & TOKO
+// ==========================================
+
 type BusinessReport struct {
 	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`
 	AccountID   string     `gorm:"not null;column:account_id" json:"account_id"`
@@ -24,14 +41,68 @@ type BusinessReportEvidence struct {
 	Report *BusinessReport `gorm:"foreignKey:ReportID;references:ReportID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"report,omitempty"`
 }
 
-type ProductReviewReport struct {
-	ReportID  string    `gorm:"primaryKey;column:report_id" json:"report_id"`
-	ReviewID  string    `gorm:"column:review_id;index" json:"review_id"` // 👈 Foreign Key ke Product Review
-	AccountID string    `gorm:"column:account_id;index" json:"account_id"`
-	Reason    string    `gorm:"column:reason" json:"reason"`
-	Status    string    `gorm:"column:status;default:'pending'" json:"status"`
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+type BusinessReviewReport struct {
+	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`
+	AccountID   string     `gorm:"not null;column:account_id" json:"account_id"`
+	ReviewID    string     `gorm:"not null;column:review_id" json:"review_id"`
+	Reason      string     `gorm:"not null;column:reason" json:"reason"`
+	Description *string    `gorm:"column:description" json:"description"`
+	Evidence    []string   `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string     `gorm:"not null;column:status;default:'pending'" json:"status"`
+	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }
+
+type BusinessReviewCommentReport struct {
+	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`
+	AccountID   string     `gorm:"not null;column:account_id" json:"account_id"`
+	CommentID   string     `gorm:"not null;column:comment_id" json:"comment_id"`
+	Reason      string     `gorm:"not null;column:reason" json:"reason"`
+	Description *string    `gorm:"column:description" json:"description"`
+	Evidence    []string   `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string     `gorm:"not null;column:status;default:'pending'" json:"status"`
+	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+// ==========================================
+// 3. MODEL PELAPORAN PRODUK
+// ==========================================
+
+type ProductReviewReport struct {
+	ReportID    string    `gorm:"primaryKey;column:report_id" json:"report_id"`
+	ReviewID    string    `gorm:"column:review_id;index" json:"review_id"`
+	AccountID   string    `gorm:"column:account_id;index" json:"account_id"`
+	Reason      string    `gorm:"column:reason" json:"reason"`
+	Description *string   `gorm:"column:description" json:"description"`
+	Evidence    []string  `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+type ProductReviewCommentReport struct {
+	ReportID    string    `gorm:"primaryKey;column:report_id" json:"report_id"`
+	CommentID   string    `gorm:"column:comment_id" json:"comment_id"`
+	AccountID   string    `gorm:"column:account_id" json:"account_id"`
+	Reason      string    `gorm:"column:reason" json:"reason"`
+	Description *string   `gorm:"column:description" json:"description"`
+	Evidence    []string  `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+type ProductCommentReport struct {
+	ReportID    string    `gorm:"primaryKey;column:report_id" json:"report_id"`
+	CommentID   string    `gorm:"column:comment_id" json:"comment_id"`
+	AccountID   string    `gorm:"column:account_id" json:"account_id"`
+	Reason      string    `gorm:"column:reason" json:"reason"`
+	Description *string   `gorm:"column:description" json:"description"`
+	Evidence    []string  `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+// ==========================================
+// 4. MODEL PELAPORAN POSTINGAN
+// ==========================================
 
 type BusinessPostReport struct {
 	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`
@@ -51,26 +122,13 @@ type BusinessPostReportEvidence struct {
 	FileURL    string `gorm:"not null;column:file_url" json:"file_url"`
 }
 
-type CreatePostReportInput struct {
-	Reason      string   `json:"reason" validate:"required"`
-	Description *string  `json:"description,omitempty"`
-	Evidence    []string `json:"evidence,omitempty"`
-}
-
-type BusinessReviewReport struct {
-	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`
-	AccountID   string     `gorm:"not null;column:account_id" json:"account_id"`
-	ReviewID    string     `gorm:"not null;column:review_id" json:"review_id"`
-	Reason      string     `gorm:"not null;column:reason" json:"reason"`
-	Status      string     `gorm:"not null;column:status;default:'pending'" json:"status"`
-	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-}
-
-type BusinessReviewCommentReport struct {
-	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`
-	AccountID   string     `gorm:"not null;column:account_id" json:"account_id"`
-	CommentID   string     `gorm:"not null;column:comment_id" json:"comment_id"`
-	Reason      string     `gorm:"not null;column:reason" json:"reason"`
-	Status      string     `gorm:"not null;column:status;default:'pending'" json:"status"`
-	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+type BusinessPostCommentReport struct {
+	ReportID    string    `gorm:"primaryKey;column:report_id" json:"report_id"`
+	CommentID   string    `gorm:"column:comment_id" json:"comment_id"`
+	AccountID   string    `gorm:"column:account_id" json:"account_id"`
+	Reason      string    `gorm:"column:reason" json:"reason"`
+	Description *string   `gorm:"column:description" json:"description"`
+	Evidence    []string  `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
