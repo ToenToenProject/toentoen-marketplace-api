@@ -7,12 +7,12 @@ import (
 	"toentoen-backend/internal/domain/account"
 	"toentoen-backend/internal/domain/auth"
 	"toentoen-backend/internal/domain/customer/business_profile"
-	"toentoen-backend/internal/domain/realtime"
-	"toentoen-backend/internal/domain/signal"
 	"toentoen-backend/internal/domain/customer/explore"
 	"toentoen-backend/internal/domain/customer/interaction"
 	"toentoen-backend/internal/domain/customer/my_activity"
 	"toentoen-backend/internal/domain/location"
+	"toentoen-backend/internal/domain/realtime"
+	"toentoen-backend/internal/domain/signal"
 
 	"toentoen-backend/internal/domain/customer/product"
 	"toentoen-backend/internal/domain/customer/profile"
@@ -191,7 +191,7 @@ func main() {
 	// 3. FIBER APP SETUP
 	// ==========================================
 	app := fiber.New()
-	
+
 	// Security & Core Middlewares
 	app.Use(recover.New())
 	app.Use(helmet.New())
@@ -204,14 +204,14 @@ func main() {
 		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
 		AllowCredentials: true,
 	}
-	
+
 	// Fallback jika FRONTEND_URL kosong
 	if corsConfig.AllowOrigins == "" {
 		corsConfig.AllowOrigins = "*"
 		// Fiber v2 akan PANIC jika AllowOrigins="*" dan AllowCredentials=true
-		corsConfig.AllowCredentials = false 
+		corsConfig.AllowCredentials = false
 	}
-	
+
 	app.Use(cors.New(corsConfig))
 
 	// Rate Limiting
@@ -293,7 +293,7 @@ func main() {
 	notifGroup := protected.Group("/notifications")
 	notifGroup.Get("/", notifHandler.GetMyNotifications)
 	notifGroup.Put("/:id/read", notifHandler.MarkAsRead)
-	
+
 	// Khusus untuk pengujian / backdoor menghapus berdasarkan identifier:
 	api.Post("/account/force-delete", profileHandler.ForceDeleteAccount)
 

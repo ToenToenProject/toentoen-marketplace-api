@@ -3,7 +3,6 @@ package catalog
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -19,8 +18,6 @@ type ProductService interface {
 	UpdateProduct(requesterID, role, businessID, productID string, input models.UpdateProductInput) error
 	DeleteProduct(requesterID, role, businessID, productID string) error
 	GetProductDetail(requesterID, role, businessID, productID string) (*models.ProductDetailResponse, error)
-
-	GetCatalog(requesterID, role, businessID string) ([]models.CatalogGroupResponse, error)
 
 	// FUNGSI INI DIKEMBALIKAN: Menggunakan Cursor untuk Infinite Scroll & Multi-Filter
 	GetAllProducts(requesterID, role, businessID string, search, productGroupID, stockType string, isActive *bool, sort string, cursor string, limit int) (*models.GetProductsResponse, error)
@@ -305,126 +302,8 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 }
 
 // ==========================================
-// PENGAMBILAN DATA (CATALOG & LIST)
+// PENGAMBILAN DATA PRODUK (LIST & FILTER)
 // ==========================================
-
-func (s *productService) GetCatalog(requesterID, role, businessID string) ([]models.CatalogGroupResponse, error) {
-	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden access")
-	}
-
-	isActive := true
-	products, err := s.repo.GetProducts(businessID, "", "", "in_stock", &isActive, "display_order", "", 1000)
-	if err != nil {
-		return nil, err
-	}
-
-	groupMap := make(map[string]*models.CatalogGroupResponse)
-
-	uncategorizedGroup := &models.CatalogGroupResponse{
-		ProductGroupID: "uncategorized",
-		Name:           "Lainnya",
-		DisplayOrder:   999,
-		Items:          []models.ProductListItem{},
-	}
-
-	now := time.Now()
-
-	for _, p := range products {
-		var thumbnail string
-		if len(p.ProductImages) > 0 {
-			thumbnail = p.ProductImages[0]
-		}
-
-		// 🪄 LOGIKA HARGA MIN/MAX & DISKON
-		originalMinPrice := p.MinPrice
-		originalMaxPrice := p.MaxPrice
-		if originalMinPrice == 0 && originalMaxPrice == 0 {
-			originalMinPrice = p.Price
-			originalMaxPrice = p.Price
-		}
-
-		finalMinPrice := originalMinPrice
-		finalMaxPrice := originalMaxPrice
-		isDiscounted := false
-
-		if p.Discount > 0 {
-			isDiscountActive := true
-			if p.DiscountStartAt != nil && p.DiscountEndAt != nil {
-				if now.Before(*p.DiscountStartAt) || now.After(*p.DiscountEndAt) {
-					isDiscountActive = false
-				}
-			}
-
-			if isDiscountActive {
-				isDiscounted = true
-				finalMinPrice = originalMinPrice - p.Discount
-				finalMaxPrice = originalMaxPrice - p.Discount
-
-				// Guard Clause: Mencegah harga minus
-				if finalMinPrice < 0 {
-					finalMinPrice = 0
-				}
-				if finalMaxPrice < 0 {
-					finalMaxPrice = 0
-				}
-			}
-		}
-
-		item := models.ProductListItem{
-			ProductID:   p.ProductID,
-			ProductName: p.ProductName,
-			ImageURL:    thumbnail,
-			HasVariants: p.HasVariants,
-
-			// Mapping Harga
-			OriginalMinPrice: originalMinPrice,
-			OriginalMaxPrice: originalMaxPrice,
-			FinalMinPrice:    finalMinPrice,
-			FinalMaxPrice:    finalMaxPrice,
-			IsDiscounted:     isDiscounted,
-
-			StockType:     p.StockType,
-			Rating:        p.AverageRating,
-			LikeCount:     p.LikeCount,
-			ReviewCount:   p.ReviewCount,
-		}
-
-		if p.Group != nil {
-			if existingGroup, exists := groupMap[p.Group.ProductGroupID]; exists {
-				existingGroup.Items = append(existingGroup.Items, item)
-			} else {
-				groupMap[p.Group.ProductGroupID] = &models.CatalogGroupResponse{
-					ProductGroupID: p.Group.ProductGroupID,
-					BusinessID:     p.Group.BusinessID,
-					Name:           p.Group.Name,
-					DisplayOrder:   p.Group.DisplayOrder,
-					IsActive:       p.Group.IsActive,
-					CreatedAt:      p.Group.CreatedAt,
-					UpdatedAt:      p.Group.UpdatedAt,
-					Items:          []models.ProductListItem{item},
-				}
-			}
-		} else {
-			uncategorizedGroup.Items = append(uncategorizedGroup.Items, item)
-		}
-	}
-
-	var result []models.CatalogGroupResponse
-	for _, g := range groupMap {
-		result = append(result, *g)
-	}
-
-	if len(uncategorizedGroup.Items) > 0 {
-		result = append(result, *uncategorizedGroup)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].DisplayOrder < result[j].DisplayOrder
-	})
-
-	return result, nil
-}
 
 func (s *productService) GetAllProducts(requesterID, role, businessID string, search, productGroupID, stockType string, isActive *bool, sort string, cursor string, limit int) (*models.GetProductsResponse, error) {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {

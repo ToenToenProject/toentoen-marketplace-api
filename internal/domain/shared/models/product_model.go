@@ -169,17 +169,6 @@ type GetProductsResponse struct {
 	Pagination PaginationMeta    `json:"pagination"`
 }
 
-type CatalogGroupResponse struct {
-	ProductGroupID string            `json:"product_group_id"`
-	BusinessID     string            `json:"business_id"`
-	Name           string            `json:"name"`
-	DisplayOrder   int               `json:"display_order"`
-	IsActive       bool              `json:"is_active"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
-	Items          []ProductListItem `json:"items"`
-}
-
 // Taruh ini di internal/models/models.go
 type ProductDetailResponse struct {
 	ProductID          string   `json:"product_id"`

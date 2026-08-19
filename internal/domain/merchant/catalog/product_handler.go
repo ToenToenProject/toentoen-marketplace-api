@@ -188,27 +188,6 @@ func (h *ProductHandler) GetProductDetail(c *fiber.Ctx) error {
 }
 
 // ==========================================
-// HANDLER UNTUK KATALOG (NESTED)
-// ==========================================
-
-func (h *ProductHandler) GetCatalog(c *fiber.Ctx) error {
-	businessID := strings.TrimSpace(c.Params("business_id"))
-
-	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
-	}
-
-	// Panggil Service khusus Katalog
-	catalog, errSvc := h.service.GetCatalog(requesterID, requesterRole, businessID)
-	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Katalog berhasil diambil", catalog)
-}
-
-// ==========================================
 // HANDLER UNTUK LIST FLAT (FILTER)
 // ==========================================
 
