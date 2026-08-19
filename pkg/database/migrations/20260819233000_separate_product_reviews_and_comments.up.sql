@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS product_reviews (
     account_id VARCHAR(50) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
     rating DECIMAL(2,1) NOT NULL CHECK (rating >= 1.0 AND rating <= 5.0),
     comment TEXT NOT NULL,
-    review_images TEXT[] DEFAULT '{}',
+    review_images TEXT DEFAULT '[]',
     review_video TEXT,
     like_count INT DEFAULT 0,
     comment_count INT DEFAULT 0,
@@ -20,10 +20,17 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'product_reviews') THEN
         ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS comment TEXT;
-        ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS review_images TEXT[] DEFAULT '{}';
+        ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS review_images TEXT DEFAULT '[]';
         ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS review_video TEXT;
         ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS like_count INT DEFAULT 0;
         ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS comment_count INT DEFAULT 0;
+
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'product_reviews' AND column_name = 'content') THEN
+            UPDATE product_reviews SET comment = content WHERE (comment IS NULL OR comment = '') AND content IS NOT NULL;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'product_reviews' AND column_name = 'media_urls') THEN
+            UPDATE product_reviews SET review_images = media_urls::text WHERE (review_images IS NULL OR review_images = '' OR review_images = '[]') AND media_urls IS NOT NULL;
+        END IF;
     END IF;
 END $$;
 
