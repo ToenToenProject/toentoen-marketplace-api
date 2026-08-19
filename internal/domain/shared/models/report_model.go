@@ -7,6 +7,8 @@ import "time"
 // ==========================================
 
 type CreateReportInput struct {
+	TargetType  string   `json:"target_type" validate:"omitempty,oneof=business product review comment post"`
+	TargetID    string   `json:"target_id"`
 	Reason      string   `json:"reason" validate:"required"`
 	Description *string  `json:"description,omitempty"`
 	Evidence    []string `json:"evidence,omitempty"`
@@ -16,7 +18,30 @@ type CreateReportInput struct {
 type CreatePostReportInput = CreateReportInput
 
 // ==========================================
-// 2. MODEL PELAPORAN BISNIS & TOKO
+// 2. MODEL TABEL UNIVERSAL REPORTS
+// ==========================================
+
+type Report struct {
+	ReportID    string    `gorm:"primaryKey;column:report_id" json:"report_id"`
+	AccountID   string    `gorm:"column:account_id;index" json:"account_id"`
+	TargetType  string    `gorm:"column:target_type;index" json:"target_type"` // "business" | "product" | "review" | "comment" | "post"
+	TargetID    string    `gorm:"column:target_id;index" json:"target_id"`     // BUS-..., PRD-..., REV-..., CMT-..., PST-...
+	Reason      string    `gorm:"column:reason" json:"reason"`
+	Description *string   `gorm:"column:description" json:"description"`
+	Evidence    []string  `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+
+	Account *Account `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+}
+
+func (Report) TableName() string {
+	return "reports"
+}
+
+// ==========================================
+// 3. MODEL PELAPORAN BISNIS LAMA (UNTUK KOMPATIBILITAS)
 // ==========================================
 
 type BusinessReport struct {
@@ -63,10 +88,6 @@ type BusinessReviewCommentReport struct {
 	CreatedAt   time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }
 
-// ==========================================
-// 3. MODEL PELAPORAN PRODUK
-// ==========================================
-
 type ProductReviewReport struct {
 	ReportID    string    `gorm:"primaryKey;column:report_id" json:"report_id"`
 	ReviewID    string    `gorm:"column:review_id;index" json:"review_id"`
@@ -99,10 +120,6 @@ type ProductCommentReport struct {
 	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
-
-// ==========================================
-// 4. MODEL PELAPORAN POSTINGAN
-// ==========================================
 
 type BusinessPostReport struct {
 	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`

@@ -46,6 +46,10 @@ type ProductInteractionRepository interface {
 	ToggleProductCommentLike(commentID, accountID string) (bool, error)
 	GetProductCommentLikes(commentID string) ([]models.ProductCommentLike, error)
 	CreateProductCommentReport(report *models.ProductCommentReport) error
+
+	// 7. Unified Likes (Universal)
+	ToggleUnifiedCommentLike(commentID, accountID string) (bool, string, error)
+	ToggleUnifiedReviewLike(reviewID, accountID string) (bool, string, error)
 }
 
 type productInteractionRepository struct {
@@ -465,4 +469,84 @@ func (r *productInteractionRepository) GetProductCommentLikes(commentID string) 
 
 func (r *productInteractionRepository) CreateProductCommentReport(report *models.ProductCommentReport) error {
 	return r.db.Create(report).Error
+}
+
+func (r *productInteractionRepository) ToggleUnifiedCommentLike(commentID, accountID string) (bool, string, error) {
+	commentID = strings.TrimSpace(commentID)
+	accountID = strings.TrimSpace(accountID)
+
+	// 1. Cek di product_comments
+	var pComment models.ProductComment
+	if err := r.db.Where("comment_id = ?", commentID).First(&pComment).Error; err == nil {
+		isLiked, errLike := r.ToggleProductCommentLike(commentID, accountID)
+		return isLiked, "product_comment", errLike
+	}
+
+	// 2. Cek di product_review_comments
+	var prComment models.ProductReviewComment
+	if err := r.db.Where("comment_id = ?", commentID).First(&prComment).Error; err == nil {
+		isLiked, errLike := r.ToggleReviewReplyLike(commentID, accountID)
+		return isLiked, "product_review_comment", errLike
+	}
+
+	// 3. Cek di business_review_comments
+	var brComment models.BusinessReviewComment
+	if err := r.db.Where("comment_id = ?", commentID).First(&brComment).Error; err == nil {
+		var count int64
+		r.db.Table("business_review_comment_likes").Where("comment_id = ? AND account_id = ?", commentID, accountID).Count(&count)
+		if count > 0 {
+			_ = r.db.Exec("DELETE FROM business_review_comment_likes WHERE comment_id = ? AND account_id = ?", commentID, accountID).Error
+			_ = r.db.Model(&models.BusinessReviewComment{}).Where("comment_id = ?", commentID).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error
+			return false, "business_review_comment", nil
+		}
+		_ = r.db.Exec("INSERT INTO business_review_comment_likes (comment_id, account_id, created_at) VALUES (?, ?, NOW())", commentID, accountID).Error
+		_ = r.db.Model(&models.BusinessReviewComment{}).Where("comment_id = ?", commentID).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+		return true, "business_review_comment", nil
+	}
+
+	// 4. Cek di business_post_comments
+	var bpComment models.BusinessPostComment
+	if err := r.db.Where("comment_id = ?", commentID).First(&bpComment).Error; err == nil {
+		var count int64
+		r.db.Table("business_post_comment_likes").Where("comment_id = ? AND account_id = ?", commentID, accountID).Count(&count)
+		if count > 0 {
+			_ = r.db.Exec("DELETE FROM business_post_comment_likes WHERE comment_id = ? AND account_id = ?", commentID, accountID).Error
+			_ = r.db.Model(&models.BusinessPostComment{}).Where("comment_id = ?", commentID).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error
+			return false, "business_post_comment", nil
+		}
+		_ = r.db.Exec("INSERT INTO business_post_comment_likes (comment_id, account_id, created_at) VALUES (?, ?, NOW())", commentID, accountID).Error
+		_ = r.db.Model(&models.BusinessPostComment{}).Where("comment_id = ?", commentID).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+		return true, "business_post_comment", nil
+	}
+
+	return false, "", errors.New("komentar tidak ditemukan")
+}
+
+func (r *productInteractionRepository) ToggleUnifiedReviewLike(reviewID, accountID string) (bool, string, error) {
+	reviewID = strings.TrimSpace(reviewID)
+	accountID = strings.TrimSpace(accountID)
+
+	// 1. Cek di product_reviews
+	var pReview models.ProductReview
+	if err := r.db.Where("review_id = ?", reviewID).First(&pReview).Error; err == nil {
+		isLiked, errLike := r.ToggleReviewLike(reviewID, accountID)
+		return isLiked, "product_review", errLike
+	}
+
+	// 2. Cek di reviews (toko)
+	var bReview models.Review
+	if err := r.db.Where("review_id = ?", reviewID).First(&bReview).Error; err == nil {
+		var count int64
+		r.db.Table("review_likes").Where("review_id = ? AND account_id = ?", reviewID, accountID).Count(&count)
+		if count > 0 {
+			_ = r.db.Exec("DELETE FROM review_likes WHERE review_id = ? AND account_id = ?", reviewID, accountID).Error
+			_ = r.db.Model(&models.Review{}).Where("review_id = ?", reviewID).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error
+			return false, "business_review", nil
+		}
+		_ = r.db.Exec("INSERT INTO review_likes (review_id, account_id, created_at) VALUES (?, ?, NOW())", reviewID, accountID).Error
+		_ = r.db.Model(&models.Review{}).Where("review_id = ?", reviewID).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+		return true, "business_review", nil
+	}
+
+	return false, "", errors.New("ulasan tidak ditemukan")
 }

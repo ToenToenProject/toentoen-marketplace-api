@@ -385,3 +385,43 @@ func (h *ProductInteractionHandler) ReportProductComment(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan komentar berhasil dikirim", nil)
 }
+
+func (h *ProductInteractionHandler) ToggleUnifiedCommentLike(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	isLiked, err := h.service.ToggleUnifiedCommentLike(commentID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	message := "Batal menyukai komentar"
+	if isLiked {
+		message = "Komentar berhasil disukai"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
+}
+
+func (h *ProductInteractionHandler) ToggleUnifiedReviewLike(c *fiber.Ctx) error {
+	reviewID := strings.TrimSpace(c.Params("review_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	isLiked, err := h.service.ToggleUnifiedReviewLike(reviewID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	message := "Batal menyukai ulasan"
+	if isLiked {
+		message = "Ulasan berhasil disukai"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
+}

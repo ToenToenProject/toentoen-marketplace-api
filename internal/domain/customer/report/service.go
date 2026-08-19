@@ -2,11 +2,13 @@ package report
 
 import (
 	"errors"
+	"strings"
 
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/utils"
 )
 
-// Request payload struct
+// Request payload struct legacy
 type SubmitReportRequest struct {
 	Reason       string   `json:"reason"`
 	Description  *string  `json:"description"`
@@ -15,6 +17,7 @@ type SubmitReportRequest struct {
 
 type Service interface {
 	SubmitReport(accountID, businessID string, req SubmitReportRequest) error
+	CreateUniversalReport(accountID string, input models.CreateReportInput) error
 }
 
 type service struct {
@@ -28,7 +31,6 @@ func NewService(r Repository) Service {
 }
 
 func (s *service) SubmitReport(accountID, businessID string, req SubmitReportRequest) error {
-	// Validasi apakah BusinessID tersebut benar-benar ada
 	exists, err := s.repo.CheckBusinessExists(businessID)
 	if err != nil {
 		return err
@@ -37,17 +39,14 @@ func (s *service) SubmitReport(accountID, businessID string, req SubmitReportReq
 		return errors.New("business not found")
 	}
 
-	// Validasi payload
 	if req.Reason == "" {
 		return errors.New("reason is required")
 	}
 
-	// Jika Reason adalah "Other", sebaiknya description tidak kosong (opsional sesuai bisnis logik)
 	if req.Reason == "Other" && (req.Description == nil || *req.Description == "") {
 		return errors.New("description is required when reason is 'Other'")
 	}
 
-	// Buat Evidence slice
 	var evidences []models.BusinessReportEvidence
 	for _, url := range req.EvidenceURLs {
 		if url != "" {
@@ -57,7 +56,6 @@ func (s *service) SubmitReport(accountID, businessID string, req SubmitReportReq
 		}
 	}
 
-	// Buat Model Report
 	report := models.BusinessReport{
 		AccountID:   accountID,
 		BusinessID:  businessID,
@@ -67,6 +65,62 @@ func (s *service) SubmitReport(accountID, businessID string, req SubmitReportReq
 		Evidence:    evidences,
 	}
 
-	// Simpan
 	return s.repo.CreateReport(&report)
+}
+
+func (s *service) CreateUniversalReport(accountID string, input models.CreateReportInput) error {
+	targetID := strings.TrimSpace(input.TargetID)
+	if targetID == "" {
+		return errors.New("target_id wajib diisi")
+	}
+
+	targetType := strings.ToLower(strings.TrimSpace(input.TargetType))
+	if targetType == "" {
+		// Auto detect dari prefix ID
+		upperID := strings.ToUpper(targetID)
+		if strings.HasPrefix(upperID, "REV") || strings.HasPrefix(upperID, "PRV") {
+			targetType = "review"
+		} else if strings.HasPrefix(upperID, "CMT") || strings.HasPrefix(upperID, "PRC") || strings.HasPrefix(upperID, "PCM") || strings.HasPrefix(upperID, "RVC") {
+			targetType = "comment"
+		} else if strings.HasPrefix(upperID, "PST") {
+			targetType = "post"
+		} else if strings.HasPrefix(upperID, "PRD") {
+			targetType = "product"
+		} else if strings.HasPrefix(upperID, "BUS") {
+			targetType = "business"
+		} else {
+			targetType = "other"
+		}
+	}
+
+	// Validasi target existence
+	exists, err := s.repo.CheckTargetExists(targetType, targetID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("target yang ingin dilaporkan tidak ditemukan")
+	}
+
+	if strings.TrimSpace(input.Reason) == "" {
+		return errors.New("alasan pelaporan (reason) wajib diisi")
+	}
+
+	evidenceList := input.Evidence
+	if evidenceList == nil {
+		evidenceList = []string{}
+	}
+
+	report := &models.Report{
+		ReportID:    utils.GenerateUUID("RPT"),
+		AccountID:   accountID,
+		TargetType:  targetType,
+		TargetID:    targetID,
+		Reason:      input.Reason,
+		Description: input.Description,
+		Evidence:    evidenceList,
+		Status:      "pending",
+	}
+
+	return s.repo.CreateUniversalReport(report)
 }

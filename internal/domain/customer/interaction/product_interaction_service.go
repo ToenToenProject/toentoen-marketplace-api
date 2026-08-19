@@ -34,6 +34,10 @@ type ProductInteractionService interface {
 	GetProductComments(productID, currentAccountID string) ([]models.CommentResponse, error)
 	ToggleProductCommentLike(commentID, accountID string) (bool, error)
 	ReportProductComment(commentID, accountID string, input models.CreateReportInput) error
+
+	// 4. Unified Likes
+	ToggleUnifiedCommentLike(commentID, accountID string) (bool, error)
+	ToggleUnifiedReviewLike(reviewID, accountID string) (bool, error)
 }
 
 type productInteractionService struct {
@@ -834,4 +838,14 @@ func (s *productInteractionService) ReportProductComment(commentID, accountID st
 		Status:      "pending",
 	}
 	return s.repo.CreateProductCommentReport(report)
+}
+
+func (s *productInteractionService) ToggleUnifiedCommentLike(commentID, accountID string) (bool, error) {
+	isLiked, _, err := s.repo.ToggleUnifiedCommentLike(commentID, accountID)
+	return isLiked, err
+}
+
+func (s *productInteractionService) ToggleUnifiedReviewLike(reviewID, accountID string) (bool, error) {
+	isLiked, _, err := s.repo.ToggleUnifiedReviewLike(reviewID, accountID)
+	return isLiked, err
 }
