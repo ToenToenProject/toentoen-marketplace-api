@@ -59,6 +59,28 @@ CREATE TABLE IF NOT EXISTS product_review_comments (
 
 ALTER TABLE product_review_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
+-- JIKA ADA DATA BALASAN LAMA DI PRODUCT_REVIEWS, PINDAHKAN KE PRODUCT_REVIEW_COMMENTS & HAPUS CONSTRAINT LAMA
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'product_reviews' AND column_name = 'reply_to_review_id') THEN
+        INSERT INTO product_review_comments (
+            comment_id, review_id, account_id, content, 
+            replied_to_account_id, replied_to_account_name, 
+            like_count, created_at, updated_at
+        )
+        SELECT 
+            review_id, reply_to_review_id, account_id, COALESCE(comment, content, ''), 
+            replied_to_account_id, replied_to_account_name, 
+            COALESCE(like_count, 0), COALESCE(created_at, NOW()), COALESCE(updated_at, NOW())
+        FROM product_reviews
+        WHERE reply_to_review_id IS NOT NULL AND reply_to_review_id != ''
+        ON CONFLICT (comment_id) DO NOTHING;
+
+        ALTER TABLE product_reviews DROP CONSTRAINT IF EXISTS fk_product_reviews_replies;
+        DELETE FROM product_reviews WHERE reply_to_review_id IS NOT NULL AND reply_to_review_id != '';
+    END IF;
+END $$;
+
 -- 4. TABEL LIKE UNTUK BALASAN REVIEW PRODUK
 CREATE TABLE IF NOT EXISTS product_review_comment_likes (
     comment_id VARCHAR(50) NOT NULL REFERENCES product_review_comments(comment_id) ON DELETE CASCADE,
