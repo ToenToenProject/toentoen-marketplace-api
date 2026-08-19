@@ -18,7 +18,10 @@ func NewProductInteractionHandler(service ProductInteractionService) *ProductInt
 	return &ProductInteractionHandler{service}
 }
 
-// 1. HANDLER TOGGLE LIKE PRODUK
+// ----------------------------------------------------
+// 1. LIKE PRODUK
+// ----------------------------------------------------
+
 func (h *ProductInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 
@@ -40,7 +43,10 @@ func (h *ProductInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
 }
 
-// 2. HANDLER CREATE REVIEW / COMMENT / BALASAN PRODUK
+// ----------------------------------------------------
+// 2. REVIEW PRODUK (ULASAN BERBINTANG)
+// ----------------------------------------------------
+
 func (h *ProductInteractionHandler) AddProductReview(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 
@@ -49,38 +55,23 @@ func (h *ProductInteractionHandler) AddProductReview(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var input models.CreateCommentInput
+	var input models.CreateProductReviewInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
-	}
-
-	if productID == "" && input.ProductID != nil {
-		productID = strings.TrimSpace(*input.ProductID)
-	}
-
-	if productID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Product ID wajib diisi", nil)
 	}
 
 	if err := h.service.AddProductReview(productID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	msg := "Komentar berhasil ditambahkan"
-	if input.Rating != nil && *input.Rating > 0 {
-		msg = "Ulasan produk berhasil ditambahkan"
-	}
-
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, msg, nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Ulasan produk berhasil ditambahkan", nil)
 }
 
-// 3. HANDLER EDIT REVIEW / COMMENT PRODUK
-func (h *ProductInteractionHandler) EditProductComment(c *fiber.Ctx) error {
-	productID := strings.TrimSpace(c.Params("product_id"))
+func (h *ProductInteractionHandler) UpdateProductReview(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 
 	accountID, ok := c.Locals("account_id").(string)
@@ -88,7 +79,7 @@ func (h *ProductInteractionHandler) EditProductComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var input models.UpdateCommentInput
+	var input models.UpdateProductReviewInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
@@ -97,16 +88,14 @@ func (h *ProductInteractionHandler) EditProductComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.EditProductComment(productID, reviewID, accountID, input); err != nil {
+	if err := h.service.UpdateProductReview(reviewID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan/komentar berhasil diperbarui", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan produk berhasil diperbarui", nil)
 }
 
-// 4. HANDLER DELETE REVIEW / COMMENT PRODUK
-func (h *ProductInteractionHandler) DeleteProductComment(c *fiber.Ctx) error {
-	productID := strings.TrimSpace(c.Params("product_id"))
+func (h *ProductInteractionHandler) DeleteProductReview(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 
 	accountID, ok := c.Locals("account_id").(string)
@@ -114,18 +103,16 @@ func (h *ProductInteractionHandler) DeleteProductComment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	if err := h.service.DeleteProductComment(productID, reviewID, accountID); err != nil {
+	if err := h.service.DeleteProductReview(reviewID, accountID); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan/komentar berhasil dihapus", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan produk berhasil dihapus", nil)
 }
 
-// 5. HANDLER GET REVIEWS / COMMENTS PRODUK
 func (h *ProductInteractionHandler) GetProductReviews(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 	accountID, _ := c.Locals("account_id").(string)
-	filterType := strings.ToLower(strings.TrimSpace(c.Query("type", ""))) // "reviews", "comments", or "" (all)
 
 	var ratingPtr *int
 	if ratingStr := c.Query("rating"); ratingStr != "" {
@@ -134,15 +121,26 @@ func (h *ProductInteractionHandler) GetProductReviews(c *fiber.Ctx) error {
 		}
 	}
 
-	reviews, err := h.service.GetProductReviews(productID, accountID, filterType, ratingPtr)
+	reviews, err := h.service.GetProductReviews(productID, accountID, ratingPtr)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan/komentar produk berhasil diambil", reviews)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan produk berhasil diambil", reviews)
 }
 
-// 6. TOGGLE LIKE REVIEW PRODUK
+func (h *ProductInteractionHandler) GetProductReviewDetail(c *fiber.Ctx) error {
+	reviewID := strings.TrimSpace(c.Params("review_id"))
+	accountID, _ := c.Locals("account_id").(string)
+
+	review, err := h.service.GetProductReviewDetail(reviewID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail ulasan produk berhasil diambil", review)
+}
+
 func (h *ProductInteractionHandler) ToggleReviewLike(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	accountID, ok := c.Locals("account_id").(string)
@@ -155,14 +153,71 @@ func (h *ProductInteractionHandler) ToggleReviewLike(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	message := "Batal menyukai ulasan/komentar"
+	message := "Batal menyukai ulasan"
 	if isLiked {
-		message = "Ulasan/komentar berhasil disukai"
+		message = "Ulasan berhasil disukai"
 	}
+
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
 }
 
-// 7. REPORT REVIEW PRODUK
+func (h *ProductInteractionHandler) AddReviewReply(c *fiber.Ctx) error {
+	reviewID := strings.TrimSpace(c.Params("review_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input models.CreateProductReviewReplyInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.AddReviewReply(reviewID, accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Balasan ulasan berhasil ditambahkan", nil)
+}
+
+func (h *ProductInteractionHandler) DeleteReviewReply(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	if err := h.service.DeleteReviewReply(commentID, accountID); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Balasan ulasan berhasil dihapus", nil)
+}
+
+func (h *ProductInteractionHandler) ToggleReviewReplyLike(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	isLiked, err := h.service.ToggleReviewReplyLike(commentID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	message := "Batal menyukai balasan"
+	if isLiked {
+		message = "Balasan berhasil disukai"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
+}
+
 func (h *ProductInteractionHandler) ReportReview(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	accountID, ok := c.Locals("account_id").(string)
@@ -170,7 +225,9 @@ func (h *ProductInteractionHandler) ReportReview(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var input models.CreatePostReportInput
+	var input struct {
+		Reason string `json:"reason" validate:"required"`
+	}
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
@@ -180,7 +237,157 @@ func (h *ProductInteractionHandler) ReportReview(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.ReportReview(reviewID, accountID, input.Reason); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan ulasan berhasil dikirim", nil)
+}
+
+func (h *ProductInteractionHandler) ReportReviewReply(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input struct {
+		Reason string `json:"reason" validate:"required"`
+	}
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.ReportReviewReply(commentID, accountID, input.Reason); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan balasan berhasil dikirim", nil)
+}
+
+// ----------------------------------------------------
+// 3. KOMENTAR DISKUSI / Q&A PRODUK
+// ----------------------------------------------------
+
+func (h *ProductInteractionHandler) AddProductComment(c *fiber.Ctx) error {
+	productID := strings.TrimSpace(c.Params("product_id"))
+
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input models.CreateProductCommentInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.AddProductComment(productID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan ulasan berhasil dikirim", nil)
+
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Komentar diskusi berhasil ditambahkan", nil)
+}
+
+func (h *ProductInteractionHandler) EditProductComment(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input models.UpdateProductCommentInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.EditProductComment(commentID, accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Komentar diskusi berhasil diperbarui", nil)
+}
+
+func (h *ProductInteractionHandler) DeleteProductComment(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	if err := h.service.DeleteProductComment(commentID, accountID); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Komentar diskusi berhasil dihapus", nil)
+}
+
+func (h *ProductInteractionHandler) GetProductComments(c *fiber.Ctx) error {
+	productID := strings.TrimSpace(c.Params("product_id"))
+	accountID, _ := c.Locals("account_id").(string)
+
+	comments, err := h.service.GetProductComments(productID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Komentar diskusi produk berhasil diambil", comments)
+}
+
+func (h *ProductInteractionHandler) ToggleProductCommentLike(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	isLiked, err := h.service.ToggleProductCommentLike(commentID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	message := "Batal menyukai komentar"
+	if isLiked {
+		message = "Komentar berhasil disukai"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
+}
+
+func (h *ProductInteractionHandler) ReportProductComment(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input struct {
+		Reason string `json:"reason" validate:"required"`
+	}
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.ReportProductComment(commentID, accountID, input.Reason); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan komentar berhasil dikirim", nil)
 }

@@ -64,13 +64,13 @@ func (r *publicProfileRepository) GetRecentReviews(accountID string, limit int) 
 
 	// Get recent product reviews
 	var productReviews []models.ProductReview
-	r.db.Where("account_id = ? AND rating IS NOT NULL", accountID).Order("created_at desc").Limit(limit).Find(&productReviews)
+	r.db.Where("account_id = ?", accountID).Order("created_at desc").Limit(limit).Find(&productReviews)
 
 	for _, review := range productReviews {
 		recentActivities = append(recentActivities, models.RecentActivityResponse{
 			ActivityType: "product_review",
-			Content:      review.Content,
-			MediaURLs:    review.MediaURLs,
+			Content:      review.Comment,
+			MediaURLs:    review.ReviewImages,
 			CreatedAt:    review.CreatedAt,
 		})
 	}

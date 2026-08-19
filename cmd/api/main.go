@@ -321,14 +321,30 @@ func main() {
 	customerConvGroup.Post("/:conversation_id/messages", customerSignalHandler.SendMessage)
 
 	publicProductRoutes := api.Group("/products")
+	// 1. Detail & Like Produk
 	publicProductRoutes.Get("/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
 	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleLike)
+
+	// 2. Review Produk (Ulasan Berbintang 1-5 + Min 10 Kata)
 	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductReview)
-	publicProductRoutes.Put("/:product_id/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.EditProductComment)
-	publicProductRoutes.Delete("/:product_id/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductComment)
 	publicProductRoutes.Get("/:product_id/reviews", middlewares.OptionalAuth, productInteractionHandler.GetProductReviews)
+	publicProductRoutes.Get("/reviews/detail/:review_id", middlewares.OptionalAuth, productInteractionHandler.GetProductReviewDetail)
+	publicProductRoutes.Put("/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.UpdateProductReview)
+	publicProductRoutes.Delete("/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductReview)
 	publicProductRoutes.Post("/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleReviewLike)
+	publicProductRoutes.Post("/reviews/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
+	publicProductRoutes.Delete("/reviews/replies/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteReviewReply)
+	publicProductRoutes.Post("/reviews/replies/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleReviewReplyLike)
 	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, productInteractionHandler.ReportReview)
+	publicProductRoutes.Post("/reviews/replies/:comment_id/report", middlewares.RequireAuth, productInteractionHandler.ReportReviewReply)
+
+	// 3. Komentar Diskusi / Q&A Produk
+	publicProductRoutes.Post("/:product_id/comments", middlewares.RequireAuth, productInteractionHandler.AddProductComment)
+	publicProductRoutes.Get("/:product_id/comments", middlewares.OptionalAuth, productInteractionHandler.GetProductComments)
+	publicProductRoutes.Put("/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.EditProductComment)
+	publicProductRoutes.Delete("/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductComment)
+	publicProductRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleProductCommentLike)
+	publicProductRoutes.Post("/comments/:comment_id/report", middlewares.RequireAuth, productInteractionHandler.ReportProductComment)
 
 	publicPostRoutes := api.Group("/posts")
 	publicPostRoutes.Post("/:post_id/like", middlewares.RequireAuth, postInteractionHandler.ToggleLike)

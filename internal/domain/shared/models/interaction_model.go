@@ -7,36 +7,33 @@ import (
 )
 
 // ==========================================
-// 1. INTERAKSI UNTUK PRODUK
+// 1. INTERAKSI UNTUK PRODUK (DISKUSI / Q&A)
 // ==========================================
 
-type ProductReview struct {
-	ReviewID             string         `gorm:"primaryKey;column:review_id" json:"review_id"`
+type ProductComment struct {
+	CommentID            string         `gorm:"primaryKey;column:comment_id" json:"comment_id"`
 	ProductID            string         `gorm:"column:product_id;index" json:"product_id"`
 	BusinessID           string         `gorm:"column:business_id;index" json:"business_id"`
 	AccountID            string         `gorm:"column:account_id" json:"account_id"`
 	Content              string         `gorm:"column:content" json:"content"`
-	
+
 	// Kunci Nesting Level 1
-	ReplyToReviewID      *string        `gorm:"column:reply_to_review_id;index" json:"reply_to_review_id"`
-	
-	// Fitur Mention/Tagging (Untuk membalas child review)
+	ReplyToCommentID     *string        `gorm:"column:reply_to_comment_id;index" json:"reply_to_comment_id"`
+
+	// Fitur Mention/Tagging (Untuk membalas child comment)
 	RepliedToAccountID   *string        `gorm:"column:replied_to_account_id" json:"replied_to_account_id"`
 	RepliedToAccountName *string        `gorm:"column:replied_to_account_name" json:"replied_to_account_name"`
 
-	// Fitur Review
-	Rating               *float64       `gorm:"column:rating" json:"rating"`
-	MediaURLs            []string       `gorm:"column:media_urls;type:jsonb;serializer:json;default:'[]'" json:"media_urls"`
-
 	LikeCount            int            `gorm:"default:0;column:like_count" json:"like_count"`
+	RepliesCount         int            `gorm:"default:0;column:replies_count" json:"replies_count"`
 	CreatedAt            time.Time      `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account  *Account        `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
-	Product  *Product        `gorm:"foreignKey:ProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"product,omitempty"`
-	Business *Business       `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
-	Replies  []ProductReview `gorm:"foreignKey:ReplyToReviewID;references:ReviewID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`
+	Account  *Account         `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+	Product  *Product         `gorm:"foreignKey:ProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"product,omitempty"`
+	Business *Business        `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Replies  []ProductComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`
 }
 
 type ProductLike struct {
@@ -45,9 +42,17 @@ type ProductLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-type ProductReviewLike struct {
+type ProductCommentLike struct {
 	AccountID string    `gorm:"primaryKey;column:account_id" json:"account_id"`
-	ReviewID  string    `gorm:"primaryKey;column:review_id" json:"review_id"`
+	CommentID string    `gorm:"primaryKey;column:comment_id" json:"comment_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+type ProductCommentReport struct {
+	ReportID  string    `gorm:"primaryKey;column:report_id" json:"report_id"`
+	CommentID string    `gorm:"column:comment_id" json:"comment_id"`
+	AccountID string    `gorm:"column:account_id" json:"account_id"`
+	Reason    string    `gorm:"column:reason" json:"reason"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
@@ -61,10 +66,10 @@ type BusinessPostComment struct {
 	BusinessID           string         `gorm:"column:business_id;index" json:"business_id"`
 	AccountID            string         `gorm:"column:account_id" json:"account_id"`
 	Content              string         `gorm:"column:content" json:"content"`
-	
+
 	// Kunci Nesting Level 1
-	ReplyToCommentID     *string        `gorm:"column:reply_to_comment_id;index" json:"reply_to_comment_id"` 
-	
+	ReplyToCommentID     *string        `gorm:"column:reply_to_comment_id;index" json:"reply_to_comment_id"`
+
 	// Fitur Mention/Tagging (Untuk membalas child comment)
 	RepliedToAccountID   *string        `gorm:"column:replied_to_account_id" json:"replied_to_account_id"`
 	RepliedToAccountName *string        `gorm:"column:replied_to_account_name" json:"replied_to_account_name"`
@@ -92,9 +97,28 @@ type BusinessPostCommentLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
+type BusinessPostCommentReport struct {
+	ReportID  string    `gorm:"primaryKey;column:report_id" json:"report_id"`
+	CommentID string    `gorm:"column:comment_id" json:"comment_id"`
+	AccountID string    `gorm:"column:account_id" json:"account_id"`
+	Reason    string    `gorm:"column:reason" json:"reason"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
 // ==========================================
 // 3. DTO (Data Transfer Object)
 // ==========================================
+
+type CreateProductCommentInput struct {
+	Content              string  `json:"content" validate:"required"`
+	ReplyToCommentID     *string `json:"reply_to_comment_id"`
+	RepliedToAccountID   *string `json:"replied_to_account_id"`
+	RepliedToAccountName *string `json:"replied_to_account_name"`
+}
+
+type UpdateProductCommentInput struct {
+	Content string `json:"content" validate:"required"`
+}
 
 type CreateCommentInput struct {
 	ProductID            *string  `json:"product_id,omitempty"`
@@ -130,16 +154,7 @@ type CommentResponse struct {
 	Rating                 *float64          `json:"rating,omitempty"`
 	MediaURLs              []string          `json:"media_urls,omitempty"`
 	CreatedAt              time.Time         `json:"created_at"`
-	
 	RepliedToAccountID     *string           `json:"replied_to_account_id,omitempty"`
 	RepliedToAccountName   *string           `json:"replied_to_account_name,omitempty"`
-	
-	// Data Produk jika ini adalah Product Review (untuk halaman All Reviews)
-	ProductID              *string           `json:"product_id,omitempty"`
-	ProductName            *string           `json:"product_name,omitempty"`
-	ProductImage           *string           `json:"product_image,omitempty"`
-	ProductPrice           *float64          `json:"product_price,omitempty"`
-	ProductOriginalPrice   *float64          `json:"product_original_price,omitempty"`
-
 	Replies                []CommentResponse `json:"replies,omitempty"`
 }

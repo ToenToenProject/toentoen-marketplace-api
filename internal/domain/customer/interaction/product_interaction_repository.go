@@ -9,20 +9,43 @@ import (
 )
 
 type ProductInteractionRepository interface {
+	// 1. General & Like Produk
+	GetBusinessIDByProductID(productID string) (string, error)
 	ToggleProductLike(productID, accountID string) (bool, error)
+
+	// 2. Review Produk (Ulasan Berbintang)
 	CreateProductReview(review *models.ProductReview) error
 	UpdateProductReview(review *models.ProductReview) error
 	DeleteProductReview(reviewID string) error
 	GetProductReviewByID(reviewID string) (*models.ProductReview, error)
-	GetReviewsByProductID(productID string) ([]models.ProductReview, error)
-	GetAllProductReviewsByBusinessID(businessID string) ([]models.ProductReview, error)
-	GetBusinessIDByProductID(productID string) (string, error)
+	GetProductReviewsByProductID(productID string, rating *int) ([]models.ProductReview, error)
 	HasUserReviewedProduct(productID, accountID string) (bool, error)
-
-	ToggleReviewLike(reviewID, accountID string) (bool, error)
-	CreateReviewReport(report *models.ProductReviewReport) error
-	GetReviewLikes(reviewID string) ([]models.ProductReviewLike, error)
 	RecalculateProductRating(productID string) error
+
+	// 3. Like Review Produk
+	ToggleReviewLike(reviewID, accountID string) (bool, error)
+	GetReviewLikes(reviewID string) ([]models.ProductReviewLike, error)
+
+	// 4. Balasan Review Produk (Replies)
+	CreateReviewReply(comment *models.ProductReviewComment) error
+	DeleteReviewReply(commentID string) error
+	GetReviewReplyByID(commentID string) (*models.ProductReviewComment, error)
+	ToggleReviewReplyLike(commentID, accountID string) (bool, error)
+	GetReviewReplyLikes(commentID string) ([]models.ProductReviewCommentLike, error)
+
+	// 5. Moderasi Review & Balasan
+	CreateReviewReport(report *models.ProductReviewReport) error
+	CreateReviewReplyReport(report *models.ProductReviewCommentReport) error
+
+	// 6. Komentar Diskusi / Q&A Produk
+	CreateProductComment(comment *models.ProductComment) error
+	UpdateProductComment(comment *models.ProductComment) error
+	DeleteProductComment(commentID string) error
+	GetProductCommentByID(commentID string) (*models.ProductComment, error)
+	GetProductCommentsByProductID(productID string) ([]models.ProductComment, error)
+	ToggleProductCommentLike(commentID, accountID string) (bool, error)
+	GetProductCommentLikes(commentID string) ([]models.ProductCommentLike, error)
+	CreateProductCommentReport(report *models.ProductCommentReport) error
 }
 
 type productInteractionRepository struct {
@@ -33,7 +56,19 @@ func NewProductInteractionRepository(db *gorm.DB) ProductInteractionRepository {
 	return &productInteractionRepository{db}
 }
 
-// 1. TOGGLE LIKE PRODUK
+// ----------------------------------------------------
+// 1. GENERAL & LIKE PRODUK
+// ----------------------------------------------------
+
+func (r *productInteractionRepository) GetBusinessIDByProductID(productID string) (string, error) {
+	var product models.Product
+	err := r.db.Select("business_id").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID)).First(&product).Error
+	if err != nil {
+		return "", err
+	}
+	return product.BusinessID, nil
+}
+
 func (r *productInteractionRepository) ToggleProductLike(productID, accountID string) (bool, error) {
 	productID = strings.TrimSpace(productID)
 	accountID = strings.TrimSpace(accountID)
@@ -85,7 +120,10 @@ func (r *productInteractionRepository) ToggleProductLike(productID, accountID st
 	return isLiked, err
 }
 
-// 2. CREATE REVIEW / COMMENT PRODUK
+// ----------------------------------------------------
+// 2. REVIEW PRODUK (ULASAN BERBINTANG)
+// ----------------------------------------------------
+
 func (r *productInteractionRepository) CreateProductReview(review *models.ProductReview) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(review).Error; err != nil {
@@ -95,7 +133,6 @@ func (r *productInteractionRepository) CreateProductReview(review *models.Produc
 	})
 }
 
-// 3. UPDATE REVIEW / COMMENT PRODUK
 func (r *productInteractionRepository) UpdateProductReview(review *models.ProductReview) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(review).Error; err != nil {
@@ -105,32 +142,45 @@ func (r *productInteractionRepository) UpdateProductReview(review *models.Produc
 	})
 }
 
-// 4. DELETE REVIEW / COMMENT PRODUK
 func (r *productInteractionRepository) DeleteProductReview(reviewID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var review models.ProductReview
 		if err := tx.Where("review_id = ?", reviewID).First(&review).Error; err != nil {
 			return err
 		}
-
-		if err := tx.Where("review_id = ?", reviewID).Delete(&models.ProductReviewLike{}).Error; err != nil {
+		if err := tx.Delete(&review).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("reply_to_review_id = ?", reviewID).Delete(&models.ProductReview{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("review_id = ?", reviewID).Delete(&models.ProductReview{}).Error; err != nil {
-			return err
-		}
-
 		return r.recalculateProductRatingTx(tx, review.ProductID)
 	})
+}
+
+func (r *productInteractionRepository) GetProductReviewByID(reviewID string) (*models.ProductReview, error) {
+	var review models.ProductReview
+	err := r.db.Preload("Account").Preload("Product").Preload("Comments", func(db *gorm.DB) *gorm.DB {
+		return db.Preload("Account").Order("created_at ASC")
+	}).Where("review_id = ?", reviewID).First(&review).Error
+	return &review, err
+}
+
+func (r *productInteractionRepository) GetProductReviewsByProductID(productID string, rating *int) ([]models.ProductReview, error) {
+	var reviews []models.ProductReview
+	query := r.db.Preload("Account").Preload("Comments", func(db *gorm.DB) *gorm.DB {
+		return db.Preload("Account").Order("created_at ASC")
+	}).Where("product_id = ?", productID)
+
+	if rating != nil && *rating >= 1 && *rating <= 5 {
+		query = query.Where("rating >= ? AND rating < ?", float64(*rating), float64(*rating)+1.0)
+	}
+
+	err := query.Order("created_at DESC").Find(&reviews).Error
+	return reviews, err
 }
 
 func (r *productInteractionRepository) HasUserReviewedProduct(productID, accountID string) (bool, error) {
 	var count int64
 	err := r.db.Model(&models.ProductReview{}).
-		Where("product_id = ? AND account_id = ? AND reply_to_review_id IS NULL AND rating IS NOT NULL", productID, accountID).
+		Where("product_id = ? AND account_id = ?", productID, accountID).
 		Count(&count).Error
 	return count > 0, err
 }
@@ -143,7 +193,7 @@ func (r *productInteractionRepository) recalculateProductRatingTx(tx *gorm.DB, p
 	var res AggResult
 	err := tx.Model(&models.ProductReview{}).
 		Select("COUNT(*) as count, COALESCE(AVG(rating), 0) as avg").
-		Where("product_id = ? AND reply_to_review_id IS NULL AND rating IS NOT NULL AND rating > 0", productID).
+		Where("product_id = ? AND rating > 0", productID).
 		Scan(&res).Error
 	if err != nil {
 		return err
@@ -161,34 +211,9 @@ func (r *productInteractionRepository) RecalculateProductRating(productID string
 	return r.recalculateProductRatingTx(r.db, productID)
 }
 
-func (r *productInteractionRepository) GetProductReviewByID(reviewID string) (*models.ProductReview, error) {
-	var review models.ProductReview
-	err := r.db.Preload("Account").Preload("Product").Where("review_id = ?", reviewID).First(&review).Error
-	return &review, err
-}
-
-func (r *productInteractionRepository) GetReviewsByProductID(productID string) ([]models.ProductReview, error) {
-	var reviews []models.ProductReview
-	err := r.db.Preload("Account").Where("product_id = ?", productID).Order("created_at ASC").Find(&reviews).Error
-	return reviews, err
-}
-
-func (r *productInteractionRepository) GetAllProductReviewsByBusinessID(businessID string) ([]models.ProductReview, error) {
-	var reviews []models.ProductReview
-	err := r.db.Preload("Account").Preload("Product").Preload("Replies").
-		Where("business_id = ? AND reply_to_review_id IS NULL", businessID).
-		Order("created_at DESC").Find(&reviews).Error
-	return reviews, err
-}
-
-func (r *productInteractionRepository) GetBusinessIDByProductID(productID string) (string, error) {
-	var product models.Product
-	err := r.db.Select("business_id").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID)).First(&product).Error
-	if err != nil {
-		return "", err
-	}
-	return product.BusinessID, nil
-}
+// ----------------------------------------------------
+// 3. LIKE REVIEW PRODUK
+// ----------------------------------------------------
 
 func (r *productInteractionRepository) ToggleReviewLike(reviewID, accountID string) (bool, error) {
 	var like models.ProductReviewLike
@@ -232,12 +257,212 @@ func (r *productInteractionRepository) ToggleReviewLike(reviewID, accountID stri
 	return isLiked, err
 }
 
-func (r *productInteractionRepository) CreateReviewReport(report *models.ProductReviewReport) error {
-	return r.db.Create(report).Error
-}
-
 func (r *productInteractionRepository) GetReviewLikes(reviewID string) ([]models.ProductReviewLike, error) {
 	var likes []models.ProductReviewLike
 	err := r.db.Where("review_id = ?", reviewID).Find(&likes).Error
 	return likes, err
+}
+
+// ----------------------------------------------------
+// 4. BALASAN REVIEW PRODUK (REPLIES)
+// ----------------------------------------------------
+
+func (r *productInteractionRepository) CreateReviewReply(comment *models.ProductReviewComment) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(comment).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.ProductReview{}).Where("review_id = ?", comment.ReviewID).
+			Updates(map[string]interface{}{
+				"comment_count": gorm.Expr("comment_count + 1"),
+			}).Error
+	})
+}
+
+func (r *productInteractionRepository) DeleteReviewReply(commentID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var comment models.ProductReviewComment
+		if err := tx.Where("comment_id = ?", commentID).First(&comment).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&comment).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.ProductReview{}).Where("review_id = ?", comment.ReviewID).
+			Updates(map[string]interface{}{
+				"comment_count": gorm.Expr("GREATEST(comment_count - 1, 0)"),
+			}).Error
+	})
+}
+
+func (r *productInteractionRepository) GetReviewReplyByID(commentID string) (*models.ProductReviewComment, error) {
+	var comment models.ProductReviewComment
+	err := r.db.Preload("Account").Where("comment_id = ?", commentID).First(&comment).Error
+	return &comment, err
+}
+
+func (r *productInteractionRepository) ToggleReviewReplyLike(commentID, accountID string) (bool, error) {
+	var like models.ProductReviewCommentLike
+	var isLiked bool
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("comment_id = ? AND account_id = ?", commentID, accountID).First(&like)
+
+		if result.Error == nil {
+			if err := tx.Delete(&like).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ProductReviewComment{}).Where("comment_id = ?", commentID).
+				Updates(map[string]interface{}{
+					"like_count": gorm.Expr("GREATEST(like_count - 1, 0)"),
+				}).Error; err != nil {
+				return err
+			}
+			isLiked = false
+		} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			newLike := models.ProductReviewCommentLike{
+				CommentID: commentID,
+				AccountID: accountID,
+			}
+			if err := tx.Create(&newLike).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ProductReviewComment{}).Where("comment_id = ?", commentID).
+				Updates(map[string]interface{}{
+					"like_count": gorm.Expr("like_count + 1"),
+				}).Error; err != nil {
+				return err
+			}
+			isLiked = true
+		} else {
+			return result.Error
+		}
+		return nil
+	})
+
+	return isLiked, err
+}
+
+func (r *productInteractionRepository) GetReviewReplyLikes(commentID string) ([]models.ProductReviewCommentLike, error) {
+	var likes []models.ProductReviewCommentLike
+	err := r.db.Where("comment_id = ?", commentID).Find(&likes).Error
+	return likes, err
+}
+
+// ----------------------------------------------------
+// 5. MODERASI REVIEW
+// ----------------------------------------------------
+
+func (r *productInteractionRepository) CreateReviewReport(report *models.ProductReviewReport) error {
+	return r.db.Create(report).Error
+}
+
+func (r *productInteractionRepository) CreateReviewReplyReport(report *models.ProductReviewCommentReport) error {
+	return r.db.Create(report).Error
+}
+
+// ----------------------------------------------------
+// 6. KOMENTAR DISKUSI / Q&A PRODUK
+// ----------------------------------------------------
+
+func (r *productInteractionRepository) CreateProductComment(comment *models.ProductComment) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(comment).Error; err != nil {
+			return err
+		}
+		if comment.ReplyToCommentID != nil {
+			return tx.Model(&models.ProductComment{}).Where("comment_id = ?", *comment.ReplyToCommentID).
+				Updates(map[string]interface{}{
+					"replies_count": gorm.Expr("replies_count + 1"),
+				}).Error
+		}
+		return nil
+	})
+}
+
+func (r *productInteractionRepository) UpdateProductComment(comment *models.ProductComment) error {
+	return r.db.Save(comment).Error
+}
+
+func (r *productInteractionRepository) DeleteProductComment(commentID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var comment models.ProductComment
+		if err := tx.Where("comment_id = ?", commentID).First(&comment).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&comment).Error; err != nil {
+			return err
+		}
+		if comment.ReplyToCommentID != nil {
+			return tx.Model(&models.ProductComment{}).Where("comment_id = ?", *comment.ReplyToCommentID).
+				Updates(map[string]interface{}{
+					"replies_count": gorm.Expr("GREATEST(replies_count - 1, 0)"),
+				}).Error
+		}
+		return nil
+	})
+}
+
+func (r *productInteractionRepository) GetProductCommentByID(commentID string) (*models.ProductComment, error) {
+	var comment models.ProductComment
+	err := r.db.Preload("Account").Where("comment_id = ?", commentID).First(&comment).Error
+	return &comment, err
+}
+
+func (r *productInteractionRepository) GetProductCommentsByProductID(productID string) ([]models.ProductComment, error) {
+	var comments []models.ProductComment
+	err := r.db.Preload("Account").Where("product_id = ?", productID).Order("created_at ASC").Find(&comments).Error
+	return comments, err
+}
+
+func (r *productInteractionRepository) ToggleProductCommentLike(commentID, accountID string) (bool, error) {
+	var like models.ProductCommentLike
+	var isLiked bool
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("comment_id = ? AND account_id = ?", commentID, accountID).First(&like)
+
+		if result.Error == nil {
+			if err := tx.Delete(&like).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ProductComment{}).Where("comment_id = ?", commentID).
+				Updates(map[string]interface{}{
+					"like_count": gorm.Expr("GREATEST(like_count - 1, 0)"),
+				}).Error; err != nil {
+				return err
+			}
+			isLiked = false
+		} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			newLike := models.ProductCommentLike{
+				CommentID: commentID,
+				AccountID: accountID,
+			}
+			if err := tx.Create(&newLike).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.ProductComment{}).Where("comment_id = ?", commentID).
+				Updates(map[string]interface{}{
+					"like_count": gorm.Expr("like_count + 1"),
+				}).Error; err != nil {
+				return err
+			}
+			isLiked = true
+		} else {
+			return result.Error
+		}
+		return nil
+	})
+
+	return isLiked, err
+}
+
+func (r *productInteractionRepository) GetProductCommentLikes(commentID string) ([]models.ProductCommentLike, error) {
+	var likes []models.ProductCommentLike
+	err := r.db.Where("comment_id = ?", commentID).Find(&likes).Error
+	return likes, err
+}
+
+func (r *productInteractionRepository) CreateProductCommentReport(report *models.ProductCommentReport) error {
+	return r.db.Create(report).Error
 }

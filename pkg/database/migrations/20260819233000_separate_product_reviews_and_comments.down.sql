@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS product_comment_reports;
+DROP TABLE IF EXISTS product_comment_likes;
+DROP TABLE IF EXISTS product_comments;
+DROP TABLE IF EXISTS product_review_comment_reports;
+DROP TABLE IF EXISTS product_review_reports;
+DROP TABLE IF EXISTS product_review_comment_likes;
+DROP TABLE IF EXISTS product_review_comments;
+DROP TABLE IF EXISTS product_review_likes;
+DROP TABLE IF EXISTS product_reviews;
