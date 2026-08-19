@@ -2,6 +2,7 @@ package interaction
 
 import (
 	"errors"
+	"strings"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -34,6 +35,15 @@ func NewProductInteractionRepository(db *gorm.DB) ProductInteractionRepository {
 
 // 1. TOGGLE LIKE PRODUK
 func (r *productInteractionRepository) ToggleProductLike(productID, accountID string) (bool, error) {
+	productID = strings.TrimSpace(productID)
+	accountID = strings.TrimSpace(accountID)
+
+	var product models.Product
+	if err := r.db.Select("product_id").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", productID).First(&product).Error; err != nil {
+		return false, errors.New("produk tidak ditemukan")
+	}
+	productID = product.ProductID
+
 	var like models.ProductLike
 	var isLiked bool
 
@@ -173,7 +183,7 @@ func (r *productInteractionRepository) GetAllProductReviewsByBusinessID(business
 
 func (r *productInteractionRepository) GetBusinessIDByProductID(productID string) (string, error) {
 	var product models.Product
-	err := r.db.Select("business_id").Where("product_id = ?", productID).First(&product).Error
+	err := r.db.Select("business_id").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID)).First(&product).Error
 	if err != nil {
 		return "", err
 	}

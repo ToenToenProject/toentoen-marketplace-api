@@ -80,7 +80,7 @@ func (s *productInteractionService) ToggleProductLike(productID, accountID strin
 func (s *productInteractionService) AddProductReview(productID, accountID string, input models.CreateCommentInput) error {
 	businessID, err := s.repo.GetBusinessIDByProductID(productID)
 	if err != nil {
-		return errors.New("gagal menemukan toko untuk produk ini")
+		return errors.New("Produk tidak ditemukan atau tidak memiliki toko yang valid")
 	}
 
 	isReview := input.Rating != nil && *input.Rating > 0

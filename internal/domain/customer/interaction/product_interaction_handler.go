@@ -57,6 +57,14 @@ func (h *ProductInteractionHandler) AddProductReview(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
+	if productID == "" && input.ProductID != nil {
+		productID = strings.TrimSpace(*input.ProductID)
+	}
+
+	if productID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Product ID wajib diisi", nil)
+	}
+
 	if err := h.service.AddProductReview(productID, accountID, input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}

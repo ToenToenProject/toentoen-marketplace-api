@@ -97,6 +97,7 @@ type BusinessPostCommentLike struct {
 // ==========================================
 
 type CreateCommentInput struct {
+	ProductID            *string  `json:"product_id,omitempty"`
 	Content              string   `json:"content" validate:"required"`
 	ReplyToCommentID     *string  `json:"reply_to_comment_id"`
 	RepliedToAccountID   *string  `json:"replied_to_account_id"`
