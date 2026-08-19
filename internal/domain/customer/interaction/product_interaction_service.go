@@ -7,6 +7,7 @@ import (
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -35,9 +36,10 @@ type ProductInteractionService interface {
 	ToggleProductCommentLike(commentID, accountID string) (bool, error)
 	ReportProductComment(commentID, accountID string, input models.CreateReportInput) error
 
-	// 4. Unified Likes
+	// 4. Unified Likes & Comments
 	ToggleUnifiedCommentLike(commentID, accountID string) (bool, error)
 	ToggleUnifiedReviewLike(reviewID, accountID string) (bool, error)
+	DeleteUnifiedComment(commentID, requesterID string) error
 }
 
 type productInteractionService struct {
@@ -443,77 +445,143 @@ func (s *productInteractionService) ToggleReviewLike(reviewID, accountID string)
 }
 
 func (s *productInteractionService) AddReviewReply(reviewID, accountID string, input models.CreateProductReviewReplyInput) error {
+	reviewID = strings.TrimSpace(reviewID)
+	accountID = strings.TrimSpace(accountID)
+
 	review, err := s.repo.GetProductReviewByID(reviewID)
-	if err != nil {
-		return errors.New("ulasan produk tidak ditemukan")
-	}
-
-	replyTarget := input.ReplyToReviewID
-	if replyTarget == nil {
-		replyTarget = input.ReplyToCommentID
-	}
-
-	var replyToCommentID *string
-	if replyTarget != nil && strings.TrimSpace(*replyTarget) != "" && *replyTarget != reviewID {
-		cleanID := strings.TrimSpace(*replyTarget)
-		parentComment, errParent := s.repo.GetReviewReplyByID(cleanID)
-		if errParent != nil || parentComment.ReviewID != reviewID {
-			return errors.New("komentar yang ingin dibalas tidak ditemukan di ulasan ini")
+	if err == nil {
+		replyTarget := input.ReplyToReviewID
+		if replyTarget == nil {
+			replyTarget = input.ReplyToCommentID
 		}
-		replyToCommentID = &cleanID
-	}
 
-	commentID := utils.GenerateUUID("CMT")
-	comment := &models.ProductReviewComment{
-		CommentID:            commentID,
-		ReviewID:             reviewID,
-		AccountID:            accountID,
-		Content:              input.Content,
-		ReplyToCommentID:     replyToCommentID,
-		RepliedToAccountID:   input.RepliedToAccountID,
-		RepliedToAccountName: input.RepliedToAccountName,
-	}
-
-	if err := s.repo.CreateReviewReply(comment); err != nil {
-		return err
-	}
-
-	if s.notifService != nil {
-		go func() {
-			data := map[string]interface{}{
-				"review_id":   reviewID,
-				"comment_id":  commentID,
-				"product_id":  review.ProductID,
-				"business_id": review.BusinessID,
+		var replyToCommentID *string
+		if replyTarget != nil && strings.TrimSpace(*replyTarget) != "" && *replyTarget != reviewID {
+			cleanID := strings.TrimSpace(*replyTarget)
+			parentComment, errParent := s.repo.GetReviewReplyByID(cleanID)
+			if errParent != nil || parentComment.ReviewID != reviewID {
+				return errors.New("komentar yang ingin dibalas tidak ditemukan di ulasan ini")
 			}
-			if review.AccountID != accountID {
-				s.notifService.SendNotification(
-					[]string{review.AccountID},
-					accountID,
-					"product_review_reply",
-					reviewID,
-					"Balasan Baru di Ulasan Produk",
-					fmt.Sprintf("Seseorang membalas ulasan Anda: \"%s\"", utils.TruncateString(input.Content, 60)),
-					data,
-					nil,
-				)
-			}
-			if input.RepliedToAccountID != nil && *input.RepliedToAccountID != accountID && *input.RepliedToAccountID != review.AccountID {
-				s.notifService.SendNotification(
-					[]string{*input.RepliedToAccountID},
-					accountID,
-					"product_review_reply",
-					reviewID,
-					"Balasan Baru di Komentar Ulasan",
-					fmt.Sprintf("Seseorang membalas komentar Anda: \"%s\"", utils.TruncateString(input.Content, 60)),
-					data,
-					nil,
-				)
-			}
-		}()
+			replyToCommentID = &cleanID
+		}
+
+		commentID := utils.GenerateUUID("CMT")
+		comment := &models.ProductReviewComment{
+			CommentID:            commentID,
+			ReviewID:             reviewID,
+			AccountID:            accountID,
+			Content:              input.Content,
+			ReplyToCommentID:     replyToCommentID,
+			RepliedToAccountID:   input.RepliedToAccountID,
+			RepliedToAccountName: input.RepliedToAccountName,
+		}
+
+		if err := s.repo.CreateReviewReply(comment); err != nil {
+			return err
+		}
+
+		if s.notifService != nil {
+			go func() {
+				data := map[string]interface{}{
+					"review_id":   reviewID,
+					"comment_id":  commentID,
+					"product_id":  review.ProductID,
+					"business_id": review.BusinessID,
+				}
+				if review.AccountID != accountID {
+					s.notifService.SendNotification(
+						[]string{review.AccountID},
+						accountID,
+						"product_review_reply",
+						reviewID,
+						"Balasan Baru di Ulasan Produk",
+						fmt.Sprintf("Seseorang membalas ulasan Anda: \"%s\"", utils.TruncateString(input.Content, 60)),
+						data,
+						nil,
+					)
+				}
+				if input.RepliedToAccountID != nil && *input.RepliedToAccountID != accountID && *input.RepliedToAccountID != review.AccountID {
+					s.notifService.SendNotification(
+						[]string{*input.RepliedToAccountID},
+						accountID,
+						"product_review_reply",
+						reviewID,
+						"Balasan Baru di Komentar Ulasan",
+						fmt.Sprintf("Seseorang membalas komentar Anda: \"%s\"", utils.TruncateString(input.Content, 60)),
+						data,
+						nil,
+					)
+				}
+			}()
+		}
+
+		return nil
 	}
 
-	return nil
+	// 2. Cek apakah ini ulasan bisnis / toko di reviews
+	var bReview models.Review
+	if errB := database.DB.Where("review_id = ?", reviewID).First(&bReview).Error; errB == nil {
+		replyTarget := input.ReplyToReviewID
+		if replyTarget == nil {
+			replyTarget = input.ReplyToCommentID
+		}
+
+		var replyToCommentID *string
+		if replyTarget != nil && strings.TrimSpace(*replyTarget) != "" && *replyTarget != reviewID {
+			cleanID := strings.TrimSpace(*replyTarget)
+			var count int64
+			database.DB.Model(&models.BusinessReviewComment{}).Where("comment_id = ? AND review_id = ?", cleanID, reviewID).Count(&count)
+			if count == 0 {
+				return errors.New("komentar yang ingin dibalas tidak ditemukan di ulasan ini")
+			}
+			replyToCommentID = &cleanID
+		}
+
+		commentID := utils.GenerateUUID("CMT")
+		comment := models.BusinessReviewComment{
+			CommentID:            commentID,
+			ReviewID:             reviewID,
+			BusinessID:           bReview.BusinessID,
+			AccountID:            accountID,
+			Content:              input.Content,
+			ReplyToCommentID:     replyToCommentID,
+			RepliedToAccountID:   input.RepliedToAccountID,
+			RepliedToAccountName: input.RepliedToAccountName,
+		}
+
+		if err := database.DB.Create(&comment).Error; err != nil {
+			return errors.New("gagal mengirimkan balasan")
+		}
+
+		if s.notifService != nil {
+			go func() {
+				recipientID := bReview.AccountID
+				if input.RepliedToAccountID != nil && *input.RepliedToAccountID != "" {
+					recipientID = *input.RepliedToAccountID
+				}
+				if recipientID != accountID {
+					data := map[string]interface{}{
+						"business_id": bReview.BusinessID,
+						"review_id":   reviewID,
+						"comment_id":  commentID,
+					}
+					s.notifService.SendNotification(
+						[]string{recipientID},
+						accountID,
+						"business_review_reply",
+						reviewID,
+						"Ulasan Anda dibalas!",
+						"Seseorang membalas ulasan Anda.",
+						data,
+						nil,
+					)
+				}
+			}()
+		}
+		return nil
+	}
+
+	return errors.New("ulasan tidak ditemukan")
 }
 
 func (s *productInteractionService) DeleteReviewReply(commentID, requesterID string) error {
@@ -848,4 +916,55 @@ func (s *productInteractionService) ToggleUnifiedCommentLike(commentID, accountI
 func (s *productInteractionService) ToggleUnifiedReviewLike(reviewID, accountID string) (bool, error) {
 	isLiked, _, err := s.repo.ToggleUnifiedReviewLike(reviewID, accountID)
 	return isLiked, err
+}
+
+func (s *productInteractionService) DeleteUnifiedComment(commentID, requesterID string) error {
+	commentID = strings.TrimSpace(commentID)
+	requesterID = strings.TrimSpace(requesterID)
+
+	// 1. Cek di product_comments
+	if err := s.DeleteProductComment(commentID, requesterID); err == nil {
+		return nil
+	}
+
+	// 2. Cek di product_review_comments
+	if err := s.DeleteReviewReply(commentID, requesterID); err == nil {
+		return nil
+	}
+
+	// 3. Cek di business_review_comments
+	var bComment models.BusinessReviewComment
+	if err := database.DB.Where("comment_id = ?", commentID).First(&bComment).Error; err == nil {
+		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(bComment.BusinessID)
+		isStaff := false
+		for _, sid := range staffIDs {
+			if sid == requesterID {
+				isStaff = true
+				break
+			}
+		}
+		if bComment.AccountID != requesterID && !isStaff {
+			return errors.New("tidak memiliki izin untuk menghapus balasan ini")
+		}
+		return database.DB.Delete(&bComment).Error
+	}
+
+	// 4. Cek di business_post_comments
+	var bpComment models.BusinessPostComment
+	if err := database.DB.Where("comment_id = ?", commentID).First(&bpComment).Error; err == nil {
+		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(bpComment.BusinessID)
+		isStaff := false
+		for _, sid := range staffIDs {
+			if sid == requesterID {
+				isStaff = true
+				break
+			}
+		}
+		if bpComment.AccountID != requesterID && !isStaff {
+			return errors.New("tidak memiliki izin untuk menghapus komentar ini")
+		}
+		return database.DB.Delete(&bpComment).Error
+	}
+
+	return errors.New("komentar tidak ditemukan")
 }

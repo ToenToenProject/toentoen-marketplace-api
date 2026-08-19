@@ -425,3 +425,23 @@ func (h *ProductInteractionHandler) ToggleUnifiedReviewLike(c *fiber.Ctx) error 
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
 }
+
+func (h *ProductInteractionHandler) DeleteUnifiedComment(c *fiber.Ctx) error {
+	commentID := strings.TrimSpace(c.Params("comment_id"))
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	if err := h.service.DeleteUnifiedComment(commentID, accountID); err != nil {
+		if strings.Contains(err.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+		}
+		if strings.Contains(err.Error(), "tidak memiliki izin") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Komentar / balasan berhasil dihapus", nil)
+}

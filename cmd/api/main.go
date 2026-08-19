@@ -320,15 +320,25 @@ func main() {
 	customerConvGroup.Get("/:conversation_id/messages", customerSignalHandler.GetMessages)
 	customerConvGroup.Post("/:conversation_id/messages", customerSignalHandler.SendMessage)
 
-	// 4. UNIFIED ROUTES (UNIVERSAL REPORTS & LIKES)
+	// 4. UNIFIED ROUTES (UNIVERSAL REPORTS, LIKES, COMMENTS, REVIEWS)
 	reportsGroup := api.Group("/reports", middlewares.RequireAuth)
 	reportsGroup.Post("/", reportHandler.CreateReport)
 
 	commentsGroup := api.Group("/comments", middlewares.RequireAuth)
 	commentsGroup.Post("/:comment_id/like", productInteractionHandler.ToggleUnifiedCommentLike)
+	commentsGroup.Delete("/:comment_id", productInteractionHandler.DeleteUnifiedComment)
+	commentsGroup.Post("/:comment_id/report", reportHandler.CreateReport)
 
-	reviewsGroup := api.Group("/reviews", middlewares.RequireAuth)
-	reviewsGroup.Post("/:review_id/like", productInteractionHandler.ToggleUnifiedReviewLike)
+	reviewsGroup := api.Group("/reviews")
+	reviewsGroup.Post("/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedReviewLike)
+	reviewsGroup.Post("/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
+	reviewsGroup.Post("/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
+
+	businessReviewGroup := api.Group("/business/reviews")
+	businessReviewGroup.Post("/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
+	businessReviewGroup.Post("/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedReviewLike)
+	businessReviewGroup.Delete("/replies/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteUnifiedComment)
+	businessReviewGroup.Post("/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
 
 	publicProductRoutes := api.Group("/products")
 	// 1. Detail & Like Produk
@@ -465,9 +475,9 @@ func main() {
 	reviewGroup.Get("/business/:business_id", middlewares.OptionalAuth, reviewHandler.GetAllReviews)
 	reviewGroup.Get("/business/detail/:review_id", middlewares.OptionalAuth, reviewHandler.GetReviewDetail)
 
-	// Balasan & Like Review Toko (Customer & Merchant)
-	reviewGroup.Post("/business/reviews/:review_id/replies", middlewares.RequireAuth, reviewHandler.ReplyReview)
-	reviewGroup.Delete("/business/replies/:comment_id", middlewares.RequireAuth, reviewHandler.DeleteReviewComment)
+	// Balasan & Like Review Toko (Legacy Alias)
+	reviewGroup.Post("/business/reviews/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
+	reviewGroup.Delete("/business/replies/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteUnifiedComment)
 	reviewGroup.Post("/business/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedReviewLike)
 	reviewGroup.Post("/business/replies/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedCommentLike)
 	reviewGroup.Post("/business/reviews/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
