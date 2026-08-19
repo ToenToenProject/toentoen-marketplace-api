@@ -321,7 +321,7 @@ func main() {
 	customerConvGroup.Post("/:conversation_id/messages", customerSignalHandler.SendMessage)
 
 	publicProductRoutes := api.Group("/products")
-	publicProductRoutes.Get("/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	publicProductRoutes.Get("/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
 	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleLike)
 	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductReview)
 	publicProductRoutes.Put("/:product_id/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.EditProductComment)
