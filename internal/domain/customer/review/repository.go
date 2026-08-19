@@ -2,6 +2,7 @@ package review
 
 import (
 	"errors"
+	"strings"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -182,18 +183,20 @@ func (r *reviewRepository) GetReviewLikes(reviewID string) ([]models.BusinessRev
 }
 
 func (r *reviewRepository) ToggleReviewLike(reviewID, accountID string) (bool, error) {
+	reviewID = strings.TrimSpace(reviewID)
+	accountID = strings.TrimSpace(accountID)
 	var like models.BusinessReviewLike
 	var isLiked bool
 
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("review_id = ? AND account_id = ?", reviewID, accountID).First(&like)
+		result := tx.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", reviewID, accountID).First(&like)
 
 		if result.Error == nil {
 			if err := tx.Delete(&like).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.Review{}).Where("review_id = ?", reviewID).
-				Updates(map[string]interface{}{"like_count": gorm.Expr("GREATEST(like_count - 1, 0)")}).Error; err != nil {
+			if err := tx.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", reviewID).
+				UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error; err != nil {
 				return err
 			}
 			isLiked = false
@@ -205,8 +208,8 @@ func (r *reviewRepository) ToggleReviewLike(reviewID, accountID string) (bool, e
 			if err := tx.Create(&newLike).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.Review{}).Where("review_id = ?", reviewID).
-				Updates(map[string]interface{}{"like_count": gorm.Expr("like_count + 1")}).Error; err != nil {
+			if err := tx.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", reviewID).
+				UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
 				return err
 			}
 			isLiked = true
@@ -224,53 +227,55 @@ func (r *reviewRepository) CreateReviewComment(comment *models.BusinessReviewCom
 		if err := tx.Create(comment).Error; err != nil {
 			return err
 		}
-		return tx.Model(&models.Review{}).Where("review_id = ?", comment.ReviewID).
-			Updates(map[string]interface{}{"comment_count": gorm.Expr("comment_count + 1")}).Error
+		return tx.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", comment.ReviewID).
+			UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
 	})
 }
 
 func (r *reviewRepository) GetReviewComments(reviewID string) ([]models.BusinessReviewComment, error) {
 	var comments []models.BusinessReviewComment
-	err := r.db.Preload("Account").Where("review_id = ?", reviewID).Order("created_at ASC").Find(&comments).Error
+	err := r.db.Preload("Account").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", strings.TrimSpace(reviewID)).Order("created_at ASC").Find(&comments).Error
 	return comments, err
 }
 
 func (r *reviewRepository) GetReviewCommentByID(commentID string) (*models.BusinessReviewComment, error) {
 	var comment models.BusinessReviewComment
-	err := r.db.Preload("Account").Where("comment_id = ?", commentID).First(&comment).Error
+	err := r.db.Preload("Account").Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", strings.TrimSpace(commentID)).First(&comment).Error
 	return &comment, err
 }
 
 func (r *reviewRepository) DeleteReviewComment(commentID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var comment models.BusinessReviewComment
-		if err := tx.Where("comment_id = ?", commentID).First(&comment).Error; err != nil {
+		if err := tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", strings.TrimSpace(commentID)).First(&comment).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("comment_id = ?", commentID).Delete(&models.BusinessReviewCommentLike{}).Error; err != nil {
+		if err := tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", strings.TrimSpace(commentID)).Delete(&models.BusinessReviewCommentLike{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("comment_id = ?", commentID).Delete(&models.BusinessReviewComment{}).Error; err != nil {
+		if err := tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", strings.TrimSpace(commentID)).Delete(&models.BusinessReviewComment{}).Error; err != nil {
 			return err
 		}
-		return tx.Model(&models.Review{}).Where("review_id = ?", comment.ReviewID).
-			Updates(map[string]interface{}{"comment_count": gorm.Expr("GREATEST(comment_count - 1, 0)")}).Error
+		return tx.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", comment.ReviewID).
+			UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
 	})
 }
 
 func (r *reviewRepository) ToggleReviewCommentLike(commentID, accountID string) (bool, error) {
+	commentID = strings.TrimSpace(commentID)
+	accountID = strings.TrimSpace(accountID)
 	var like models.BusinessReviewCommentLike
 	var isLiked bool
 
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("comment_id = ? AND account_id = ?", commentID, accountID).First(&like)
+		result := tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", commentID, accountID).First(&like)
 
 		if result.Error == nil {
 			if err := tx.Delete(&like).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.BusinessReviewComment{}).Where("comment_id = ?", commentID).
-				Updates(map[string]interface{}{"like_count": gorm.Expr("GREATEST(like_count - 1, 0)")}).Error; err != nil {
+			if err := tx.Model(&models.BusinessReviewComment{}).Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", commentID).
+				UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error; err != nil {
 				return err
 			}
 			isLiked = false
@@ -282,8 +287,8 @@ func (r *reviewRepository) ToggleReviewCommentLike(commentID, accountID string) 
 			if err := tx.Create(&newLike).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.BusinessReviewComment{}).Where("comment_id = ?", commentID).
-				Updates(map[string]interface{}{"like_count": gorm.Expr("like_count + 1")}).Error; err != nil {
+			if err := tx.Model(&models.BusinessReviewComment{}).Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", commentID).
+				UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
 				return err
 			}
 			isLiked = true
