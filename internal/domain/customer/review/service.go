@@ -177,13 +177,23 @@ func (s *reviewService) ReplyReview(accountID, role, reviewID string, input mode
 		return errors.New("ulasan yang ingin dibalas tidak ditemukan")
 	}
 
+	var replyToCommentID *string
+	if input.ReplyToCommentID != nil && strings.TrimSpace(*input.ReplyToCommentID) != "" && *input.ReplyToCommentID != reviewID {
+		cleanID := strings.TrimSpace(*input.ReplyToCommentID)
+		parentComment, errParent := s.reviewRepo.GetReviewCommentByID(cleanID)
+		if errParent != nil || parentComment.ReviewID != reviewID {
+			return errors.New("komentar yang ingin dibalas tidak ditemukan di ulasan ini")
+		}
+		replyToCommentID = &cleanID
+	}
+
 	comment := models.BusinessReviewComment{
 		CommentID:            utils.GenerateUUID("CMT"),
 		ReviewID:             reviewID,
 		BusinessID:           review.BusinessID,
 		AccountID:            accountID,
 		Content:              input.Content,
-		ReplyToCommentID:     input.ReplyToCommentID,
+		ReplyToCommentID:     replyToCommentID,
 		RepliedToAccountID:   input.RepliedToAccountID,
 		RepliedToAccountName: input.RepliedToAccountName,
 	}

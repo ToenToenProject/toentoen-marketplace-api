@@ -442,13 +442,23 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 		return errors.New("ulasan produk tidak ditemukan")
 	}
 
+	var replyToCommentID *string
+	if input.ReplyToCommentID != nil && strings.TrimSpace(*input.ReplyToCommentID) != "" && *input.ReplyToCommentID != reviewID {
+		cleanID := strings.TrimSpace(*input.ReplyToCommentID)
+		parentComment, errParent := s.repo.GetReviewReplyByID(cleanID)
+		if errParent != nil || parentComment.ReviewID != reviewID {
+			return errors.New("komentar yang ingin dibalas tidak ditemukan di ulasan ini")
+		}
+		replyToCommentID = &cleanID
+	}
+
 	commentID := utils.GenerateUUID("CMT")
 	comment := &models.ProductReviewComment{
 		CommentID:            commentID,
 		ReviewID:             reviewID,
 		AccountID:            accountID,
 		Content:              input.Content,
-		ReplyToCommentID:     input.ReplyToCommentID,
+		ReplyToCommentID:     replyToCommentID,
 		RepliedToAccountID:   input.RepliedToAccountID,
 		RepliedToAccountName: input.RepliedToAccountName,
 	}
@@ -580,6 +590,16 @@ func (s *productInteractionService) AddProductComment(productID, accountID strin
 		return errors.New("Produk tidak ditemukan atau tidak memiliki toko yang valid")
 	}
 
+	var replyToCommentID *string
+	if input.ReplyToCommentID != nil && strings.TrimSpace(*input.ReplyToCommentID) != "" && *input.ReplyToCommentID != productID {
+		cleanID := strings.TrimSpace(*input.ReplyToCommentID)
+		parentComment, errParent := s.repo.GetProductCommentByID(cleanID)
+		if errParent != nil || parentComment.ProductID != productID {
+			return errors.New("komentar yang ingin dibalas tidak ditemukan di produk ini")
+		}
+		replyToCommentID = &cleanID
+	}
+
 	commentID := utils.GenerateUUID("CMT")
 	comment := &models.ProductComment{
 		CommentID:            commentID,
@@ -587,7 +607,7 @@ func (s *productInteractionService) AddProductComment(productID, accountID strin
 		BusinessID:           businessID,
 		AccountID:            accountID,
 		Content:              input.Content,
-		ReplyToCommentID:     input.ReplyToCommentID,
+		ReplyToCommentID:     replyToCommentID,
 		RepliedToAccountID:   input.RepliedToAccountID,
 		RepliedToAccountName: input.RepliedToAccountName,
 	}
