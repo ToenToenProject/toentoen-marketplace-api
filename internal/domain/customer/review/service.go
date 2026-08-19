@@ -177,9 +177,14 @@ func (s *reviewService) ReplyReview(accountID, role, reviewID string, input mode
 		return errors.New("ulasan yang ingin dibalas tidak ditemukan")
 	}
 
+	replyTarget := input.ReplyToReviewID
+	if replyTarget == nil {
+		replyTarget = input.ReplyToCommentID
+	}
+
 	var replyToCommentID *string
-	if input.ReplyToCommentID != nil && strings.TrimSpace(*input.ReplyToCommentID) != "" && *input.ReplyToCommentID != reviewID {
-		cleanID := strings.TrimSpace(*input.ReplyToCommentID)
+	if replyTarget != nil && strings.TrimSpace(*replyTarget) != "" && *replyTarget != reviewID {
+		cleanID := strings.TrimSpace(*replyTarget)
 		parentComment, errParent := s.reviewRepo.GetReviewCommentByID(cleanID)
 		if errParent != nil || parentComment.ReviewID != reviewID {
 			return errors.New("komentar yang ingin dibalas tidak ditemukan di ulasan ini")

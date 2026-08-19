@@ -276,6 +276,7 @@ func (s *productInteractionService) GetProductReviews(productID, currentAccountI
 				IsByOwner:             isReplyByOwner,
 				IsOwnerLiked:          cIsOwnerLiked,
 				OwnerInteractionLabel: getOwnerInteractionLabel(cIsOwnerLiked, false, isReplyByOwner),
+				ReplyToReviewID:       c.ReplyToCommentID,
 				ReplyToCommentID:      c.ReplyToCommentID,
 				RepliedToAccountID:    c.RepliedToAccountID,
 				RepliedToAccountName:  c.RepliedToAccountName,
@@ -379,6 +380,7 @@ func (s *productInteractionService) GetProductReviewDetail(reviewID, currentAcco
 			IsByOwner:             isReplyByOwner,
 			IsOwnerLiked:          cIsOwnerLiked,
 			OwnerInteractionLabel: getOwnerInteractionLabel(cIsOwnerLiked, false, isReplyByOwner),
+			ReplyToReviewID:       c.ReplyToCommentID,
 			ReplyToCommentID:      c.ReplyToCommentID,
 			RepliedToAccountID:    c.RepliedToAccountID,
 			RepliedToAccountName:  c.RepliedToAccountName,
@@ -442,9 +444,14 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 		return errors.New("ulasan produk tidak ditemukan")
 	}
 
+	replyTarget := input.ReplyToReviewID
+	if replyTarget == nil {
+		replyTarget = input.ReplyToCommentID
+	}
+
 	var replyToCommentID *string
-	if input.ReplyToCommentID != nil && strings.TrimSpace(*input.ReplyToCommentID) != "" && *input.ReplyToCommentID != reviewID {
-		cleanID := strings.TrimSpace(*input.ReplyToCommentID)
+	if replyTarget != nil && strings.TrimSpace(*replyTarget) != "" && *replyTarget != reviewID {
+		cleanID := strings.TrimSpace(*replyTarget)
 		parentComment, errParent := s.repo.GetReviewReplyByID(cleanID)
 		if errParent != nil || parentComment.ReviewID != reviewID {
 			return errors.New("komentar yang ingin dibalas tidak ditemukan di ulasan ini")

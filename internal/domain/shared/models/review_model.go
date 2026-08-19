@@ -77,7 +77,8 @@ type UpdateReviewInput struct {
 // Struct untuk membalas review bisnis
 type CreateReviewReplyInput struct {
 	Content              string  `json:"content" validate:"required"`
-	ReplyToCommentID     *string `json:"reply_to_comment_id"`
+	ReplyToReviewID      *string `json:"reply_to_review_id"`
+	ReplyToCommentID     *string `json:"reply_to_comment_id,omitempty"`
 	RepliedToAccountID   *string `json:"replied_to_account_id"`
 	RepliedToAccountName *string `json:"replied_to_account_name"`
 }
@@ -179,7 +180,8 @@ type UpdateProductReviewInput struct {
 
 type CreateProductReviewReplyInput struct {
 	Content              string  `json:"content" validate:"required"`
-	ReplyToCommentID     *string `json:"reply_to_comment_id"`
+	ReplyToReviewID      *string `json:"reply_to_review_id"`
+	ReplyToCommentID     *string `json:"reply_to_comment_id,omitempty"`
 	RepliedToAccountID   *string `json:"replied_to_account_id"`
 	RepliedToAccountName *string `json:"replied_to_account_name"`
 }
@@ -218,6 +220,7 @@ type BusinessReviewCommentResponse struct {
 	IsByOwner              bool                            `json:"is_by_owner"`
 	IsOwnerLiked           bool                            `json:"is_owner_liked"`
 	OwnerInteractionLabel  string                          `json:"owner_interaction_label,omitempty"`
+	ReplyToReviewID        *string                         `json:"reply_to_review_id,omitempty"`
 	ReplyToCommentID       *string                         `json:"reply_to_comment_id,omitempty"`
 	RepliedToAccountID     *string                         `json:"replied_to_account_id,omitempty"`
 	RepliedToAccountName   *string                         `json:"replied_to_account_name,omitempty"`
@@ -259,6 +262,7 @@ type ProductReviewCommentResponse struct {
 	IsByOwner              bool                           `json:"is_by_owner"`
 	IsOwnerLiked           bool                           `json:"is_owner_liked"`
 	OwnerInteractionLabel  string                         `json:"owner_interaction_label,omitempty"`
+	ReplyToReviewID        *string                        `json:"reply_to_review_id,omitempty"`
 	ReplyToCommentID       *string                        `json:"reply_to_comment_id,omitempty"`
 	RepliedToAccountID     *string                        `json:"replied_to_account_id,omitempty"`
 	RepliedToAccountName   *string                        `json:"replied_to_account_name,omitempty"`
