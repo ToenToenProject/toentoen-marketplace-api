@@ -1,6 +1,7 @@
 package interaction
 
 import (
+	"strconv"
 	"strings"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
@@ -124,8 +125,16 @@ func (h *ProductInteractionHandler) DeleteProductComment(c *fiber.Ctx) error {
 func (h *ProductInteractionHandler) GetProductReviews(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 	accountID, _ := c.Locals("account_id").(string)
+	filterType := strings.ToLower(strings.TrimSpace(c.Query("type", ""))) // "reviews", "comments", or "" (all)
 
-	reviews, err := h.service.GetProductReviews(productID, accountID)
+	var ratingPtr *int
+	if ratingStr := c.Query("rating"); ratingStr != "" {
+		if rVal, err := strconv.Atoi(ratingStr); err == nil && rVal >= 1 && rVal <= 5 {
+			ratingPtr = &rVal
+		}
+	}
+
+	reviews, err := h.service.GetProductReviews(productID, accountID, filterType, ratingPtr)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}

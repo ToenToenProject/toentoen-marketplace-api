@@ -15,7 +15,7 @@ type ProductInteractionService interface {
 	AddProductReview(productID, accountID string, input models.CreateCommentInput) error
 	EditProductComment(productID, reviewID, accountID string, input models.UpdateCommentInput) error
 	DeleteProductComment(productID, reviewID, requesterID string) error
-	GetProductReviews(productID, currentAccountID string) ([]models.CommentResponse, error)
+	GetProductReviews(productID, currentAccountID, filterType string, rating *int) ([]models.CommentResponse, error)
 	GetAllProductReviewsByBusinessID(businessID string) ([]models.CommentResponse, error)
 	ToggleReviewLike(reviewID, accountID string) (bool, error)
 	ReportReview(reviewID, accountID, reason string) error
@@ -247,8 +247,8 @@ func (s *productInteractionService) DeleteProductComment(productID, reviewID, re
 	return s.repo.DeleteProductReview(reviewID)
 }
 
-// 5. GET REVIEWS / COMMENTS PRODUK (TREE STRUCTURE + BADGES)
-func (s *productInteractionService) GetProductReviews(productID, currentAccountID string) ([]models.CommentResponse, error) {
+// 5. GET REVIEWS / COMMENTS PRODUK (TREE STRUCTURE + BADGES + FILTER)
+func (s *productInteractionService) GetProductReviews(productID, currentAccountID, filterType string, rating *int) ([]models.CommentResponse, error) {
 	rawReviews, err := s.repo.GetReviewsByProductID(productID)
 	if err != nil {
 		return nil, errors.New("gagal mengambil data review produk")
@@ -338,6 +338,20 @@ func (s *productInteractionService) GetProductReviews(productID, currentAccountI
 
 	for _, rv := range rawReviews {
 		if rv.ReplyToReviewID == nil {
+			isReview := rv.Rating != nil && *rv.Rating > 0
+
+			if filterType == "reviews" && !isReview {
+				continue
+			}
+			if filterType == "comments" && isReview {
+				continue
+			}
+			if rating != nil && *rating > 0 {
+				if rv.Rating == nil || int(*rv.Rating) != *rating {
+					continue
+				}
+			}
+
 			finalReviews = append(finalReviews, *reviewMap[rv.ReviewID])
 		}
 	}
