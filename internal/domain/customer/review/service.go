@@ -178,7 +178,7 @@ func (s *reviewService) ReplyReview(accountID, role, reviewID string, input mode
 	}
 
 	comment := models.BusinessReviewComment{
-		CommentID:            utils.GenerateUUID("RVC"),
+		CommentID:            utils.GenerateUUID("CMT"),
 		ReviewID:             reviewID,
 		BusinessID:           review.BusinessID,
 		AccountID:            accountID,

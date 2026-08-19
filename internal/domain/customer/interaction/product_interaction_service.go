@@ -113,7 +113,7 @@ func (s *productInteractionService) AddProductReview(productID, accountID string
 		return errors.New("Anda sudah memberikan ulasan untuk produk ini. Silakan gunakan fitur edit jika ingin mengubah ulasan.")
 	}
 
-	reviewID := utils.GenerateUUID("PRV")
+	reviewID := utils.GenerateUUID("REV")
 	review := &models.ProductReview{
 		ReviewID:     reviewID,
 		ProductID:    productID,
@@ -442,7 +442,7 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 		return errors.New("ulasan produk tidak ditemukan")
 	}
 
-	commentID := utils.GenerateUUID("PRC")
+	commentID := utils.GenerateUUID("CMT")
 	comment := &models.ProductReviewComment{
 		CommentID:            commentID,
 		ReviewID:             reviewID,
@@ -580,7 +580,7 @@ func (s *productInteractionService) AddProductComment(productID, accountID strin
 		return errors.New("Produk tidak ditemukan atau tidak memiliki toko yang valid")
 	}
 
-	commentID := utils.GenerateUUID("PCM")
+	commentID := utils.GenerateUUID("CMT")
 	comment := &models.ProductComment{
 		CommentID:            commentID,
 		ProductID:            productID,
