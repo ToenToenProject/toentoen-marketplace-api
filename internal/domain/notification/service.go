@@ -14,6 +14,7 @@ import (
 type NotificationService interface {
 	SendNotification(recipientIDs []string, triggerActorID string, notifType, referenceID, defaultTitle, defaultBody string, data map[string]interface{}, fcmTokensMap map[string][]string)
 	GetMyNotifications(accountID string, page, limit int) ([]models.NotificationResponse, int64, error)
+	GetUnreadCount(accountID string) (int64, error)
 	MarkAsRead(accountID, notifID string) error
 	MarkAllAsRead(accountID string) error
 }
@@ -173,19 +174,24 @@ func (s *notificationService) GetMyNotifications(accountID string, page, limit i
 		_ = json.Unmarshal(n.ActorIDs, &actors)
 
 		resp := models.NotificationResponse{
-			ID:         n.ID,
-			Type:       n.Type,
-			Title:      n.Title,
-			Body:       n.Body,
-			IsRead:     n.IsRead,
-			Data:       dataMap,
-			ActorCount: len(actors),
-			CreatedAt:  n.CreatedAt,
+			ID:             n.ID,
+			NotificationID: n.ID,
+			Type:           n.Type,
+			Title:          n.Title,
+			Body:           n.Body,
+			IsRead:         n.IsRead,
+			Data:           dataMap,
+			ActorCount:     len(actors),
+			CreatedAt:      n.CreatedAt,
 		}
 		responses = append(responses, resp)
 	}
 
 	return responses, total, nil
+}
+
+func (s *notificationService) GetUnreadCount(accountID string) (int64, error) {
+	return s.repo.GetUnreadCount(accountID)
 }
 
 func (s *notificationService) MarkAsRead(accountID, notifID string) error {

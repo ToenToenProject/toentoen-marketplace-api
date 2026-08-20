@@ -2,6 +2,7 @@ package signal
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 
@@ -28,6 +29,8 @@ type SignalRepository interface {
 	GetConversationByID(convID string) (*models.SignalConversation, error)
 	GetConversationsBySignal(signalID string) ([]models.SignalConversation, error)
 	FindExistingConversation(signalID, merchantID string) (*models.SignalConversation, error)
+	GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error)
+	GetCustomerConversations(customerAccountID string) ([]models.ConversationListItem, error)
 
 	// Messages
 	CreateMessage(msg *models.SignalMessage) error
@@ -164,11 +167,10 @@ func (r *signalRepository) ExploreActiveSignals(merchantLat, merchantLng float64
 			s.expires_at,
 			s.created_at,
 			ST_Distance(s.location::geography, %s::geography) / 1000 AS distance_km,
-			a.fullname AS customer_name,
-			c.profile_picture_url AS customer_avatar
+			TRIM(CONCAT(a.first_name, ' ', a.last_name)) AS customer_name,
+			a.profile_picture_url AS customer_avatar
 		FROM signals s
 		JOIN accounts a ON s.customer_id = a.account_id
-		LEFT JOIN customers c ON s.customer_id = c.account_id
 		WHERE s.status = 'active'
 		  AND s.expires_at > NOW()
 		  AND s.location IS NOT NULL
@@ -231,12 +233,203 @@ func (r *signalRepository) GetConversationsBySignal(signalID string) ([]models.S
 func (r *signalRepository) FindExistingConversation(signalID, merchantID string) (*models.SignalConversation, error) {
 	var conv models.SignalConversation
 	err := r.db.
+		Preload("Business").
+		Preload("Merchant").
 		Where("signal_id = ? AND merchant_id = ?", signalID, merchantID).
 		First(&conv).Error
 	if err != nil {
 		return nil, err
 	}
 	return &conv, nil
+}
+
+func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error) {
+	var conversations []models.SignalConversation
+	err := r.db.
+		Preload("Business").
+		Preload("Merchant").
+		Where("merchant_id = ?", merchantAccountID).
+		Order("created_at DESC").
+		Find(&conversations).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var items []models.ConversationListItem
+	for _, conv := range conversations {
+		signal, errSig := r.GetSignalByID(conv.SignalID)
+		sigDesc := ""
+		sigCat := ""
+		sigStatus := ""
+		isUrgent := false
+		peerID := ""
+		peerName := "Customer"
+		var peerAvatar *string
+
+		if errSig == nil && signal != nil {
+			sigDesc = signal.Description
+			sigCat = signal.Category
+			sigStatus = signal.Status
+			isUrgent = signal.IsUrgent
+			peerID = signal.CustomerID
+			if signal.Account != nil {
+				peerName = strings.TrimSpace(signal.Account.FirstName + " " + signal.Account.LastName)
+				if peerName == "" {
+					peerName = "Customer"
+				}
+				peerAvatar = signal.Account.ProfilePictureUrl
+			}
+		}
+
+		bName := ""
+		var bLogo *string
+		if conv.Business != nil {
+			if conv.Business.BusinessName != nil {
+				bName = *conv.Business.BusinessName
+			}
+			bLogo = conv.Business.LogoURL
+		}
+
+		// Ambil pesan terakhir
+		var lastMsg models.SignalMessage
+		var lastMsgText *string
+		var lastMsgSender string
+		var lastMsgAt time.Time = conv.CreatedAt
+
+		if err := r.db.Where("conversation_id = ?", conv.ConversationID).
+			Order("created_at DESC").First(&lastMsg).Error; err == nil {
+			lastMsgText = &lastMsg.MessageText
+			lastMsgSender = lastMsg.SenderType
+			lastMsgAt = lastMsg.CreatedAt
+		}
+
+		// Hitung unread messages (pesan dari customer yang belum dibaca merchant)
+		var unreadCount int64
+		r.db.Model(&models.SignalMessage{}).
+			Where("conversation_id = ? AND sender_type = 'customer' AND is_read = false", conv.ConversationID).
+			Count(&unreadCount)
+
+		item := models.ConversationListItem{
+			ConversationID:    conv.ConversationID,
+			SignalID:          conv.SignalID,
+			SignalDescription: sigDesc,
+			SignalCategory:    sigCat,
+			SignalStatus:      sigStatus,
+			IsUrgent:          isUrgent,
+			PeerID:            peerID,
+			PeerName:          peerName,
+			PeerAvatar:        peerAvatar,
+			BusinessID:        conv.BusinessID,
+			BusinessName:      bName,
+			BusinessLogo:      bLogo,
+			LastMessage:       lastMsgText,
+			LastMessageSender: lastMsgSender,
+			LastMessageAt:     lastMsgAt,
+			UnreadCount:       unreadCount,
+			Status:            conv.Status,
+			CreatedAt:         conv.CreatedAt,
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
+func (r *signalRepository) GetCustomerConversations(customerAccountID string) ([]models.ConversationListItem, error) {
+	var conversations []models.SignalConversation
+	err := r.db.
+		Preload("Business").
+		Preload("Merchant").
+		Joins("JOIN signals ON signals.signal_id = signal_conversations.signal_id").
+		Where("signals.customer_id = ?", customerAccountID).
+		Order("signal_conversations.created_at DESC").
+		Find(&conversations).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var items []models.ConversationListItem
+	for _, conv := range conversations {
+		signal, errSig := r.GetSignalByID(conv.SignalID)
+		sigDesc := ""
+		sigCat := ""
+		sigStatus := ""
+		isUrgent := false
+
+		if errSig == nil && signal != nil {
+			sigDesc = signal.Description
+			sigCat = signal.Category
+			sigStatus = signal.Status
+			isUrgent = signal.IsUrgent
+		}
+
+		peerID := conv.MerchantID
+		peerName := "Merchant"
+		var peerAvatar *string
+
+		if conv.Merchant != nil {
+			peerName = strings.TrimSpace(conv.Merchant.FirstName + " " + conv.Merchant.LastName)
+			if peerName == "" {
+				peerName = "Merchant"
+			}
+			peerAvatar = conv.Merchant.ProfilePictureUrl
+		}
+
+		bName := ""
+		var bLogo *string
+		if conv.Business != nil {
+			if conv.Business.BusinessName != nil {
+				bName = *conv.Business.BusinessName
+			}
+			bLogo = conv.Business.LogoURL
+			if bLogo != nil && *bLogo != "" {
+				peerAvatar = bLogo
+			}
+		}
+
+		// Ambil pesan terakhir
+		var lastMsg models.SignalMessage
+		var lastMsgText *string
+		var lastMsgSender string
+		var lastMsgAt time.Time = conv.CreatedAt
+
+		if err := r.db.Where("conversation_id = ?", conv.ConversationID).
+			Order("created_at DESC").First(&lastMsg).Error; err == nil {
+			lastMsgText = &lastMsg.MessageText
+			lastMsgSender = lastMsg.SenderType
+			lastMsgAt = lastMsg.CreatedAt
+		}
+
+		// Hitung unread messages (pesan dari merchant yang belum dibaca customer)
+		var unreadCount int64
+		r.db.Model(&models.SignalMessage{}).
+			Where("conversation_id = ? AND sender_type = 'merchant' AND is_read = false", conv.ConversationID).
+			Count(&unreadCount)
+
+		item := models.ConversationListItem{
+			ConversationID:    conv.ConversationID,
+			SignalID:          conv.SignalID,
+			SignalDescription: sigDesc,
+			SignalCategory:    sigCat,
+			SignalStatus:      sigStatus,
+			IsUrgent:          isUrgent,
+			PeerID:            peerID,
+			PeerName:          peerName,
+			PeerAvatar:        peerAvatar,
+			BusinessID:        conv.BusinessID,
+			BusinessName:      bName,
+			BusinessLogo:      bLogo,
+			LastMessage:       lastMsgText,
+			LastMessageSender: lastMsgSender,
+			LastMessageAt:     lastMsgAt,
+			UnreadCount:       unreadCount,
+			Status:            conv.Status,
+			CreatedAt:         conv.CreatedAt,
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
 }
 
 // ================================================================

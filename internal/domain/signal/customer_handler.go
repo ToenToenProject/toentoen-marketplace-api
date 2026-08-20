@@ -59,6 +59,22 @@ func (h *CustomerHandler) GetMySignals(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar signal", signals)
 }
 
+// GetMyConversations mengambil semua roomchat percakapan milik customer
+// GET /api/v1/customer/conversations
+func (h *CustomerHandler) GetMyConversations(c *fiber.Ctx) error {
+	accID, _, err := getSession(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	conversations, errSvc := h.service.GetCustomerConversations(accID)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar percakapan", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar percakapan", conversations)
+}
+
 // GetSignalDetail mengambil detail signal beserta daftar merchant yang merespons
 // GET /api/v1/customer/signals/:signal_id
 func (h *CustomerHandler) GetSignalDetail(c *fiber.Ctx) error {

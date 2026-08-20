@@ -12,6 +12,7 @@ type NotificationRepository interface {
 	GetUnreadNotificationByRef(recipientID, notifType, refID string) (*models.UserNotification, error)
 	UpdateNotification(notif *models.UserNotification) error
 	GetMyNotifications(accountID string, page, limit int) ([]models.UserNotification, int64, error)
+	GetUnreadCount(accountID string) (int64, error)
 	MarkAsRead(accountID, notifID string) error
 	MarkAllAsRead(accountID string) error
 	GetFCMTokensByAccountID(accountID string) ([]string, error)
@@ -61,6 +62,14 @@ func (r *notificationRepository) GetMyNotifications(accountID string, page, limi
 	err := query.Order("updated_at DESC").Offset(offset).Limit(limit).Find(&notifications).Error
 
 	return notifications, total, err
+}
+
+func (r *notificationRepository) GetUnreadCount(accountID string) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.UserNotification{}).
+		Where("recipient_account_id = ? AND is_read = false", accountID).
+		Count(&count).Error
+	return count, err
 }
 
 func (r *notificationRepository) MarkAsRead(accountID, notifID string) error {

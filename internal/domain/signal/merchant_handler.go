@@ -43,10 +43,10 @@ func (h *MerchantHandler) ExploreSignals(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil feed sinyal aktif", signals)
 }
 
-// GetSignalDetail mengambil detail signal yang dipilih merchant
+// GetSignalDetail mengambil detail signal yang dipilih merchant (beserta status roomchat merchant)
 // GET /api/v1/merchant/signals/:signal_id
 func (h *MerchantHandler) GetSignalDetail(c *fiber.Ctx) error {
-	_, _, err := getSession(c)
+	accID, _, err := getSession(c)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
@@ -56,12 +56,28 @@ func (h *MerchantHandler) GetSignalDetail(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Signal ID wajib diisi", nil)
 	}
 
-	signal, errSvc := h.service.GetMerchantSignalDetail(signalID)
+	signal, errSvc := h.service.GetMerchantSignalDetail(signalID, accID)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil detail signal", signal)
+}
+
+// GetMyConversations mengambil semua roomchat percakapan milik merchant
+// GET /api/v1/merchant/conversations
+func (h *MerchantHandler) GetMyConversations(c *fiber.Ctx) error {
+	accID, _, err := getSession(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	conversations, errSvc := h.service.GetMerchantConversations(accID)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar percakapan", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar percakapan", conversations)
 }
 
 // ReplyToSignal memulai conversation baru dari merchant

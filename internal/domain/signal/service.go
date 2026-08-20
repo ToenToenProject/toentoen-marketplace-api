@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/merchant/business"
@@ -18,11 +19,13 @@ type SignalService interface {
 	GetMySignals(customerID string) ([]models.Signal, error)
 	GetSignalDetail(signalID, accountID, role string) (*models.Signal, error)
 	CompleteSignal(customerID, signalID string) error
+	GetCustomerConversations(customerID string) ([]models.ConversationListItem, error)
 
 	// Merchant
 	ExploreSignals(accountID, businessID string, lat, lng float64) ([]models.SignalExploreItem, error)
-	GetMerchantSignalDetail(signalID string) (*models.Signal, error)
+	GetMerchantSignalDetail(signalID, merchantAccountID string) (*models.MerchantSignalDetailResponse, error)
 	ReplyToSignal(accountID, role, signalID string, input models.InitiateConversationInput) (*models.SignalConversation, error)
+	GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error)
 
 	// Shared (Customer & Merchant)
 	GetMessages(accountID, conversationID string, page, limit int) ([]models.SignalMessage, int64, error)
@@ -48,10 +51,12 @@ func NewSignalService(signalRepo SignalRepository, businessRepo business.Busines
 // ================================================================
 
 func (s *signalService) CreateSignal(customerID string, input models.CreateSignalInput) (*models.Signal, error) {
-	if input.Description == "" {
+	desc := strings.TrimSpace(input.Description)
+	if desc == "" {
 		return nil, errors.New("deskripsi kebutuhan wajib diisi")
 	}
-	if input.Category == "" {
+	cat := strings.TrimSpace(input.Category)
+	if cat == "" {
 		return nil, errors.New("kategori wajib diisi")
 	}
 	if input.Latitude == 0 || input.Longitude == 0 {
@@ -73,8 +78,8 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 	signal := models.Signal{
 		SignalID:    utils.GenerateUUID("SIG"),
 		CustomerID:  customerID,
-		Description: input.Description,
-		Category:    input.Category,
+		Description: desc,
+		Category:    cat,
 		Latitude:    input.Latitude,
 		Longitude:   input.Longitude,
 		RadiusKm:    radiusKm,
@@ -85,7 +90,7 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 
 	// 1. Simpan signal ke database
 	if err := s.signalRepo.CreateSignal(&signal); err != nil {
-		return nil, errors.New("gagal membuat signal")
+		return nil, fmt.Errorf("gagal membuat signal: %w", err)
 	}
 
 	// 2. Update kolom PostGIS location via raw SQL
@@ -93,20 +98,33 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		fmt.Printf("Warning: gagal update lokasi PostGIS untuk signal %s: %v\n", signal.SignalID, err)
 	}
 
-	// 3. Simpan gambar lampiran (jika ada)
-	if len(input.ImageURLs) > 0 {
+	// 3. Simpan gambar lampiran (jika ada, dukung image_urls, media_urls, atau images)
+	imgList := input.ImageURLs
+	if len(imgList) == 0 && len(input.MediaUrls) > 0 {
+		imgList = input.MediaUrls
+	}
+	if len(imgList) == 0 && len(input.Images) > 0 {
+		imgList = input.Images
+	}
+
+	if len(imgList) > 0 {
 		var images []models.SignalImage
-		for _, url := range input.ImageURLs {
-			images = append(images, models.SignalImage{
-				ImageID:  utils.GenerateUUID("IMG"),
-				SignalID: signal.SignalID,
-				ImageURL: url,
-			})
+		for _, url := range imgList {
+			cleanURL := strings.TrimSpace(url)
+			if cleanURL != "" {
+				images = append(images, models.SignalImage{
+					ImageID:  utils.GenerateUUID("IMG"),
+					SignalID: signal.SignalID,
+					ImageURL: cleanURL,
+				})
+			}
 		}
-		if err := s.signalRepo.CreateSignalImages(images); err != nil {
-			fmt.Printf("Warning: gagal menyimpan gambar signal: %v\n", err)
+		if len(images) > 0 {
+			if err := s.signalRepo.CreateSignalImages(images); err != nil {
+				fmt.Printf("Warning: gagal menyimpan gambar signal: %v\n", err)
+			}
+			signal.Images = images
 		}
-		signal.Images = images
 	}
 
 	return &signal, nil
@@ -114,6 +132,10 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 
 func (s *signalService) GetMySignals(customerID string) ([]models.Signal, error) {
 	return s.signalRepo.GetMySignals(customerID)
+}
+
+func (s *signalService) GetCustomerConversations(customerID string) ([]models.ConversationListItem, error) {
+	return s.signalRepo.GetCustomerConversations(customerID)
 }
 
 func (s *signalService) GetSignalDetail(signalID, accountID, role string) (*models.Signal, error) {
@@ -236,12 +258,35 @@ func (s *signalService) ExploreSignals(accountID, businessID string, lat, lng fl
 	return s.signalRepo.ExploreActiveSignals(lat, lng, categories)
 }
 
-func (s *signalService) GetMerchantSignalDetail(signalID string) (*models.Signal, error) {
+func (s *signalService) GetMerchantSignalDetail(signalID, merchantAccountID string) (*models.MerchantSignalDetailResponse, error) {
 	signal, err := s.signalRepo.GetSignalByID(signalID)
 	if err != nil {
 		return nil, fmt.Errorf("signal dengan ID %s tidak ditemukan", signalID)
 	}
-	return signal, nil
+
+	var myConv *models.SignalConversation
+	var myConvID *string
+	hasReplied := false
+
+	if merchantAccountID != "" {
+		existing, errConv := s.signalRepo.FindExistingConversation(signalID, merchantAccountID)
+		if errConv == nil && existing != nil {
+			hasReplied = true
+			myConv = existing
+			myConvID = &existing.ConversationID
+		}
+	}
+
+	return &models.MerchantSignalDetailResponse{
+		Signal:           signal,
+		HasReplied:       hasReplied,
+		MyConversationID: myConvID,
+		MyConversation:   myConv,
+	}, nil
+}
+
+func (s *signalService) GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error) {
+	return s.signalRepo.GetMerchantConversations(merchantAccountID)
 }
 
 func (s *signalService) ReplyToSignal(accountID, role, signalID string, input models.InitiateConversationInput) (*models.SignalConversation, error) {

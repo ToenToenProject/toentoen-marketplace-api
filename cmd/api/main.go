@@ -292,6 +292,8 @@ func main() {
 	// Notifications
 	notifGroup := protected.Group("/notifications")
 	notifGroup.Get("/", notifHandler.GetMyNotifications)
+	notifGroup.Get("/unread-count", notifHandler.GetUnreadCount)
+	notifGroup.Put("/read-all", notifHandler.MarkAllAsRead)
 	notifGroup.Put("/:id/read", notifHandler.MarkAsRead)
 
 	// Khusus untuk pengujian / backdoor menghapus berdasarkan identifier:
@@ -310,13 +312,14 @@ func main() {
 	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - CUSTOMER
 	// ==========================================
-	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth, middlewares.AllowRoles("customer"))
+	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth)
 	customerSignalGroup.Post("/", customerSignalHandler.CreateSignal)
 	customerSignalGroup.Get("/me", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
 	customerSignalGroup.Put("/:signal_id/complete", customerSignalHandler.CompleteSignal)
 
-	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth, middlewares.AllowRoles("customer"))
+	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth)
+	customerConvGroup.Get("/", customerSignalHandler.GetMyConversations)
 	customerConvGroup.Get("/:conversation_id/messages", customerSignalHandler.GetMessages)
 	customerConvGroup.Post("/:conversation_id/messages", customerSignalHandler.SendMessage)
 
@@ -452,12 +455,13 @@ func main() {
 	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - MERCHANT
 	// ==========================================
-	merchantSignalGroup := api.Group("/merchant/signals", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	merchantSignalGroup := api.Group("/merchant/signals", middlewares.RequireAuth, sharedAccess)
 	merchantSignalGroup.Get("/explore", merchantSignalHandler.ExploreSignals)
 	merchantSignalGroup.Get("/:signal_id", merchantSignalHandler.GetSignalDetail)
 	merchantSignalGroup.Post("/:signal_id/reply", merchantSignalHandler.ReplyToSignal)
 
-	merchantConvGroup := api.Group("/merchant/conversations", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	merchantConvGroup := api.Group("/merchant/conversations", middlewares.RequireAuth, sharedAccess)
+	merchantConvGroup.Get("/", merchantSignalHandler.GetMyConversations)
 	merchantConvGroup.Get("/:conversation_id/messages", merchantSignalHandler.GetMessages)
 	merchantConvGroup.Post("/:conversation_id/messages", merchantSignalHandler.SendMessage)
 

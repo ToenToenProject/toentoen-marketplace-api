@@ -40,12 +40,13 @@ type DemandResponse struct {
 // --- LEGACY V1 INPUT STRUCTS (masih dipakai oleh package demand lama) ---
 
 type CreateSignalInput struct {
-	Category    string   `json:"category"`
-	Description string   `json:"description"`
-	MediaUrls   []string `json:"media_urls"`
-	ImageURLs   []string `json:"image_urls"`
-	Latitude    float64  `json:"latitude"`
-	Longitude   float64  `json:"longitude"`
+	Category       string   `json:"category"`
+	Description    string   `json:"description"`
+	MediaUrls      []string `json:"media_urls"`
+	ImageURLs      []string `json:"image_urls"`
+	Images         []string `json:"images"`
+	Latitude       float64  `json:"latitude"`
+	Longitude      float64  `json:"longitude"`
 	RadiusKm       int      `json:"radius_km"`
 	IsUrgent       bool     `json:"is_urgent"`
 	ExpiresInHours int      `json:"expires_in_hours"`
@@ -129,7 +130,7 @@ type SignalMessage struct {
 func (SignalMessage) TableName() string { return "signal_messages" }
 
 // ================================================================
-// INPUT STRUCTS (V2) — CreateSignalInput sudah didefinisikan di atas (V1 struct)
+// INPUT STRUCTS (V2)
 // ================================================================
 
 type InitiateConversationInput struct {
@@ -161,17 +162,52 @@ type SignalListItem struct {
 
 // SignalExploreItem untuk merchant explore (dengan jarak)
 type SignalExploreItem struct {
-	SignalID    string    `json:"signal_id"`
-	CustomerID  string    `json:"customer_id"`
-	Description string    `json:"description"`
-	Category    string    `json:"category"`
-	IsUrgent    bool      `json:"is_urgent"`
-	RadiusKm    int       `json:"radius_km"`
-	DistanceKm  float64   `json:"distance_km"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	SignalID       string    `json:"signal_id"`
+	CustomerID     string    `json:"customer_id"`
+	Description    string    `json:"description"`
+	Category       string    `json:"category"`
+	IsUrgent       bool      `json:"is_urgent"`
+	RadiusKm       int       `json:"radius_km"`
+	DistanceKm     float64   `json:"distance_km"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	CreatedAt      time.Time `json:"created_at"`
+	CustomerName   string    `json:"customer_name"`
+	CustomerAvatar *string   `json:"customer_avatar"`
+	Images         []string  `json:"images"`
+}
 
-	CustomerName      string   `json:"customer_name"`
-	CustomerAvatar    *string  `json:"customer_avatar"`
-	Images            []string `json:"images"`
+// ConversationListItem untuk daftar roomchat (Merchant / Customer)
+type ConversationListItem struct {
+	ConversationID    string    `json:"conversation_id"`
+	SignalID          string    `json:"signal_id"`
+	SignalDescription string    `json:"signal_description"`
+	SignalCategory    string    `json:"signal_category"`
+	SignalStatus      string    `json:"signal_status"`
+	IsUrgent          bool      `json:"is_urgent"`
+	
+	// Lawan bicara
+	PeerID            string    `json:"peer_id"`
+	PeerName          string    `json:"peer_name"`
+	PeerAvatar        *string   `json:"peer_avatar"`
+	
+	// Bisnis (Toko)
+	BusinessID        string    `json:"business_id"`
+	BusinessName      string    `json:"business_name"`
+	BusinessLogo      *string   `json:"business_logo"`
+	
+	// Pesan terakhir & status
+	LastMessage       *string   `json:"last_message"`
+	LastMessageSender string    `json:"last_message_sender"` // "customer" | "merchant"
+	LastMessageAt     time.Time `json:"last_message_at"`
+	UnreadCount       int64     `json:"unread_count"`
+	Status            string    `json:"status"` // "open" | "locked"
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+// MerchantSignalDetailResponse menyertakan status balasan merchant yang sedang login
+type MerchantSignalDetailResponse struct {
+	Signal           *Signal             `json:"signal"`
+	HasReplied       bool                `json:"has_replied"`
+	MyConversationID *string             `json:"my_conversation_id"`
+	MyConversation   *SignalConversation `json:"my_conversation"`
 }
