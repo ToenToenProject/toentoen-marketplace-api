@@ -523,13 +523,13 @@ func (r *productInteractionRepository) ToggleUnifiedReviewLike(reviewID, account
 	var bReview models.Review
 	if err := r.db.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", reviewID).First(&bReview).Error; err == nil {
 		var count int64
-		r.db.Table("review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", bReview.ReviewID, accountID).Count(&count)
+		r.db.Table("business_review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", bReview.ReviewID, accountID).Count(&count)
 		if count > 0 {
-			_ = r.db.Exec("DELETE FROM review_likes WHERE TRIM(LOWER(review_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", bReview.ReviewID, accountID).Error
+			_ = r.db.Exec("DELETE FROM business_review_likes WHERE TRIM(LOWER(review_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", bReview.ReviewID, accountID).Error
 			_ = r.db.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", bReview.ReviewID).UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error
 			return false, "business_review", nil
 		}
-		_ = r.db.Exec("INSERT INTO review_likes (review_id, account_id, created_at) VALUES (?, ?, NOW())", bReview.ReviewID, accountID).Error
+		_ = r.db.Exec("INSERT INTO business_review_likes (review_id, account_id, created_at) VALUES (?, ?, NOW())", bReview.ReviewID, accountID).Error
 		_ = r.db.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", bReview.ReviewID).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
 		return true, "business_review", nil
 	}

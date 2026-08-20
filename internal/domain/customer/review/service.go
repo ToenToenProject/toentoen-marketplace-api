@@ -52,6 +52,9 @@ func getOwnerInteractionLabel(isOwnerLiked, isOwnerReplied, isByOwner bool) stri
 	if isOwnerLiked {
 		return "Disukai Pemilik"
 	}
+	if isOwnerReplied {
+		return "Dibalas Pemilik"
+	}
 	if isByOwner {
 		return "Pemilik Toko"
 	}
@@ -444,7 +447,7 @@ func (s *reviewService) GetReviewDetail(reviewID, currentAccountID string) (*mod
 		ReviewImages:          review.ReviewImages,
 		ReviewVideo:           review.ReviewVideo,
 		LikeCount:             review.LikeCount,
-		CommentCount:          review.CommentCount,
+		CommentCount:          len(commentResponses),
 		IsLikedByMe:           isLikedByMe,
 		IsOwnerLiked:          isOwnerLiked,
 		IsOwnerReplied:        isOwnerReplied,

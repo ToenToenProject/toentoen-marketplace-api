@@ -9,6 +9,8 @@ import (
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
+
+	"gorm.io/gorm"
 )
 
 type ProductInteractionService interface {
@@ -553,6 +555,8 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 			return errors.New("gagal mengirimkan balasan")
 		}
 
+		_ = database.DB.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", reviewID).UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+
 		if s.notifService != nil {
 			go func() {
 				recipientID := bReview.AccountID
@@ -946,7 +950,11 @@ func (s *productInteractionService) DeleteUnifiedComment(commentID, requesterID 
 		if bComment.AccountID != requesterID && !isStaff {
 			return errors.New("tidak memiliki izin untuk menghapus balasan ini")
 		}
-		return database.DB.Delete(&bComment).Error
+		if err := database.DB.Delete(&bComment).Error; err != nil {
+			return err
+		}
+		_ = database.DB.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", bComment.ReviewID).UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
+		return nil
 	}
 
 	// 4. Cek di business_post_comments
