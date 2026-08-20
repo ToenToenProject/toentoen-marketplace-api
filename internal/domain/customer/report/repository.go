@@ -144,8 +144,13 @@ func (r *repository) UpdateReportStatus(reportID, status string) error {
 
 func (r *repository) UpdateReportResolution(reportID, status, adminNote, resolvedBy string) error {
 	updates := map[string]interface{}{
-		"status":      strings.ToLower(strings.TrimSpace(status)),
-		"resolved_at": gorm.Expr("NOW()"),
+		"status": strings.ToLower(strings.TrimSpace(status)),
+	}
+
+	// resolved_at hanya diset untuk status terminal (resolved, rejected, dismissed)
+	terminalStatuses := map[string]bool{"resolved": true, "rejected": true, "dismissed": true}
+	if terminalStatuses[strings.ToLower(strings.TrimSpace(status))] {
+		updates["resolved_at"] = gorm.Expr("NOW()")
 	}
 	if strings.TrimSpace(adminNote) != "" {
 		updates["admin_note"] = strings.TrimSpace(adminNote)

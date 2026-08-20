@@ -69,6 +69,9 @@ func getOwnerInteractionLabel(isOwnerLiked, isOwnerReplied, isByOwner bool) stri
 	if isOwnerLiked {
 		return "Disukai Pemilik"
 	}
+	if isOwnerReplied {
+		return "Dibalas Pemilik"
+	}
 	if isByOwner {
 		return "Pemilik Toko"
 	}
@@ -1339,7 +1342,11 @@ func (s *productInteractionService) DeleteUnifiedComment(commentID, requesterID 
 		if bpComment.AccountID != requesterID && !isStaff {
 			return errors.New("tidak memiliki izin untuk menghapus komentar ini")
 		}
-		return database.DB.Delete(&bpComment).Error
+		if err := database.DB.Delete(&bpComment).Error; err != nil {
+			return err
+		}
+		_ = database.DB.Model(&models.BusinessPost{}).Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", bpComment.PostID).UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
+		return nil
 	}
 
 	return errors.New("komentar tidak ditemukan")
