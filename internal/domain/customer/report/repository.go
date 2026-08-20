@@ -163,21 +163,34 @@ func (r *repository) TakedownTargetContent(targetType, targetID string) error {
 	targetID = strings.TrimSpace(targetID)
 	targetType = strings.ToLower(strings.TrimSpace(targetType))
 
-	switch targetType {
-	case "comment":
-		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductComment{})
-		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReviewComment{})
-		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessReviewComment{})
-		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPostComment{})
-	case "review":
-		_ = r.db.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReview{})
-		_ = r.db.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Review{})
-	case "post":
-		_ = r.db.Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPost{})
-	case "product":
-		_ = r.db.Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Product{})
-	}
-	return nil
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		switch targetType {
+		case "comment":
+			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductComment{})
+			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReviewComment{})
+			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessReviewComment{})
+			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPostComment{})
+		case "review":
+			// Bersihkan relasi ulasan toko
+			_ = tx.Table("business_review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("business_review_comments").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Review{})
+
+			// Bersihkan relasi ulasan produk
+			_ = tx.Table("product_review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("product_review_comments").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReview{})
+		case "post":
+			_ = tx.Table("business_post_likes").Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("business_post_comments").Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPost{})
+		case "product":
+			_ = tx.Table("product_likes").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("product_comments").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Product{})
+		}
+		return nil
+	})
 }
 
 func (r *repository) CheckBusinessExists(businessID string) (bool, error) {
