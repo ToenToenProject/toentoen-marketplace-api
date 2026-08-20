@@ -22,16 +22,20 @@ type CreatePostReportInput = CreateReportInput
 // ==========================================
 
 type Report struct {
-	ReportID    string    `gorm:"primaryKey;column:report_id" json:"report_id"`
-	AccountID   string    `gorm:"column:account_id;index" json:"account_id"`
-	TargetType  string    `gorm:"column:target_type;index" json:"target_type"` // "business" | "product" | "review" | "comment" | "post"
-	TargetID    string    `gorm:"column:target_id;index" json:"target_id"`     // BUS-..., PRD-..., REV-..., CMT-..., PST-...
-	Reason      string    `gorm:"column:reason" json:"reason"`
-	Description *string   `gorm:"column:description" json:"description"`
-	Evidence    []string  `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
-	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
-	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+	ReportID    string     `gorm:"primaryKey;column:report_id" json:"report_id"`
+	AccountID   string     `gorm:"column:account_id;index" json:"account_id"`
+	TargetType  string     `gorm:"column:target_type;index" json:"target_type"` // "business" | "product" | "review" | "comment" | "post"
+	TargetID    string     `gorm:"column:target_id;index" json:"target_id"`     // BUS-..., PRD-..., REV-..., CMT-..., PST-...
+	Reason      string     `gorm:"column:reason" json:"reason"`
+	Description *string    `gorm:"column:description" json:"description"`
+	Evidence    []string   `gorm:"column:evidence;serializer:json;default:'[]'" json:"evidence"`
+	Status      string     `gorm:"column:status;default:'pending'" json:"status"`
+	Priority    string     `gorm:"column:priority;default:'medium'" json:"priority"` // "high" | "medium" | "low"
+	AdminNote   *string    `gorm:"column:admin_note" json:"admin_note"`
+	ResolvedAt  *time.Time `gorm:"column:resolved_at" json:"resolved_at"`
+	ResolvedBy  *string    `gorm:"column:resolved_by" json:"resolved_by"`
+	CreatedAt   time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time  `gorm:"column:updated_at" json:"updated_at"`
 
 	Account *Account `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 }
@@ -41,26 +45,33 @@ func (Report) TableName() string {
 }
 
 type ReportResponse struct {
-	ReportID      string    `json:"report_id"`
-	AccountID     string    `json:"account_id"`
-	ReporterName  string    `json:"reporter_name"`
-	ReporterAvatar *string  `json:"reporter_avatar,omitempty"`
-	TargetType    string    `json:"target_type"`
-	TargetID      string    `json:"target_id"`
-	Reason        string    `json:"reason"`
-	Description   *string   `json:"description"`
-	Evidence      []string  `json:"evidence"`
-	Status        string    `json:"status"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ReportID       string     `json:"report_id"`
+	AccountID      string     `json:"account_id"`
+	ReporterName   string     `json:"reporter_name"`
+	ReporterAvatar *string    `json:"reporter_avatar,omitempty"`
+	TargetType     string     `json:"target_type"`
+	TargetID       string     `json:"target_id"`
+	Reason         string     `json:"reason"`
+	Description    *string    `json:"description"`
+	Evidence       []string   `json:"evidence"`
+	Status         string     `json:"status"`
+	Priority       string     `json:"priority"`
+	AdminNote      *string    `json:"admin_note,omitempty"`
+	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
+	ResolvedBy     *string    `json:"resolved_by,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 type UpdateReportStatusInput struct {
-	Status string `json:"status" validate:"required,oneof=pending in_review resolved rejected dismissed"`
+	Status    string  `json:"status" validate:"required,oneof=pending in_review resolved rejected dismissed"`
+	AdminNote *string `json:"admin_note,omitempty"`
+	Action    *string `json:"action,omitempty"` // "delete_target" | "none"
 }
 
 type ReportFilterQuery struct {
 	Status     string `query:"status"`
+	Priority   string `query:"priority"`
 	TargetType string `query:"target_type"`
 	TargetID   string `query:"target_id"`
 	Page       int    `query:"page"`

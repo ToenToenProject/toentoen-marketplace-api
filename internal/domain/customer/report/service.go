@@ -2,8 +2,10 @@ package report
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
+	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 )
@@ -22,16 +24,18 @@ type Service interface {
 	GetUserReports(accountID string, page, limit int) ([]models.ReportResponse, int64, error)
 	GetReportDetail(reportID string) (*models.ReportResponse, error)
 	DeleteReport(reportID, requesterAccountID, role string) error
-	UpdateReportStatus(reportID, status string) error
+	UpdateReportStatus(reportID string, input models.UpdateReportStatusInput, resolvedBy string) error
 }
 
 type service struct {
-	repo Repository
+	repo         Repository
+	notifService notification.NotificationService
 }
 
-func NewService(r Repository) Service {
+func NewService(r Repository, notifService notification.NotificationService) Service {
 	return &service{
-		repo: r,
+		repo:         r,
+		notifService: notifService,
 	}
 }
 
@@ -73,6 +77,27 @@ func (s *service) SubmitReport(accountID, businessID string, req SubmitReportReq
 	return s.repo.CreateReport(&report)
 }
 
+func normalizeReasonAndPriority(rawReason string) (string, string) {
+	clean := strings.TrimSpace(rawReason)
+	lower := strings.ToLower(clean)
+
+	switch {
+	case strings.Contains(lower, "fake") || strings.Contains(lower, "fraud"):
+		return "Fake or fraudulent post", "high"
+	case strings.Contains(lower, "inaccurate") || strings.Contains(lower, "innacurate"):
+		return "Inaccurate posts information", "medium"
+	case strings.Contains(lower, "policy") || strings.Contains(lower, "violation"):
+		return "Policy violation", "high"
+	case strings.Contains(lower, "spam") || strings.Contains(lower, "misleading"):
+		return "Spam or misleading information", "medium"
+	case strings.Contains(lower, "other") || lower == "lainnya":
+		return "Other", "low"
+	default:
+		// Jika format custom lainnya
+		return clean, "medium"
+	}
+}
+
 func (s *service) CreateUniversalReport(accountID string, input models.CreateReportInput) error {
 	accountID = strings.TrimSpace(accountID)
 	targetID := strings.TrimSpace(input.TargetID)
@@ -99,7 +124,7 @@ func (s *service) CreateUniversalReport(accountID string, input models.CreateRep
 		}
 	}
 
-	// 1. Cek apakah user sudah pernah melaporkan target ini sebelumnya
+	// 1. Cek apakah user sudah pernah melaporkan target ini sebelumnya (1 Akun 1 Report)
 	hasReported, errReported := s.repo.HasUserReportedTarget(accountID, targetID)
 	if errReported == nil && hasReported {
 		return errors.New("Anda sudah pernah melaporkan konten ini sebelumnya")
@@ -118,6 +143,11 @@ func (s *service) CreateUniversalReport(accountID string, input models.CreateRep
 		return errors.New("alasan pelaporan (reason) wajib diisi")
 	}
 
+	standardReason, priority := normalizeReasonAndPriority(input.Reason)
+	if standardReason == "Other" && (input.Description == nil || strings.TrimSpace(*input.Description) == "") {
+		return errors.New("deskripsi wajib diisi ketika memilih alasan 'Other'")
+	}
+
 	evidenceList := input.Evidence
 	if evidenceList == nil {
 		evidenceList = []string{}
@@ -128,10 +158,11 @@ func (s *service) CreateUniversalReport(accountID string, input models.CreateRep
 		AccountID:   accountID,
 		TargetType:  targetType,
 		TargetID:    targetID,
-		Reason:      input.Reason,
+		Reason:      standardReason,
 		Description: input.Description,
 		Evidence:    evidenceList,
 		Status:      "pending",
+		Priority:    priority,
 	}
 
 	return s.repo.CreateUniversalReport(report)
@@ -153,6 +184,11 @@ func (s *service) toReportResponse(r models.Report) models.ReportResponse {
 		evidences = []string{}
 	}
 
+	priority := r.Priority
+	if priority == "" {
+		priority = "medium"
+	}
+
 	return models.ReportResponse{
 		ReportID:       r.ReportID,
 		AccountID:      r.AccountID,
@@ -164,6 +200,10 @@ func (s *service) toReportResponse(r models.Report) models.ReportResponse {
 		Description:    r.Description,
 		Evidence:       evidences,
 		Status:         r.Status,
+		Priority:       priority,
+		AdminNote:      r.AdminNote,
+		ResolvedAt:     r.ResolvedAt,
+		ResolvedBy:     r.ResolvedBy,
 		CreatedAt:      r.CreatedAt,
 		UpdatedAt:      r.UpdatedAt,
 	}
@@ -221,8 +261,8 @@ func (s *service) DeleteReport(reportID, requesterAccountID, role string) error 
 	return s.repo.DeleteReport(reportID)
 }
 
-func (s *service) UpdateReportStatus(reportID, status string) error {
-	_, err := s.repo.GetReportByID(reportID)
+func (s *service) UpdateReportStatus(reportID string, input models.UpdateReportStatusInput, resolvedBy string) error {
+	report, err := s.repo.GetReportByID(reportID)
 	if err != nil {
 		return errors.New("laporan tidak ditemukan")
 	}
@@ -235,10 +275,66 @@ func (s *service) UpdateReportStatus(reportID, status string) error {
 		"dismissed": true,
 	}
 
-	cleanStatus := strings.ToLower(strings.TrimSpace(status))
+	cleanStatus := strings.ToLower(strings.TrimSpace(input.Status))
 	if !validStatuses[cleanStatus] {
 		return errors.New("status laporan tidak valid (pending, in_review, resolved, rejected, dismissed)")
 	}
 
-	return s.repo.UpdateReportStatus(reportID, cleanStatus)
+	adminNote := ""
+	if input.AdminNote != nil {
+		adminNote = *input.AdminNote
+	}
+
+	if err := s.repo.UpdateReportResolution(reportID, cleanStatus, adminNote, resolvedBy); err != nil {
+		return err
+	}
+
+	// 1. Eksekusi Aksi Takedown Konten jika status Resolved (atau jika action == delete_target)
+	if cleanStatus == "resolved" {
+		shouldDelete := true
+		if input.Action != nil && *input.Action == "none" {
+			shouldDelete = false
+		}
+		if shouldDelete {
+			_ = s.repo.TakedownTargetContent(report.TargetType, report.TargetID)
+		}
+	}
+
+	// 2. Kirim Notifikasi Resolusi ke Pelapor (Resolution Loop)
+	if s.notifService != nil && report.AccountID != "" {
+		go func() {
+			notifData := map[string]interface{}{
+				"report_id":   reportID,
+				"target_type": report.TargetType,
+				"target_id":   report.TargetID,
+				"status":      cleanStatus,
+			}
+
+			if cleanStatus == "resolved" {
+				s.notifService.SendNotification(
+					[]string{report.AccountID},
+					resolvedBy,
+					"report_resolved",
+					reportID,
+					"Laporan Anda Telah Ditindaklanjuti",
+					fmt.Sprintf("Terima kasih atas kontribusi Anda. Konten yang Anda laporkan (%s) telah kami tindaklanjuti dan dihapus sesuai Pedoman Komunitas.", report.TargetID),
+					notifData,
+					nil,
+				)
+			} else if cleanStatus == "rejected" || cleanStatus == "dismissed" {
+				s.notifService.SendNotification(
+					[]string{report.AccountID},
+					resolvedBy,
+					"report_rejected",
+					reportID,
+					"Laporan Anda Selesai Ditinjau",
+					fmt.Sprintf("Kami telah memeriksa konten yang Anda laporkan (%s). Saat ini kami tidak menemukan pelanggaran Pedoman Komunitas.", report.TargetID),
+					notifData,
+					nil,
+				)
+			}
+		}()
+	}
+
+	return nil
 }

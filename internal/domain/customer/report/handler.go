@@ -180,6 +180,8 @@ func (h *Handler) UpdateReportStatus(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Report ID wajib diisi", nil)
 	}
 
+	accountID, _ := c.Locals("account_id").(string)
+
 	var input models.UpdateReportStatusInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
@@ -189,7 +191,7 @@ func (h *Handler) UpdateReportStatus(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.UpdateReportStatus(reportID, input.Status); err != nil {
+	if err := h.service.UpdateReportStatus(reportID, input, accountID); err != nil {
 		if strings.Contains(err.Error(), "tidak ditemukan") {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
 		}

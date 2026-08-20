@@ -12,11 +12,14 @@ type Repository interface {
 	CreateReport(report *models.BusinessReport) error
 	CreateUniversalReport(report *models.Report) error
 	HasUserReportedTarget(accountID, targetID string) (bool, error)
+	CountActiveReportsForTarget(targetID string) (int64, error)
 	GetReportsPaginated(filter models.ReportFilterQuery) ([]models.Report, int64, error)
 	GetUserReports(accountID string, page, limit int) ([]models.Report, int64, error)
 	GetReportByID(reportID string) (*models.Report, error)
 	DeleteReport(reportID string) error
 	UpdateReportStatus(reportID, status string) error
+	UpdateReportResolution(reportID, status, adminNote, resolvedBy string) error
+	TakedownTargetContent(targetType, targetID string) error
 	CheckBusinessExists(businessID string) (bool, error)
 	CheckTargetExists(targetType, targetID string) (bool, error)
 }
@@ -49,6 +52,14 @@ func (r *repository) HasUserReportedTarget(accountID, targetID string) (bool, er
 	return count > 0, err
 }
 
+func (r *repository) CountActiveReportsForTarget(targetID string) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Report{}).
+		Where("TRIM(LOWER(target_id)) = TRIM(LOWER(?)) AND status NOT IN ('rejected', 'dismissed')", strings.TrimSpace(targetID)).
+		Count(&count).Error
+	return count, err
+}
+
 func (r *repository) GetReportsPaginated(filter models.ReportFilterQuery) ([]models.Report, int64, error) {
 	var reports []models.Report
 	var total int64
@@ -57,6 +68,9 @@ func (r *repository) GetReportsPaginated(filter models.ReportFilterQuery) ([]mod
 
 	if filter.Status != "" {
 		query = query.Where("status = ?", strings.ToLower(strings.TrimSpace(filter.Status)))
+	}
+	if filter.Priority != "" {
+		query = query.Where("priority = ?", strings.ToLower(strings.TrimSpace(filter.Priority)))
 	}
 	if filter.TargetType != "" {
 		query = query.Where("target_type = ?", strings.ToLower(strings.TrimSpace(filter.TargetType)))
@@ -126,6 +140,44 @@ func (r *repository) UpdateReportStatus(reportID, status string) error {
 	return r.db.Model(&models.Report{}).
 		Where("TRIM(LOWER(report_id)) = TRIM(LOWER(?))", strings.TrimSpace(reportID)).
 		UpdateColumn("status", strings.ToLower(strings.TrimSpace(status))).Error
+}
+
+func (r *repository) UpdateReportResolution(reportID, status, adminNote, resolvedBy string) error {
+	updates := map[string]interface{}{
+		"status":      strings.ToLower(strings.TrimSpace(status)),
+		"resolved_at": gorm.Expr("NOW()"),
+	}
+	if strings.TrimSpace(adminNote) != "" {
+		updates["admin_note"] = strings.TrimSpace(adminNote)
+	}
+	if strings.TrimSpace(resolvedBy) != "" {
+		updates["resolved_by"] = strings.TrimSpace(resolvedBy)
+	}
+
+	return r.db.Model(&models.Report{}).
+		Where("TRIM(LOWER(report_id)) = TRIM(LOWER(?))", strings.TrimSpace(reportID)).
+		Updates(updates).Error
+}
+
+func (r *repository) TakedownTargetContent(targetType, targetID string) error {
+	targetID = strings.TrimSpace(targetID)
+	targetType = strings.ToLower(strings.TrimSpace(targetType))
+
+	switch targetType {
+	case "comment":
+		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductComment{})
+		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReviewComment{})
+		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessReviewComment{})
+		_ = r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPostComment{})
+	case "review":
+		_ = r.db.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReview{})
+		_ = r.db.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Review{})
+	case "post":
+		_ = r.db.Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPost{})
+	case "product":
+		_ = r.db.Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Product{})
+	}
+	return nil
 }
 
 func (r *repository) CheckBusinessExists(businessID string) (bool, error) {

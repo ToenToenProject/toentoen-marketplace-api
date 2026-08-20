@@ -166,7 +166,7 @@ func main() {
 	businessProfileHandler := business_profile.NewHandler(businessProfileService)
 
 	reportRepo := report.NewRepository()
-	reportService := report.NewService(reportRepo)
+	reportService := report.NewService(reportRepo, notifService)
 	reportHandler := report.NewHandler(reportService)
 
 	productDetailRepo := product.NewProductDetailRepository(database.DB)
