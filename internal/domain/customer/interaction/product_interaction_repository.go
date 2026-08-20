@@ -19,6 +19,9 @@ type ProductInteractionRepository interface {
 	DeleteProductReview(reviewID string) error
 	GetProductReviewByID(reviewID string) (*models.ProductReview, error)
 	GetProductReviewsByProductID(productID string, rating *int) ([]models.ProductReview, error)
+	GetEligibleProductReviewsForSmartDisplay(productID string) ([]models.ProductReview, error)
+	GetProductReviewSummary(productID string) (*models.ReviewSummary, error)
+	GetProductReviewsPaginated(productID string, ratingFilter int, sort string, page, limit int) ([]models.ProductReview, int64, error)
 	HasUserReviewedProduct(productID, accountID string) (bool, error)
 	RecalculateProductRating(productID string) error
 
@@ -187,6 +190,96 @@ func (r *productInteractionRepository) HasUserReviewedProduct(productID, account
 		Where("product_id = ? AND account_id = ?", productID, accountID).
 		Count(&count).Error
 	return count > 0, err
+}
+
+func (r *productInteractionRepository) GetEligibleProductReviewsForSmartDisplay(productID string) ([]models.ProductReview, error) {
+	var reviews []models.ProductReview
+	err := r.db.Preload("Account").Preload("Comments", func(db *gorm.DB) *gorm.DB {
+		return db.Preload("Account").Order("created_at ASC")
+	}).Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID)).
+		Order("created_at DESC").
+		Find(&reviews).Error
+	return reviews, err
+}
+
+func (r *productInteractionRepository) GetProductReviewSummary(productID string) (*models.ReviewSummary, error) {
+	var summary models.ReviewSummary
+	var total float64
+
+	type Result struct {
+		Rating int
+		Count  int64
+	}
+	var results []Result
+
+	err := r.db.Model(&models.ProductReview{}).
+		Select("FLOOR(rating)::int as rating, count(*) as count").
+		Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID)).
+		Group("FLOOR(rating)").
+		Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, res := range results {
+		summary.TotalReviews += res.Count
+		total += float64(res.Rating) * float64(res.Count)
+
+		switch res.Rating {
+		case 5:
+			summary.Distribution.Star5 += res.Count
+		case 4:
+			summary.Distribution.Star4 += res.Count
+		case 3:
+			summary.Distribution.Star3 += res.Count
+		case 2:
+			summary.Distribution.Star2 += res.Count
+		case 1:
+			summary.Distribution.Star1 += res.Count
+		}
+	}
+
+	if summary.TotalReviews > 0 {
+		summary.AverageRating = total / float64(summary.TotalReviews)
+		summary.AverageRating = float64(int(summary.AverageRating*10)) / 10
+	}
+
+	return &summary, nil
+}
+
+func (r *productInteractionRepository) GetProductReviewsPaginated(productID string, ratingFilter int, sort string, page, limit int) ([]models.ProductReview, int64, error) {
+	var reviews []models.ProductReview
+	var total int64
+
+	query := r.db.Model(&models.ProductReview{}).Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID))
+
+	if ratingFilter >= 1 && ratingFilter <= 5 {
+		query = query.Where("rating >= ? AND rating < ?", float64(ratingFilter), float64(ratingFilter)+1.0)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	switch sort {
+	case "highest":
+		query = query.Order("rating DESC, created_at DESC")
+	case "lowest":
+		query = query.Order("rating ASC, created_at DESC")
+	case "most_liked":
+		query = query.Order("like_count DESC, created_at DESC")
+	case "oldest":
+		query = query.Order("created_at ASC")
+	default: // "newest"
+		query = query.Order("created_at DESC")
+	}
+
+	offset := (page - 1) * limit
+	err := query.Preload("Account").Preload("Comments", func(db *gorm.DB) *gorm.DB {
+		return db.Preload("Account").Order("created_at ASC")
+	}).Offset(offset).Limit(limit).Find(&reviews).Error
+
+	return reviews, total, err
 }
 
 func (r *productInteractionRepository) recalculateProductRatingTx(tx *gorm.DB, productID string) error {

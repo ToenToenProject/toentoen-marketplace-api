@@ -353,6 +353,7 @@ func main() {
 	// 2. Review Produk (Ulasan Berbintang 1-5 + Min 10 Kata)
 	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductReview)
 	publicProductRoutes.Get("/:product_id/reviews", middlewares.OptionalAuth, productInteractionHandler.GetProductReviews)
+	publicProductRoutes.Get("/:product_id/reviews/smart", middlewares.OptionalAuth, productInteractionHandler.GetSmartDisplayProductReviews)
 	publicProductRoutes.Get("/reviews/detail/:review_id", middlewares.OptionalAuth, productInteractionHandler.GetProductReviewDetail)
 	publicProductRoutes.Put("/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.UpdateProductReview)
 	publicProductRoutes.Delete("/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductReview)

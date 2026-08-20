@@ -3,6 +3,7 @@ package interaction
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
@@ -23,6 +24,9 @@ type ProductInteractionService interface {
 	DeleteProductReview(reviewID, requesterID string) error
 	GetProductReviews(productID, currentAccountID string, rating *int) ([]models.ProductReviewResponse, error)
 	GetProductReviewDetail(reviewID, currentAccountID string) (*models.ProductReviewResponse, error)
+	GetSmartDisplayProductReviews(productID, currentAccountID string) ([]models.ProductReviewResponse, error)
+	GetProductReviewSummary(productID string) (*models.ReviewSummary, error)
+	GetAllProductReviewsPaginated(productID, currentAccountID string, page, limit, ratingFilter int, sortStr string) ([]models.ProductReviewResponse, int64, error)
 	ToggleReviewLike(reviewID, accountID string) (bool, error)
 	AddReviewReply(reviewID, accountID string, input models.CreateProductReviewReplyInput) error
 	DeleteReviewReply(commentID, requesterID string) error
@@ -417,6 +421,370 @@ func (s *productInteractionService) GetProductReviewDetail(reviewID, currentAcco
 		CreatedAt:             r.CreatedAt,
 		UpdatedAt:             r.UpdatedAt,
 	}, nil
+}
+
+// Get Smart Display 5 Reviews Produk
+func (s *productInteractionService) GetSmartDisplayProductReviews(productID, currentAccountID string) ([]models.ProductReviewResponse, error) {
+	rawReviews, err := s.repo.GetEligibleProductReviewsForSmartDisplay(productID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter kualitas: Hanya review dengan min. 10 kata
+	var eligible []models.ProductReview
+	for _, r := range rawReviews {
+		if countWords(r.Comment) >= 10 {
+			eligible = append(eligible, r)
+		}
+	}
+
+	if len(eligible) == 0 {
+		return []models.ProductReviewResponse{}, nil
+	}
+
+	var businessID string
+	if len(eligible) > 0 {
+		businessID = eligible[0].BusinessID
+	}
+	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
+	staffMap := make(map[string]bool)
+	for _, sid := range staffIDs {
+		staffMap[sid] = true
+	}
+
+	// Hitung rata-rata rating
+	summary, _ := s.repo.GetProductReviewSummary(productID)
+	avgRating := 5.0
+	if summary != nil && summary.TotalReviews > 0 {
+		avgRating = summary.AverageRating
+	}
+
+	// Helper score calculator
+	type ScoredReview struct {
+		Review         models.ProductReview
+		Score          float64
+		IsOwnerLiked   bool
+		IsOwnerReplied bool
+	}
+
+	var highList, midList, lowList []ScoredReview
+
+	for _, r := range eligible {
+		likes, _ := s.repo.GetReviewLikes(r.ReviewID)
+		isOwnerLiked := false
+		for _, l := range likes {
+			if staffMap[l.AccountID] {
+				isOwnerLiked = true
+				break
+			}
+		}
+
+		isOwnerReplied := false
+		for _, c := range r.Comments {
+			if staffMap[c.AccountID] {
+				isOwnerReplied = true
+				break
+			}
+		}
+
+		ownerLikeBonus := 0.0
+		if isOwnerLiked {
+			ownerLikeBonus = 10.0
+		}
+		ownerReplyBonus := 0.0
+		if isOwnerReplied {
+			ownerReplyBonus = 15.0
+		}
+
+		wordBonus := float64(countWords(r.Comment)) / 10.0
+		score := float64(r.LikeCount*2) + float64(len(r.Comments)*3) + ownerLikeBonus + ownerReplyBonus + wordBonus
+
+		sr := ScoredReview{
+			Review:         r,
+			Score:          score,
+			IsOwnerLiked:   isOwnerLiked,
+			IsOwnerReplied: isOwnerReplied,
+		}
+
+		if r.Rating >= 4 {
+			highList = append(highList, sr)
+		} else if r.Rating == 3 {
+			midList = append(midList, sr)
+		} else {
+			lowList = append(lowList, sr)
+		}
+	}
+
+	sortScored := func(list []ScoredReview) {
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].Score > list[j].Score
+		})
+	}
+	sortScored(highList)
+	sortScored(midList)
+	sortScored(lowList)
+
+	// Target kuota 5 review berdasarkan rata-rata rating
+	var targetHigh, targetMid, targetLow int
+	if avgRating >= 4.0 {
+		targetHigh, targetMid, targetLow = 3, 1, 1
+	} else if avgRating >= 3.0 {
+		targetHigh, targetMid, targetLow = 2, 2, 1
+	} else {
+		targetHigh, targetMid, targetLow = 1, 1, 3
+	}
+
+	var selected []ScoredReview
+	usedMap := make(map[string]bool)
+
+	takeN := func(list []ScoredReview, n int) {
+		count := 0
+		for _, sr := range list {
+			if count >= n {
+				break
+			}
+			if !usedMap[sr.Review.ReviewID] {
+				selected = append(selected, sr)
+				usedMap[sr.Review.ReviewID] = true
+				count++
+			}
+		}
+	}
+
+	takeN(highList, targetHigh)
+	takeN(midList, targetMid)
+	takeN(lowList, targetLow)
+
+	// Jika belum mencapai 5, isi dari sisa daftar apa saja berdasarkan skor tertinggi
+	if len(selected) < 5 {
+		var allRemaining []ScoredReview
+		for _, l := range [][]ScoredReview{highList, midList, lowList} {
+			for _, sr := range l {
+				if !usedMap[sr.Review.ReviewID] {
+					allRemaining = append(allRemaining, sr)
+				}
+			}
+		}
+		sortScored(allRemaining)
+		for _, sr := range allRemaining {
+			if len(selected) >= 5 {
+				break
+			}
+			selected = append(selected, sr)
+			usedMap[sr.Review.ReviewID] = true
+		}
+	}
+
+	// Map ke Response DTO
+	var responses []models.ProductReviewResponse
+	for _, sr := range selected {
+		r := sr.Review
+		isLikedByMe := false
+		if currentAccountID != "" {
+			likes, _ := s.repo.GetReviewLikes(r.ReviewID)
+			for _, l := range likes {
+				if l.AccountID == currentAccountID {
+					isLikedByMe = true
+					break
+				}
+			}
+		}
+
+		accName := "Pengguna"
+		var accAvatar *string
+		if r.Account != nil {
+			accName = r.Account.FirstName + " " + r.Account.LastName
+			accAvatar = r.Account.ProfilePictureUrl
+		}
+
+		replyResponses := make([]models.ProductReviewCommentResponse, 0, len(r.Comments))
+		for _, c := range r.Comments {
+			cName := "Pengguna"
+			var cAvatar *string
+			if c.Account != nil {
+				cName = c.Account.FirstName + " " + c.Account.LastName
+				cAvatar = c.Account.ProfilePictureUrl
+			}
+			isReplyByOwner := staffMap[c.AccountID]
+			cLikes, _ := s.repo.GetReviewReplyLikes(c.CommentID)
+			cIsLikedByMe := false
+			cIsOwnerLiked := false
+			for _, cl := range cLikes {
+				if currentAccountID != "" && cl.AccountID == currentAccountID {
+					cIsLikedByMe = true
+				}
+				if staffMap[cl.AccountID] {
+					cIsOwnerLiked = true
+				}
+			}
+
+			replyResponses = append(replyResponses, models.ProductReviewCommentResponse{
+				CommentID:             c.CommentID,
+				ReviewID:              c.ReviewID,
+				AccountID:             c.AccountID,
+				AccountName:           cName,
+				AccountAvatar:         cAvatar,
+				Content:               c.Content,
+				LikeCount:             c.LikeCount,
+				IsLikedByMe:           cIsLikedByMe,
+				IsByOwner:             isReplyByOwner,
+				IsOwnerLiked:          cIsOwnerLiked,
+				OwnerInteractionLabel: getOwnerInteractionLabel(cIsOwnerLiked, false, isReplyByOwner),
+				ReplyToReviewID:       c.ReplyToCommentID,
+				ReplyToCommentID:      c.ReplyToCommentID,
+				RepliedToAccountID:    c.RepliedToAccountID,
+				RepliedToAccountName:  c.RepliedToAccountName,
+				CreatedAt:             c.CreatedAt,
+			})
+		}
+
+		resp := models.ProductReviewResponse{
+			ReviewID:              r.ReviewID,
+			ProductID:             r.ProductID,
+			BusinessID:            r.BusinessID,
+			AccountID:             r.AccountID,
+			AccountName:           accName,
+			AccountAvatar:         accAvatar,
+			Rating:                r.Rating,
+			Comment:               r.Comment,
+			ReviewImages:          r.ReviewImages,
+			ReviewVideo:           r.ReviewVideo,
+			LikeCount:             r.LikeCount,
+			CommentCount:          len(r.Comments),
+			IsLikedByMe:           isLikedByMe,
+			IsOwnerLiked:          sr.IsOwnerLiked,
+			IsOwnerReplied:        sr.IsOwnerReplied,
+			OwnerInteractionLabel: getOwnerInteractionLabel(sr.IsOwnerLiked, sr.IsOwnerReplied, staffMap[r.AccountID]),
+			Replies:               replyResponses,
+			CreatedAt:             r.CreatedAt,
+			UpdatedAt:             r.UpdatedAt,
+		}
+		responses = append(responses, resp)
+	}
+
+	return responses, nil
+}
+
+func (s *productInteractionService) GetProductReviewSummary(productID string) (*models.ReviewSummary, error) {
+	return s.repo.GetProductReviewSummary(productID)
+}
+
+func (s *productInteractionService) GetAllProductReviewsPaginated(productID, currentAccountID string, page, limit, ratingFilter int, sortStr string) ([]models.ProductReviewResponse, int64, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
+	reviews, total, err := s.repo.GetProductReviewsPaginated(productID, ratingFilter, sortStr, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var businessID string
+	if len(reviews) > 0 {
+		businessID = reviews[0].BusinessID
+	} else {
+		businessID, _ = s.repo.GetBusinessIDByProductID(productID)
+	}
+	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
+	staffMap := make(map[string]bool)
+	for _, sid := range staffIDs {
+		staffMap[sid] = true
+	}
+
+	var responses []models.ProductReviewResponse
+	for _, r := range reviews {
+		likes, _ := s.repo.GetReviewLikes(r.ReviewID)
+		isLikedByMe := false
+		isOwnerLiked := false
+		for _, l := range likes {
+			if currentAccountID != "" && l.AccountID == currentAccountID {
+				isLikedByMe = true
+			}
+			if staffMap[l.AccountID] {
+				isOwnerLiked = true
+			}
+		}
+
+		isOwnerReplied := false
+		replyResponses := make([]models.ProductReviewCommentResponse, 0, len(r.Comments))
+		for _, c := range r.Comments {
+			cName := "Pengguna"
+			var cAvatar *string
+			if c.Account != nil {
+				cName = c.Account.FirstName + " " + c.Account.LastName
+				cAvatar = c.Account.ProfilePictureUrl
+			}
+			isReplyByOwner := staffMap[c.AccountID]
+			if isReplyByOwner {
+				isOwnerReplied = true
+			}
+			cLikes, _ := s.repo.GetReviewReplyLikes(c.CommentID)
+			cIsLikedByMe := false
+			cIsOwnerLiked := false
+			for _, cl := range cLikes {
+				if currentAccountID != "" && cl.AccountID == currentAccountID {
+					cIsLikedByMe = true
+				}
+				if staffMap[cl.AccountID] {
+					cIsOwnerLiked = true
+				}
+			}
+
+			replyResponses = append(replyResponses, models.ProductReviewCommentResponse{
+				CommentID:             c.CommentID,
+				ReviewID:              c.ReviewID,
+				AccountID:             c.AccountID,
+				AccountName:           cName,
+				AccountAvatar:         cAvatar,
+				Content:               c.Content,
+				LikeCount:             c.LikeCount,
+				IsLikedByMe:           cIsLikedByMe,
+				IsByOwner:             isReplyByOwner,
+				IsOwnerLiked:          cIsOwnerLiked,
+				OwnerInteractionLabel: getOwnerInteractionLabel(cIsOwnerLiked, false, isReplyByOwner),
+				ReplyToReviewID:       c.ReplyToCommentID,
+				ReplyToCommentID:      c.ReplyToCommentID,
+				RepliedToAccountID:    c.RepliedToAccountID,
+				RepliedToAccountName:  c.RepliedToAccountName,
+				CreatedAt:             c.CreatedAt,
+			})
+		}
+
+		accName := "Pengguna"
+		var accAvatar *string
+		if r.Account != nil {
+			accName = r.Account.FirstName + " " + r.Account.LastName
+			accAvatar = r.Account.ProfilePictureUrl
+		}
+
+		resp := models.ProductReviewResponse{
+			ReviewID:              r.ReviewID,
+			ProductID:             r.ProductID,
+			BusinessID:            r.BusinessID,
+			AccountID:             r.AccountID,
+			AccountName:           accName,
+			AccountAvatar:         accAvatar,
+			Rating:                r.Rating,
+			Comment:               r.Comment,
+			ReviewImages:          r.ReviewImages,
+			ReviewVideo:           r.ReviewVideo,
+			LikeCount:             r.LikeCount,
+			CommentCount:          len(r.Comments),
+			IsLikedByMe:           isLikedByMe,
+			IsOwnerLiked:          isOwnerLiked,
+			IsOwnerReplied:        isOwnerReplied,
+			OwnerInteractionLabel: getOwnerInteractionLabel(isOwnerLiked, isOwnerReplied, staffMap[r.AccountID]),
+			Replies:               replyResponses,
+			CreatedAt:             r.CreatedAt,
+			UpdatedAt:             r.UpdatedAt,
+		}
+		responses = append(responses, resp)
+	}
+
+	return responses, total, nil
 }
 
 func (s *productInteractionService) ToggleReviewLike(reviewID, accountID string) (bool, error) {

@@ -1,7 +1,6 @@
 package interaction
 
 import (
-	"strconv"
 	"strings"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
@@ -110,23 +109,52 @@ func (h *ProductInteractionHandler) DeleteProductReview(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan produk berhasil dihapus", nil)
 }
 
+// 2. Get All Product Reviews (Paginated & Filterable)
 func (h *ProductInteractionHandler) GetProductReviews(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 	accountID, _ := c.Locals("account_id").(string)
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 10)
+	ratingFilter := c.QueryInt("rating", 0)
+	sortStr := c.Query("sort", "newest")
 
-	var ratingPtr *int
-	if ratingStr := c.Query("rating"); ratingStr != "" {
-		if rVal, err := strconv.Atoi(ratingStr); err == nil && rVal >= 1 && rVal <= 5 {
-			ratingPtr = &rVal
-		}
-	}
-
-	reviews, err := h.service.GetProductReviews(productID, accountID, ratingPtr)
+	reviews, total, err := h.service.GetAllProductReviewsPaginated(productID, accountID, page, limit, ratingFilter, sortStr)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan produk berhasil diambil", reviews)
+	summary, _ := h.service.GetProductReviewSummary(productID)
+
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar ulasan produk berhasil diambil", fiber.Map{
+		"summary": summary,
+		"reviews": reviews,
+		"meta": fiber.Map{
+			"page":        page,
+			"limit":       limit,
+			"total_rows":  total,
+			"total_pages": totalPages,
+		},
+	})
+}
+
+// 2b. Get Smart Display 5 Reviews Produk (Publik)
+func (h *ProductInteractionHandler) GetSmartDisplayProductReviews(c *fiber.Ctx) error {
+	productID := strings.TrimSpace(c.Params("product_id"))
+	accountID, _ := c.Locals("account_id").(string)
+
+	reviews, err := h.service.GetSmartDisplayProductReviews(productID, accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	summary, _ := h.service.GetProductReviewSummary(productID)
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Smart display ulasan produk berhasil diambil", fiber.Map{
+		"summary": summary,
+		"reviews": reviews,
+	})
 }
 
 func (h *ProductInteractionHandler) GetProductReviewDetail(c *fiber.Ctx) error {
