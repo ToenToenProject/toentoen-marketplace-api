@@ -285,3 +285,67 @@ func (h *BusinessAdminHandler) GetMyAssignments(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar penugasan berhasil diambil", assignments)
 }
+
+// 11. LIHAT PERMISSION ADMIN (Owner atau Supervisor)
+// GET /business/:business_id/admins/:assignment_id/permissions
+func (h *BusinessAdminHandler) GetPermissions(c *fiber.Ctx) error {
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
+	if businessID == "" || assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID dan Assignment ID wajib diisi", nil)
+	}
+
+	result, err := h.service.GetPermissions(requesterID, businessID, assignmentID)
+	if err != nil {
+		status := fiber.StatusBadRequest
+		if strings.Contains(err.Error(), "forbidden") {
+			status = fiber.StatusForbidden
+		} else if strings.Contains(err.Error(), "tidak ditemukan") {
+			status = fiber.StatusNotFound
+		}
+		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Izin admin berhasil diambil", result)
+}
+
+// 12. UPDATE PERMISSION ADMIN (Owner atau Supervisor)
+// PUT /business/:business_id/admins/:assignment_id/permissions
+func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
+	if businessID == "" || assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID dan Assignment ID wajib diisi", nil)
+	}
+
+	var input models.UpdatePermissionsInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+	if input.Permissions == nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'permissions' wajib diisi", nil)
+	}
+
+	result, err := h.service.UpdatePermissions(requesterID, businessID, assignmentID, input)
+	if err != nil {
+		status := fiber.StatusBadRequest
+		if strings.Contains(err.Error(), "forbidden") {
+			status = fiber.StatusForbidden
+		} else if strings.Contains(err.Error(), "tidak ditemukan") {
+			status = fiber.StatusNotFound
+		}
+		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Izin admin berhasil diperbarui", result)
+}

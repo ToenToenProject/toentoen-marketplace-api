@@ -402,6 +402,8 @@ func main() {
 	adminGroup.Put("/:assignment_id", middlewares.AllowRoles("owner"), businessAdminHandler.UpdateAdminAssignment)
 	adminGroup.Delete("/:assignment_id", businessAdminHandler.TerminateAdmin)
 	adminGroup.Post("/:assignment_id/cancel-termination", businessAdminHandler.CancelTermination)
+	adminGroup.Get("/:assignment_id/permissions", businessAdminHandler.GetPermissions)
+	adminGroup.Put("/:assignment_id/permissions", businessAdminHandler.UpdatePermissions)
 
 	// 🪄 Rute Personal Calon Admin (Lihat Undangan, Terima/Tolak, Resign)
 	workerGroup := api.Group("/my-jobs", middlewares.RequireAuth, middlewares.AllowRoles("business_admin"))

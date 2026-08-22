@@ -1,6 +1,84 @@
 package models
 
-import "time"
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+// ================================================================
+// PERMISSION CONSTANTS
+// ================================================================
+
+// Kunci-kunci izin yang tersedia. Tambahkan di sini saat ada permission baru.
+const (
+	PermChangeProductImage  = "change_product_image"
+	PermChangeBizHours      = "change_business_hours"
+	PermEditProductDetails  = "edit_product_details"
+	PermCreatePromotion     = "create_promotion"
+	PermAddPremiumFeature   = "add_premium_feature"
+	PermCreatePost          = "create_post"
+	PermAddDeleteProducts   = "add_delete_products"
+	PermCreateSupportTicket = "create_support_ticket"
+)
+
+// AllPermissions adalah daftar semua kunci permission yang valid.
+var AllPermissions = []string{
+	PermChangeProductImage,
+	PermChangeBizHours,
+	PermEditProductDetails,
+	PermCreatePromotion,
+	PermAddPremiumFeature,
+	PermCreatePost,
+	PermAddDeleteProducts,
+	PermCreateSupportTicket,
+}
+
+// AdminPermissions adalah alias untuk map permission (key → bool).
+// Key tidak ada berarti false (default deny).
+type AdminPermissions map[string]bool
+
+// Value implementasi untuk GORM JSONB serialization
+func (p AdminPermissions) Value() (driver.Value, error) {
+	if p == nil {
+		return "{}", nil
+	}
+	b, err := json.Marshal(p)
+	return string(b), err
+}
+
+// Scan implementasi untuk GORM JSONB deserialization
+func (p *AdminPermissions) Scan(value interface{}) error {
+	if value == nil {
+		*p = AdminPermissions{}
+		return nil
+	}
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return fmt.Errorf("cannot scan type %T into AdminPermissions", value)
+	}
+	return json.Unmarshal(bytes, p)
+}
+
+// AllTrue mengembalikan map dengan semua permission = true.
+// Digunakan untuk Owner & Supervisor yang memiliki akses penuh.
+func (AdminPermissions) AllTrue() AdminPermissions {
+	result := make(AdminPermissions, len(AllPermissions))
+	for _, p := range AllPermissions {
+		result[p] = true
+	}
+	return result
+}
+
+// ================================================================
+// MODELS
+// ================================================================
 
 type BusinessAdmin struct {
 	AccountID      string    `gorm:"primaryKey;column:account_id" json:"account_id"`
@@ -37,8 +115,11 @@ type BusinessAdminAssignment struct {
 	InvitedBy    string  `gorm:"column:invited_by" json:"invited_by"`
 	SupervisorID *string `gorm:"column:supervisor_id" json:"supervisor_id"` // ID Supervisor atasan (nil jika langsung di bawah Owner)
 
-	Role   string `gorm:"default:'staff';not null;column:role" json:"role"`  // "supervisor" atau "staff"
+	Role   string `gorm:"default:'staff';not null;column:role" json:"role"`     // "supervisor" atau "staff"
 	Status string `gorm:"default:'pending';column:status" json:"status"` // "pending", "pending_owner_approval", "active", "scheduled_for_deletion", "revoked", "rejected"
+
+	// Granular Permission Toggle (JSONB, default empty = semua false)
+	Permissions AdminPermissions `gorm:"type:jsonb;column:permissions;default:'{}'" json:"permissions"`
 
 	// Grace Period (3 Hari)
 	DeletionScheduledAt *time.Time `gorm:"column:deletion_scheduled_at" json:"deletion_scheduled_at"`
@@ -74,10 +155,12 @@ func (BusinessAdminShift) TableName() string {
 	return "business_admin_shifts"
 }
 
+// ================================================================
 // DTO Input & Response
+// ================================================================
 
 type InviteAdminInput struct {
-	InvitationCode string                    `json:"invitation_code" validate:"required"` 
+	InvitationCode string                    `json:"invitation_code" validate:"required"`
 	BusinessID     string                    `json:"business_id"`
 	Role           string                    `json:"role" validate:"required,oneof=supervisor staff"`
 	Shifts         []BusinessAdminShiftInput `json:"shifts,omitempty"`
@@ -101,6 +184,20 @@ type UpdateAssignmentInput struct {
 	Role         *string                   `json:"role" validate:"omitempty,oneof=supervisor staff"`
 	SupervisorID *string                   `json:"supervisor_id"`
 	Shifts       []BusinessAdminShiftInput `json:"shifts,omitempty"`
+}
+
+// UpdatePermissionsInput adalah payload untuk mengubah izin granular admin.
+type UpdatePermissionsInput struct {
+	Permissions AdminPermissions `json:"permissions" validate:"required"`
+}
+
+// PermissionResponse adalah response untuk GET/PUT permissions.
+type PermissionResponse struct {
+	AssignmentID string           `json:"assignment_id"`
+	AdminID      string           `json:"admin_id"`
+	AdminName    string           `json:"admin_name"`
+	Role         string           `json:"role"`
+	Permissions  AdminPermissions `json:"permissions"`
 }
 
 type UpdateBusinessAdminKYCInput struct {
@@ -130,15 +227,16 @@ type UpdateBusinessAdminKYCInput struct {
 }
 
 type AdminTreeNode struct {
-	AccountID    string               `json:"account_id"`
-	AssignmentID string               `json:"assignment_id,omitempty"`
-	Name         string               `json:"name"`
-	Username     string               `json:"username"`
-	AvatarURL    *string              `json:"avatar_url"`
-	Role         string               `json:"role"`
-	Status       string               `json:"status,omitempty"`
+	AccountID    string           `json:"account_id"`
+	AssignmentID string           `json:"assignment_id,omitempty"`
+	Name         string           `json:"name"`
+	Username     string           `json:"username"`
+	AvatarURL    *string          `json:"avatar_url"`
+	Role         string           `json:"role"`
+	Status       string           `json:"status,omitempty"`
+	Permissions  AdminPermissions `json:"permissions,omitempty"`
 	Shifts       []BusinessAdminShift `json:"shifts,omitempty"`
-	Subordinates []AdminTreeNode      `json:"subordinates,omitempty"`
+	Subordinates []AdminTreeNode  `json:"subordinates,omitempty"`
 }
 
 type AdminTreeResponse struct {
@@ -153,5 +251,8 @@ type AdminAssignmentListItem struct {
 	AssignmentID string           `json:"assignment_id"`
 	Role         string           `json:"role"`
 	Status       string           `json:"status"`
+	Permissions  AdminPermissions `json:"permissions"`
 	Business     BusinessListItem `json:"business"`
 }
+
+

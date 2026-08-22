@@ -31,6 +31,10 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 		return nil, errors.New("forbidden: you don't have access to this business")
 	}
 
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermCreatePost) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk membuat postingan")
+	}
+
 	// 🛡️ VALIDASI ATURAN BISNIS
 	if len(input.Images) > 5 {
 		return nil, errors.New("maximum 5 images allowed per post")

@@ -3,12 +3,14 @@ package catalog
 import (
 	"strings"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/shared/permissions"
 
 	"gorm.io/gorm"
 )
 
 type ProductRepository interface {
 	HasAccessToBusiness(accountID, role, businessID string) bool
+	HasPermission(accountID, businessID, permKey string) bool
 	CreateProduct(product *models.Product) error
 
 	// Fitur Varian
@@ -50,6 +52,10 @@ func (r *productRepository) HasAccessToBusiness(accountID, role, businessID stri
 	}
 
 	return count > 0
+}
+
+func (r *productRepository) HasPermission(accountID, businessID, permKey string) bool {
+	return permissions.HasPermission(r.db, accountID, businessID, permKey)
 }
 
 // 2. CREATE

@@ -34,6 +34,10 @@ type BusinessAdminRepository interface {
 	// Grace Period & Worker
 	GetExpiredScheduledDeletions() ([]models.BusinessAdminAssignment, error)
 	BatchRevokeAssignments(assignmentIDs []string) error
+
+	// Permissions
+	GetPermissions(assignmentID string) (*models.BusinessAdminAssignment, error)
+	UpdatePermissions(assignmentID string, permissions models.AdminPermissions) error
 }
 
 type businessAdminRepository struct {
@@ -193,4 +197,24 @@ func (r *businessAdminRepository) BatchRevokeAssignments(assignmentIDs []string)
 	return r.db.Model(&models.BusinessAdminAssignment{}).
 		Where("assignment_id IN ?", assignmentIDs).
 		Update("status", "revoked").Error
+}
+
+// GetPermissions mengambil assignment beserta nama admin untuk ditampilkan di response.
+func (r *businessAdminRepository) GetPermissions(assignmentID string) (*models.BusinessAdminAssignment, error) {
+	var assignment models.BusinessAdminAssignment
+	err := r.db.
+		Preload("Admin.Account").
+		Where("assignment_id = ?", assignmentID).
+		First(&assignment).Error
+	if err != nil {
+		return nil, err
+	}
+	return &assignment, nil
+}
+
+// UpdatePermissions mengupdate kolom permissions JSONB pada assignment tertentu.
+func (r *businessAdminRepository) UpdatePermissions(assignmentID string, permissions models.AdminPermissions) error {
+	return r.db.Model(&models.BusinessAdminAssignment{}).
+		Where("assignment_id = ?", assignmentID).
+		Update("permissions", permissions).Error
 }

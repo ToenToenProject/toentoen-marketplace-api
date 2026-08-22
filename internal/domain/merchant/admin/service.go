@@ -27,6 +27,10 @@ type BusinessAdminService interface {
 	GetAdminsByOwner(ownerID string) ([]models.AdminTreeResponse, error)
 	GetMyAssignments(adminID string) ([]models.AdminAssignmentListItem, error)
 	GetAdminTree(requesterID, businessID string) (*models.AdminTreeResponse, error)
+
+	// Permission Management
+	GetPermissions(requesterID, businessID, targetAssignmentID string) (*models.PermissionResponse, error)
+	UpdatePermissions(requesterID, businessID, targetAssignmentID string, input models.UpdatePermissionsInput) (*models.PermissionResponse, error)
 }
 
 type businessAdminService struct {
@@ -768,6 +772,16 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			Status:       a.Status,
 			Shifts:       a.Shifts,
 			Subordinates: []models.AdminTreeNode{},
+			// Supervisor default semua true, staff ambil dari DB
+			Permissions: func() models.AdminPermissions {
+				if a.Role == "supervisor" {
+					return models.AdminPermissions{}.AllTrue()
+				}
+				if a.Permissions == nil {
+					return models.AdminPermissions{}
+				}
+				return a.Permissions
+			}(),
 		}
 
 		if a.Role == "supervisor" {
@@ -780,6 +794,10 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 
 	// Masukkan staff ke supervisor masing-masing atau ke DirectStaff
 	for _, a := range staffAssignments {
+		perms := a.Permissions
+		if perms == nil {
+			perms = models.AdminPermissions{}
+		}
 		node := models.AdminTreeNode{
 			AccountID:    a.AdminID,
 			AssignmentID: a.AssignmentID,
@@ -789,6 +807,7 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			Role:         a.Role,
 			Status:       a.Status,
 			Shifts:       a.Shifts,
+			Permissions:  perms,
 		}
 
 		if a.SupervisorID != nil && spvMap[*a.SupervisorID] != nil {
@@ -864,16 +883,24 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 				bizName = *assignment.Business.BusinessName
 			}
 
-			// Dapatkan owner name dari tabel account (Opsional: bisa juga diambil jika repository join Account)
 			ownerName := "" // Biarkan kosong atau jika diperlukan bisa diambil dari repo
-			
+
 			// Ambil gambar produk sebagai preview images (Opsional, saat ini kosong sesuai contoh Owner)
 			var previewImages []string
+
+			// Permissions: supervisor default semua true, staff dari DB
+			perms := assignment.Permissions
+			if assignment.Role == "supervisor" {
+				perms = models.AdminPermissions{}.AllTrue()
+			} else if perms == nil {
+				perms = models.AdminPermissions{}
+			}
 
 			item := models.AdminAssignmentListItem{
 				AssignmentID: assignment.AssignmentID,
 				Role:         assignment.Role,
 				Status:       assignment.Status,
+				Permissions:  perms,
 				Business: models.BusinessListItem{
 					BusinessID:    assignment.BusinessID,
 					BusinessName:  bizName,
@@ -888,4 +915,129 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 	}
 
 	return response, nil
+}
+
+// 11. GET PERMISSIONS (Owner atau Supervisor melihat izin admin tertentu)
+func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAssignmentID string) (*models.PermissionResponse, error) {
+	biz, err := s.bizRepo.FindBusinessByID(businessID)
+	if err != nil {
+		return nil, errors.New("toko tidak ditemukan")
+	}
+
+	isOwner := biz.AccountID == requesterID
+	if !isOwner {
+		requesterAssignment, errA := s.adminRepo.GetActiveAssignment(requesterID, businessID)
+		if errA != nil || requesterAssignment == nil {
+			return nil, errors.New("forbidden: Anda tidak memiliki akses ke toko ini")
+		}
+	}
+
+	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
+	if err != nil {
+		return nil, errors.New("assignment tidak ditemukan")
+	}
+	if target.BusinessID != businessID {
+		return nil, errors.New("forbidden: assignment tidak termasuk dalam toko ini")
+	}
+
+	adminName := ""
+	if target.Admin != nil && target.Admin.Account != nil {
+		adminName = target.Admin.Account.FirstName + " " + target.Admin.Account.LastName
+	}
+
+	perms := target.Permissions
+	if target.Role == "supervisor" {
+		perms = models.AdminPermissions{}.AllTrue()
+	} else if perms == nil {
+		perms = models.AdminPermissions{}
+	}
+
+	return &models.PermissionResponse{
+		AssignmentID: target.AssignmentID,
+		AdminID:      target.AdminID,
+		AdminName:    adminName,
+		Role:         target.Role,
+		Permissions:  perms,
+	}, nil
+}
+
+// 12. UPDATE PERMISSIONS (Owner atau Supervisor mengatur izin admin)
+func (s *businessAdminService) UpdatePermissions(requesterID, businessID, targetAssignmentID string, input models.UpdatePermissionsInput) (*models.PermissionResponse, error) {
+	biz, err := s.bizRepo.FindBusinessByID(businessID)
+	if err != nil {
+		return nil, errors.New("toko tidak ditemukan")
+	}
+
+	isOwner := biz.AccountID == requesterID
+
+	var requesterAssignment *models.BusinessAdminAssignment
+	if !isOwner {
+		a, errA := s.adminRepo.GetActiveAssignment(requesterID, businessID)
+		if errA != nil || a == nil || a.Role != "supervisor" {
+			return nil, errors.New("forbidden: hanya Owner atau Supervisor aktif yang dapat mengubah izin admin")
+		}
+		requesterAssignment = a
+	}
+
+	// Ambil data target assignment
+	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
+	if err != nil {
+		return nil, errors.New("assignment tidak ditemukan")
+	}
+	if target.BusinessID != businessID {
+		return nil, errors.New("forbidden: assignment tidak termasuk dalam toko ini")
+	}
+	if target.Status != "active" && target.Status != "scheduled_for_deletion" {
+		return nil, errors.New("admin ini tidak dalam status aktif")
+	}
+
+	// Supervisor tidak boleh mengubah permission sesama supervisor
+	if !isOwner && target.Role == "supervisor" {
+		return nil, errors.New("forbidden: Supervisor tidak dapat mengubah izin sesama Supervisor")
+	}
+
+	// Supervisor hanya boleh mengubah permission bawahannya langsung
+	if !isOwner && requesterAssignment != nil {
+		if target.SupervisorID == nil || *target.SupervisorID != requesterID {
+			return nil, errors.New("forbidden: Anda hanya dapat mengubah izin staf yang langsung berada di bawah Anda")
+		}
+	}
+
+	// Validasi key permission — tolak unknown keys
+	validKeys := make(map[string]bool, len(models.AllPermissions))
+	for _, k := range models.AllPermissions {
+		validKeys[k] = true
+	}
+	for key := range input.Permissions {
+		if !validKeys[key] {
+			return nil, fmt.Errorf("permission key tidak dikenal: '%s'", key)
+		}
+	}
+
+	// Simpan permission yang dikirim (partial update: key tidak dikirim tidak berubah)
+	// Merge ke permissions existing
+	existing := target.Permissions
+	if existing == nil {
+		existing = models.AdminPermissions{}
+	}
+	for key, val := range input.Permissions {
+		existing[key] = val
+	}
+
+	if err := s.adminRepo.UpdatePermissions(targetAssignmentID, existing); err != nil {
+		return nil, errors.New("gagal memperbarui izin admin")
+	}
+
+	adminName := ""
+	if target.Admin != nil && target.Admin.Account != nil {
+		adminName = target.Admin.Account.FirstName + " " + target.Admin.Account.LastName
+	}
+
+	return &models.PermissionResponse{
+		AssignmentID: target.AssignmentID,
+		AdminID:      target.AdminID,
+		AdminName:    adminName,
+		Role:         target.Role,
+		Permissions:  existing,
+	}, nil
 }
