@@ -15,6 +15,8 @@ type NotificationRepository interface {
 	GetUnreadCount(accountID string) (int64, error)
 	MarkAsRead(accountID, notifID string) error
 	MarkAllAsRead(accountID string) error
+	DeleteNotification(accountID, notifID string) error
+	DeleteAllNotifications(accountID string) error
 	GetFCMTokensByAccountID(accountID string) ([]string, error)
 }
 
@@ -90,6 +92,21 @@ func (r *notificationRepository) MarkAllAsRead(accountID string) error {
 	return r.db.Model(&models.UserNotification{}).
 		Where("recipient_account_id = ? AND is_read = false", accountID).
 		Update("is_read", true).Error
+}
+
+func (r *notificationRepository) DeleteNotification(accountID, notifID string) error {
+	result := r.db.Where("id = ? AND recipient_account_id = ?", notifID, accountID).Delete(&models.UserNotification{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("notifikasi tidak ditemukan atau Anda tidak memiliki akses")
+	}
+	return nil
+}
+
+func (r *notificationRepository) DeleteAllNotifications(accountID string) error {
+	return r.db.Where("recipient_account_id = ?", accountID).Delete(&models.UserNotification{}).Error
 }
 
 func (r *notificationRepository) GetFCMTokensByAccountID(accountID string) ([]string, error) {

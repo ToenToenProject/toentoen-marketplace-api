@@ -91,3 +91,36 @@ func (h *NotificationHandler) MarkAllAsRead(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Semua notifikasi ditandai sudah dibaca", nil)
 }
+
+func (h *NotificationHandler) DeleteNotification(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+	}
+	accountID := accountIDValue.(string)
+	notifID := c.Params("id")
+
+	if notifID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Notification ID wajib diisi", nil)
+	}
+
+	if err := h.service.DeleteNotification(accountID, notifID); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Notifikasi berhasil dihapus", nil)
+}
+
+func (h *NotificationHandler) DeleteAllNotifications(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+	}
+	accountID := accountIDValue.(string)
+
+	if err := h.service.DeleteAllNotifications(accountID); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Semua notifikasi berhasil dihapus", nil)
+}

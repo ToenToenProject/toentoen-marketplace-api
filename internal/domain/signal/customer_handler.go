@@ -96,6 +96,56 @@ func (h *CustomerHandler) GetSignalDetail(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil detail signal", signal)
 }
 
+// UpdateSignal memperbarui informasi signal (deskripsi, kategori, tags, lokasi, radius, dll)
+// PUT /api/v1/customer/signals/:signal_id
+func (h *CustomerHandler) UpdateSignal(c *fiber.Ctx) error {
+	accID, _, err := getSession(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	signalID := c.Params("signal_id")
+	if signalID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Signal ID wajib diisi", nil)
+	}
+
+	var input models.UpdateSignalInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	updatedSignal, errSvc := h.service.UpdateSignal(accID, signalID, input)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Signal berhasil diperbarui", updatedSignal)
+}
+
+// DeleteSignal membatalkan / menghapus signal milik customer
+// DELETE /api/v1/customer/signals/:signal_id
+func (h *CustomerHandler) DeleteSignal(c *fiber.Ctx) error {
+	accID, _, err := getSession(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	signalID := c.Params("signal_id")
+	if signalID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Signal ID wajib diisi", nil)
+	}
+
+	if errSvc := h.service.DeleteSignal(accID, signalID); errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Signal berhasil dihapus/dibatalkan", nil)
+}
+
 // CompleteSignal menyelesaikan signal (status → completed, semua conversation → locked)
 // PUT /api/v1/customer/signals/:signal_id/complete
 func (h *CustomerHandler) CompleteSignal(c *fiber.Ctx) error {
@@ -119,7 +169,7 @@ func (h *CustomerHandler) CompleteSignal(c *fiber.Ctx) error {
 // GetMessages membaca isi chat dalam conversation
 // GET /api/v1/customer/conversations/:conversation_id/messages
 func (h *CustomerHandler) GetMessages(c *fiber.Ctx) error {
-	accID, _, err := getSession(c)
+	accID, role, err := getSession(c)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
@@ -128,7 +178,7 @@ func (h *CustomerHandler) GetMessages(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 50)
 
-	messages, total, errSvc := h.service.GetMessages(accID, convID, page, limit)
+	messages, total, errSvc := h.service.GetMessages(accID, role, convID, page, limit)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}

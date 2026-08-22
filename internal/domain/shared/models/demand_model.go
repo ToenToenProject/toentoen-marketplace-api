@@ -40,7 +40,9 @@ type DemandResponse struct {
 // --- LEGACY V1 INPUT STRUCTS (masih dipakai oleh package demand lama) ---
 
 type CreateSignalInput struct {
+	CategoryID     *int64   `json:"category_id"`
 	Category       string   `json:"category"`
+	TagIDs         []int64  `json:"tag_ids"`
 	Description    string   `json:"description"`
 	MediaUrls      []string `json:"media_urls"`
 	ImageURLs      []string `json:"image_urls"`
@@ -50,6 +52,21 @@ type CreateSignalInput struct {
 	RadiusKm       int      `json:"radius_km"`
 	IsUrgent       bool     `json:"is_urgent"`
 	ExpiresInHours int      `json:"expires_in_hours"`
+}
+
+type UpdateSignalInput struct {
+	CategoryID     *int64   `json:"category_id"`
+	Category       string   `json:"category"`
+	TagIDs         []int64  `json:"tag_ids"`
+	Description    string   `json:"description"`
+	MediaUrls      []string `json:"media_urls"`
+	ImageURLs      []string `json:"image_urls"`
+	Images         []string `json:"images"`
+	Latitude       *float64 `json:"latitude"`
+	Longitude      *float64 `json:"longitude"`
+	RadiusKm       *int     `json:"radius_km"`
+	IsUrgent       *bool    `json:"is_urgent"`
+	ExpiresInHours *int     `json:"expires_in_hours"`
 }
 
 type CreateResponseInput struct {
@@ -67,6 +84,7 @@ type Signal struct {
 	SignalID    string    `gorm:"primaryKey;column:signal_id" json:"signal_id"`
 	CustomerID  string    `gorm:"not null;column:customer_id" json:"customer_id"`
 	Description string    `gorm:"not null" json:"description"`
+	CategoryID  *int64    `gorm:"column:category_id" json:"category_id,omitempty"`
 	Category    string    `gorm:"not null" json:"category"`
 	Latitude    float64   `gorm:"not null" json:"latitude"`
 	Longitude   float64   `gorm:"not null" json:"longitude"`
@@ -81,11 +99,23 @@ type Signal struct {
 
 	// Relations
 	Account       *Account             `gorm:"foreignKey:CustomerID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	CategoryObj   *Category            `gorm:"foreignKey:CategoryID;references:CategoryID" json:"category_detail,omitempty"`
+	Tags          []SignalTag          `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"tags,omitempty"`
 	Images        []SignalImage        `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"images,omitempty"`
 	Conversations []SignalConversation `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"conversations,omitempty"`
 }
 
 func (Signal) TableName() string { return "signals" }
+
+// SignalTag adalah relasi antara signal dan tag bisnis yang dipilih customer
+type SignalTag struct {
+	SignalID string `gorm:"primaryKey;column:signal_id" json:"signal_id"`
+	TagID    int64  `gorm:"primaryKey;column:tag_id" json:"tag_id"`
+
+	Tag *Tag `gorm:"foreignKey:TagID;references:TagID" json:"tag,omitempty"`
+}
+
+func (SignalTag) TableName() string { return "signal_tags" }
 
 // SignalImage adalah lampiran gambar pada signal
 type SignalImage struct {
@@ -152,6 +182,7 @@ type SendMessageInput struct {
 type SignalListItem struct {
 	SignalID          string    `json:"signal_id"`
 	Description       string    `json:"description"`
+	CategoryID        *int64    `json:"category_id,omitempty"`
 	Category          string    `json:"category"`
 	IsUrgent          bool      `json:"is_urgent"`
 	Status            string    `json:"status"`
@@ -160,20 +191,23 @@ type SignalListItem struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
-// SignalExploreItem untuk merchant explore (dengan jarak)
+// SignalExploreItem untuk merchant explore (dengan jarak dan relevansi tag)
 type SignalExploreItem struct {
-	SignalID       string    `json:"signal_id"`
-	CustomerID     string    `json:"customer_id"`
-	Description    string    `json:"description"`
-	Category       string    `json:"category"`
-	IsUrgent       bool      `json:"is_urgent"`
-	RadiusKm       int       `json:"radius_km"`
-	DistanceKm     float64   `json:"distance_km"`
-	ExpiresAt      time.Time `json:"expires_at"`
-	CreatedAt      time.Time `json:"created_at"`
-	CustomerName   string    `json:"customer_name"`
-	CustomerAvatar *string   `json:"customer_avatar"`
-	Images         []string  `json:"images"`
+	SignalID        string    `json:"signal_id"`
+	CustomerID      string    `json:"customer_id"`
+	Description     string    `json:"description"`
+	CategoryID      *int64    `json:"category_id,omitempty"`
+	Category        string    `json:"category"`
+	IsUrgent        bool      `json:"is_urgent"`
+	RadiusKm        int       `json:"radius_km"`
+	DistanceKm      float64   `json:"distance_km"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	CreatedAt       time.Time `json:"created_at"`
+	CustomerName    string    `json:"customer_name"`
+	CustomerAvatar  *string   `json:"customer_avatar"`
+	Images          []string  `json:"images"`
+	Tags            []string  `json:"tags"`          // Nama tag yang dipilih customer
+	TagOverlapScore int       `json:"relevance_score"` // Jumlah tag overlap dengan bisnis merchant
 }
 
 // ConversationListItem untuk daftar roomchat (Merchant / Customer)
@@ -181,6 +215,7 @@ type ConversationListItem struct {
 	ConversationID    string    `json:"conversation_id"`
 	SignalID          string    `json:"signal_id"`
 	SignalDescription string    `json:"signal_description"`
+	CategoryID        *int64    `json:"category_id,omitempty"`
 	SignalCategory    string    `json:"signal_category"`
 	SignalStatus      string    `json:"signal_status"`
 	IsUrgent          bool      `json:"is_urgent"`

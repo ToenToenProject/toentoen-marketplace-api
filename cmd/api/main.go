@@ -142,9 +142,9 @@ func main() {
 	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo)
 	businessPostHandler := post.NewBusinessPostHandler(businessPostService)
 
-	// Signal V2 (menggantikan demand lama) — dengan Real-Time Hub
+	// Signal V2 (menggantikan demand lama) — dengan Real-Time Hub & Notification Service
 	signalRepo := signal.NewSignalRepository(database.DB)
-	signalService := signal.NewSignalService(signalRepo, businessRepo, wsHub)
+	signalService := signal.NewSignalService(signalRepo, businessRepo, notifService, wsHub)
 	customerSignalHandler := signal.NewCustomerHandler(signalService)
 	merchantSignalHandler := signal.NewMerchantHandler(signalService)
 	wsHandler := realtime.NewWSHandler(wsHub)
@@ -295,6 +295,9 @@ func main() {
 	notifGroup.Get("/unread-count", notifHandler.GetUnreadCount)
 	notifGroup.Put("/read-all", notifHandler.MarkAllAsRead)
 	notifGroup.Put("/:id/read", notifHandler.MarkAsRead)
+	notifGroup.Delete("/clear-all", notifHandler.DeleteAllNotifications)
+	notifGroup.Delete("/:id", notifHandler.DeleteNotification)
+	notifGroup.Delete("/", notifHandler.DeleteAllNotifications)
 
 	// Khusus untuk pengujian / backdoor menghapus berdasarkan identifier:
 	api.Post("/account/force-delete", profileHandler.ForceDeleteAccount)
@@ -316,6 +319,8 @@ func main() {
 	customerSignalGroup.Post("/", customerSignalHandler.CreateSignal)
 	customerSignalGroup.Get("/me", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
+	customerSignalGroup.Put("/:signal_id", customerSignalHandler.UpdateSignal)
+	customerSignalGroup.Delete("/:signal_id", customerSignalHandler.DeleteSignal)
 	customerSignalGroup.Put("/:signal_id/complete", customerSignalHandler.CompleteSignal)
 
 	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth)

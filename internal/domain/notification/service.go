@@ -17,6 +17,8 @@ type NotificationService interface {
 	GetUnreadCount(accountID string) (int64, error)
 	MarkAsRead(accountID, notifID string) error
 	MarkAllAsRead(accountID string) error
+	DeleteNotification(accountID, notifID string) error
+	DeleteAllNotifications(accountID string) error
 }
 
 type notificationService struct {
@@ -203,4 +205,15 @@ func (s *notificationService) MarkAsRead(accountID, notifID string) error {
 
 func (s *notificationService) MarkAllAsRead(accountID string) error {
 	return s.repo.MarkAllAsRead(accountID)
+}
+
+func (s *notificationService) DeleteNotification(accountID, notifID string) error {
+	if strings.ToLower(notifID) == "all" || strings.ToLower(notifID) == "clear-all" {
+		return s.repo.DeleteAllNotifications(accountID)
+	}
+	return s.repo.DeleteNotification(accountID, notifID)
+}
+
+func (s *notificationService) DeleteAllNotifications(accountID string) error {
+	return s.repo.DeleteAllNotifications(accountID)
 }

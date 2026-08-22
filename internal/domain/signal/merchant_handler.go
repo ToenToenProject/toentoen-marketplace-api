@@ -119,7 +119,7 @@ func (h *MerchantHandler) ReplyToSignal(c *fiber.Ctx) error {
 // GetMessages membaca isi chat dalam conversation
 // GET /api/v1/merchant/conversations/:conversation_id/messages
 func (h *MerchantHandler) GetMessages(c *fiber.Ctx) error {
-	accID, _, err := getSession(c)
+	accID, role, err := getSession(c)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
@@ -128,7 +128,7 @@ func (h *MerchantHandler) GetMessages(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 50)
 
-	messages, total, errSvc := h.service.GetMessages(accID, convID, page, limit)
+	messages, total, errSvc := h.service.GetMessages(accID, role, convID, page, limit)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
