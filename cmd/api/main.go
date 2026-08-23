@@ -418,20 +418,23 @@ func main() {
 	ownerGroup := api.Group("/owner", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
 	ownerGroup.Get("/admins", businessAdminHandler.GetAdminsByOwner)
 
-	// Business Management
-	businessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
-	businessGroup.Post("/", businessHandler.CreateBusiness)
-	businessGroup.Get("/", businessHandler.GetMyBusinesses)
-	businessGroup.Get("/:business_id", businessHandler.GetBusinessDetail)
-	businessGroup.Put("/:id", businessHandler.UpdateBusiness)
-	businessGroup.Delete("/:id", businessHandler.DeleteBusiness)
-	businessGroup.Patch("/:business_id/toggle-status", businessHandler.ToggleStoreStatus)
-
-	// Admin / Owner Shared Access (Products, Posts, Analytics) dengan BusinessAccessGuard
+	// Admin / Owner Shared Access (Products, Posts, Analytics, Business Detail) dengan BusinessAccessGuard
 	sharedAccess := middlewares.AllowRoles("owner", "business_admin")
 
+	// Owner-only Business Management
+	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	ownerBusinessGroup.Post("/", businessHandler.CreateBusiness)
+	ownerBusinessGroup.Get("/", businessHandler.GetMyBusinesses)
+	ownerBusinessGroup.Put("/:id", businessHandler.UpdateBusiness)
+	ownerBusinessGroup.Delete("/:id", businessHandler.DeleteBusiness)
+
+	// Shared Business Scope (Owner & Business Admin dengan BusinessAccessGuard)
+	sharedBusinessScope := api.Group("/business/:business_id", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
+	sharedBusinessScope.Get("/", businessHandler.GetBusinessDetail)
+	sharedBusinessScope.Patch("/toggle-status", businessHandler.ToggleStoreStatus)
+
 	// -> Products
-	productRoutes := api.Group("/business/:business_id/products", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
+	productRoutes := sharedBusinessScope.Group("/products")
 	productRoutes.Post("/", productHandler.CreateProduct)
 	productRoutes.Get("/", productHandler.GetFlatProducts)
 	productRoutes.Post("/:product_id/variants", productHandler.AddVariant)
@@ -444,7 +447,7 @@ func main() {
 	productRoutes.Delete("/bulk-delete", productHandler.BulkDelete)
 
 	// -> Product Groups
-	productGroupRoutes := api.Group("/business/:business_id/product-groups", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
+	productGroupRoutes := sharedBusinessScope.Group("/product-groups")
 	productGroupRoutes.Patch("/reorder", productGroupHandler.ReorderGroups)
 	productGroupRoutes.Patch("/:product_group_id/contents", productGroupHandler.UpdateContents)
 	productGroupRoutes.Post("/", productGroupHandler.CreateGroup)
@@ -453,7 +456,7 @@ func main() {
 	productGroupRoutes.Delete("/:product_group_id", productGroupHandler.DeleteGroup)
 
 	// -> Posts & Comments
-	postRoutes := api.Group("/business/:business_id/posts", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
+	postRoutes := sharedBusinessScope.Group("/posts")
 	postRoutes.Post("/", businessPostHandler.CreatePost)
 	postRoutes.Get("/", businessPostHandler.GetPosts)
 	postRoutes.Get("/:post_id", businessPostHandler.GetPostDetail)
@@ -473,7 +476,7 @@ func main() {
 	merchantConvGroup.Post("/:conversation_id/messages", merchantSignalHandler.SendMessage)
 
 	// -> Analytics
-	analyticsRoutes := api.Group("/business/:business_id/analytics", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
+	analyticsRoutes := sharedBusinessScope.Group("/analytics")
 	analyticsRoutes.Get("/daily", analyticsHandler.GetDailyAnalytics)
 	analyticsRoutes.Get("/history", analyticsHandler.GetHistoryAnalytics)
 	analyticsRoutes.Get("/explore", analyticsHandler.GetExploreAnalytics)
