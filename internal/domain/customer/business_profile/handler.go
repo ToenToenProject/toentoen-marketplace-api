@@ -28,7 +28,13 @@ func (h *Handler) GetProfile(c *fiber.Ctx) error {
 		accountID = id
 	}
 
-	profile, err := h.service.GetBusinessProfile(businessID, accountID)
+	// Baca konteks sumber kunjungan (dikirim dari Flutter untuk analytics)
+	// Contoh: ?source=tag_search&tag=Bengkel&product_id=PRD-xxx
+	sourceType := c.Query("source")   // explore | tag_search | product_search | post_feed | direct | signal_match
+	searchedTag := c.Query("tag")     // diisi jika source=tag_search
+	productID := c.Query("product_id") // diisi jika source=product_search
+
+	profile, err := h.service.GetBusinessProfile(businessID, accountID, sourceType, searchedTag, productID)
 	if err != nil {
 		if err.Error() == "business not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, "Business not found", "D1", nil)

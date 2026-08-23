@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"toentoen-backend/internal/domain/merchant/analytics"
 	"toentoen-backend/internal/domain/shared/models"
 )
 
@@ -49,7 +50,7 @@ type BusinessProfileResponse struct {
 }
 
 type Service interface {
-	GetBusinessProfile(businessID string, accountID string) (BusinessProfileResponse, error)
+	GetBusinessProfile(businessID string, accountID string, sourceType string, searchedTag string, productID string) (BusinessProfileResponse, error)
 	ToggleBookmark(accountID, businessID string) (bool, error)
 	GetBookmarks(accountID string) ([]BusinessProfileResponse, error)
 
@@ -59,19 +60,31 @@ type Service interface {
 }
 
 type service struct {
-	repo Repository
+	repo         Repository
+	analyticsSvc analytics.AnalyticsService
 }
 
-func NewService(r Repository) Service {
+func NewService(r Repository, analyticsSvc analytics.AnalyticsService) Service {
 	return &service{
-		repo: r,
+		repo:         r,
+		analyticsSvc: analyticsSvc,
 	}
 }
 
-func (s *service) GetBusinessProfile(businessID, accountID string) (BusinessProfileResponse, error) {
+func (s *service) GetBusinessProfile(businessID, accountID string, sourceType string, searchedTag string, productID string) (BusinessProfileResponse, error) {
 	business, err := s.repo.GetBusinessDetail(businessID)
 	if err != nil {
 		return BusinessProfileResponse{}, err
+	}
+
+	// Catat event visitor secara async (fire-and-forget, tidak memblok response)
+	// Abaikan kunjungan dari pemilik toko sendiri agar data analitik akurat
+	isOwner := accountID != "" && business.AccountID == accountID
+	if s.analyticsSvc != nil && !isOwner {
+		if sourceType == "" {
+			sourceType = "direct"
+		}
+		go s.analyticsSvc.TrackVisitor(businessID, accountID, sourceType, searchedTag, productID)
 	}
 
 	var isBookmarked bool

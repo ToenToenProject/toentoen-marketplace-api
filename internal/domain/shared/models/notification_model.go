@@ -7,8 +7,7 @@ import (
 )
 
 type UserNotification struct {
-	ID                 string         `gorm:"primaryKey;column:id" json:"id"`
-	NotificationID     string         `gorm:"-" json:"notification_id"`
+	ID                 string         `gorm:"primaryKey;column:id" json:"notification_id"`
 	RecipientAccountID string         `gorm:"column:recipient_account_id" json:"recipient_account_id"`
 	ActorIDs           datatypes.JSON `gorm:"column:actor_ids;default:'[]'" json:"actor_ids"`
 	Type               string         `gorm:"column:type" json:"type"`
@@ -30,7 +29,6 @@ func (UserNotification) TableName() string {
 
 // Untuk response API List Notifikasi
 type NotificationResponse struct {
-	ID             string                 `json:"id"`
 	NotificationID string                 `json:"notification_id"`
 	Type           string                 `json:"type"`
 	Title          string                 `json:"title"`
@@ -40,3 +38,4 @@ type NotificationResponse struct {
 	ActorCount     int                    `json:"actor_count"`
 	CreatedAt      time.Time              `json:"created_at"`
 }
+

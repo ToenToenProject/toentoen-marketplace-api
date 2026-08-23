@@ -3,12 +3,13 @@ package notification
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
-	"strings"
 )
 
 type NotificationService interface {
@@ -120,7 +121,9 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 				newNotif.ReferenceID = &referenceID
 			}
 
-			_ = s.repo.CreateNotification(newNotif)
+			if err := s.repo.CreateNotification(newNotif); err != nil {
+				log.Printf("❌ Failed to create notification for %s: %v", recipientID, err)
+			}
 			notifToSave = newNotif
 			isNew = true
 		}
@@ -176,7 +179,6 @@ func (s *notificationService) GetMyNotifications(accountID string, page, limit i
 		_ = json.Unmarshal(n.ActorIDs, &actors)
 
 		resp := models.NotificationResponse{
-			ID:             n.ID,
 			NotificationID: n.ID,
 			Type:           n.Type,
 			Title:          n.Title,

@@ -43,14 +43,19 @@ type ProductStat struct {
 
 // Struct Response untuk History Page
 type HistoryAnalyticsResponse struct {
-	TotalVisitors    int64               `json:"total_visitors"`
-	VisitorsGrowth   float64             `json:"visitors_growth"`   // Contoh: 80.5 (berarti +80.5%)
-	TotalImpression  int64               `json:"total_impression"`
-	ImpressionGrowth float64             `json:"impression_growth"` 
-	TrafficSources   []TrafficSourceStat `json:"traffic_sources"`
-	TrafficGrowth    float64             `json:"traffic_growth"`
-	VisitorByTags    []TagStat           `json:"visitor_by_tags"`
-	VisitorByProd    []ProductStat       `json:"visitor_by_products"`
+	TotalVisitors        int64               `json:"total_visitors"`
+	VisitorsGrowth       float64             `json:"visitors_growth"`   // Contoh: 80.5 (berarti +80.5%)
+	TotalImpression      int64               `json:"total_impression"`
+	ImpressionGrowth     float64             `json:"impression_growth"`
+	ConversionRate       string              `json:"conversion_rate"`   // misal "16.7%"
+	TrafficSources       []TrafficSourceStat `json:"traffic_sources"`
+	TrafficGrowth        float64             `json:"traffic_growth"`
+	VisitorByTags        []TagStat           `json:"visitor_by_tags"`
+	VisitorByProd        []ProductStat       `json:"visitor_by_products"`
+	TotalSignalReceived  int64               `json:"total_signal_received"`
+	SignalReceivedGrowth float64             `json:"signal_received_growth"`
+	TotalSignalResponded int64               `json:"total_signal_responded"`
+	SignalRespondedGrowth float64            `json:"signal_responded_growth"`
 }
 
 // 5. Struct Response untuk Explore Page

@@ -162,7 +162,7 @@ func main() {
 	exploreHandler := explore.NewExploreHandler(exploreService)
 
 	businessProfileRepo := business_profile.NewRepository()
-	businessProfileService := business_profile.NewService(businessProfileRepo)
+	businessProfileService := business_profile.NewService(businessProfileRepo, analyticsService)
 	businessProfileHandler := business_profile.NewHandler(businessProfileService)
 
 	reportRepo := report.NewRepository()
@@ -501,11 +501,14 @@ func main() {
 	reviewGroup.Post("/business/replies/:comment_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
 
 	// ==========================================
-	// ROUTES: CUSTOMER EXPLORE
+	// ROUTES: CUSTOMER EXPLORE & ANALYTICS
 	// ==========================================
 	customerExploreGroup := api.Group("/customer/explore")
 	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
 	customerExploreGroup.Get("/timeline", middlewares.OptionalAuth, exploreHandler.GetTimeline)
+
+	// Batch Impressions dari Flutter
+	api.Post("/customer/analytics/impressions", analyticsHandler.TrackImpressions)
 
 	// ==========================================
 	// ROUTES: LIVE LOCATION

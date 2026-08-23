@@ -71,3 +71,18 @@ func (h *AnalyticsHandler) GetExploreAnalytics(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Explore analytics retrieved", data)
 }
+
+// TrackImpressions menerima batch impression dari Flutter (fire-and-forget, selalu 200 OK)
+func (h *AnalyticsHandler) TrackImpressions(c *fiber.Ctx) error {
+	var body struct {
+		Impressions []ImpressionItem `json:"impressions"`
+	}
+	if err := c.BodyParser(&body); err != nil || len(body.Impressions) == 0 {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'impressions' wajib diisi", nil)
+	}
+
+	// Jalankan async agar response langsung cepat
+	go h.service.TrackImpressions(body.Impressions)
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Impressions recorded", nil)
+}
