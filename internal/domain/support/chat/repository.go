@@ -8,17 +8,17 @@ import (
 )
 
 type SupportChatRepository interface {
-	FindActiveRoomByAccountID(accountID string) (*models.CSChatRoom, error)
-	GetRoomByID(roomID string) (*models.CSChatRoom, error)
-	CreateRoomWithGreeting(room *models.CSChatRoom, greetingMessage *models.CSChatMessage) error
+	FindActiveSessionByAccountID(accountID string) (*models.CSChatSession, error)
+	GetSessionByID(sessionID string) (*models.CSChatSession, error)
+	CreateSessionWithGreeting(session *models.CSChatSession, greetingMessage *models.CSChatMessage) error
 	SaveMessage(message *models.CSChatMessage) error
-	UpdateRoomLastMessage(roomID string, preview string, lastMessageAt time.Time, status string, csAdminID *string) error
-	GetMessagesByRoomID(roomID string, limit int, cursor string) ([]models.CSChatMessage, error)
-	MarkMessagesAsRead(roomID string, readerType string) error
-	EndRoom(roomID string, endedBy string, rating *int, feedback *string, endMessage *models.CSChatMessage) error
-	GetAdminQueue(status string, limit int, cursor string) ([]models.CSChatRoom, error)
-	GetAdminHistory(limit int, cursor string) ([]models.CSChatRoom, error)
-	AssignCSToRoom(roomID string, csAdminID string) error
+	UpdateSessionLastMessage(sessionID string, preview string, lastMessageAt time.Time, status string, csAdminID *string) error
+	GetMessagesBySessionID(sessionID string, limit int, cursor string) ([]models.CSChatMessage, error)
+	MarkMessagesAsRead(sessionID string, readerType string) error
+	EndSession(sessionID string, endedBy string, rating *int, feedback *string, endMessage *models.CSChatMessage) error
+	GetAdminQueue(status string, limit int, cursor string) ([]models.CSChatSession, error)
+	GetAdminHistory(limit int, cursor string) ([]models.CSChatSession, error)
+	AssignCSToSession(sessionID string, csAdminID string) error
 	GetAccountByID(accountID string) (*models.Account, error)
 }
 
@@ -30,38 +30,38 @@ func NewSupportChatRepository(db *gorm.DB) SupportChatRepository {
 	return &supportChatRepository{db: db}
 }
 
-func (r *supportChatRepository) FindActiveRoomByAccountID(accountID string) (*models.CSChatRoom, error) {
-	var room models.CSChatRoom
+func (r *supportChatRepository) FindActiveSessionByAccountID(accountID string) (*models.CSChatSession, error) {
+	var session models.CSChatSession
 	err := r.db.
 		Preload("Account").
 		Preload("Business").
 		Preload("CSAdmin").
 		Where("account_id = ? AND status IN ('open', 'in_progress') AND user_hidden = false", accountID).
 		Order("created_at DESC").
-		First(&room).Error
+		First(&session).Error
 	if err != nil {
 		return nil, err
 	}
-	return &room, nil
+	return &session, nil
 }
 
-func (r *supportChatRepository) GetRoomByID(roomID string) (*models.CSChatRoom, error) {
-	var room models.CSChatRoom
+func (r *supportChatRepository) GetSessionByID(sessionID string) (*models.CSChatSession, error) {
+	var session models.CSChatSession
 	err := r.db.
 		Preload("Account").
 		Preload("Business").
 		Preload("CSAdmin").
-		Where("room_id = ?", roomID).
-		First(&room).Error
+		Where("session_id = ?", sessionID).
+		First(&session).Error
 	if err != nil {
 		return nil, err
 	}
-	return &room, nil
+	return &session, nil
 }
 
-func (r *supportChatRepository) CreateRoomWithGreeting(room *models.CSChatRoom, greetingMessage *models.CSChatMessage) error {
+func (r *supportChatRepository) CreateSessionWithGreeting(session *models.CSChatSession, greetingMessage *models.CSChatMessage) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(room).Error; err != nil {
+		if err := tx.Create(session).Error; err != nil {
 			return err
 		}
 		if greetingMessage != nil {
@@ -77,7 +77,7 @@ func (r *supportChatRepository) SaveMessage(message *models.CSChatMessage) error
 	return r.db.Create(message).Error
 }
 
-func (r *supportChatRepository) UpdateRoomLastMessage(roomID string, preview string, lastMessageAt time.Time, status string, csAdminID *string) error {
+func (r *supportChatRepository) UpdateSessionLastMessage(sessionID string, preview string, lastMessageAt time.Time, status string, csAdminID *string) error {
 	updates := map[string]interface{}{
 		"last_message_preview": preview,
 		"last_message_at":      lastMessageAt,
@@ -90,12 +90,12 @@ func (r *supportChatRepository) UpdateRoomLastMessage(roomID string, preview str
 		updates["cs_admin_id"] = *csAdminID
 	}
 
-	return r.db.Model(&models.CSChatRoom{}).Where("room_id = ?", roomID).Updates(updates).Error
+	return r.db.Model(&models.CSChatSession{}).Where("session_id = ?", sessionID).Updates(updates).Error
 }
 
-func (r *supportChatRepository) GetMessagesByRoomID(roomID string, limit int, cursor string) ([]models.CSChatMessage, error) {
+func (r *supportChatRepository) GetMessagesBySessionID(sessionID string, limit int, cursor string) ([]models.CSChatMessage, error) {
 	var messages []models.CSChatMessage
-	query := r.db.Where("room_id = ?", roomID)
+	query := r.db.Where("session_id = ?", sessionID)
 
 	if cursor != "" {
 		var cursorMsg models.CSChatMessage
@@ -108,9 +108,7 @@ func (r *supportChatRepository) GetMessagesByRoomID(roomID string, limit int, cu
 	return messages, err
 }
 
-func (r *supportChatRepository) MarkMessagesAsRead(roomID string, readerType string) error {
-	// Jika reader adalah 'user', tandai pesan dari 'cs' dan 'system' sebagai terbaca
-	// Jika reader adalah 'cs', tandai pesan dari 'user' sebagai terbaca
+func (r *supportChatRepository) MarkMessagesAsRead(sessionID string, readerType string) error {
 	targetSenderType := "cs"
 	if readerType == "cs" {
 		targetSenderType = "user"
@@ -118,14 +116,14 @@ func (r *supportChatRepository) MarkMessagesAsRead(roomID string, readerType str
 
 	now := time.Now()
 	return r.db.Model(&models.CSChatMessage{}).
-		Where("room_id = ? AND sender_type = ? AND is_read = false", roomID, targetSenderType).
+		Where("session_id = ? AND sender_type = ? AND is_read = false", sessionID, targetSenderType).
 		Updates(map[string]interface{}{
 			"is_read": true,
 			"read_at": &now,
 		}).Error
 }
 
-func (r *supportChatRepository) EndRoom(roomID string, endedBy string, rating *int, feedback *string, endMessage *models.CSChatMessage) error {
+func (r *supportChatRepository) EndSession(sessionID string, endedBy string, rating *int, feedback *string, endMessage *models.CSChatMessage) error {
 	now := time.Now()
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
@@ -142,7 +140,7 @@ func (r *supportChatRepository) EndRoom(roomID string, endedBy string, rating *i
 			updates["feedback"] = *feedback
 		}
 
-		if err := tx.Model(&models.CSChatRoom{}).Where("room_id = ?", roomID).Updates(updates).Error; err != nil {
+		if err := tx.Model(&models.CSChatSession{}).Where("session_id = ?", sessionID).Updates(updates).Error; err != nil {
 			return err
 		}
 
@@ -156,8 +154,8 @@ func (r *supportChatRepository) EndRoom(roomID string, endedBy string, rating *i
 	})
 }
 
-func (r *supportChatRepository) GetAdminQueue(status string, limit int, cursor string) ([]models.CSChatRoom, error) {
-	var rooms []models.CSChatRoom
+func (r *supportChatRepository) GetAdminQueue(status string, limit int, cursor string) ([]models.CSChatSession, error) {
+	var sessions []models.CSChatSession
 	query := r.db.
 		Preload("Account").
 		Preload("Business").
@@ -170,18 +168,18 @@ func (r *supportChatRepository) GetAdminQueue(status string, limit int, cursor s
 	}
 
 	if cursor != "" {
-		var cursorRoom models.CSChatRoom
-		if err := r.db.Select("last_message_at").Where("room_id = ?", cursor).First(&cursorRoom).Error; err == nil {
-			query = query.Where("last_message_at < ?", cursorRoom.LastMessageAt)
+		var cursorSession models.CSChatSession
+		if err := r.db.Select("last_message_at").Where("session_id = ?", cursor).First(&cursorSession).Error; err == nil {
+			query = query.Where("last_message_at < ?", cursorSession.LastMessageAt)
 		}
 	}
 
-	err := query.Order("last_message_at DESC").Limit(limit).Find(&rooms).Error
-	return rooms, err
+	err := query.Order("last_message_at DESC").Limit(limit).Find(&sessions).Error
+	return sessions, err
 }
 
-func (r *supportChatRepository) GetAdminHistory(limit int, cursor string) ([]models.CSChatRoom, error) {
-	var rooms []models.CSChatRoom
+func (r *supportChatRepository) GetAdminHistory(limit int, cursor string) ([]models.CSChatSession, error) {
+	var sessions []models.CSChatSession
 	query := r.db.
 		Preload("Account").
 		Preload("Business").
@@ -189,19 +187,19 @@ func (r *supportChatRepository) GetAdminHistory(limit int, cursor string) ([]mod
 		Where("status = 'ended'")
 
 	if cursor != "" {
-		var cursorRoom models.CSChatRoom
-		if err := r.db.Select("ended_at").Where("room_id = ?", cursor).First(&cursorRoom).Error; err == nil && cursorRoom.EndedAt != nil {
-			query = query.Where("ended_at < ?", cursorRoom.EndedAt)
+		var cursorSession models.CSChatSession
+		if err := r.db.Select("ended_at").Where("session_id = ?", cursor).First(&cursorSession).Error; err == nil && cursorSession.EndedAt != nil {
+			query = query.Where("ended_at < ?", cursorSession.EndedAt)
 		}
 	}
 
-	err := query.Order("ended_at DESC").Limit(limit).Find(&rooms).Error
-	return rooms, err
+	err := query.Order("ended_at DESC").Limit(limit).Find(&sessions).Error
+	return sessions, err
 }
 
-func (r *supportChatRepository) AssignCSToRoom(roomID string, csAdminID string) error {
-	return r.db.Model(&models.CSChatRoom{}).
-		Where("room_id = ?", roomID).
+func (r *supportChatRepository) AssignCSToSession(sessionID string, csAdminID string) error {
+	return r.db.Model(&models.CSChatSession{}).
+		Where("session_id = ?", sessionID).
 		Updates(map[string]interface{}{
 			"cs_admin_id": csAdminID,
 			"status":      "in_progress",

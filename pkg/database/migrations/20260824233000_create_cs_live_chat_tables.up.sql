@@ -1,6 +1,6 @@
 -- Migration: Create CS Live Chat Tables
-CREATE TABLE IF NOT EXISTS cs_chat_rooms (
-    room_id VARCHAR(50) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS cs_chat_sessions (
+    session_id VARCHAR(50) PRIMARY KEY,
     account_id VARCHAR(50) NOT NULL REFERENCES accounts(account_id) ON DELETE CASCADE,
     user_role VARCHAR(20) NOT NULL,
     business_id VARCHAR(50) REFERENCES businesses(business_id) ON DELETE SET NULL,
@@ -17,14 +17,14 @@ CREATE TABLE IF NOT EXISTS cs_chat_rooms (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_cs_chat_rooms_account_id ON cs_chat_rooms(account_id);
-CREATE INDEX IF NOT EXISTS idx_cs_chat_rooms_status ON cs_chat_rooms(status);
-CREATE INDEX IF NOT EXISTS idx_cs_chat_rooms_user_hidden ON cs_chat_rooms(user_hidden);
-CREATE INDEX IF NOT EXISTS idx_cs_chat_rooms_last_message_at ON cs_chat_rooms(last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cs_chat_sessions_account_id ON cs_chat_sessions(account_id);
+CREATE INDEX IF NOT EXISTS idx_cs_chat_sessions_status ON cs_chat_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_cs_chat_sessions_user_hidden ON cs_chat_sessions(user_hidden);
+CREATE INDEX IF NOT EXISTS idx_cs_chat_sessions_last_message_at ON cs_chat_sessions(last_message_at DESC);
 
 CREATE TABLE IF NOT EXISTS cs_chat_messages (
     message_id VARCHAR(50) PRIMARY KEY,
-    room_id VARCHAR(50) NOT NULL REFERENCES cs_chat_rooms(room_id) ON DELETE CASCADE,
+    session_id VARCHAR(50) NOT NULL REFERENCES cs_chat_sessions(session_id) ON DELETE CASCADE,
     sender_id VARCHAR(50) NOT NULL,
     sender_type VARCHAR(20) NOT NULL,
     sender_name VARCHAR(100) NOT NULL,
@@ -36,5 +36,5 @@ CREATE TABLE IF NOT EXISTS cs_chat_messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_cs_chat_messages_room_id ON cs_chat_messages(room_id);
+CREATE INDEX IF NOT EXISTS idx_cs_chat_messages_session_id ON cs_chat_messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_cs_chat_messages_created_at ON cs_chat_messages(created_at ASC);

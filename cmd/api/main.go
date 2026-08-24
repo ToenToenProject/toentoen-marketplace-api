@@ -573,6 +573,10 @@ func main() {
 	supportGroup := api.Group("/support/chat", middlewares.RequireAuth)
 	supportGroup.Post("/initiate", supportChatHandler.InitiateChat)
 	supportGroup.Get("/active", supportChatHandler.GetActiveChat)
+	supportGroup.Get("/:session_id/messages", supportChatHandler.GetMessages)
+	supportGroup.Post("/:session_id/messages", supportChatHandler.SendMessage)
+	supportGroup.Post("/:session_id/end", supportChatHandler.EndChat)
+	// Backward-compatible aliases
 	supportGroup.Get("/:room_id/messages", supportChatHandler.GetMessages)
 	supportGroup.Post("/:room_id/messages", supportChatHandler.SendMessage)
 	supportGroup.Post("/:room_id/end", supportChatHandler.EndChat)
@@ -582,7 +586,8 @@ func main() {
 	supportAdminGroup := api.Group("/support/chat/admin", middlewares.RequireAuth, csAdminAuth)
 	supportAdminGroup.Get("/queue", supportChatHandler.AdminGetQueue)
 	supportAdminGroup.Get("/history", supportChatHandler.AdminGetHistory)
-	supportAdminGroup.Post("/:room_id/assign", supportChatHandler.AdminAssignRoom)
+	supportAdminGroup.Post("/:session_id/assign", supportChatHandler.AdminAssignSession)
+	supportAdminGroup.Post("/:room_id/assign", supportChatHandler.AdminAssignSession)
 
 	// ==========================================
 	// 4. START SERVER

@@ -11,14 +11,14 @@ import (
 )
 
 type SupportChatService interface {
-	InitiateChat(accountID string, userRole string, businessID *string) (*models.CSChatRoom, *models.CSChatMessage, bool, error)
-	GetActiveChat(accountID string) (*models.CSChatRoom, error)
-	GetChatMessages(roomID string, requesterID string, isCS bool, limit int, cursor string) ([]models.CSChatMessage, error)
-	SendMessage(roomID string, senderID string, senderType string, senderName string, input models.SendCSMessageInput) (*models.CSChatMessage, error)
-	EndChat(roomID string, requesterID string, isCS bool, input models.EndCSChatInput) error
-	AdminGetQueue(status string, limit int, cursor string) ([]models.CSChatRoom, error)
-	AdminGetHistory(limit int, cursor string) ([]models.CSChatRoom, error)
-	AdminAssignRoom(roomID string, csAdminID string) error
+	InitiateChat(accountID string, userRole string, businessID *string) (*models.CSChatSession, *models.CSChatMessage, bool, error)
+	GetActiveChat(accountID string) (*models.CSChatSession, error)
+	GetChatMessages(sessionID string, requesterID string, isCS bool, limit int, cursor string) ([]models.CSChatMessage, error)
+	SendMessage(sessionID string, senderID string, senderType string, senderName string, input models.SendCSMessageInput) (*models.CSChatMessage, error)
+	EndChat(sessionID string, requesterID string, isCS bool, input models.EndCSChatInput) error
+	AdminGetQueue(status string, limit int, cursor string) ([]models.CSChatSession, error)
+	AdminGetHistory(limit int, cursor string) ([]models.CSChatSession, error)
+	AdminAssignSession(sessionID string, csAdminID string) error
 }
 
 type supportChatService struct {
@@ -33,17 +33,17 @@ func NewSupportChatService(repo SupportChatRepository, hub *realtime.Hub) Suppor
 	}
 }
 
-func (s *supportChatService) InitiateChat(accountID string, userRole string, businessID *string) (*models.CSChatRoom, *models.CSChatMessage, bool, error) {
-	// 1. Cek apakah user sudah memiliki room aktif yang belum di-end/hide
-	existingRoom, err := s.repo.FindActiveRoomByAccountID(accountID)
-	if err == nil && existingRoom != nil {
-		// Sudah ada room aktif, kembalikan room tersebut (isNew = false)
-		messages, _ := s.repo.GetMessagesByRoomID(existingRoom.RoomID, 1, "")
+func (s *supportChatService) InitiateChat(accountID string, userRole string, businessID *string) (*models.CSChatSession, *models.CSChatMessage, bool, error) {
+	// 1. Cek apakah user sudah memiliki sesi aktif yang belum di-end/hide
+	existingSession, err := s.repo.FindActiveSessionByAccountID(accountID)
+	if err == nil && existingSession != nil {
+		// Sudah ada sesi aktif, kembalikan sesi tersebut (isNew = false)
+		messages, _ := s.repo.GetMessagesBySessionID(existingSession.SessionID, 1, "")
 		var lastMsg *models.CSChatMessage
 		if len(messages) > 0 {
 			lastMsg = &messages[len(messages)-1]
 		}
-		return existingRoom, lastMsg, false, nil
+		return existingSession, lastMsg, false, nil
 	}
 
 	// 2. Ambil data akun user untuk mendapatkan nama tampilan
@@ -58,12 +58,14 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 	}
 
 	now := time.Now()
-	roomID := utils.GenerateUUID("CSR")
+	// Prefix LCS: Live Chat Session
+	sessionID := utils.GenerateUUID("LCS")
 	greetingContent := fmt.Sprintf("Halo %s! Selamat datang di Layanan Bantuan ToenToen. Ada yang bisa kami bantu hari ini?", displayName)
 
+	// Prefix LCM: Live Chat Message
 	greetingMsg := &models.CSChatMessage{
-		MessageID:   utils.GenerateUUID("CSM"),
-		RoomID:      roomID,
+		MessageID:   utils.GenerateUUID("LCM"),
+		SessionID:   sessionID,
 		SenderID:    "SYSTEM",
 		SenderType:  "system",
 		SenderName:  "ToenToen Support",
@@ -77,8 +79,8 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 		businessID = nil
 	}
 
-	newRoom := &models.CSChatRoom{
-		RoomID:             roomID,
+	newSession := &models.CSChatSession{
+		SessionID:          sessionID,
 		AccountID:          accountID,
 		UserRole:           userRole,
 		BusinessID:         businessID,
@@ -90,44 +92,44 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 		UpdatedAt:          now,
 	}
 
-	if err := s.repo.CreateRoomWithGreeting(newRoom, greetingMsg); err != nil {
-		fmt.Printf("⚠️ Error CreateRoomWithGreeting: %v\n", err)
+	if err := s.repo.CreateSessionWithGreeting(newSession, greetingMsg); err != nil {
+		fmt.Printf("⚠️ Error CreateSessionWithGreeting: %v\n", err)
 		return nil, nil, false, errors.New("Gagal membuat sesi live chat")
 	}
 
 	// 3. Broadcast event real-time ke CS via WebSocket jika hub tersedia
 	if s.hub != nil {
 		s.hub.BroadcastToRole("platform_admin", realtime.WSEvent{
-			Type: "CS_ROOM_CREATED",
+			Type: "CS_SESSION_CREATED",
 			Data: map[string]interface{}{
-				"room_id":      newRoom.RoomID,
-				"account_id":   newRoom.AccountID,
-				"user_role":    newRoom.UserRole,
+				"session_id":   newSession.SessionID,
+				"account_id":   newSession.AccountID,
+				"user_role":    newSession.UserRole,
 				"display_name": displayName,
-				"created_at":   newRoom.CreatedAt,
+				"created_at":   newSession.CreatedAt,
 			},
 		})
 	}
 
-	return newRoom, greetingMsg, true, nil
+	return newSession, greetingMsg, true, nil
 }
 
-func (s *supportChatService) GetActiveChat(accountID string) (*models.CSChatRoom, error) {
-	room, err := s.repo.FindActiveRoomByAccountID(accountID)
+func (s *supportChatService) GetActiveChat(accountID string) (*models.CSChatSession, error) {
+	session, err := s.repo.FindActiveSessionByAccountID(accountID)
 	if err != nil {
 		return nil, nil
 	}
-	return room, nil
+	return session, nil
 }
 
-func (s *supportChatService) GetChatMessages(roomID string, requesterID string, isCS bool, limit int, cursor string) ([]models.CSChatMessage, error) {
-	room, err := s.repo.GetRoomByID(roomID)
+func (s *supportChatService) GetChatMessages(sessionID string, requesterID string, isCS bool, limit int, cursor string) ([]models.CSChatMessage, error) {
+	session, err := s.repo.GetSessionByID(sessionID)
 	if err != nil {
-		return nil, errors.New("Room chat tidak ditemukan")
+		return nil, errors.New("Sesi live chat tidak ditemukan")
 	}
 
-	// Validasi akses: hanya pemilik chat atau admin CS yang boleh membaca
-	if !isCS && room.AccountID != requesterID {
+	// Validasi akses: hanya pemilik sesi chat atau admin CS yang boleh membaca
+	if !isCS && session.AccountID != requesterID {
 		return nil, errors.New("Anda tidak memiliki akses ke percakapan ini")
 	}
 
@@ -139,23 +141,23 @@ func (s *supportChatService) GetChatMessages(roomID string, requesterID string, 
 	if isCS {
 		readerType = "cs"
 	}
-	_ = s.repo.MarkMessagesAsRead(roomID, readerType)
+	_ = s.repo.MarkMessagesAsRead(sessionID, readerType)
 
-	return s.repo.GetMessagesByRoomID(roomID, limit, cursor)
+	return s.repo.GetMessagesBySessionID(sessionID, limit, cursor)
 }
 
-func (s *supportChatService) SendMessage(roomID string, senderID string, senderType string, senderName string, input models.SendCSMessageInput) (*models.CSChatMessage, error) {
-	room, err := s.repo.GetRoomByID(roomID)
+func (s *supportChatService) SendMessage(sessionID string, senderID string, senderType string, senderName string, input models.SendCSMessageInput) (*models.CSChatMessage, error) {
+	session, err := s.repo.GetSessionByID(sessionID)
 	if err != nil {
-		return nil, errors.New("Room chat tidak ditemukan")
+		return nil, errors.New("Sesi live chat tidak ditemukan")
 	}
 
-	if room.Status == "ended" {
-		return nil, errors.New("Sesi chat ini sudah diakhiri. Silakan mulai live chat baru.")
+	if session.Status == "ended" {
+		return nil, errors.New("Sesi live chat ini sudah diakhiri. Silakan mulai sesi live chat baru.")
 	}
 
 	// Validasi sender
-	if senderType == "user" && room.AccountID != senderID {
+	if senderType == "user" && session.AccountID != senderID {
 		return nil, errors.New("Anda tidak memiliki akses ke percakapan ini")
 	}
 
@@ -169,8 +171,8 @@ func (s *supportChatService) SendMessage(roomID string, senderID string, senderT
 
 	now := time.Now()
 	message := &models.CSChatMessage{
-		MessageID:   utils.GenerateUUID("CSM"),
-		RoomID:      roomID,
+		MessageID:   utils.GenerateUUID("LCM"),
+		SessionID:   sessionID,
 		SenderID:    senderID,
 		SenderType:  senderType,
 		SenderName:  senderName,
@@ -185,16 +187,16 @@ func (s *supportChatService) SendMessage(roomID string, senderID string, senderT
 		return nil, errors.New("Gagal mengirim pesan")
 	}
 
-	// Update metadata room
-	newStatus := room.Status
+	// Update metadata session
+	newStatus := session.Status
 	var csAdminIDToUpdate *string
 	if senderType == "cs" {
 		newStatus = "in_progress"
-		if room.CSAdminID == nil || *room.CSAdminID == "" {
+		if session.CSAdminID == nil || *session.CSAdminID == "" {
 			csAdminIDToUpdate = &senderID
 		}
 	}
-	_ = s.repo.UpdateRoomLastMessage(roomID, message.Content, now, newStatus, csAdminIDToUpdate)
+	_ = s.repo.UpdateSessionLastMessage(sessionID, message.Content, now, newStatus, csAdminIDToUpdate)
 
 	// Broadcast via WebSocket
 	if s.hub != nil {
@@ -204,11 +206,11 @@ func (s *supportChatService) SendMessage(roomID string, senderID string, senderT
 		}
 
 		// Kirim ke pemilik chat
-		s.hub.SendToAccount(room.AccountID, event)
+		s.hub.SendToAccount(session.AccountID, event)
 
 		// Jika ada CS assigned, kirim ke CS tersebut, jika belum, broadcast ke pool CS
-		if room.CSAdminID != nil && *room.CSAdminID != "" {
-			s.hub.SendToAccount(*room.CSAdminID, event)
+		if session.CSAdminID != nil && *session.CSAdminID != "" {
+			s.hub.SendToAccount(*session.CSAdminID, event)
 		} else {
 			s.hub.BroadcastToRole("platform_admin", event)
 		}
@@ -217,17 +219,17 @@ func (s *supportChatService) SendMessage(roomID string, senderID string, senderT
 	return message, nil
 }
 
-func (s *supportChatService) EndChat(roomID string, requesterID string, isCS bool, input models.EndCSChatInput) error {
-	room, err := s.repo.GetRoomByID(roomID)
+func (s *supportChatService) EndChat(sessionID string, requesterID string, isCS bool, input models.EndCSChatInput) error {
+	session, err := s.repo.GetSessionByID(sessionID)
 	if err != nil {
-		return errors.New("Room chat tidak ditemukan")
+		return errors.New("Sesi live chat tidak ditemukan")
 	}
 
-	if !isCS && room.AccountID != requesterID {
+	if !isCS && session.AccountID != requesterID {
 		return errors.New("Anda tidak memiliki akses ke percakapan ini")
 	}
 
-	if room.Status == "ended" {
+	if session.Status == "ended" {
 		return nil // Sudah berstatus ended
 	}
 
@@ -238,8 +240,8 @@ func (s *supportChatService) EndChat(roomID string, requesterID string, isCS boo
 
 	now := time.Now()
 	endMsg := &models.CSChatMessage{
-		MessageID:   utils.GenerateUUID("CSM"),
-		RoomID:      roomID,
+		MessageID:   utils.GenerateUUID("LCM"),
+		SessionID:   sessionID,
 		SenderID:    "SYSTEM",
 		SenderType:  "system",
 		SenderName:  "ToenToen Support",
@@ -249,7 +251,7 @@ func (s *supportChatService) EndChat(roomID string, requesterID string, isCS boo
 		CreatedAt:   now,
 	}
 
-	if err := s.repo.EndRoom(roomID, endedBy, input.Rating, input.Feedback, endMsg); err != nil {
+	if err := s.repo.EndSession(sessionID, endedBy, input.Rating, input.Feedback, endMsg); err != nil {
 		return errors.New("Gagal mengakhiri percakapan")
 	}
 
@@ -258,16 +260,16 @@ func (s *supportChatService) EndChat(roomID string, requesterID string, isCS boo
 		event := realtime.WSEvent{
 			Type: "CS_CHAT_ENDED",
 			Data: map[string]interface{}{
-				"room_id":  roomID,
-				"ended_by": endedBy,
-				"ended_at": now,
-				"rating":   input.Rating,
-				"feedback": input.Feedback,
+				"session_id": sessionID,
+				"ended_by":   endedBy,
+				"ended_at":   now,
+				"rating":     input.Rating,
+				"feedback":   input.Feedback,
 			},
 		}
-		s.hub.SendToAccount(room.AccountID, event)
-		if room.CSAdminID != nil && *room.CSAdminID != "" {
-			s.hub.SendToAccount(*room.CSAdminID, event)
+		s.hub.SendToAccount(session.AccountID, event)
+		if session.CSAdminID != nil && *session.CSAdminID != "" {
+			s.hub.SendToAccount(*session.CSAdminID, event)
 		} else {
 			s.hub.BroadcastToRole("platform_admin", event)
 		}
@@ -276,27 +278,27 @@ func (s *supportChatService) EndChat(roomID string, requesterID string, isCS boo
 	return nil
 }
 
-func (s *supportChatService) AdminGetQueue(status string, limit int, cursor string) ([]models.CSChatRoom, error) {
+func (s *supportChatService) AdminGetQueue(status string, limit int, cursor string) ([]models.CSChatSession, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
 	return s.repo.GetAdminQueue(status, limit, cursor)
 }
 
-func (s *supportChatService) AdminGetHistory(limit int, cursor string) ([]models.CSChatRoom, error) {
+func (s *supportChatService) AdminGetHistory(limit int, cursor string) ([]models.CSChatSession, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
 	return s.repo.GetAdminHistory(limit, cursor)
 }
 
-func (s *supportChatService) AdminAssignRoom(roomID string, csAdminID string) error {
-	room, err := s.repo.GetRoomByID(roomID)
+func (s *supportChatService) AdminAssignSession(sessionID string, csAdminID string) error {
+	session, err := s.repo.GetSessionByID(sessionID)
 	if err != nil {
-		return errors.New("Room chat tidak ditemukan")
+		return errors.New("Sesi live chat tidak ditemukan")
 	}
-	if room.Status == "ended" {
-		return errors.New("Room chat sudah berakhir")
+	if session.Status == "ended" {
+		return errors.New("Sesi live chat sudah berakhir")
 	}
-	return s.repo.AssignCSToRoom(roomID, csAdminID)
+	return s.repo.AssignCSToSession(sessionID, csAdminID)
 }

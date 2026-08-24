@@ -1,2 +1,3 @@
 DROP TABLE IF EXISTS cs_chat_messages CASCADE;
+DROP TABLE IF EXISTS cs_chat_sessions CASCADE;
 DROP TABLE IF EXISTS cs_chat_rooms CASCADE;
