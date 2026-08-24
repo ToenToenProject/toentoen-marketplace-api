@@ -459,6 +459,8 @@ func main() {
 	// Shared Business Scope (Owner & Business Admin dengan BusinessAccessGuard)
 	sharedBusinessScope := api.Group("/business/:business_id", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
 	sharedBusinessScope.Get("/", businessHandler.GetBusinessDetail)
+	sharedBusinessScope.Put("/", businessHandler.UpdateBusiness)
+	sharedBusinessScope.Patch("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/toggle-status", businessHandler.ToggleStoreStatus)
 
 	// -> Products

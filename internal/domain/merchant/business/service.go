@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -183,10 +184,19 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	return business, nil
 }
 
-func (s *businessService) UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (error) {
-	business, err := s.repo.FindBusinessByIDAndOwner(businessID, ownerID)
+func (s *businessService) UpdateBusiness(requesterID, businessID string, input models.UpdateBusinessInput) (error) {
+	business, err := s.repo.FindBusinessByID(businessID)
 	if err != nil {
-		return errors.New("business is not found or you don't have access")
+		return errors.New("business is not found")
+	}
+
+	// Verifikasi apakah requester adalah owner atau admin aktif di toko ini
+	isOwner := business.AccountID == requesterID
+	if !isOwner {
+		var assignment models.BusinessAdminAssignment
+		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
+			return errors.New("you don't have access to update this business")
+		}
 	}
 
 	// Update field sederhana
@@ -324,10 +334,22 @@ func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 	return s.repo.DeleteBusiness(business)
 }
 
-func (s *businessService) ToggleStoreStatus(ownerID, businessID string) (bool, error) {
-	business, err := s.repo.FindBusinessByIDAndOwnerWithPreload(businessID, ownerID)
+func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (bool, error) {
+	business, err := s.repo.FindBusinessByID(businessID)
 	if err != nil {
-		return false, errors.New("business is not found or you don't have access")
+		return false, errors.New("business is not found")
+	}
+
+	isOwner := business.AccountID == requesterID
+	if !isOwner {
+		var assignment models.BusinessAdminAssignment
+		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
+			return false, errors.New("you don't have access to toggle store status")
+		}
+	}
+
+	if len(business.Hours) == 0 {
+		database.DB.Where("business_id = ?", businessID).Find(&business.Hours)
 	}
 
 	// Nilai baru yang akan di-apply (Flip)

@@ -99,16 +99,14 @@ func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 }
 
 func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
-	businessID := c.Params("id")
-
-	accountIDValue := c.Locals("account_id")
-	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
 	}
 
-	var ownerID, ok = accountIDValue.(string)
-	if !ok {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
 	var input models.UpdateBusinessInput
@@ -120,7 +118,7 @@ func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	err := h.service.UpdateBusiness(ownerID, businessID, input)
+	err = h.service.UpdateBusiness(requesterID, businessID, input)
 	if err != nil {
 		if err.Error() == "handle already exists" {
 			return utils.SendResponse(c, fiber.StatusConflict, constants.HandleTaken, "Handle sudah digunakan, silakan pilih yang lain", nil)
