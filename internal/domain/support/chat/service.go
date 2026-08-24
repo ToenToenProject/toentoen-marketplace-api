@@ -73,6 +73,10 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 		CreatedAt:   now,
 	}
 
+	if businessID != nil && strings.TrimSpace(*businessID) == "" {
+		businessID = nil
+	}
+
 	newRoom := &models.CSChatRoom{
 		RoomID:             roomID,
 		AccountID:          accountID,
@@ -87,6 +91,7 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 	}
 
 	if err := s.repo.CreateRoomWithGreeting(newRoom, greetingMsg); err != nil {
+		fmt.Printf("⚠️ Error CreateRoomWithGreeting: %v\n", err)
 		return nil, nil, false, errors.New("Gagal membuat sesi live chat")
 	}
 
