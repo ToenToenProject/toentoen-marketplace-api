@@ -108,8 +108,16 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 	if input.LastName != nil {
 		account.LastName = *input.LastName
 	}
-	if input.Username != nil {
-		account.Username = *input.Username
+	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
+		cleanUsername := strings.TrimSpace(*input.Username)
+		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("username already in use")
+		}
+		account.Username = cleanUsername
 	}
 	if input.Email != nil && *input.Email != "" {
 		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
@@ -270,8 +278,16 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	if input.ProfilePictureUrl != nil {
 		account.ProfilePictureUrl = input.ProfilePictureUrl
 	}
-	if input.Username != nil {
-		account.Username = *input.Username
+	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
+		cleanUsername := strings.TrimSpace(*input.Username)
+		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("username already in use")
+		}
+		account.Username = cleanUsername
 	}
 	if input.Email != nil && *input.Email != "" {
 		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
@@ -404,8 +420,16 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 	if input.ProfilePictureUrl != nil {
 		account.ProfilePictureUrl = input.ProfilePictureUrl
 	}
-	if input.Username != nil {
-		account.Username = *input.Username
+	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
+		cleanUsername := strings.TrimSpace(*input.Username)
+		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, errors.New("username already in use")
+		}
+		account.Username = cleanUsername
 	}
 	if input.Email != nil && *input.Email != "" {
 		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)

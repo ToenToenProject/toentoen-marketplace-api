@@ -1,6 +1,7 @@
 package account
 
 import (
+	"strings"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -18,6 +19,7 @@ type ProfileRepository interface {
 	SaveBusinessAdminProfile(account *models.Account, businessAdmin *models.BusinessAdmin) error
 
 	DeleteAccountTx(accountID string, role string) ([]string, []string, error)
+	CheckUsernameExists(username string, excludeAccountID string) (bool, error)
 	CheckEmailExists(email string, excludeAccountID string) (bool, error)
 	CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error)
 	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
@@ -106,15 +108,31 @@ func (r *profileRepository) SaveBusinessAdminProfile(account *models.Account, bu
 }
 
 // DeleteAccountTx deletes the account and all associated data, returning lists of deleted business IDs and product IDs for Meilisearch cleanup
+func (r *profileRepository) CheckUsernameExists(username string, excludeAccountID string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Account{}).Where("LOWER(username) = LOWER(?) AND account_id != ?", strings.TrimSpace(username), excludeAccountID).Count(&count).Error
+	return count > 0, err
+}
+
 func (r *profileRepository) CheckEmailExists(email string, excludeAccountID string) (bool, error) {
 	var count int64
-	err := r.db.Model(&models.Account{}).Where("email = ? AND account_id != ?", email, excludeAccountID).Count(&count).Error
+	err := r.db.Model(&models.Account{}).Where("LOWER(email) = LOWER(?) AND account_id != ?", strings.TrimSpace(email), excludeAccountID).Count(&count).Error
 	return count > 0, err
 }
 
 func (r *profileRepository) CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error) {
+	clean := strings.TrimPrefix(strings.TrimSpace(phone), "+")
+	var phones []string
+	if strings.HasPrefix(clean, "08") {
+		phones = []string{clean, "62" + clean[1:], "+62" + clean[1:]}
+	} else if strings.HasPrefix(clean, "628") {
+		phones = []string{clean, "0" + clean[2:], "+" + clean}
+	} else {
+		phones = []string{phone, "+" + phone, clean}
+	}
+
 	var count int64
-	err := r.db.Model(&models.Account{}).Where("phone_number = ? AND account_id != ?", phone, excludeAccountID).Count(&count).Error
+	err := r.db.Model(&models.Account{}).Where("phone_number IN ? AND account_id != ?", phones, excludeAccountID).Count(&count).Error
 	return count > 0, err
 }
 
