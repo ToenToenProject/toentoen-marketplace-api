@@ -25,6 +25,7 @@ import (
 	"toentoen-backend/internal/domain/merchant/post"
 	"toentoen-backend/internal/domain/meta"
 	"toentoen-backend/internal/domain/notification"
+	support_chat "toentoen-backend/internal/domain/support/chat"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -186,6 +187,10 @@ func main() {
 	metaRepo := meta.NewMetaRepository(database.DB)
 	metaService := meta.NewMetaService(metaRepo)
 	metaHandler := meta.NewMetaHandler(metaService)
+
+	supportChatRepo := support_chat.NewSupportChatRepository(database.DB)
+	supportChatService := support_chat.NewSupportChatService(supportChatRepo, wsHub)
+	supportChatHandler := support_chat.NewSupportChatHandler(supportChatService)
 
 	// ==========================================
 	// 3. FIBER APP SETUP
@@ -561,6 +566,23 @@ func main() {
 	// ROUTES: CUSTOMER PROFILE
 	// ==========================================
 	api.Get("/customer/profile/:account_id/summary", middlewares.RequireAuth, publicProfileHandler.GetPublicProfileSummary)
+
+	// ==========================================
+	// ROUTES: SUPPORT LIVE CHAT (Customer Service)
+	// ==========================================
+	supportGroup := api.Group("/support/chat", middlewares.RequireAuth)
+	supportGroup.Post("/initiate", supportChatHandler.InitiateChat)
+	supportGroup.Get("/active", supportChatHandler.GetActiveChat)
+	supportGroup.Get("/:room_id/messages", supportChatHandler.GetMessages)
+	supportGroup.Post("/:room_id/messages", supportChatHandler.SendMessage)
+	supportGroup.Post("/:room_id/end", supportChatHandler.EndChat)
+
+	// Rute Khusus Admin/CS Dashboard
+	csAdminAuth := middlewares.AllowRoles("platform_admin", "customer_service", "cs", "super_admin")
+	supportAdminGroup := api.Group("/support/chat/admin", middlewares.RequireAuth, csAdminAuth)
+	supportAdminGroup.Get("/queue", supportChatHandler.AdminGetQueue)
+	supportAdminGroup.Get("/history", supportChatHandler.AdminGetHistory)
+	supportAdminGroup.Post("/:room_id/assign", supportChatHandler.AdminAssignRoom)
 
 	// ==========================================
 	// 4. START SERVER

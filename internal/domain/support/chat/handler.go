@@ -1,0 +1,207 @@
+package chat
+
+import (
+	"strings"
+	"toentoen-backend/internal/constants"
+	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/utils"
+
+	"github.com/gofiber/fiber/v2"
+)
+
+type SupportChatHandler struct {
+	service SupportChatService
+}
+
+func NewSupportChatHandler(service SupportChatService) *SupportChatHandler {
+	return &SupportChatHandler{service: service}
+}
+
+// InitiateChat memulai atau membuka kembali sesi live chat CS aktif
+func (h *SupportChatHandler) InitiateChat(c *fiber.Ctx) error {
+	accountID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	var input models.InitiateCSChatInput
+	_ = c.BodyParser(&input)
+
+	room, greetingMsg, isNew, errSvc := h.service.InitiateChat(accountID, role, input.BusinessID)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	message := "Sesi live chat aktif ditemukan"
+	if isNew {
+		message = "Sesi live chat baru berhasil dibuat"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{
+		"room":             room,
+		"greeting_message": greetingMsg,
+		"is_new_session":   isNew,
+	})
+}
+
+// GetActiveChat mengambil sesi live chat yang sedang aktif untuk user yang login
+func (h *SupportChatHandler) GetActiveChat(c *fiber.Ctx) error {
+	accountID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	room, errSvc := h.service.GetActiveChat(accountID)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errSvc.Error(), nil)
+	}
+
+	if room == nil {
+		return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Tidak ada sesi live chat aktif", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sesi live chat aktif ditemukan", room)
+}
+
+// GetMessages mengambil riwayat pesan dalam room chat
+func (h *SupportChatHandler) GetMessages(c *fiber.Ctx) error {
+	accountID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	roomID := strings.TrimSpace(c.Params("room_id"))
+	if roomID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "room_id wajib diisi", nil)
+	}
+
+	limit := c.QueryInt("limit", 50)
+	cursor := strings.TrimSpace(c.Query("cursor", ""))
+	isCS := role == "platform_admin" || role == "customer_service" || role == "cs" || role == "super_admin"
+
+	messages, errSvc := h.service.GetChatMessages(roomID, accountID, isCS, limit, cursor)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan berhasil dimuat", messages)
+}
+
+// SendMessage mengirim pesan baru ke dalam room live chat
+func (h *SupportChatHandler) SendMessage(c *fiber.Ctx) error {
+	accountID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	roomID := strings.TrimSpace(c.Params("room_id"))
+	if roomID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "room_id wajib diisi", nil)
+	}
+
+	var input models.SendCSMessageInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	senderType := "user"
+	senderName := "Pengguna ToenToen"
+	isCS := role == "platform_admin" || role == "customer_service" || role == "cs" || role == "super_admin"
+
+	if isCS {
+		senderType = "cs"
+		senderName = "Customer Service ToenToen"
+	}
+
+	message, errSvc := h.service.SendMessage(roomID, accountID, senderType, senderName, input)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan berhasil terkirim", message)
+}
+
+// EndChat mengakhiri sesi live chat dan menyimpan rating/feedback
+func (h *SupportChatHandler) EndChat(c *fiber.Ctx) error {
+	accountID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	roomID := strings.TrimSpace(c.Params("room_id"))
+	if roomID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "room_id wajib diisi", nil)
+	}
+
+	var input models.EndCSChatInput
+	_ = c.BodyParser(&input)
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	isCS := role == "platform_admin" || role == "customer_service" || role == "cs" || role == "super_admin"
+	if errSvc := h.service.EndChat(roomID, accountID, isCS, input); errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sesi live chat telah berhasil diakhiri. Terima kasih atas masukan Anda!", nil)
+}
+
+// AdminGetQueue mengambil antrian live chat untuk dashboard CS
+func (h *SupportChatHandler) AdminGetQueue(c *fiber.Ctx) error {
+	status := strings.TrimSpace(c.Query("status", ""))
+	limit := c.QueryInt("limit", 50)
+	cursor := strings.TrimSpace(c.Query("cursor", ""))
+
+	rooms, err := h.service.AdminGetQueue(status, limit, cursor)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Antrian live chat berhasil dimuat", rooms)
+}
+
+// AdminGetHistory mengambil riwayat seluruh chat yang sudah selesai (ended)
+func (h *SupportChatHandler) AdminGetHistory(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit", 50)
+	cursor := strings.TrimSpace(c.Query("cursor", ""))
+
+	rooms, err := h.service.AdminGetHistory(limit, cursor)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Riwayat live chat berhasil dimuat", rooms)
+}
+
+// AdminAssignRoom menugaskan CS tertentu untuk menangani room chat
+func (h *SupportChatHandler) AdminAssignRoom(c *fiber.Ctx) error {
+	accountID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	roomID := strings.TrimSpace(c.Params("room_id"))
+	if roomID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "room_id wajib diisi", nil)
+	}
+
+	var input models.AssignCSChatInput
+	_ = c.BodyParser(&input)
+
+	csAdminID := accountID
+	if input.CSAdminID != "" {
+		csAdminID = input.CSAdminID
+	}
+
+	if errSvc := h.service.AdminAssignRoom(roomID, csAdminID); errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Room chat berhasil ditugaskan ke CS", nil)
+}

@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"toentoen-backend/internal/config"
+	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -32,4 +33,9 @@ func ConnectDB() {
 	}
 
 	log.Println("🚀 Connected to Database successfully")
+
+	// Auto-migrate CS chat models
+	if err := DB.AutoMigrate(&models.CSChatRoom{}, &models.CSChatMessage{}); err != nil {
+		log.Printf("⚠️ AutoMigrate CS chat models: %v", err)
+	}
 }

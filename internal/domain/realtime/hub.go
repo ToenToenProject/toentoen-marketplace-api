@@ -210,12 +210,36 @@ func (h *Hub) SendToUser(accountID string, event WSEvent) {
 	h.publishToRedis([]string{accountID}, event)
 }
 
+// SendToAccount adalah alias untuk SendToUser
+func (h *Hub) SendToAccount(accountID string, event WSEvent) {
+	h.SendToUser(accountID, event)
+}
+
 // BroadcastToUsers mengirimkan event ke banyak user sekaligus
 func (h *Hub) BroadcastToUsers(accountIDs []string, event WSEvent) {
 	if len(accountIDs) == 0 {
 		return
 	}
 	h.publishToRedis(accountIDs, event)
+}
+
+// BroadcastToRole mengirimkan event ke semua user aktif dengan role tertentu
+func (h *Hub) BroadcastToRole(role string, event WSEvent) {
+	h.mu.RLock()
+	var targetIDs []string
+	for id, conns := range h.clients {
+		for client := range conns {
+			if client.Role == role {
+				targetIDs = append(targetIDs, id)
+				break
+			}
+		}
+	}
+	h.mu.RUnlock()
+
+	if len(targetIDs) > 0 {
+		h.publishToRedis(targetIDs, event)
+	}
 }
 
 // IsOnline mengecek apakah user sedang terkoneksi via WebSocket
