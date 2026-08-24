@@ -48,6 +48,16 @@ type VerifyEmailChangeInput struct {
 	OTP      string `json:"otp" validate:"required"`
 }
 
+type RequestPhoneChangeInput struct {
+	CurrentPhone string `json:"current_phone" validate:"required"`
+	NewPhone     string `json:"new_phone" validate:"required"`
+}
+
+type VerifyPhoneChangeInput struct {
+	NewPhone string `json:"new_phone" validate:"required"`
+	OTP      string `json:"otp" validate:"required"`
+}
+
 type ChangePasswordInput struct {
 	CurrentPassword    string `json:"current_password"`
 	NewPassword        string `json:"new_password" validate:"required,min=6"`

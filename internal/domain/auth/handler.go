@@ -227,6 +227,60 @@ func (h *AuthHandler) VerifyEmailChange(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Email Anda telah berhasil diperbarui", nil)
 }
 
+func (h *AuthHandler) RequestPhoneChange(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID sesi pengguna", nil)
+	}
+
+	var input models.RequestPhoneChangeInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.RequestPhoneChange(accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP telah dikirim ke nomor WhatsApp baru Anda", nil)
+}
+
+func (h *AuthHandler) VerifyPhoneChange(c *fiber.Ctx) error {
+	accountIDValue := c.Locals("account_id")
+	if accountIDValue == nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	accountID, ok := accountIDValue.(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID sesi pengguna", nil)
+	}
+
+	var input models.VerifyPhoneChangeInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.VerifyPhoneChange(accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Nomor telepon Anda telah berhasil diperbarui", nil)
+}
+
 func (h *AuthHandler) CreateBusinessAdmin(c *fiber.Ctx) error {
 	var input models.CreateBusinessAdminInput
 	if err := c.BodyParser(&input); err != nil {

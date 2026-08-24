@@ -25,6 +25,8 @@ type AuthService interface {
 	ChangePassword(accountID string, input models.ChangePasswordInput) error
 	RequestEmailChange(accountID string, input models.RequestEmailChangeInput) error
 	VerifyEmailChange(accountID string, input models.VerifyEmailChangeInput) error
+	RequestPhoneChange(accountID string, input models.RequestPhoneChangeInput) error
+	VerifyPhoneChange(accountID string, input models.VerifyPhoneChangeInput) error
 	CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error)
 }
 
@@ -379,6 +381,57 @@ func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEma
 
 	if err := s.repo.UpdateEmail(accountID, input.NewEmail); err != nil {
 		return errors.New("Gagal memperbarui email")
+	}
+
+	config.RDB.Del(config.Ctx, redisKey)
+	return nil
+}
+
+func (s *authService) RequestPhoneChange(accountID string, input models.RequestPhoneChangeInput) error {
+	account, err := s.repo.FindByID(accountID)
+	if err != nil {
+		return errors.New("Sesi pengguna tidak valid")
+	}
+
+	currentPhoneClean := cleanIdentifier(input.CurrentPhone)
+	newPhoneClean := cleanIdentifier(input.NewPhone)
+
+	if account.PhoneNumber != nil && cleanIdentifier(*account.PhoneNumber) != currentPhoneClean {
+		return errors.New("Nomor telepon saat ini tidak cocok dengan data akun Anda")
+	}
+
+	if currentPhoneClean == newPhoneClean {
+		return errors.New("Nomor telepon baru tidak boleh sama dengan nomor saat ini")
+	}
+
+	// Cek apakah nomor telepon baru sudah dipakai akun lain
+	if exists, _ := s.repo.FindByIdentifier(newPhoneClean); exists != nil && exists.AccountID != accountID {
+		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
+	}
+
+	otp := utils.GenerateNumericOTP(6)
+	redisKey := fmt.Sprintf("change_phone_otp:%s", newPhoneClean)
+
+	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
+		return errors.New("Gagal memproses kode verifikasi")
+	}
+
+	go utils.SendWAOTP(newPhoneClean, otp)
+
+	return nil
+}
+
+func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPhoneChangeInput) error {
+	newPhoneClean := cleanIdentifier(input.NewPhone)
+	redisKey := fmt.Sprintf("change_phone_otp:%s", newPhoneClean)
+	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+
+	if err == redis.Nil || storedOTP != input.OTP {
+		return errors.New("OTP tidak valid atau sudah kadaluarsa")
+	}
+
+	if err := s.repo.UpdatePhoneNumber(accountID, newPhoneClean); err != nil {
+		return errors.New("Gagal memperbarui nomor telepon")
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)

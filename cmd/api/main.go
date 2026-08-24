@@ -268,6 +268,8 @@ func main() {
 	authGroup.Patch("/change-password", middlewares.RequireAuth, authHandler.ChangePassword)
 	authGroup.Post("/email/change/request", middlewares.RequireAuth, authHandler.RequestEmailChange)
 	authGroup.Post("/email/change/verify", middlewares.RequireAuth, authHandler.VerifyEmailChange)
+	authGroup.Post("/phone/change/request", middlewares.RequireAuth, authHandler.RequestPhoneChange)
+	authGroup.Post("/phone/change/verify", middlewares.RequireAuth, authHandler.VerifyPhoneChange)
 
 	// ==========================================
 	// ROUTES: CUSTOMER BUSINESS PROFILE
@@ -305,6 +307,10 @@ func main() {
 	protected.Patch("/change-password", authHandler.ChangePassword)
 	protected.Put("/password", authHandler.ChangePassword)
 	protected.Patch("/password", authHandler.ChangePassword)
+	protected.Post("/email/change/request", authHandler.RequestEmailChange)
+	protected.Post("/email/change/verify", authHandler.VerifyEmailChange)
+	protected.Post("/phone/change/request", authHandler.RequestPhoneChange)
+	protected.Post("/phone/change/verify", authHandler.VerifyPhoneChange)
 	protected.Post("/delete/request", profileHandler.RequestDeleteOTP)
 	protected.Delete("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
 
