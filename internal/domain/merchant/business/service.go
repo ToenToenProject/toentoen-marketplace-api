@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
@@ -197,6 +198,12 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
 			return errors.New("you don't have access to update this business")
 		}
+
+		if assignment.Role == "staff" && (len(input.Hours) > 0 || len(input.EventSchedules) > 0) {
+			if !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
+				return errors.New("you don't have permission to change business hours")
+			}
+		}
 	}
 
 	// Update field sederhana
@@ -345,6 +352,10 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 		var assignment models.BusinessAdminAssignment
 		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
 			return false, errors.New("you don't have access to toggle store status")
+		}
+
+		if assignment.Role == "staff" && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
+			return false, errors.New("you don't have permission to change store operational status")
 		}
 	}
 
