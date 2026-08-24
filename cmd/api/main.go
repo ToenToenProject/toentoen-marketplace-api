@@ -200,8 +200,8 @@ func main() {
 	// CORS Configuration
 	corsConfig := cors.Config{
 		AllowOrigins:     os.Getenv("FRONTEND_URL"),
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
-		AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With",
+		AllowMethods:     "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD",
 		AllowCredentials: true,
 	}
 
@@ -371,12 +371,10 @@ func main() {
 	publicProductRoutes.Post("/reviews/replies/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedCommentLike)
 	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
 	publicProductRoutes.Post("/reviews/replies/:comment_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
-
-	// 3. Komentar Diskusi / Q&A Produk
 	publicProductRoutes.Post("/:product_id/comments", middlewares.RequireAuth, productInteractionHandler.AddProductComment)
+	publicProductRoutes.Put("/:product_id/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.EditProductComment)
+	publicProductRoutes.Delete("/:product_id/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductComment)
 	publicProductRoutes.Get("/:product_id/comments", middlewares.OptionalAuth, productInteractionHandler.GetProductComments)
-	publicProductRoutes.Put("/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.EditProductComment)
-	publicProductRoutes.Delete("/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductComment)
 	publicProductRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedCommentLike)
 	publicProductRoutes.Post("/comments/:comment_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
 
@@ -400,10 +398,18 @@ func main() {
 	adminGroup.Get("", businessAdminHandler.GetAdminTree)
 	adminGroup.Get("/", businessAdminHandler.GetAdminTree)
 	adminGroup.Put("/:assignment_id", middlewares.AllowRoles("owner"), businessAdminHandler.UpdateAdminAssignment)
+	adminGroup.Patch("/:assignment_id", middlewares.AllowRoles("owner"), businessAdminHandler.UpdateAdminAssignment)
 	adminGroup.Delete("/:assignment_id", businessAdminHandler.TerminateAdmin)
 	adminGroup.Post("/:assignment_id/cancel-termination", businessAdminHandler.CancelTermination)
 	adminGroup.Get("/:assignment_id/permissions", businessAdminHandler.GetPermissions)
 	adminGroup.Put("/:assignment_id/permissions", businessAdminHandler.UpdatePermissions)
+	adminGroup.Patch("/:assignment_id/permissions", businessAdminHandler.UpdatePermissions)
+
+	// 🪄 Direct Admin Permissions (Owner & Supervisor by assignment_id)
+	adminDirectGroup := api.Group("/admins", middlewares.RequireAuth, middlewares.AllowRoles("owner", "business_admin"))
+	adminDirectGroup.Get("/:assignment_id/permissions", businessAdminHandler.GetPermissions)
+	adminDirectGroup.Put("/:assignment_id/permissions", businessAdminHandler.UpdatePermissions)
+	adminDirectGroup.Patch("/:assignment_id/permissions", businessAdminHandler.UpdatePermissions)
 
 	// 🪄 Rute Personal Calon Admin (Lihat Undangan, Terima/Tolak, Resign)
 	workerGroup := api.Group("/my-jobs", middlewares.RequireAuth, middlewares.AllowRoles("business_admin"))
@@ -417,6 +423,9 @@ func main() {
 	// Owner Management (All Businesses)
 	ownerGroup := api.Group("/owner", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
 	ownerGroup.Get("/admins", businessAdminHandler.GetAdminsByOwner)
+	ownerGroup.Get("/admins/:assignment_id/permissions", businessAdminHandler.GetPermissions)
+	ownerGroup.Put("/admins/:assignment_id/permissions", businessAdminHandler.UpdatePermissions)
+	ownerGroup.Patch("/admins/:assignment_id/permissions", businessAdminHandler.UpdatePermissions)
 
 	// Admin / Owner Shared Access (Products, Posts, Analytics, Business Detail) dengan BusinessAccessGuard
 	sharedAccess := middlewares.AllowRoles("owner", "business_admin")

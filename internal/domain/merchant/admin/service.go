@@ -919,6 +919,15 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 
 // 11. GET PERMISSIONS (Owner atau Supervisor melihat izin admin tertentu)
 func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAssignmentID string) (*models.PermissionResponse, error) {
+	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
+	if err != nil {
+		return nil, errors.New("assignment tidak ditemukan")
+	}
+
+	if businessID == "" {
+		businessID = target.BusinessID
+	}
+
 	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err != nil {
 		return nil, errors.New("toko tidak ditemukan")
@@ -932,10 +941,6 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 		}
 	}
 
-	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
-	if err != nil {
-		return nil, errors.New("assignment tidak ditemukan")
-	}
 	if target.BusinessID != businessID {
 		return nil, errors.New("forbidden: assignment tidak termasuk dalam toko ini")
 	}
@@ -963,6 +968,15 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 
 // 12. UPDATE PERMISSIONS (Owner atau Supervisor mengatur izin admin)
 func (s *businessAdminService) UpdatePermissions(requesterID, businessID, targetAssignmentID string, input models.UpdatePermissionsInput) (*models.PermissionResponse, error) {
+	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
+	if err != nil {
+		return nil, errors.New("assignment tidak ditemukan")
+	}
+
+	if businessID == "" {
+		businessID = target.BusinessID
+	}
+
 	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err != nil {
 		return nil, errors.New("toko tidak ditemukan")
@@ -977,12 +991,6 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 			return nil, errors.New("forbidden: hanya Owner atau Supervisor aktif yang dapat mengubah izin admin")
 		}
 		requesterAssignment = a
-	}
-
-	// Ambil data target assignment
-	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
-	if err != nil {
-		return nil, errors.New("assignment tidak ditemukan")
 	}
 	if target.BusinessID != businessID {
 		return nil, errors.New("forbidden: assignment tidak termasuk dalam toko ini")

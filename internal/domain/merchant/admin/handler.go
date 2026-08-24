@@ -287,7 +287,8 @@ func (h *BusinessAdminHandler) GetMyAssignments(c *fiber.Ctx) error {
 }
 
 // 11. LIHAT PERMISSION ADMIN (Owner atau Supervisor)
-// GET /business/:business_id/admins/:assignment_id/permissions
+// 11. GET PERMISSION ADMIN (Owner atau Supervisor)
+// GET /business/:business_id/admins/:assignment_id/permissions ATAU /admins/:assignment_id/permissions
 func (h *BusinessAdminHandler) GetPermissions(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -296,8 +297,8 @@ func (h *BusinessAdminHandler) GetPermissions(c *fiber.Ctx) error {
 
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
-	if businessID == "" || assignmentID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID dan Assignment ID wajib diisi", nil)
+	if assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
 	}
 
 	result, err := h.service.GetPermissions(requesterID, businessID, assignmentID)
@@ -315,7 +316,7 @@ func (h *BusinessAdminHandler) GetPermissions(c *fiber.Ctx) error {
 }
 
 // 12. UPDATE PERMISSION ADMIN (Owner atau Supervisor)
-// PUT /business/:business_id/admins/:assignment_id/permissions
+// PUT/PATCH /business/:business_id/admins/:assignment_id/permissions ATAU /admins/:assignment_id/permissions
 func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -324,16 +325,23 @@ func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
-	if businessID == "" || assignmentID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID dan Assignment ID wajib diisi", nil)
+	if assignmentID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
 	}
 
 	var input models.UpdatePermissionsInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
-	if input.Permissions == nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'permissions' wajib diisi", nil)
+
+	// Dukung format payload flat {"change_product_image": true, ...} jika tidak dibungkus {"permissions": {...}}
+	if input.Permissions == nil || len(input.Permissions) == 0 {
+		var flatPerms models.AdminPermissions
+		if err := c.BodyParser(&flatPerms); err == nil && len(flatPerms) > 0 {
+			input.Permissions = flatPerms
+		} else {
+			return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'permissions' wajib diisi", nil)
+		}
 	}
 
 	result, err := h.service.UpdatePermissions(requesterID, businessID, assignmentID, input)
