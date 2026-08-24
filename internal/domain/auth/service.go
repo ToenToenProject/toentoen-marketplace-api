@@ -303,6 +303,9 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 }
 
 func (s *authService) ChangePassword(accountID string, input models.ChangePasswordInput) error {
+	if len(strings.TrimSpace(input.NewPassword)) < 6 {
+		return errors.New("Kata sandi baru minimal 6 karakter")
+	}
 	if input.NewPassword != input.ConfirmNewPassword {
 		return errors.New("Kata sandi baru dan konfirmasi kata sandi tidak cocok")
 	}
@@ -346,44 +349,58 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 		return errors.New("Sesi pengguna tidak valid")
 	}
 
-	if account.Email != nil && *account.Email != input.CurrentEmail {
-		return errors.New("Email saat ini tidak cocok dengan data kami")
+	currentEmailClean := strings.ToLower(strings.TrimSpace(input.CurrentEmail))
+	newEmailClean := strings.ToLower(strings.TrimSpace(input.NewEmail))
+
+	if account.Email != nil && strings.ToLower(strings.TrimSpace(*account.Email)) != currentEmailClean {
+		return errors.New("Email saat ini tidak cocok dengan data akun Anda")
 	}
 
-	if input.CurrentEmail == input.NewEmail {
+	if currentEmailClean == newEmailClean {
 		return errors.New("Email baru tidak boleh sama dengan email saat ini")
 	}
 
-	_, err = s.repo.FindByIdentifier(input.NewEmail)
-	if err == nil {
+	if exists, err := s.repo.FindByIdentifier(newEmailClean); err == nil && exists != nil && exists.AccountID != accountID {
 		return errors.New("Email baru sudah terdaftar pada akun lain")
 	}
 
 	otp := utils.GenerateNumericOTP(6)
-	redisKey := fmt.Sprintf("change_email_otp:%s", input.NewEmail)
+	redisKey := fmt.Sprintf("change_email_otp:%s", newEmailClean)
 
 	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
 		return errors.New("Gagal memproses kode verifikasi")
 	}
 
-	go utils.SendEmailOTP(input.NewEmail, otp)
+	go utils.SendEmailOTP(newEmailClean, otp)
 
 	return nil
 }
 
 func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEmailChangeInput) error {
-	redisKey := fmt.Sprintf("change_email_otp:%s", input.NewEmail)
-	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+	newEmailClean := strings.ToLower(strings.TrimSpace(input.NewEmail))
+	redisKey := fmt.Sprintf("change_email_otp:%s", newEmailClean)
+	attemptKey := fmt.Sprintf("change_email_attempts:%s", newEmailClean)
 
+	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 	if err == redis.Nil || storedOTP != input.OTP {
+		attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
+		if attempts == 1 {
+			config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
+		}
+		if attempts >= 5 {
+			config.RDB.Del(config.Ctx, redisKey)
+			config.RDB.Del(config.Ctx, attemptKey)
+			return errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
+		}
 		return errors.New("OTP tidak valid atau sudah kadaluarsa")
 	}
 
-	if err := s.repo.UpdateEmail(accountID, input.NewEmail); err != nil {
+	if err := s.repo.UpdateEmail(accountID, newEmailClean); err != nil {
 		return errors.New("Gagal memperbarui email")
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)
+	config.RDB.Del(config.Ctx, attemptKey)
 	return nil
 }
 
@@ -424,9 +441,19 @@ func (s *authService) RequestPhoneChange(accountID string, input models.RequestP
 func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPhoneChangeInput) error {
 	newPhoneClean := cleanIdentifier(input.NewPhone)
 	redisKey := fmt.Sprintf("change_phone_otp:%s", newPhoneClean)
-	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+	attemptKey := fmt.Sprintf("change_phone_attempts:%s", newPhoneClean)
 
+	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 	if err == redis.Nil || storedOTP != input.OTP {
+		attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
+		if attempts == 1 {
+			config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
+		}
+		if attempts >= 5 {
+			config.RDB.Del(config.Ctx, redisKey)
+			config.RDB.Del(config.Ctx, attemptKey)
+			return errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
+		}
 		return errors.New("OTP tidak valid atau sudah kadaluarsa")
 	}
 
@@ -435,6 +462,7 @@ func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPho
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)
+	config.RDB.Del(config.Ctx, attemptKey)
 	return nil
 }
 
