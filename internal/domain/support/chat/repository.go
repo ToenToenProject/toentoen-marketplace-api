@@ -95,32 +95,46 @@ func (r *supportChatRepository) UpdateSessionLastMessage(sessionID string, previ
 
 func (r *supportChatRepository) GetMessagesBySessionID(sessionID string, limit int, cursor string) ([]models.CSChatMessage, error) {
 	var messages []models.CSChatMessage
-	query := r.db.Where("session_id = ?", sessionID)
 
 	if cursor != "" {
 		var cursorMsg models.CSChatMessage
 		if err := r.db.Select("created_at").Where("message_id = ?", cursor).First(&cursorMsg).Error; err == nil {
-			query = query.Where("created_at < ?", cursorMsg.CreatedAt)
+			// Mengambil N pesan tepat sebelum kursor (scroll ke atas)
+			var reverseMessages []models.CSChatMessage
+			err := r.db.Where("session_id = ? AND created_at < ?", sessionID, cursorMsg.CreatedAt).
+				Order("created_at DESC").
+				Limit(limit).
+				Find(&reverseMessages).Error
+			if err != nil {
+				return nil, err
+			}
+			// Balikkan urutan agar tetap kronologis ASC
+			for i := len(reverseMessages) - 1; i >= 0; i-- {
+				messages = append(messages, reverseMessages[i])
+			}
+			return messages, nil
 		}
 	}
 
-	err := query.Order("created_at ASC").Limit(limit).Find(&messages).Error
+	err := r.db.Where("session_id = ?", sessionID).Order("created_at ASC").Limit(limit).Find(&messages).Error
 	return messages, err
 }
 
 func (r *supportChatRepository) MarkMessagesAsRead(sessionID string, readerType string) error {
-	targetSenderType := "cs"
+	now := time.Now()
+	query := r.db.Model(&models.CSChatMessage{}).
+		Where("session_id = ? AND is_read = false", sessionID)
+
 	if readerType == "cs" {
-		targetSenderType = "user"
+		query = query.Where("sender_type = 'user'")
+	} else {
+		query = query.Where("sender_type IN ('cs', 'system')")
 	}
 
-	now := time.Now()
-	return r.db.Model(&models.CSChatMessage{}).
-		Where("session_id = ? AND sender_type = ? AND is_read = false", sessionID, targetSenderType).
-		Updates(map[string]interface{}{
-			"is_read": true,
-			"read_at": &now,
-		}).Error
+	return query.Updates(map[string]interface{}{
+		"is_read": true,
+		"read_at": &now,
+	}).Error
 }
 
 func (r *supportChatRepository) EndSession(sessionID string, endedBy string, rating *int, feedback *string, endMessage *models.CSChatMessage) error {
