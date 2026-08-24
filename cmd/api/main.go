@@ -26,6 +26,7 @@ import (
 	"toentoen-backend/internal/domain/meta"
 	"toentoen-backend/internal/domain/notification"
 	support_chat "toentoen-backend/internal/domain/support/chat"
+	support_ticket "toentoen-backend/internal/domain/support/ticket"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -191,6 +192,10 @@ func main() {
 	supportChatRepo := support_chat.NewSupportChatRepository(database.DB)
 	supportChatService := support_chat.NewSupportChatService(supportChatRepo, wsHub)
 	supportChatHandler := support_chat.NewSupportChatHandler(supportChatService)
+
+	supportTicketRepo := support_ticket.NewSupportTicketRepository(database.DB)
+	supportTicketService := support_ticket.NewSupportTicketService(supportTicketRepo)
+	supportTicketHandler := support_ticket.NewSupportTicketHandler(supportTicketService)
 
 	// ==========================================
 	// 3. FIBER APP SETUP
@@ -588,6 +593,19 @@ func main() {
 	supportAdminGroup.Get("/history", supportChatHandler.AdminGetHistory)
 	supportAdminGroup.Post("/:session_id/assign", supportChatHandler.AdminAssignSession)
 	supportAdminGroup.Post("/:room_id/assign", supportChatHandler.AdminAssignSession)
+
+	// ==========================================
+	// ROUTES: SUPPORT TICKETS (Tiket Bantuan)
+	// ==========================================
+	ticketGroup := api.Group("/support/tickets", middlewares.RequireAuth)
+	ticketGroup.Post("/", supportTicketHandler.CreateTicket)
+	ticketGroup.Get("/", supportTicketHandler.GetMyTickets)
+	ticketGroup.Get("/:ticket_id", supportTicketHandler.GetTicketDetail)
+
+	// Rute Khusus Admin/CS Ticket Resolution
+	ticketAdminGroup := api.Group("/support/tickets/admin", middlewares.RequireAuth, csAdminAuth)
+	ticketAdminGroup.Get("/queue", supportTicketHandler.AdminGetTickets)
+	ticketAdminGroup.Post("/:ticket_id/resolve", supportTicketHandler.AdminResolveTicket)
 
 	// ==========================================
 	// 4. START SERVER

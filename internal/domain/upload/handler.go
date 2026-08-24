@@ -21,6 +21,7 @@ var allowedFolders = map[string]bool{
 	"reviews/images":      true,
 	"reviews/videos":      true,
 	"demands/attachments": true,
+	"tickets/attachments": true,
 }
 
 // allowedContentTypes — mencegah upload file berbahaya
@@ -33,6 +34,7 @@ var allowedContentTypes = map[string]bool{
 	"video/mp4":       true,
 	"video/webm":      true,
 	"video/quicktime": true, // Untuk perekaman dari iOS (.mov)
+	"application/pdf": true, // Untuk dokumen tiket bantuan
 }
 
 type Handler struct{}
