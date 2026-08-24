@@ -49,7 +49,7 @@ type VerifyEmailChangeInput struct {
 }
 
 type ChangePasswordInput struct {
-	CurrentPassword    string `json:"current_password" validate:"required"`
+	CurrentPassword    string `json:"current_password"`
 	NewPassword        string `json:"new_password" validate:"required,min=6"`
 	ConfirmNewPassword string `json:"confirm_new_password" validate:"required,eqfield=NewPassword"`
 }

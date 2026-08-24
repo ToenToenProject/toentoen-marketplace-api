@@ -218,10 +218,7 @@ func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 		return errors.New("Akun tidak ditemukan")
 	}
 
-	if account.PasswordHash == nil {
-		return errors.New("Akun ini tidak memiliki kata sandi. Lanjutkan untuk membuat sandi baru.")
-	}
-
+	// Kirim OTP verifikasi (berlaku untuk semua akun lokal maupun akun OAuth yang ingin membuat kata sandi baru)
 	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "forgot_otp")
 }
 
@@ -230,15 +227,29 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 	redisKey := fmt.Sprintf("forgot_otp:%s", input.Identifier)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
-	if err == redis.Nil || storedOTP != input.OTP {
-		return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
+	if err == redis.Nil {
+		return "", errors.New("Kode OTP telah kadaluarsa atau tidak ditemukan")
+	}
+
+	if storedOTP != input.OTP {
+		attemptKey := fmt.Sprintf("forgot_otp_attempts:%s", input.Identifier)
+		attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
+		config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
+		if attempts >= 5 {
+			config.RDB.Del(config.Ctx, redisKey)
+			config.RDB.Del(config.Ctx, attemptKey)
+			return "", errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
+		}
+		return "", errors.New("Kode OTP tidak valid")
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)
+	config.RDB.Del(config.Ctx, fmt.Sprintf("forgot_otp_attempts:%s", input.Identifier))
 
-	resetToken := utils.GenerateNumericOTP(6)
+	// Generate secure UUID reset token
+	resetToken := utils.GenerateUUID("RST")
 	tokenRedisKey := fmt.Sprintf("reset_token:%s", input.Identifier)
-	config.RDB.Set(config.Ctx, tokenRedisKey, resetToken, 5*time.Minute)
+	config.RDB.Set(config.Ctx, tokenRedisKey, resetToken, 10*time.Minute)
 
 	return resetToken, nil
 }
@@ -246,7 +257,7 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
 	if input.NewPassword != input.ConfirmNewPassword {
-		return errors.New("Kata sandi dan konfirmasi kata sandi tidak cocok")
+		return errors.New("Kata sandi baru dan konfirmasi kata sandi tidak cocok")
 	}
 
 	tokenRedisKey := fmt.Sprintf("reset_token:%s", input.Identifier)
@@ -261,17 +272,25 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 		return errors.New("Akun tidak ditemukan")
 	}
 
-	if account.PasswordHash != nil {
+	if account.PasswordHash != nil && *account.PasswordHash != "" {
 		if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.NewPassword)); err == nil {
 			return errors.New("Kata sandi baru tidak boleh sama dengan kata sandi lama")
 		}
 	}
 
-	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("Gagal memproses kata sandi")
+	}
 	pwd := string(passwordHash)
 	account.PasswordHash = &pwd
 	now := time.Now()
 	account.LastLoginAt = &now
+
+	// Jika akun sebelumnya inactive, verifikasi OTP via reset password membuktikan kepemilikan akun -> aktifkan
+	if account.AccountStatus == "inactive" {
+		account.AccountStatus = "active"
+	}
 
 	if err := s.repo.Update(account); err != nil {
 		return errors.New("Gagal memperbarui kata sandi")
@@ -291,19 +310,23 @@ func (s *authService) ChangePassword(accountID string, input models.ChangePasswo
 		return errors.New("Sesi pengguna tidak valid")
 	}
 
-	if account.PasswordHash == nil {
-		return errors.New("Akun Anda belum memiliki kata sandi sebelumnya")
+	// Jika akun sudah memiliki kata sandi sebelumnya, wajib verifikasi CurrentPassword
+	if account.PasswordHash != nil && *account.PasswordHash != "" {
+		if strings.TrimSpace(input.CurrentPassword) == "" {
+			return errors.New("Kata sandi saat ini wajib diisi")
+		}
+		if input.CurrentPassword == input.NewPassword {
+			return errors.New("Kata sandi baru tidak boleh sama dengan kata sandi saat ini")
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.CurrentPassword)); err != nil {
+			return errors.New("Kata sandi saat ini salah")
+		}
 	}
 
-	if input.CurrentPassword == input.NewPassword {
-		return errors.New("Kata sandi baru tidak boleh sama dengan kata sandi saat ini")
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("Gagal memproses kata sandi baru")
 	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.CurrentPassword)); err != nil {
-		return errors.New("Kata sandi saat ini salah")
-	}
-
-	passwordHash, _ := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
 	pwd := string(passwordHash)
 	account.PasswordHash = &pwd
 	now := time.Now()

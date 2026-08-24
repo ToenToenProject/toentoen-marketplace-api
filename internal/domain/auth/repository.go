@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"strings"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 
@@ -63,7 +64,25 @@ func (r *authRepository) UpdateAccountStatus(identifier string, status string) e
 
 func (r *authRepository) FindByIdentifier(identifier string) (*models.Account, error) {
 	var account models.Account
-	err := r.db.Where("email = ? OR phone_number = ?", identifier, identifier).First(&account).Error
+	identifier = strings.TrimSpace(identifier)
+
+	if strings.Contains(identifier, "@") {
+		err := r.db.Where("LOWER(email) = LOWER(?)", identifier).First(&account).Error
+		return &account, err
+	}
+
+	// Buat variasi format nomor telepon (08xxx, 628xxx, +628xxx)
+	clean := strings.TrimPrefix(identifier, "+")
+	var phones []string
+	if strings.HasPrefix(clean, "08") {
+		phones = []string{clean, "62" + clean[1:], "+62" + clean[1:]}
+	} else if strings.HasPrefix(clean, "628") {
+		phones = []string{clean, "0" + clean[2:], "+" + clean}
+	} else {
+		phones = []string{identifier, "+" + identifier, clean}
+	}
+
+	err := r.db.Where("phone_number IN ? OR LOWER(username) = LOWER(?)", phones, identifier).First(&account).Error
 	return &account, err
 }
 
