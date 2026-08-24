@@ -405,7 +405,7 @@ func (s *authService) RequestPhoneChange(accountID string, input models.RequestP
 	}
 
 	// Cek apakah nomor telepon baru sudah dipakai akun lain
-	if exists, _ := s.repo.FindByIdentifier(newPhoneClean); exists != nil && exists.AccountID != accountID {
+	if exists, err := s.repo.FindByIdentifier(newPhoneClean); err == nil && exists != nil && exists.AccountID != accountID {
 		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
 	}
 

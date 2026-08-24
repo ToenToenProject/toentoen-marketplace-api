@@ -36,25 +36,37 @@ func NewProfileRepository(db *gorm.DB) ProfileRepository {
 func (r *profileRepository) GetAccountByID(accountID string) (*models.Account, error) {
 	var account models.Account
 	err := r.db.Where("account_id = ?", accountID).First(&account).Error
-	return &account, err
+	if err != nil {
+		return nil, err
+	}
+	return &account, nil
 }
 
 func (r *profileRepository) GetAccountByIdentifier(identifier string) (*models.Account, error) {
 	var account models.Account
 	err := r.db.Where("email = ? OR phone_number = ?", identifier, identifier).First(&account).Error
-	return &account, err
+	if err != nil {
+		return nil, err
+	}
+	return &account, nil
 }
 
 func (r *profileRepository) GetCustomerByAccountID(accountID string) (*models.Customer, error) {
 	var customer models.Customer
 	err := r.db.Where("account_id = ?", accountID).First(&customer).Error
-	return &customer, err
+	if err != nil {
+		return nil, err
+	}
+	return &customer, nil
 }
 
 func (r *profileRepository) GetOwnerByAccountID(accountID string) (*models.Owner, error) {
 	var owner models.Owner
 	err := r.db.Where("account_id = ?", accountID).First(&owner).Error
-	return &owner, err
+	if err != nil {
+		return nil, err
+	}
+	return &owner, nil
 }
 
 func (r *profileRepository) GetBusinessAdminByAccountID(accountID string) (*models.BusinessAdmin, error) {
@@ -65,7 +77,10 @@ func (r *profileRepository) GetBusinessAdminByAccountID(accountID string) (*mode
 		Preload("Assignments.Shifts").
 		Where("account_id = ?", accountID).
 		First(&businessAdmin).Error
-	return &businessAdmin, err
+	if err != nil {
+		return nil, err
+	}
+	return &businessAdmin, nil
 }
 
 func (r *profileRepository) SaveCustomerProfile(account *models.Account, customer *models.Customer) error {

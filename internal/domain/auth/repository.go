@@ -69,7 +69,10 @@ func (r *authRepository) FindByIdentifier(identifier string) (*models.Account, e
 
 	if strings.Contains(identifier, "@") {
 		err := r.db.Where("LOWER(email) = LOWER(?)", identifier).First(&account).Error
-		return &account, err
+		if err != nil {
+			return nil, err
+		}
+		return &account, nil
 	}
 
 	// Buat variasi format nomor telepon (08xxx, 628xxx, +628xxx)
@@ -84,13 +87,19 @@ func (r *authRepository) FindByIdentifier(identifier string) (*models.Account, e
 	}
 
 	err := r.db.Where("phone_number IN ? OR LOWER(username) = LOWER(?)", phones, identifier).First(&account).Error
-	return &account, err
+	if err != nil {
+		return nil, err
+	}
+	return &account, nil
 }
 
 func (r *authRepository) FindByID(id string) (*models.Account, error) {
 	var account models.Account
 	err := r.db.Where("account_id = ?", id).First(&account).Error
-	return &account, err
+	if err != nil {
+		return nil, err
+	}
+	return &account, nil
 }
 
 func (r *authRepository) Update(account *models.Account) error {
