@@ -27,6 +27,7 @@ import (
 	"toentoen-backend/internal/domain/notification"
 	support_chat "toentoen-backend/internal/domain/support/chat"
 	support_ticket "toentoen-backend/internal/domain/support/ticket"
+	"toentoen-backend/internal/domain/business_chat"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -196,6 +197,10 @@ func main() {
 	supportTicketRepo := support_ticket.NewSupportTicketRepository(database.DB)
 	supportTicketService := support_ticket.NewSupportTicketService(supportTicketRepo)
 	supportTicketHandler := support_ticket.NewSupportTicketHandler(supportTicketService)
+
+	businessChatRepo := business_chat.NewBusinessChatRepository(database.DB)
+	businessChatService := business_chat.NewBusinessChatService(businessChatRepo, wsHub)
+	businessChatHandler := business_chat.NewBusinessChatHandler(businessChatService)
 
 	// ==========================================
 	// 3. FIBER APP SETUP
@@ -606,6 +611,20 @@ func main() {
 	ticketAdminGroup := api.Group("/support/tickets/admin", middlewares.RequireAuth, csAdminAuth)
 	ticketAdminGroup.Get("/queue", supportTicketHandler.AdminGetTickets)
 	ticketAdminGroup.Post("/:ticket_id/resolve", supportTicketHandler.AdminResolveTicket)
+
+	// ==========================================
+	// ROUTES: DIRECT BUSINESS CHAT (Chat Toko)
+	// ==========================================
+	customerBizChat := api.Group("/customer/business-chat", middlewares.RequireAuth)
+	customerBizChat.Post("/:business_id/initiate", businessChatHandler.InitiateChat)
+	customerBizChat.Get("/conversations", businessChatHandler.GetCustomerConversations)
+
+	merchantBizChat := api.Group("/merchant/business-chat", middlewares.RequireAuth)
+	merchantBizChat.Get("/:business_id/conversations", businessChatHandler.GetMerchantConversations)
+
+	sharedBizChat := api.Group("/business-chat", middlewares.RequireAuth)
+	sharedBizChat.Get("/:conversation_id/messages", businessChatHandler.GetMessages)
+	sharedBizChat.Post("/:conversation_id/messages", businessChatHandler.SendMessage)
 
 	// ==========================================
 	// 4. START SERVER
