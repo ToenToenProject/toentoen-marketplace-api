@@ -40,6 +40,11 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		return nil, nil, false, errors.New("Bisnis/Toko tidak ditemukan")
 	}
 
+	// Cegah chat dengan toko milik sendiri
+	if business.AccountID == customerID {
+		return nil, nil, false, errors.New("Anda tidak dapat memulai chat dengan toko milik Anda sendiri")
+	}
+
 	// 1. Cek apakah percakapan sudah ada
 	existingConv, err := s.repo.FindConversation(businessID, customerID)
 	if err == nil && existingConv != nil {
@@ -113,6 +118,11 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 			CreatedAt:      now,
 		}
 		newConv.LastMessagePreview = content
+
+		// Preload product detail
+		if input.ProductID != nil && *input.ProductID != "" {
+			firstMsg.ProductDetail, _ = s.repo.GetProductByID(*input.ProductID)
+		}
 	}
 
 	if err := s.repo.CreateConversation(newConv, firstMsg); err != nil {
@@ -122,13 +132,16 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 	newConv.Business = business
 	newConv.Customer = customer
 
-	// Broadcast WS event ke Owner toko jika ada hub
+	// Broadcast WS event ke seluruh staff/owner toko jika ada hub
 	if s.hub != nil && firstMsg != nil {
 		event := realtime.WSEvent{
 			Type: "BUSINESS_CHAT_NEW_MESSAGE",
 			Data: firstMsg,
 		}
-		s.hub.SendToAccount(business.AccountID, event)
+		staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(businessID)
+		for _, staffID := range staffIDs {
+			s.hub.SendToAccount(staffID, event)
+		}
 	}
 
 	return newConv, firstMsg, true, nil
@@ -275,9 +288,10 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 		}
 
 		if isCustomer {
-			// Kirim ke owner bisnis
-			if conv.Business != nil {
-				s.hub.SendToAccount(conv.Business.AccountID, event)
+			// Kirim ke seluruh staf dan owner toko
+			staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(conv.BusinessID)
+			for _, staffID := range staffIDs {
+				s.hub.SendToAccount(staffID, event)
 			}
 		} else {
 			// Kirim ke customer

@@ -18,6 +18,7 @@ type BusinessChatRepository interface {
 	GetMessagesByConversationID(conversationID string, limit int, cursor string) ([]models.DirectBusinessMessage, error)
 	MarkMessagesAsRead(conversationID string, readerType string) error
 	VerifyMerchantAccess(businessID string, accountID string) (bool, error)
+	GetMerchantStaffAccountIDs(businessID string) ([]string, error)
 	GetAccountByID(accountID string) (*models.Account, error)
 	GetBusinessByID(businessID string) (*models.Business, error)
 	GetProductByID(productID string) (*models.Product, error)
@@ -191,6 +192,7 @@ func (r *businessChatRepository) GetMessagesByConversationID(conversationID stri
 	if cursor != "" {
 		var cursorMsg models.DirectBusinessMessage
 		if err := r.db.Select("created_at").Where("message_id = ?", cursor).First(&cursorMsg).Error; err == nil {
+			// Mengambil N pesan tepat sebelum kursor (scroll ke atas)
 			var reverseMessages []models.DirectBusinessMessage
 			err := r.db.Preload("ProductDetail").
 				Where("conversation_id = ? AND created_at < ?", conversationID, cursorMsg.CreatedAt).
@@ -207,12 +209,21 @@ func (r *businessChatRepository) GetMessagesByConversationID(conversationID stri
 		}
 	}
 
+	// KETIKA CURSOR KOSONG (Initial Load saat buka chat room):
+	// Ambil N pesan TERAKHIR (terbaru) dengan ORDER BY created_at DESC LIMIT limit, lalu dibalik ke ASC!
+	var reverseMessages []models.DirectBusinessMessage
 	err := r.db.Preload("ProductDetail").
 		Where("conversation_id = ?", conversationID).
-		Order("created_at ASC").
+		Order("created_at DESC").
 		Limit(limit).
-		Find(&messages).Error
-	return messages, err
+		Find(&reverseMessages).Error
+	if err != nil {
+		return nil, err
+	}
+	for i := len(reverseMessages) - 1; i >= 0; i-- {
+		messages = append(messages, reverseMessages[i])
+	}
+	return messages, nil
 }
 
 func (r *businessChatRepository) MarkMessagesAsRead(conversationID string, readerType string) error {
@@ -247,6 +258,28 @@ func (r *businessChatRepository) VerifyMerchantAccess(businessID string, account
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func (r *businessChatRepository) GetMerchantStaffAccountIDs(businessID string) ([]string, error) {
+	var ids []string
+
+	// 1. Owner account ID
+	var business models.Business
+	if err := r.db.Select("account_id").Where("business_id = ?", businessID).First(&business).Error; err == nil && business.AccountID != "" {
+		ids = append(ids, business.AccountID)
+	}
+
+	// 2. Active assigned business admins
+	var assignments []models.BusinessAdminAssignment
+	if err := r.db.Select("admin_id").
+		Where("business_id = ? AND status IN ('accepted', 'active')", businessID).
+		Find(&assignments).Error; err == nil {
+		for _, a := range assignments {
+			ids = append(ids, a.AdminID)
+		}
+	}
+
+	return ids, nil
 }
 
 func (r *businessChatRepository) GetAccountByID(accountID string) (*models.Account, error) {
