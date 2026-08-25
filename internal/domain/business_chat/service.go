@@ -227,8 +227,8 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 	senderName := "Pelanggan"
 	if isMerchant {
 		senderType = "merchant"
-		if conv.Business != nil && conv.Business.BusinessName != "" {
-			senderName = conv.Business.BusinessName
+		if conv.Business != nil && conv.Business.BusinessName != nil && *conv.Business.BusinessName != "" {
+			senderName = *conv.Business.BusinessName
 		} else {
 			senderName = "Penjual"
 		}

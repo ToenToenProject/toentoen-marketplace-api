@@ -100,7 +100,9 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 		var bizName string
 		var bizLogo *string
 		if c.Business != nil {
-			bizName = c.Business.BusinessName
+			if c.Business.BusinessName != nil {
+				bizName = *c.Business.BusinessName
+			}
 			bizLogo = c.Business.LogoURL
 		}
 
@@ -154,7 +156,7 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 			} else {
 				custName = c.Customer.Username
 			}
-			custAvatar = c.Customer.AvatarURL
+			custAvatar = c.Customer.ProfilePictureUrl
 		}
 
 		results = append(results, models.MerchantBusinessConversationListItem{

@@ -335,7 +335,7 @@ func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 	}
 
 	// Dukung format payload flat {"change_product_image": true, ...} jika tidak dibungkus {"permissions": {...}}
-	if input.Permissions == nil || len(input.Permissions) == 0 {
+	if len(input.Permissions) == 0 {
 		var flatPerms models.AdminPermissions
 		if err := c.BodyParser(&flatPerms); err == nil && len(flatPerms) > 0 {
 			input.Permissions = flatPerms
