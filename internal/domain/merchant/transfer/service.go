@@ -119,7 +119,7 @@ func (s *businessTransferService) InitiateTransfer(ownerID, businessID string, i
 	}
 
 	// 4. Generate OTP
-	otp := utils.GenerateOTP()
+	otp := utils.GenerateNumericOTP(6)
 	otpKey := fmt.Sprintf("biz_transfer_otp:%s:%s", businessID, ownerID)
 	targetKey := fmt.Sprintf("biz_transfer_target:%s:%s", businessID, ownerID)
 
@@ -133,7 +133,7 @@ func (s *businessTransferService) InitiateTransfer(ownerID, businessID string, i
 	destination := ""
 	channel := strings.ToLower(input.Channel)
 	if channel == "whatsapp" && currentOwner.PhoneNumber != nil && *currentOwner.PhoneNumber != "" {
-		go utils.SendWhatsAppOTP(*currentOwner.PhoneNumber, otp)
+		go utils.SendWAOTP(*currentOwner.PhoneNumber, otp)
 		destination = utils.MaskPhoneNumber(*currentOwner.PhoneNumber)
 	} else if currentOwner.Email != nil && *currentOwner.Email != "" {
 		channel = "email"
@@ -141,7 +141,7 @@ func (s *businessTransferService) InitiateTransfer(ownerID, businessID string, i
 		destination = utils.MaskEmail(*currentOwner.Email)
 	} else if currentOwner.PhoneNumber != nil && *currentOwner.PhoneNumber != "" {
 		channel = "whatsapp"
-		go utils.SendWhatsAppOTP(*currentOwner.PhoneNumber, otp)
+		go utils.SendWAOTP(*currentOwner.PhoneNumber, otp)
 		destination = utils.MaskPhoneNumber(*currentOwner.PhoneNumber)
 	} else {
 		return nil, errors.New("Akun Anda tidak memiliki email atau nomor telepon yang valid untuk verifikasi OTP")
