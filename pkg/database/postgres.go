@@ -34,7 +34,7 @@ func ConnectDB() {
 
 	log.Println("🚀 Connected to Database successfully")
 
-	// Auto-migrate CS chat, support ticket & direct business chat models
+	// Auto-migrate CS chat, support ticket, direct business chat & business transfer models
 	if err := DB.AutoMigrate(
 		&models.CSChatSession{},
 		&models.CSChatMessage{},
@@ -42,7 +42,8 @@ func ConnectDB() {
 		&models.SupportTicketAttachment{},
 		&models.DirectBusinessConversation{},
 		&models.DirectBusinessMessage{},
+		&models.BusinessTransferRequest{},
 	); err != nil {
-		log.Printf("⚠️ AutoMigrate chat models: %v", err)
+		log.Printf("⚠️ AutoMigrate models: %v", err)
 	}
 }

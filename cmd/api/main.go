@@ -28,6 +28,7 @@ import (
 	support_chat "toentoen-backend/internal/domain/support/chat"
 	support_ticket "toentoen-backend/internal/domain/support/ticket"
 	"toentoen-backend/internal/domain/business_chat"
+	"toentoen-backend/internal/domain/merchant/transfer"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -201,6 +202,10 @@ func main() {
 	businessChatRepo := business_chat.NewBusinessChatRepository(database.DB)
 	businessChatService := business_chat.NewBusinessChatService(businessChatRepo, wsHub)
 	businessChatHandler := business_chat.NewBusinessChatHandler(businessChatService)
+
+	businessTransferRepo := transfer.NewBusinessTransferRepository(database.DB)
+	businessTransferService := transfer.NewBusinessTransferService(businessTransferRepo, notifService)
+	businessTransferHandler := transfer.NewBusinessTransferHandler(businessTransferService)
 
 	// ==========================================
 	// 3. FIBER APP SETUP
@@ -625,6 +630,19 @@ func main() {
 	sharedBizChat := api.Group("/business-chat", middlewares.RequireAuth)
 	sharedBizChat.Get("/:conversation_id/messages", businessChatHandler.GetMessages)
 	sharedBizChat.Post("/:conversation_id/messages", businessChatHandler.SendMessage)
+
+	// ==========================================
+	// ROUTES: STORE OWNERSHIP TRANSFER (Transfer Bisnis)
+	// ==========================================
+	bizTransferGroup := api.Group("/merchant/businesses/:business_id/transfer", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	bizTransferGroup.Post("/check-target", businessTransferHandler.CheckTarget)
+	bizTransferGroup.Post("/initiate", businessTransferHandler.InitiateTransfer)
+	bizTransferGroup.Post("/verify-otp", businessTransferHandler.VerifyOTP)
+	bizTransferGroup.Post("/cancel", businessTransferHandler.CancelTransfer)
+
+	incomingTransferGroup := api.Group("/merchant/transfers", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	incomingTransferGroup.Get("/incoming", businessTransferHandler.GetIncomingTransfers)
+	incomingTransferGroup.Post("/:transfer_id/respond", businessTransferHandler.RespondTransfer)
 
 	// ==========================================
 	// 4. START SERVER
