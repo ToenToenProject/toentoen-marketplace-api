@@ -193,6 +193,12 @@ func (s *businessTransferService) VerifyOTPAndCreateTransfer(ownerID, businessID
 	if err != nil || business == nil {
 		return nil, errors.New("Bisnis tidak ditemukan")
 	}
+	if business.AccountID != ownerID {
+		return nil, errors.New("Anda bukan pemilik sah dari bisnis ini")
+	}
+	if target.AccountID == ownerID {
+		return nil, errors.New("Anda tidak dapat mentransfer bisnis kepada akun Anda sendiri")
+	}
 
 	// 3. Buat transfer request
 	now := time.Now()
@@ -330,7 +336,7 @@ func (s *businessTransferService) RespondTransfer(targetAccountID, transferID st
 	}
 
 	if transfer.Status != "pending_acceptance" {
-		return fmt.Sprintf("Permohonan transfer sudah berstatus '%s'", transfer.Status)
+		return fmt.Errorf("Permohonan transfer sudah berstatus '%s'", transfer.Status)
 	}
 
 	if time.Now().After(transfer.ExpiresAt) {

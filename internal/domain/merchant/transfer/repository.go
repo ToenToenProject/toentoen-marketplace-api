@@ -147,7 +147,20 @@ func (r *businessTransferRepository) AcceptTransfer(transferID string, businessI
 			return errors.New("Bisnis tidak ditemukan atau gagal diperbarui")
 		}
 
-		// 3. Pastikan record Owner di tabel owners tersedia untuk owner baru
+		// 3. Batalkan permohonan transfer lain yang masih pending untuk bisnis ini
+		_ = tx.Model(&models.BusinessTransferRequest{}).
+			Where("business_id = ? AND status = 'pending_acceptance' AND transfer_id != ?", businessID, transferID).
+			Updates(map[string]interface{}{
+				"status":       "cancelled",
+				"cancelled_at": &now,
+				"updated_at":   now,
+			}).Error
+
+		// 4. Jika pemilik baru sebelumnya terdaftar sebagai staff/admin toko ini, hapus assignment lamanya
+		_ = tx.Where("business_id = ? AND admin_id = ?", businessID, newOwnerID).
+			Delete(&models.BusinessAdminAssignment{}).Error
+
+		// 5. Pastikan record Owner di tabel owners tersedia untuk owner baru
 		var ownerCount int64
 		if err := tx.Model(&models.Owner{}).Where("account_id = ?", newOwnerID).Count(&ownerCount).Error; err == nil && ownerCount == 0 {
 			newOwnerRecord := models.Owner{
