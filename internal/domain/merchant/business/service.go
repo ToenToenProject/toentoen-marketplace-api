@@ -147,12 +147,13 @@ func (s *businessService) GetMyBusinesses(ownerID, search string, categoryID int
 		}
 
 		item := models.BusinessListItem{
-			BusinessID:    b.BusinessID,
-			BusinessName:  *b.BusinessName,
-			OwnerName:     b.OwnerName,
-			LogoURL:       mainImage,
-			Address:       fullAddress,
-			PreviewImages: b.PreviewImages,
+			BusinessID:          b.BusinessID,
+			BusinessName:        *b.BusinessName,
+			OwnerName:           b.OwnerName,
+			LogoURL:             mainImage,
+			Address:             fullAddress,
+			AverageRating:       b.AverageRating,
+			TotalProductReviews: b.TotalProductReviews,
 		}
 		
 		responseList = append(responseList, item)

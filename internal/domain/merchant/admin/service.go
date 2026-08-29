@@ -885,9 +885,6 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 
 			ownerName := "" // Biarkan kosong atau jika diperlukan bisa diambil dari repo
 
-			// Ambil gambar produk sebagai preview images (Opsional, saat ini kosong sesuai contoh Owner)
-			var previewImages []string
-
 			// Permissions: supervisor default semua true, staff dari DB
 			perms := assignment.Permissions
 			if assignment.Role == "supervisor" {
@@ -902,12 +899,13 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 				Status:       assignment.Status,
 				Permissions:  perms,
 				Business: models.BusinessListItem{
-					BusinessID:    assignment.BusinessID,
-					BusinessName:  bizName,
-					OwnerName:     ownerName,
-					LogoURL:       mainImage,
-					Address:       fullAddress,
-					PreviewImages: previewImages,
+					BusinessID:          assignment.BusinessID,
+					BusinessName:        bizName,
+					OwnerName:           ownerName,
+					LogoURL:             mainImage,
+					Address:             fullAddress,
+					AverageRating:       0,
+					TotalProductReviews: 0,
 				},
 			}
 			response = append(response, item)

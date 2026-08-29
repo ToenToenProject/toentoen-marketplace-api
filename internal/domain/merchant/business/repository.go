@@ -302,39 +302,38 @@ func (r *businessRepository) GetBusinessListWithPreviews(ownerID string, search 
 	var accountName string
 	r.db.Table("accounts").Select("full_name").Where("id = ?", ownerID).Scan(&accountName) 
 
-	// Ambil Preview Produk
-	type ProductPreview struct {
-		BusinessID string
-		ImageURL   string
+	// Ambil Rating Rata-rata dari Seluruh Review Produk Toko
+	type ProductRatingAgg struct {
+		BusinessID   string
+		AvgRating    float64
+		TotalReviews int64
 	}
-	var previews []ProductPreview
+	var ratings []ProductRatingAgg
 
 	err = r.db.Raw(`
-		SELECT p.business_id, p.product_preview->>0 as image_url
-		FROM products p
-		WHERE p.business_id IN ?
-		AND jsonb_array_length(p.product_preview) > 0
-		AND p.is_active = true
-		ORDER BY p.created_at DESC
-	`, businessIDs).Scan(&previews).Error
-	
-	previewMap := make(map[string][]string)
-	for _, p := range previews {
-		if len(previewMap[p.BusinessID]) < 4 {
-			previewMap[p.BusinessID] = append(previewMap[p.BusinessID], p.ImageURL)
-		}
+		SELECT 
+			pr.business_id,
+			COALESCE(AVG(pr.rating), 0) as avg_rating,
+			COUNT(pr.review_id) as total_reviews
+		FROM product_reviews pr
+		WHERE pr.business_id IN ? AND pr.rating > 0
+		GROUP BY pr.business_id
+	`, businessIDs).Scan(&ratings).Error
+
+	ratingMap := make(map[string]ProductRatingAgg)
+	for _, r := range ratings {
+		ratingMap[r.BusinessID] = r
 	}
 
 	var result []models.BusinessWithPreview
 	for _, b := range businesses {
-		images := previewMap[b.BusinessID]
-		if images == nil {
-			images = []string{}
-		}
+		agg := ratingMap[b.BusinessID]
+		roundedAvg := float64(int(agg.AvgRating*10)) / 10
 		result = append(result, models.BusinessWithPreview{
-			Business:      b,
-			OwnerName:     accountName,
-			PreviewImages: images,
+			Business:            b,
+			OwnerName:           accountName,
+			AverageRating:       roundedAvg,
+			TotalProductReviews: agg.TotalReviews,
 		})
 	}
 

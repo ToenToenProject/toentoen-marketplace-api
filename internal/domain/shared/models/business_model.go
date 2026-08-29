@@ -161,14 +161,13 @@ type UpdateBusinessInput struct {
 }
 
 type BusinessListItem struct {
-	BusinessID   string `json:"business_id"`
-	BusinessName string `json:"business_name"`
-	OwnerName    string `json:"owner_name"` // Membutuhkan join/preload ke tabel Account
-	LogoURL      string `json:"logo_url"`
-	Address      string `json:"address"`    // Gabungan AddressDetail, City, Province
-
-	// 🪄 4 Gambar preview produk yang diambil dari tabel products
-	PreviewImages []string `json:"preview_images"` 
+	BusinessID          string  `json:"business_id"`
+	BusinessName        string  `json:"business_name"`
+	OwnerName           string  `json:"owner_name"` // Membutuhkan join/preload ke tabel Account
+	LogoURL             string  `json:"logo_url"`
+	Address             string  `json:"address"` // Gabungan AddressDetail, City, Province
+	AverageRating       float64 `json:"average_rating"`
+	TotalProductReviews int64   `json:"total_product_reviews"`
 }
 
 // GetBusinessListResponse adalah bungkus utama paginasi
@@ -179,6 +178,7 @@ type GetBusinessListResponse struct {
 
 type BusinessWithPreview struct {
 	Business
-	OwnerName     string
-	PreviewImages []string
+	OwnerName           string
+	AverageRating       float64
+	TotalProductReviews int64
 }
