@@ -169,6 +169,27 @@ func (h *ProductInteractionHandler) GetProductReviewDetail(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail ulasan produk berhasil diambil", review)
 }
 
+func (h *ProductInteractionHandler) GetBusinessProductReviewsSummary(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
+	}
+
+	summary, err := h.service.GetBusinessProductReviewSummary(businessID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil ringkasan ulasan produk toko", nil)
+	}
+
+	data := fiber.Map{
+		"business_id":            businessID,
+		"total_product_reviews":  summary.TotalReviews,
+		"average_product_rating": summary.AverageRating,
+		"distribution":           summary.Distribution,
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ringkasan ulasan seluruh produk toko berhasil diambil", data)
+}
+
 func (h *ProductInteractionHandler) ToggleReviewLike(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	accountID, ok := c.Locals("account_id").(string)

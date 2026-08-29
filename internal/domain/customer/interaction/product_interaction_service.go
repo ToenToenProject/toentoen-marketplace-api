@@ -26,6 +26,7 @@ type ProductInteractionService interface {
 	GetProductReviewDetail(reviewID, currentAccountID string) (*models.ProductReviewResponse, error)
 	GetSmartDisplayProductReviews(productID, currentAccountID string) ([]models.ProductReviewResponse, error)
 	GetProductReviewSummary(productID string) (*models.ReviewSummary, error)
+	GetBusinessProductReviewSummary(businessID string) (*models.ReviewSummary, error)
 	GetAllProductReviewsPaginated(productID, currentAccountID string, page, limit, ratingFilter int, sortStr string) ([]models.ProductReviewResponse, int64, error)
 	ToggleReviewLike(reviewID, accountID string) (bool, error)
 	AddReviewReply(reviewID, accountID string, input models.CreateProductReviewReplyInput) error
@@ -670,6 +671,10 @@ func (s *productInteractionService) GetSmartDisplayProductReviews(productID, cur
 
 func (s *productInteractionService) GetProductReviewSummary(productID string) (*models.ReviewSummary, error) {
 	return s.repo.GetProductReviewSummary(productID)
+}
+
+func (s *productInteractionService) GetBusinessProductReviewSummary(businessID string) (*models.ReviewSummary, error) {
+	return s.repo.GetBusinessProductReviewSummary(businessID)
 }
 
 func (s *productInteractionService) GetAllProductReviewsPaginated(productID, currentAccountID string, page, limit, ratingFilter int, sortStr string) ([]models.ProductReviewResponse, int64, error) {

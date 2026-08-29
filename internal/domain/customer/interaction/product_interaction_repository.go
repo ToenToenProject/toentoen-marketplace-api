@@ -21,6 +21,7 @@ type ProductInteractionRepository interface {
 	GetProductReviewsByProductID(productID string, rating *int) ([]models.ProductReview, error)
 	GetEligibleProductReviewsForSmartDisplay(productID string) ([]models.ProductReview, error)
 	GetProductReviewSummary(productID string) (*models.ReviewSummary, error)
+	GetBusinessProductReviewSummary(businessID string) (*models.ReviewSummary, error)
 	GetProductReviewsPaginated(productID string, ratingFilter int, sort string, page, limit int) ([]models.ProductReview, int64, error)
 	HasUserReviewedProduct(productID, accountID string) (bool, error)
 	RecalculateProductRating(productID string) error
@@ -221,6 +222,51 @@ func (r *productInteractionRepository) GetProductReviewSummary(productID string)
 	err := r.db.Model(&models.ProductReview{}).
 		Select("FLOOR(rating)::int as rating, count(*) as count").
 		Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", strings.TrimSpace(productID)).
+		Group("FLOOR(rating)").
+		Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, res := range results {
+		summary.TotalReviews += res.Count
+		total += float64(res.Rating) * float64(res.Count)
+
+		switch res.Rating {
+		case 5:
+			summary.Distribution.Star5 += res.Count
+		case 4:
+			summary.Distribution.Star4 += res.Count
+		case 3:
+			summary.Distribution.Star3 += res.Count
+		case 2:
+			summary.Distribution.Star2 += res.Count
+		case 1:
+			summary.Distribution.Star1 += res.Count
+		}
+	}
+
+	if summary.TotalReviews > 0 {
+		summary.AverageRating = total / float64(summary.TotalReviews)
+		summary.AverageRating = float64(int(summary.AverageRating*10)) / 10
+	}
+
+	return &summary, nil
+}
+
+func (r *productInteractionRepository) GetBusinessProductReviewSummary(businessID string) (*models.ReviewSummary, error) {
+	var summary models.ReviewSummary
+	var total float64
+
+	type Result struct {
+		Rating int
+		Count  int64
+	}
+	var results []Result
+
+	err := r.db.Model(&models.ProductReview{}).
+		Select("FLOOR(rating)::int as rating, count(*) as count").
+		Where("TRIM(LOWER(business_id)) = TRIM(LOWER(?)) AND rating > 0", strings.TrimSpace(businessID)).
 		Group("FLOOR(rating)").
 		Scan(&results).Error
 	if err != nil {

@@ -303,6 +303,7 @@ func main() {
 	// Products
 	customerBusinessGroup.Get("/:business_id/product-groups", businessProfileHandler.GetProductGroups)
 	customerBusinessGroup.Get("/:business_id/products", businessProfileHandler.GetProducts)
+	customerBusinessGroup.Get("/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)
 	customerBusinessGroup.Get("/:business_id/posts", middlewares.OptionalAuth, businessProfileHandler.GetPosts)
 
 	// ==========================================
@@ -551,7 +552,11 @@ func main() {
 	// Get Reviews Toko (Smart display 5 review, Paginated list, Detail)
 	reviewGroup.Get("/business/:business_id/smart", middlewares.OptionalAuth, reviewHandler.GetSmartDisplayReviews)
 	reviewGroup.Get("/business/:business_id", middlewares.OptionalAuth, reviewHandler.GetAllReviews)
+	reviewGroup.Get("/business/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)
 	reviewGroup.Get("/business/detail/:review_id", middlewares.OptionalAuth, reviewHandler.GetReviewDetail)
+
+	// Direct alias
+	api.Get("/business/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)
 
 	// Balasan & Like Review Toko (Legacy Alias)
 	reviewGroup.Post("/business/reviews/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
