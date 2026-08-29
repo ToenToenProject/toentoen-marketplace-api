@@ -1,0 +1,104 @@
+name: CI/CD Pipeline - Build & Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==========================================
+  # JOB 1: BUILD & PUSH DOCKER IMAGE TO GHCR
+  # ==========================================
+  build-and-push:
+    name: 🔨 Build & Push to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Login to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷️ Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: 🚀 Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ==========================================
+  # JOB 2: DEPLOY TO AWS EC2 (LIGHTWEIGHT PULL)
+  # ==========================================
+  deploy-to-ec2:
+    name: 🚢 Deploy to AWS EC2
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: 🚀 SSH into AWS EC2 and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            echo "🚀 Memulai proses deploy di AWS EC2..."
+            
+            # Pindah ke direktori kerja aplikasi
+            cd ~/webapi-go || cd /home/ubuntu/webapi-go
+            
+            # Tarik kode git terbaru
+            echo "📥 Menarik kode konfigurasi terbaru dari Git..."
+            git pull origin main
+            
+            # Login ke GHCR jika image bersifat private
+            echo "🔑 Login ke GHCR di server..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin || true
+            
+            # Tarik pre-built Docker image terbaru
+            echo "📦 Menarik image aplikasi terbaru dari GHCR..."
+            docker compose pull api-server
+            
+            # Jalankan migrasi database otomatis
+            echo "🗄️ Menjalankan migrasi database..."
+            docker compose run --rm migrator || true
+            
+            # Restart container tanpa proses kompilasi (Instant ~2 detik)
+            echo "♻️ Menjalankan service API server..."
+            docker compose up -d --no-build api-server
+            
+            # Bersihkan image lama yang tidak terpakai untuk hemat disk
+            echo "🧹 Membersihkan image lama..."
+            docker image prune -f
+            
+            echo "✅ Deployment selesai dengan sukses!"
