@@ -326,7 +326,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 
 	if err := s.repo.UpdateBusiness(business, hoursToUpdate, catIDs, tagIDs); err != nil {
-		return errors.New("failed to update business data in the database")
+		return fmt.Errorf("failed to update business data in the database: %w", err)
 	}
 
 	return nil

@@ -127,8 +127,8 @@ func (r *businessRepository) CheckHandleExists(handle, excludeBusinessID string)
 
 func (r *businessRepository) UpdateBusiness(business *models.Business, newHours *[]models.BusinessHour, newCategoryIDs *[]int64, newTagIDs *[]int64) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// tx.Save akan otomatis menimpa data kolom Photos dan SocialWebsites dengan array JSONB yang baru
-		if err := tx.Save(business).Error; err != nil {
+		// tx.Omit mencegah GORM meng-upsert relasi yang ter-preload yang bisa memicu conflict key
+		if err := tx.Omit("Hours", "Categories", "Tags").Save(business).Error; err != nil {
 			return err
 		}
 
