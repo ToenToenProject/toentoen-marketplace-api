@@ -24,6 +24,12 @@ type CreatePostInput struct {
 	VideoURL string   `json:"video_url"`
 }
 
+type UpdatePostInput struct {
+	Content  *string   `json:"content"`
+	Images   *[]string `json:"images" validate:"omitempty,max=5"`
+	VideoURL *string   `json:"video_url"`
+}
+
 type PostResponse struct {
 	PostID       string    `json:"post_id"`
 	BusinessID   string    `json:"business_id"`

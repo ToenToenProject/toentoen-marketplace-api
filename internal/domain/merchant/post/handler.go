@@ -73,6 +73,32 @@ func (h *BusinessPostHandler) GetPostDetail(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail post berhasil diambil", post)
 }
 
+func (h *BusinessPostHandler) UpdatePost(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	postID := strings.TrimSpace(c.Params("post_id"))
+
+	requesterID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input models.UpdatePostInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	updatedPost, errSvc := h.service.UpdatePost(requesterID, role, businessID, postID, input)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Post berhasil diperbarui", updatedPost)
+}
+
 func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	postID := strings.TrimSpace(c.Params("post_id"))

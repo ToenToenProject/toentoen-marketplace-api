@@ -11,6 +11,7 @@ import (
 type BusinessPostService interface {
 	CreatePost(requesterID, role, businessID string, input models.CreatePostInput) (*models.BusinessPost, error)
 	GetPosts(businessID string, page, limit int) ([]models.BusinessPost, int64, error)
+	UpdatePost(requesterID, role, businessID, postID string, input models.UpdatePostInput) (*models.BusinessPost, error)
 	DeletePost(requesterID, role, businessID, postID string) error
 	ToggleLike(accountID, postID string) (string, error)
 	GetPostByID(postID string) (*models.BusinessPost, error)
@@ -65,6 +66,44 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 func (s *businessPostService) GetPosts(businessID string, page, limit int) ([]models.BusinessPost, int64, error) {
 	// Tidak perlu cek otoritas, karena Postigan (Feed) biasanya bersifat publik untuk dilihat pembeli
 	return s.postRepo.GetPostsByBusinessID(businessID, page, limit)
+}
+
+func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID string, input models.UpdatePostInput) (*models.BusinessPost, error) {
+	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
+		return nil, errors.New("forbidden: you don't have access to this business")
+	}
+
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermCreatePost) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengedit postingan")
+	}
+
+	post, err := s.postRepo.GetPostByID(postID)
+	if err != nil || post == nil || post.BusinessID != businessID {
+		return nil, errors.New("post not found in this business")
+	}
+
+	if input.Images != nil && len(*input.Images) > 5 {
+		return nil, errors.New("maximum 5 images allowed per post")
+	}
+
+	if input.Content != nil {
+		post.Content = *input.Content
+	}
+	if input.Images != nil {
+		post.Images = *input.Images
+	}
+	if input.VideoURL != nil {
+		if strings.TrimSpace(*input.VideoURL) == "" {
+			post.VideoURL = nil
+		} else {
+			post.VideoURL = input.VideoURL
+		}
+	}
+
+	if err := s.postRepo.UpdatePost(post); err != nil {
+		return nil, errors.New("failed to update post")
+	}
+	return post, nil
 }
 
 func (s *businessPostService) DeletePost(requesterID, role, businessID, postID string) error {

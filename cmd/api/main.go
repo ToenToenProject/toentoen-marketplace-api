@@ -516,6 +516,8 @@ func main() {
 	postRoutes.Post("/", businessPostHandler.CreatePost)
 	postRoutes.Get("/", businessPostHandler.GetPosts)
 	postRoutes.Get("/:post_id", businessPostHandler.GetPostDetail)
+	postRoutes.Put("/:post_id", businessPostHandler.UpdatePost)
+	postRoutes.Patch("/:post_id", businessPostHandler.UpdatePost)
 	postRoutes.Delete("/:post_id", businessPostHandler.DeletePost)
 
 	// ==========================================

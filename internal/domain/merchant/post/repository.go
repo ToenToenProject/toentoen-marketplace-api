@@ -8,6 +8,7 @@ import (
 type BusinessPostRepository interface {
 	CreatePost(post *models.BusinessPost) error
 	GetPostsByBusinessID(businessID string, page, limit int) ([]models.BusinessPost, int64, error)
+	UpdatePost(post *models.BusinessPost) error
 	DeletePost(postID, businessID string) error
 	ToggleLike(postID, accountID string) (string, error)
 	GetPostByID(postID string) (*models.BusinessPost, error)
@@ -36,6 +37,10 @@ func (r *businessPostRepository) GetPostsByBusinessID(businessID string, page, l
 	err := query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&posts).Error
 
 	return posts, totalRows, err
+}
+
+func (r *businessPostRepository) UpdatePost(post *models.BusinessPost) error {
+	return r.db.Save(post).Error
 }
 
 func (r *businessPostRepository) DeletePost(postID, businessID string) error {
