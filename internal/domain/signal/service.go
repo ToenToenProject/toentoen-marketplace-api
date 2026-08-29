@@ -422,7 +422,7 @@ func (s *signalService) ExploreSignals(accountID, businessID string, lat, lng fl
 	var err error
 
 	if businessID != "" {
-		activeBusiness, err = s.businessRepo.GetSpecificBusiness(accountID, businessID)
+		activeBusiness, err = s.businessRepo.FindBusinessByID(businessID)
 	} else {
 		businesses, errRepo := s.businessRepo.FindBusinessesByOwnerID(accountID)
 		if errRepo == nil && len(businesses) > 0 {
