@@ -53,7 +53,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		ProductID:          utils.GenerateUUID("PRD"),
 		BusinessID:         businessID,
 		ProductGroupID:     input.ProductGroupID,
-		ProductImages:      input.ProductImages,
+		ProductPreview:     input.ProductPreview,
 		ProductName:        input.ProductName,
 		ProductOrigin:      input.ProductOrigin,
 		ProductDescription: input.ProductDescription,
@@ -164,8 +164,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	}
 
 	if role == "business_admin" {
-		if input.ProductImages != nil && !s.repo.HasPermission(requesterID, businessID, models.PermChangeProductImage) {
-			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah gambar produk")
+		if input.ProductPreview != nil && !s.repo.HasPermission(requesterID, businessID, models.PermChangeProductImage) {
+			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah gambar/media produk")
 		}
 
 		hasOtherDetails := input.ProductGroupID != nil || input.ProductName != nil || input.ProductOrigin != nil ||
@@ -185,8 +185,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	if input.ProductGroupID != nil {
 		product.ProductGroupID = input.ProductGroupID
 	}
-	if input.ProductImages != nil {
-		product.ProductImages = *input.ProductImages
+	if input.ProductPreview != nil {
+		product.ProductPreview = *input.ProductPreview
 	}
 	if input.ProductName != nil {
 		product.ProductName = *input.ProductName
@@ -305,7 +305,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		ProductID:          p.ProductID,
 		BusinessID:         p.BusinessID,
 		ProductGroupID:     p.ProductGroupID,
-		ProductImages:      p.ProductImages,
+		ProductPreview:     p.ProductPreview,
 		ProductName:        p.ProductName,
 		ProductOrigin:      p.ProductOrigin,
 		ProductDescription: p.ProductDescription,
@@ -367,8 +367,8 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 
 	for _, p := range products {
 		var thumbnail string
-		if len(p.ProductImages) > 0 {
-			thumbnail = p.ProductImages[0]
+		if len(p.ProductPreview) > 0 {
+			thumbnail = p.ProductPreview[0]
 		}
 
 		// 🪄 LOGIKA HARGA MIN/MAX & DISKON (Sama dengan GetCatalog)

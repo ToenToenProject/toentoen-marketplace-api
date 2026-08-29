@@ -310,10 +310,10 @@ func (r *businessRepository) GetBusinessListWithPreviews(ownerID string, search 
 	var previews []ProductPreview
 
 	err = r.db.Raw(`
-		SELECT p.business_id, p.product_images->>0 as image_url
+		SELECT p.business_id, p.product_preview->>0 as image_url
 		FROM products p
 		WHERE p.business_id IN ?
-		AND jsonb_array_length(p.product_images) > 0
+		AND jsonb_array_length(p.product_preview) > 0
 		AND p.is_active = true
 		ORDER BY p.created_at DESC
 	`, businessIDs).Scan(&previews).Error

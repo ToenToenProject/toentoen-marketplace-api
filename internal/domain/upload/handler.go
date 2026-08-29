@@ -16,6 +16,7 @@ var allowedFolders = map[string]bool{
 	"accounts/avatars":    true,
 	"products/images":     true,
 	"products/videos":     true,
+	"products/previews":   true,
 	"posts/images":        true,
 	"posts/videos":        true,
 	"reviews/images":      true,

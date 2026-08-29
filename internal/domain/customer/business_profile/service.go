@@ -9,14 +9,14 @@ import (
 )
 
 type SimpleProductResponse struct {
-	ProductID     string   `json:"product_id"`
-	ProductName   string   `json:"product_name"`
-	ProductImages []string `json:"product_images"`
-	Price         float64  `json:"price"`
-	OriginalPrice *float64 `json:"original_price,omitempty"`
-	AverageRating float64  `json:"average_rating"`
-	ReviewCount   int      `json:"review_count"`
-	StockStatus   string   `json:"stock_status"`
+	ProductID      string   `json:"product_id"`
+	ProductName    string   `json:"product_name"`
+	ProductPreview []string `json:"product_preview"`
+	Price          float64  `json:"price"`
+	OriginalPrice  *float64 `json:"original_price,omitempty"`
+	AverageRating  float64  `json:"average_rating"`
+	ReviewCount    int      `json:"review_count"`
+	StockStatus    string   `json:"stock_status"`
 }
 
 type BusinessProfileResponse struct {
@@ -283,14 +283,14 @@ func mapToSimpleProduct(p models.Product) SimpleProductResponse {
 	}
 
 	return SimpleProductResponse{
-		ProductID:     p.ProductID,
-		ProductName:   p.ProductName,
-		ProductImages: p.ProductImages,
-		Price:         currentPrice,
-		OriginalPrice: originalPrice,
-		AverageRating: p.AverageRating,
-		ReviewCount:   p.ReviewCount,
-		StockStatus:   stockStatus,
+		ProductID:      p.ProductID,
+		ProductName:    p.ProductName,
+		ProductPreview: p.ProductPreview,
+		Price:          currentPrice,
+		OriginalPrice:  originalPrice,
+		AverageRating:  p.AverageRating,
+		ReviewCount:    p.ReviewCount,
+		StockStatus:    stockStatus,
 	}
 }
 

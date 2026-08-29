@@ -16,7 +16,7 @@ type Product struct {
 	ProductGroupID *string `gorm:"column:product_group_id;index" json:"product_group_id"` // Pointer karena bisa NULL
 
 	// Serializer JSON otomatis dari GORM
-	ProductImages      []string `gorm:"column:product_images;type:jsonb;serializer:json;default:'[]'" json:"product_images"`
+	ProductPreview     []string `gorm:"column:product_preview;type:jsonb;serializer:json;default:'[]'" json:"product_preview"`
 	ProductName        string   `gorm:"column:product_name" json:"product_name"`
 	ProductOrigin      string   `gorm:"column:product_origin;default:'domestic'" json:"product_origin"`
 	ProductDescription string   `gorm:"column:product_description" json:"product_description"`
@@ -91,7 +91,7 @@ type UpdateVariantInput struct {
 
 type CreateProductInput struct {
 	ProductGroupID     *string  `json:"product_group_id"`
-	ProductImages      []string `json:"product_images" validate:"max=5"`
+	ProductPreview     []string `json:"product_preview" validate:"max=10"`
 	ProductName        string   `json:"product_name" validate:"required"`
 	ProductOrigin      string   `json:"product_origin"`
 	ProductDescription string   `json:"product_description" validate:"max=300"`
@@ -108,7 +108,7 @@ type CreateProductInput struct {
 
 type UpdateProductInput struct {
 	ProductGroupID     *string    `json:"product_group_id"`
-	ProductImages      *[]string  `json:"product_images" validate:"max=5"`
+	ProductPreview     *[]string  `json:"product_preview" validate:"max=10"`
 	ProductName        *string    `json:"product_name"`
 	ProductOrigin      *string    `json:"product_origin"`
 	ProductDescription *string    `json:"product_description" validate:"max=300"`
@@ -174,7 +174,7 @@ type ProductDetailResponse struct {
 	ProductID          string   `json:"product_id"`
 	BusinessID         string   `json:"business_id"`
 	ProductGroupID     *string  `json:"product_group_id"`
-	ProductImages      []string `json:"product_images"`
+	ProductPreview     []string `json:"product_preview"`
 	ProductName        string   `json:"product_name"`
 	ProductOrigin      string   `json:"product_origin"`
 	ProductDescription string   `json:"product_description"`

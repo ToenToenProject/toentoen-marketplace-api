@@ -10,7 +10,7 @@ type ProductDetailResponse struct {
 	ProductName        string   `json:"product_name"`
 	ProductOrigin      string   `json:"product_origin"`
 	ProductDescription string   `json:"product_description"`
-	ProductImages      []string `json:"product_images"`
+	ProductPreview     []string `json:"product_preview"`
 	Rating             float64  `json:"rating"`
 	ReviewCount        int      `json:"review_count"`
 	Price              float64  `json:"price"`
@@ -67,7 +67,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		ProductName:        prod.ProductName,
 		ProductOrigin:      prod.ProductOrigin,
 		ProductDescription: prod.ProductDescription,
-		ProductImages:      prod.ProductImages,
+		ProductPreview:     prod.ProductPreview,
 		Rating:             prod.AverageRating,
 		ReviewCount:        prod.ReviewCount,
 		Price:              finalPrice,
@@ -93,8 +93,8 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		}
 		
 		img := ""
-		if len(sim.ProductImages) > 0 {
-			img = sim.ProductImages[0]
+		if len(sim.ProductPreview) > 0 {
+			img = sim.ProductPreview[0]
 		}
 		
 		st := "In Stock"
