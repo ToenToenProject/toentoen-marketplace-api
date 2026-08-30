@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"io"
 	"strings"
@@ -15,24 +16,48 @@ import (
 // CiphertextPrefix adalah penanda opsional untuk mendeteksi data terenkripsi secara deterministik
 const CiphertextPrefix = "enc::"
 
-// getAESKey mengambil 32-byte key dari config
-func getAESKey() ([]byte, error) {
+const defaultDevKey = "toentoen-secret-key-32bytes-long!"
+
+// getCandidateKeys menghasilkan daftar kandidat kunci untuk dekripsi (termasuk backward compatibility)
+func getCandidateKeys() [][]byte {
+	var keys [][]byte
 	keyStr := ""
 	if config.Envs != nil {
 		keyStr = config.Envs.DataEncryptionKey
 	}
-	if keyStr == "" {
-		keyStr = "toentoen-secret-key-32bytes-long!" // fallback default dev key
+
+	if keyStr != "" {
+		// 1. Jika hex string 64-karakter (32 byte binary)
+		if len(keyStr) == 64 {
+			if decoded, err := hex.DecodeString(keyStr); err == nil && len(decoded) == 32 {
+				keys = append(keys, decoded)
+			}
+		}
+		// 2. Jika persis 32 byte
+		if len(keyStr) == 32 {
+			keys = append(keys, []byte(keyStr))
+		}
+		// 3. Normalisasi slice 32 byte
+		norm := make([]byte, 32)
+		copy(norm, []byte(keyStr))
+		keys = append(keys, norm)
 	}
 
-	key := []byte(keyStr)
-	if len(key) != 32 {
-		// Jika panjang kunci bukan 32 byte, normalisasi ke 32 byte
-		normalized := make([]byte, 32)
-		copy(normalized, key)
-		return normalized, nil
+	// 4. Default fallback key untuk backward-compatibility data lokal
+	defaultNorm := make([]byte, 32)
+	copy(defaultNorm, []byte(defaultDevKey))
+	keys = append(keys, defaultNorm)
+
+	return keys
+}
+
+// getPrimaryAESKey mengambil kunci utama untuk proses enkripsi baru
+func getPrimaryAESKey() ([]byte, error) {
+	candidates := getCandidateKeys()
+	if len(candidates) > 0 {
+		return candidates[0], nil
 	}
-	return key, nil
+	return nil, errors.New("no encryption key configured")
 }
 
 // Encrypt mengenkripsi plaintext string menjadi string base64 berformat "enc::<base64_payload>"
@@ -41,7 +66,7 @@ func Encrypt(plaintext string) (string, error) {
 		return "", nil
 	}
 
-	key, err := getAESKey()
+	key, err := getPrimaryAESKey()
 	if err != nil {
 		return "", err
 	}
@@ -67,6 +92,31 @@ func Encrypt(plaintext string) (string, error) {
 	return CiphertextPrefix + encoded, nil
 }
 
+func decryptPayload(data []byte, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", errors.New("ciphertext terlalu pendek")
+	}
+
+	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintext), nil
+}
+
 // Decrypt mendekripsi ciphertext berformat "enc::<base64_payload>".
 // Jika data tidak memiliki prefix "enc::" (misal data lama/plaintext),
 // fungsi ini akan mengembalikan data asli secara aman (graceful fallback).
@@ -87,34 +137,15 @@ func Decrypt(encryptedText string) (string, error) {
 		return encryptedText, nil
 	}
 
-	key, err := getAESKey()
-	if err != nil {
-		return encryptedText, err
+	candidateKeys := getCandidateKeys()
+	for _, key := range candidateKeys {
+		if decrypted, err := decryptPayload(data, key); err == nil {
+			return decrypted, nil
+		}
 	}
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return encryptedText, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return encryptedText, err
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(data) < nonceSize {
-		return encryptedText, errors.New("ciphertext terlalu pendek")
-	}
-
-	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		// Jika gagal decrypt dengan key (misal corrupted), fallback ke teks asli
-		return encryptedText, nil
-	}
-
-	return string(plaintext), nil
+	// Jika semua kandidat kunci gagal decrypt (misal data rusak), fallback ke teks asli
+	return encryptedText, nil
 }
 
 // EncryptPointer adalah helper untuk mengenkripsi pointer string (*string)
