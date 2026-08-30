@@ -3,6 +3,7 @@ package explore
 import (
 	"strconv"
 
+	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
