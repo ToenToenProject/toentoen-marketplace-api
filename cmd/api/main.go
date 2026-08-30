@@ -583,6 +583,9 @@ func main() {
 	customerExploreGroup := api.Group("/customer/explore")
 	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
 	customerExploreGroup.Get("/timeline", middlewares.OptionalAuth, exploreHandler.GetTimeline)
+	customerExploreGroup.Get("/feed", middlewares.OptionalAuth, exploreHandler.GetTimeline)
+	customerExploreGroup.Post("/feed/events", middlewares.OptionalAuth, exploreHandler.RecordFeedEvents)
+	customerExploreGroup.Post("/timeline/events", middlewares.OptionalAuth, exploreHandler.RecordFeedEvents)
 
 	// Batch Impressions dari Flutter
 	api.Post("/customer/analytics/impressions", analyticsHandler.TrackImpressions)

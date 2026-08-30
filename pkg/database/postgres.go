@@ -45,6 +45,8 @@ func ConnectDB() {
 		&models.DirectBusinessConversation{},
 		&models.DirectBusinessMessage{},
 		&models.BusinessTransferRequest{},
+		&models.UserPostInteraction{},
+		&models.UserCategoryAffinity{},
 	); err != nil {
 		log.Printf("⚠️ AutoMigrate models: %v", err)
 	}
