@@ -167,3 +167,31 @@ func (h *MerchantHandler) SendMessage(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Pesan berhasil dikirim", msg)
 }
+
+// GetProductSuggestions memberikan rekomendasi produk dari katalog toko yang cocok dengan sinyal
+// GET /api/v1/merchant/signals/:signal_id/product-suggestions?business_id=BUS-xxx
+func (h *MerchantHandler) GetProductSuggestions(c *fiber.Ctx) error {
+	accID, _, err := getSession(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+	_ = accID
+
+	signalID := c.Params("signal_id")
+	if signalID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Signal ID wajib diisi", nil)
+	}
+
+	businessID := c.Query("business_id")
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Query parameter 'business_id' wajib diisi", nil)
+	}
+
+	products, errSvc := h.service.GetProductSuggestions(businessID, signalID)
+	if errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil rekomendasi produk katalog", products)
+}
+

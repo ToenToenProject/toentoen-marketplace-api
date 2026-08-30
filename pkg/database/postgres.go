@@ -47,6 +47,11 @@ func ConnectDB() {
 		&models.BusinessTransferRequest{},
 		&models.UserPostInteraction{},
 		&models.UserCategoryAffinity{},
+		&models.Signal{},
+		&models.SignalTag{},
+		&models.SignalImage{},
+		&models.SignalConversation{},
+		&models.SignalMessage{},
 	); err != nil {
 		log.Printf("⚠️ AutoMigrate models: %v", err)
 	}

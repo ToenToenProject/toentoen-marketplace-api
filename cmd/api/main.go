@@ -538,6 +538,7 @@ func main() {
 	merchantSignalGroup := api.Group("/merchant/signals", middlewares.RequireAuth, sharedAccess)
 	merchantSignalGroup.Get("/explore", merchantSignalHandler.ExploreSignals)
 	merchantSignalGroup.Get("/:signal_id", merchantSignalHandler.GetSignalDetail)
+	merchantSignalGroup.Get("/:signal_id/product-suggestions", merchantSignalHandler.GetProductSuggestions)
 	merchantSignalGroup.Post("/:signal_id/reply", merchantSignalHandler.ReplyToSignal)
 
 	merchantConvGroup := api.Group("/merchant/conversations", middlewares.RequireAuth, sharedAccess)

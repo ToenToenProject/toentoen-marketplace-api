@@ -28,6 +28,7 @@ type SignalService interface {
 	GetMerchantSignalDetail(signalID, merchantAccountID string) (*models.MerchantSignalDetailResponse, error)
 	ReplyToSignal(accountID, role, signalID string, input models.InitiateConversationInput) (*models.SignalConversation, error)
 	GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error)
+	GetProductSuggestions(businessID, signalID string) ([]models.Product, error)
 
 	// Shared (Customer & Merchant)
 	GetMessages(accountID, role, conversationID string, page, limit int) ([]models.SignalMessage, int64, error)
@@ -95,6 +96,11 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		expiresInHours = 72 // max 3 days
 	}
 
+	maxOffers := 5
+	if input.MaxOffers != nil && *input.MaxOffers > 0 {
+		maxOffers = *input.MaxOffers
+	}
+
 	signal := models.Signal{
 		SignalID:    utils.GenerateUUID("SIG"),
 		CustomerID:  customerID,
@@ -106,6 +112,10 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		RadiusKm:    radiusKm,
 		IsUrgent:    input.IsUrgent,
 		Status:      "active",
+		MinBudget:   input.MinBudget,
+		MaxBudget:   input.MaxBudget,
+		MaxOffers:   &maxOffers,
+		OfferCount:  0,
 		ExpiresAt:   time.Now().Add(time.Duration(expiresInHours) * time.Hour),
 	}
 
@@ -165,6 +175,9 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 			}
 		}
 	}
+
+	// 5. 🔔 REAL-TIME BROADCAST: Kirim notifikasi instan ke toko terdekat yang relevan
+	go s.notifyNearbyMerchantsNewSignal(signal.SignalID, resolvedCatID, signal.Category, input.Latitude, input.Longitude, float64(radiusKm), signal.IsUrgent)
 
 	return &signal, nil
 }
@@ -231,7 +244,18 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 		signal.ExpiresAt = time.Now().Add(time.Duration(hours) * time.Hour)
 	}
 
-	// 7. Simpan perubahan signal
+	// 7. Budget & MaxOffers jika diubah
+	if input.MinBudget != nil {
+		signal.MinBudget = input.MinBudget
+	}
+	if input.MaxBudget != nil {
+		signal.MaxBudget = input.MaxBudget
+	}
+	if input.MaxOffers != nil && *input.MaxOffers > 0 {
+		signal.MaxOffers = input.MaxOffers
+	}
+
+	// 8. Simpan perubahan signal
 	if err := s.signalRepo.UpdateSignal(signal); err != nil {
 		return nil, fmt.Errorf("gagal mengupdate signal: %w", err)
 	}
@@ -358,6 +382,14 @@ func (s *signalService) GetSignalDetail(signalID, accountID, role string) (*mode
 		return nil, errors.New("anda tidak memiliki akses ke signal ini")
 	}
 
+	// Dekripsi pesan pada relasi percakapan
+	for i := range signal.Conversations {
+		for j := range signal.Conversations[i].Messages {
+			signal.Conversations[i].Messages[j].MessageText, _ = crypto.Decrypt(signal.Conversations[i].Messages[j].MessageText)
+			signal.Conversations[i].Messages[j].AttachmentURL, _ = crypto.DecryptPointer(signal.Conversations[i].Messages[j].AttachmentURL)
+		}
+	}
+
 	return signal, nil
 }
 
@@ -383,6 +415,53 @@ func (s *signalService) CompleteSignal(customerID, signalID string) error {
 	go s.notifySignalCompleted(signalID, customerID)
 
 	return nil
+}
+
+// notifyNearbyMerchantsNewSignal menyebarkan event dan push notifikasi ke seluruh merchant terdekat yang relevan
+func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, categoryID int64, categoryName string, lat, lng, radiusKm float64, isUrgent bool) {
+	accountIDs, err := s.signalRepo.FindNearbyMatchingMerchantAccountIDs(categoryID, lat, lng, radiusKm)
+	if err != nil || len(accountIDs) == 0 {
+		return
+	}
+
+	title := "📢 Peluang Baru: Permintaan Kebutuhan Sekitarmu!"
+	if isUrgent {
+		title = "🚨 Mendesak: Calon Pembeli Butuh Cepat di Dekatmu!"
+	}
+	body := fmt.Sprintf("Ada calon pembeli mencari kebutuhan kategori %s dalam radius %.0f km dari tokomu.", categoryName, radiusKm)
+
+	event := realtime.WSEvent{
+		Type: "NEW_DEMAND_SIGNAL",
+		Data: map[string]interface{}{
+			"signal_id":   signalID,
+			"category_id": categoryID,
+			"category":    categoryName,
+			"is_urgent":   isUrgent,
+			"radius_km":   radiusKm,
+		},
+	}
+
+	// Broadcast ke WebSocket merchant yang sedang online
+	s.hub.BroadcastToUsers(accountIDs, event)
+
+	// Kirim In-App Notification & Push Notification FCM
+	if s.notifService != nil {
+		s.notifService.SendNotification(
+			accountIDs,
+			"SYSTEM",
+			"new_demand_signal",
+			signalID,
+			title,
+			body,
+			map[string]interface{}{
+				"type":      "new_demand_signal",
+				"signal_id": signalID,
+				"category":  categoryName,
+				"is_urgent": isUrgent,
+			},
+			nil,
+		)
+	}
 }
 
 // notifySignalCompleted mengirimkan event signal_completed ke semua merchant terkait
@@ -461,18 +540,22 @@ func (s *signalService) ExploreSignals(accountID, businessID string, lat, lng fl
 func (s *signalService) GetMerchantSignalDetail(signalID, merchantAccountID string) (*models.MerchantSignalDetailResponse, error) {
 	signal, err := s.signalRepo.GetSignalByID(signalID)
 	if err != nil {
-		return nil, fmt.Errorf("signal dengan ID %s tidak ditemukan", signalID)
+		return nil, errors.New("signal tidak ditemukan")
 	}
 
-	var myConv *models.SignalConversation
+	existing, _ := s.signalRepo.FindExistingConversation(signalID, merchantAccountID)
+	hasReplied := existing != nil
 	var myConvID *string
-	hasReplied := false
+	var myConv *models.SignalConversation
 
-	if merchantAccountID != "" {
-		existing, errConv := s.signalRepo.FindExistingConversation(signalID, merchantAccountID)
-		if errConv == nil && existing != nil {
-			hasReplied = true
-			myConv = existing
+	if hasReplied {
+		myConvID = &existing.ConversationID
+		myConv, err = s.signalRepo.GetConversationByID(existing.ConversationID)
+		if err == nil && myConv != nil {
+			for i := range myConv.Messages {
+				myConv.Messages[i].MessageText, _ = crypto.Decrypt(myConv.Messages[i].MessageText)
+				myConv.Messages[i].AttachmentURL, _ = crypto.DecryptPointer(myConv.Messages[i].AttachmentURL)
+			}
 			myConvID = &existing.ConversationID
 		}
 	}
@@ -514,6 +597,11 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 		return nil, errors.New("toko Anda sudah pernah membalas signal ini")
 	}
 
+	// Validasi Kuota Penawaran (Offer Cap)
+	if signal.MaxOffers != nil && *signal.MaxOffers > 0 && signal.OfferCount >= *signal.MaxOffers {
+		return nil, errors.New("batas maksimal kuota penawaran untuk sinyal ini telah tercapai")
+	}
+
 	conv := models.SignalConversation{
 		ConversationID: utils.GenerateUUID("CONV"),
 		SignalID:       signalID,
@@ -525,6 +613,9 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 	if err := s.signalRepo.CreateConversation(&conv); err != nil {
 		return nil, errors.New("gagal membuat ruang percakapan")
 	}
+
+	// Increment offer count
+	_ = s.signalRepo.IncrementOfferCount(signalID)
 
 	// Kirim pesan pertama dari merchant
 	var firstMsg *models.SignalMessage
@@ -554,6 +645,26 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 	go s.notifyNewConversation(signal.CustomerID, accountID, &conv, firstMsg)
 
 	return &conv, nil
+}
+
+// GetProductSuggestions mencari produk dari katalog toko yang paling cocok dengan sinyal kebutuhan
+func (s *signalService) GetProductSuggestions(businessID, signalID string) ([]models.Product, error) {
+	signal, err := s.signalRepo.GetSignalByID(signalID)
+	if err != nil {
+		return nil, errors.New("signal tidak ditemukan")
+	}
+
+	var tagIDs []int64
+	for _, t := range signal.Tags {
+		tagIDs = append(tagIDs, t.TagID)
+	}
+
+	products, err := s.signalRepo.FindMatchingProductsForSignal(businessID, signal.Description, tagIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return products, nil
 }
 
 // notifyNewConversation mengirimkan event new_conversation ke customer pemilik signal

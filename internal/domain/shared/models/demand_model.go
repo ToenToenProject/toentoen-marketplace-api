@@ -52,6 +52,9 @@ type CreateSignalInput struct {
 	RadiusKm       int      `json:"radius_km"`
 	IsUrgent       bool     `json:"is_urgent"`
 	ExpiresInHours int      `json:"expires_in_hours"`
+	MinBudget      *float64 `json:"min_budget"`
+	MaxBudget      *float64 `json:"max_budget"`
+	MaxOffers      *int     `json:"max_offers"`
 }
 
 type UpdateSignalInput struct {
@@ -67,6 +70,9 @@ type UpdateSignalInput struct {
 	RadiusKm       *int     `json:"radius_km"`
 	IsUrgent       *bool    `json:"is_urgent"`
 	ExpiresInHours *int     `json:"expires_in_hours"`
+	MinBudget      *float64 `json:"min_budget"`
+	MaxBudget      *float64 `json:"max_budget"`
+	MaxOffers      *int     `json:"max_offers"`
 }
 
 type CreateResponseInput struct {
@@ -91,6 +97,10 @@ type Signal struct {
 	RadiusKm    int       `gorm:"default:5" json:"radius_km"`
 	IsUrgent    bool      `gorm:"default:false" json:"is_urgent"`
 	Status      string    `gorm:"default:'active'" json:"status"` // active, completed, expired
+	MinBudget   *float64  `gorm:"column:min_budget" json:"min_budget,omitempty"`
+	MaxBudget   *float64  `gorm:"column:max_budget" json:"max_budget,omitempty"`
+	MaxOffers   *int      `gorm:"column:max_offers;default:5" json:"max_offers,omitempty"`
+	OfferCount  int       `gorm:"column:offer_count;default:0" json:"offer_count"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 
@@ -186,6 +196,10 @@ type SignalListItem struct {
 	Category          string    `json:"category"`
 	IsUrgent          bool      `json:"is_urgent"`
 	Status            string    `json:"status"`
+	MinBudget         *float64  `json:"min_budget,omitempty"`
+	MaxBudget         *float64  `json:"max_budget,omitempty"`
+	MaxOffers         *int      `json:"max_offers,omitempty"`
+	OfferCount        int       `json:"offer_count"`
 	ConversationCount int       `json:"conversation_count"`
 	ExpiresAt         time.Time `json:"expires_at"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -201,6 +215,11 @@ type SignalExploreItem struct {
 	IsUrgent        bool      `json:"is_urgent"`
 	RadiusKm        int       `json:"radius_km"`
 	DistanceKm      float64   `json:"distance_km"`
+	MinBudget       *float64  `json:"min_budget,omitempty"`
+	MaxBudget       *float64  `json:"max_budget,omitempty"`
+	MaxOffers       *int      `json:"max_offers,omitempty"`
+	OfferCount      int       `json:"offer_count"`
+	HasReplied      bool      `json:"has_replied"`
 	ExpiresAt       time.Time `json:"expires_at"`
 	CreatedAt       time.Time `json:"created_at"`
 	CustomerName    string    `json:"customer_name"`
@@ -208,6 +227,25 @@ type SignalExploreItem struct {
 	Images          []string  `json:"images"`
 	Tags            []string  `json:"tags"`          // Nama tag yang dipilih customer
 	TagOverlapScore int       `json:"relevance_score"` // Jumlah tag overlap dengan bisnis merchant
+}
+
+// SignalMerchantComparison untuk matriks perbandingan toko penawar bagi customer
+type SignalMerchantComparison struct {
+	BusinessID        string    `json:"business_id"`
+	BusinessName      string    `json:"business_name"`
+	LogoURL           *string   `json:"logo_url"`
+	DistanceKm        float64   `json:"distance_km"`
+	AverageRating     float64   `json:"average_rating"`
+	ReviewCount       int64     `json:"review_count"`
+	ConversationID    string    `json:"conversation_id"`
+	FirstOfferMessage string    `json:"first_offer_message"`
+	LastMessageAt     time.Time `json:"last_message_at"`
+}
+
+// CustomerSignalDetailResponse menyertakan sinyal dan perbandingan merchant
+type CustomerSignalDetailResponse struct {
+	Signal      *Signal                    `json:"signal"`
+	Comparisons []SignalMerchantComparison `json:"merchant_comparisons"`
 }
 
 // ConversationListItem untuk daftar roomchat (Merchant / Customer)

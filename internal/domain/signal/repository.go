@@ -30,6 +30,9 @@ type SignalRepository interface {
 
 	// Explore (Merchant) — Category-strict + Tag relevance ranking
 	ExploreActiveSignals(merchantBusinessID string, merchantLat, merchantLng float64) ([]models.SignalExploreItem, error)
+	FindNearbyMatchingMerchantAccountIDs(categoryID int64, lat, lng float64, radiusKm float64) ([]string, error)
+	FindMatchingProductsForSignal(businessID string, queryText string, tagIDs []int64) ([]models.Product, error)
+	IncrementOfferCount(signalID string) error
 
 	// Conversations
 	CreateConversation(conv *models.SignalConversation) error
@@ -237,11 +240,20 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 			s.category,
 			s.is_urgent,
 			s.radius_km,
+			s.min_budget,
+			s.max_budget,
+			s.max_offers,
+			s.offer_count,
 			s.expires_at,
 			s.created_at,
 			ST_Distance(s.location::geography, %s::geography) / 1000 AS distance_km,
 			TRIM(CONCAT(a.first_name, ' ', a.last_name)) AS customer_name,
 			a.profile_picture_url AS customer_avatar,
+			-- Cek apakah toko ini sudah pernah membalas
+			EXISTS(
+				SELECT 1 FROM signal_conversations sc 
+				WHERE sc.signal_id = s.signal_id AND sc.business_id = ?
+			) AS has_replied,
 			-- Layer 3: Hitung berapa tag signal yang cocok dengan tag bisnis merchant
 			COALESCE((
 				SELECT COUNT(*)
@@ -262,13 +274,20 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		  )
 		  -- Layer 2 (WAJIB): Signal dalam radius jangkauan yang ditentukan customer
 		  AND ST_DWithin(s.location::geography, %s::geography, s.radius_km * 1000)
+		  -- Saring signal yang offer_cap sudah tercapai (kecuali toko ini sudah termasuk yang membalas)
+		  AND (
+		      s.max_offers IS NULL 
+		      OR s.max_offers <= 0 
+		      OR s.offer_count < s.max_offers 
+		      OR EXISTS(SELECT 1 FROM signal_conversations sc WHERE sc.signal_id = s.signal_id AND sc.business_id = ?)
+		  )
 		ORDER BY
 			s.is_urgent DESC,
 			tag_overlap_score DESC,
 			s.created_at DESC
 	`, merchantPoint, merchantPoint)
 
-	err := r.db.Raw(query, merchantBusinessID, merchantBusinessID).Scan(&results).Error
+	err := r.db.Raw(query, merchantBusinessID, merchantBusinessID, merchantBusinessID, merchantBusinessID).Scan(&results).Error
 	if err != nil {
 		return nil, err
 	}
@@ -598,3 +617,76 @@ func (r *signalRepository) GetCategoryByNameOrID(categoryName string, categoryID
 
 	return nil, fmt.Errorf("kategori '%s' tidak ditemukan di sistem", categoryName)
 }
+
+// IncrementOfferCount menambah jumlah penawaran yang sudah masuk pada sinyal
+func (r *signalRepository) IncrementOfferCount(signalID string) error {
+	return r.db.Model(&models.Signal{}).
+		Where("signal_id = ?", signalID).
+		UpdateColumn("offer_count", gorm.Expr("offer_count + 1")).Error
+}
+
+// FindNearbyMatchingMerchantAccountIDs mencari account_id (owner & staff) toko dalam radius & kategori yang cocok
+func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryID int64, lat, lng float64, radiusKm float64) ([]string, error) {
+	if radiusKm <= 0 {
+		radiusKm = 5
+	}
+	customerPoint := fmt.Sprintf("ST_SetSRID(ST_MakePoint(%f, %f), 4326)", lng, lat)
+	query := fmt.Sprintf(`
+		SELECT DISTINCT account_id FROM (
+			-- 1. Owner Toko
+			SELECT b.account_id
+			FROM businesses b
+			JOIN business_has_categories bhc ON b.business_id = bhc.business_id
+			WHERE bhc.category_id = ?
+			  AND b.is_active = true
+			  AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
+			  AND ST_DWithin(ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography, %s::geography, ? * 1000)
+
+			UNION
+
+			-- 2. Staff / Business Admin Toko
+			SELECT baa.admin_id AS account_id
+			FROM businesses b
+			JOIN business_has_categories bhc ON b.business_id = bhc.business_id
+			JOIN business_admin_assignments baa ON b.business_id = baa.business_id
+			WHERE bhc.category_id = ?
+			  AND b.is_active = true
+			  AND baa.is_active = true
+			  AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
+			  AND ST_DWithin(ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography, %s::geography, ? * 1000)
+		) combined
+	`, customerPoint, customerPoint)
+
+	var accountIDs []string
+	err := r.db.Raw(query, categoryID, radiusKm, categoryID, radiusKm).Scan(&accountIDs).Error
+	return accountIDs, err
+}
+
+// FindMatchingProductsForSignal mencari rekomendasi produk toko yang cocok dengan kebutuhan sinyal
+func (r *signalRepository) FindMatchingProductsForSignal(businessID string, queryText string, tagIDs []int64) ([]models.Product, error) {
+	query := r.db.Model(&models.Product{}).
+		Where("business_id = ? AND is_archived = false", businessID)
+
+	cleanQuery := strings.TrimSpace(queryText)
+	if cleanQuery != "" {
+		words := strings.Fields(cleanQuery)
+		if len(words) > 0 {
+			var conditions []string
+			var args []interface{}
+			for _, w := range words {
+				if len(w) >= 3 {
+					conditions = append(conditions, "LOWER(name) LIKE ?")
+					args = append(args, "%"+strings.ToLower(w)+"%")
+				}
+			}
+			if len(conditions) > 0 {
+				query = query.Where(strings.Join(conditions, " OR "), args...)
+			}
+		}
+	}
+
+	var products []models.Product
+	err := query.Preload("ProductReviews").Limit(10).Find(&products).Error
+	return products, err
+}
+
