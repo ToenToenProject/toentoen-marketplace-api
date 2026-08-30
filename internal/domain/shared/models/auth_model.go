@@ -35,23 +35,27 @@ type Customer struct {
 }
 
 type Owner struct {
-	AccountID      string    `gorm:"primaryKey" json:"accountId"`
-	KtpNumber      *string   `json:"ktpNumber"`
-	KtpPhotoUrl    *string   `json:"ktpPhotoUrl"`
-	ReferralCode   *string   `json:"referralCode"`
-	Country        *string   `json:"country"`
-	KtpName        *string   `json:"ktpName"`
-	KtpBirthPlace  *string   `json:"ktpBirthPlace"`
-	KtpBirthDate   *string   `gorm:"type:date" json:"ktpBirthDate"`
-	KtpGender      *string   `json:"ktpGender"`
-	KtpAddress     *string   `json:"ktpAddress"`
-	KtpRtRw        *string   `json:"ktpRtRw"`
-	KtpVillage     *string   `json:"ktpVillage"`
-	KtpDistrict    *string   `json:"ktpDistrict"`
-	KtpReligion    *string   `json:"ktpReligion"`
-	KtpOccupation  *string   `json:"ktpOccupation"`
-	KtpCitizenship *string   `json:"ktpCitizenship"`
-	CreatedAt      time.Time `json:"createdAt"`
+	AccountID      string    `gorm:"primaryKey;column:account_id" json:"accountId"`
+	KtpNumber      *string   `gorm:"type:text;column:ktp_number" json:"ktpNumber"`
+	KtpPhotoUrl    *string   `gorm:"type:text;column:ktp_photo_url" json:"ktpPhotoUrl"`
+	ReferralCode   *string   `gorm:"column:referral_code" json:"referralCode"`
+	Country        *string   `gorm:"column:country" json:"country"`
+	KtpName        *string   `gorm:"type:text;column:ktp_name" json:"ktpName"`
+	KtpBirthPlace  *string   `gorm:"type:text;column:ktp_birth_place" json:"ktpBirthPlace"`
+	KtpBirthDate   *string   `gorm:"type:date;column:ktp_birth_date" json:"ktpBirthDate"`
+	KtpGender      *string   `gorm:"type:text;column:ktp_gender" json:"ktpGender"`
+	KtpAddress     *string   `gorm:"type:text;column:ktp_address" json:"ktpAddress"`
+	KtpRtRw        *string   `gorm:"type:text;column:ktp_rt_rw" json:"ktpRtRw"`
+	KtpVillage     *string   `gorm:"type:text;column:ktp_village" json:"ktpVillage"`
+	KtpDistrict    *string   `gorm:"type:text;column:ktp_district" json:"ktpDistrict"`
+	KtpReligion    *string   `gorm:"type:text;column:ktp_religion" json:"ktpReligion"`
+	KtpOccupation  *string   `gorm:"type:text;column:ktp_occupation" json:"ktpOccupation"`
+	KtpCitizenship *string   `gorm:"type:text;column:ktp_citizenship" json:"ktpCitizenship"`
+	CreatedAt      time.Time `gorm:"column:created_at" json:"createdAt"`
+}
+
+func (Owner) TableName() string {
+	return "owners"
 }
 
 type PlatformAdmin struct {

@@ -6,6 +6,7 @@ import (
 	"toentoen-backend/pkg/crypto"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ProfileRepository interface {
@@ -45,7 +46,7 @@ func (r *profileRepository) GetAccountByID(accountID string) (*models.Account, e
 
 func (r *profileRepository) GetAccountByIdentifier(identifier string) (*models.Account, error) {
 	var account models.Account
-	err := r.db.Where("email = ? OR phone_number = ?", identifier, identifier).First(&account).Error
+	err := r.db.Where("email = ? OR phone_number = ? OR username = ?", identifier, identifier, identifier).First(&account).Error
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +87,7 @@ func (r *profileRepository) GetBusinessAdminByAccountID(accountID string) (*mode
 
 func (r *profileRepository) SaveCustomerProfile(account *models.Account, customer *models.Customer) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(account).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Save(account).Error; err != nil {
 			return err
 		}
 
@@ -99,7 +100,7 @@ func (r *profileRepository) SaveCustomerProfile(account *models.Account, custome
 
 func (r *profileRepository) SaveOwnerProfile(account *models.Account, owner *models.Owner) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(account).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Save(account).Error; err != nil {
 			return err
 		}
 
@@ -112,7 +113,7 @@ func (r *profileRepository) SaveOwnerProfile(account *models.Account, owner *mod
 
 func (r *profileRepository) SaveBusinessAdminProfile(account *models.Account, businessAdmin *models.BusinessAdmin) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(account).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Save(account).Error; err != nil {
 			return err
 		}
 

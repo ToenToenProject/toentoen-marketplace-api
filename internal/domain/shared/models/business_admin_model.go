@@ -82,19 +82,19 @@ func (AdminPermissions) AllTrue() AdminPermissions {
 
 type BusinessAdmin struct {
 	AccountID      string    `gorm:"primaryKey;column:account_id" json:"account_id"`
-	KtpNumber      *string   `gorm:"unique;column:ktp_number" json:"ktp_number"`
-	KtpPhotoUrl    *string   `gorm:"column:ktp_photo_url" json:"ktp_photo_url"`
-	KtpName        *string   `gorm:"column:ktp_name" json:"ktp_name"`
-	KtpBirthPlace  *string   `gorm:"column:ktp_birth_place" json:"ktp_birth_place"`
+	KtpNumber      *string   `gorm:"type:text;column:ktp_number" json:"ktp_number"`
+	KtpPhotoUrl    *string   `gorm:"type:text;column:ktp_photo_url" json:"ktp_photo_url"`
+	KtpName        *string   `gorm:"type:text;column:ktp_name" json:"ktp_name"`
+	KtpBirthPlace  *string   `gorm:"type:text;column:ktp_birth_place" json:"ktp_birth_place"`
 	KtpBirthDate   *string   `gorm:"type:date;column:ktp_birth_date" json:"ktp_birth_date"`
-	KtpGender      *string   `gorm:"column:ktp_gender" json:"ktp_gender"`
-	KtpAddress     *string   `gorm:"column:ktp_address" json:"ktp_address"`
-	KtpRtRw        *string   `gorm:"column:ktp_rt_rw" json:"ktp_rt_rw"`
-	KtpVillage     *string   `gorm:"column:ktp_village" json:"ktp_village"`
-	KtpDistrict    *string   `gorm:"column:ktp_district" json:"ktp_district"`
-	KtpReligion    *string   `gorm:"column:ktp_religion" json:"ktp_religion"`
-	KtpOccupation  *string   `gorm:"column:ktp_occupation" json:"ktp_occupation"`
-	KtpCitizenship *string   `gorm:"column:ktp_citizenship" json:"ktp_citizenship"`
+	KtpGender      *string   `gorm:"type:text;column:ktp_gender" json:"ktp_gender"`
+	KtpAddress     *string   `gorm:"type:text;column:ktp_address" json:"ktp_address"`
+	KtpRtRw        *string   `gorm:"type:text;column:ktp_rt_rw" json:"ktp_rt_rw"`
+	KtpVillage     *string   `gorm:"type:text;column:ktp_village" json:"ktp_village"`
+	KtpDistrict    *string   `gorm:"type:text;column:ktp_district" json:"ktp_district"`
+	KtpReligion    *string   `gorm:"type:text;column:ktp_religion" json:"ktp_religion"`
+	KtpOccupation  *string   `gorm:"type:text;column:ktp_occupation" json:"ktp_occupation"`
+	KtpCitizenship *string   `gorm:"type:text;column:ktp_citizenship" json:"ktp_citizenship"`
 	InvitationCode *string   `gorm:"unique;column:invitation_code" json:"invitation_code"`
 	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
