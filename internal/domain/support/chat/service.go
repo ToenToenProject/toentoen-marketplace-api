@@ -7,6 +7,7 @@ import (
 	"time"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -38,10 +39,14 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 	existingSession, err := s.repo.FindActiveSessionByAccountID(accountID)
 	if err == nil && existingSession != nil {
 		// Sudah ada sesi aktif, kembalikan sesi tersebut (isNew = false)
+		existingSession.LastMessagePreview, _ = crypto.Decrypt(existingSession.LastMessagePreview)
 		messages, _ := s.repo.GetMessagesBySessionID(existingSession.SessionID, 1, "")
 		var lastMsg *models.CSChatMessage
 		if len(messages) > 0 {
-			lastMsg = &messages[len(messages)-1]
+			msg := messages[len(messages)-1]
+			msg.Content, _ = crypto.Decrypt(msg.Content)
+			msg.MediaURL, _ = crypto.DecryptPointer(msg.MediaURL)
+			lastMsg = &msg
 		}
 		return existingSession, lastMsg, false, nil
 	}
@@ -92,23 +97,26 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 		UpdatedAt:          now,
 	}
 
-	if err := s.repo.CreateSessionWithGreeting(newSession, greetingMsg); err != nil {
+	// Enkripsi pesan awal dan preview sebelum disimpan
+	encGreeting, _ := crypto.Encrypt(greetingContent)
+	greetingMsgToSave := *greetingMsg
+	greetingMsgToSave.Content = encGreeting
+
+	newSessionToSave := *newSession
+	newSessionToSave.LastMessagePreview = encGreeting
+
+	if err := s.repo.CreateSessionWithGreeting(&newSessionToSave, &greetingMsgToSave); err != nil {
 		fmt.Printf("⚠️ Error CreateSessionWithGreeting: %v\n", err)
 		return nil, nil, false, errors.New("Gagal membuat sesi live chat")
 	}
 
 	// 3. Broadcast event real-time ke CS via WebSocket jika hub tersedia
 	if s.hub != nil {
-		s.hub.BroadcastToRole("platform_admin", realtime.WSEvent{
-			Type: "CS_SESSION_CREATED",
-			Data: map[string]interface{}{
-				"session_id":   newSession.SessionID,
-				"account_id":   newSession.AccountID,
-				"user_role":    newSession.UserRole,
-				"display_name": displayName,
-				"created_at":   newSession.CreatedAt,
-			},
-		})
+		event := realtime.WSEvent{
+			Type: "CS_CHAT_NEW_SESSION",
+			Data: newSession,
+		}
+		s.hub.BroadcastToRole("platform_admin", event)
 	}
 
 	return newSession, greetingMsg, true, nil
@@ -118,6 +126,9 @@ func (s *supportChatService) GetActiveChat(accountID string) (*models.CSChatSess
 	session, err := s.repo.FindActiveSessionByAccountID(accountID)
 	if err != nil {
 		return nil, nil
+	}
+	if session != nil {
+		session.LastMessagePreview, _ = crypto.Decrypt(session.LastMessagePreview)
 	}
 	return session, nil
 }
@@ -143,7 +154,17 @@ func (s *supportChatService) GetChatMessages(sessionID string, requesterID strin
 	}
 	_ = s.repo.MarkMessagesAsRead(sessionID, readerType)
 
-	return s.repo.GetMessagesBySessionID(sessionID, limit, cursor)
+	messages, err := s.repo.GetMessagesBySessionID(sessionID, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range messages {
+		messages[i].Content, _ = crypto.Decrypt(messages[i].Content)
+		messages[i].MediaURL, _ = crypto.DecryptPointer(messages[i].MediaURL)
+	}
+
+	return messages, nil
 }
 
 func (s *supportChatService) SendMessage(sessionID string, senderID string, senderType string, senderName string, input models.SendCSMessageInput) (*models.CSChatMessage, error) {
@@ -183,7 +204,12 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 		CreatedAt:   now,
 	}
 
-	if err := s.repo.SaveMessage(message); err != nil {
+	// Enkripsi sebelum disimpan
+	msgToSave := *message
+	msgToSave.Content, _ = crypto.Encrypt(message.Content)
+	msgToSave.MediaURL, _ = crypto.EncryptPointer(message.MediaURL)
+
+	if err := s.repo.SaveMessage(&msgToSave); err != nil {
 		return nil, errors.New("Gagal mengirim pesan")
 	}
 
@@ -196,9 +222,11 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 			csAdminIDToUpdate = &senderID
 		}
 	}
-	_ = s.repo.UpdateSessionLastMessage(sessionID, message.Content, now, newStatus, csAdminIDToUpdate)
 
-	// Broadcast via WebSocket
+	encPreview, _ := crypto.Encrypt(message.Content)
+	_ = s.repo.UpdateSessionLastMessage(sessionID, encPreview, now, newStatus, csAdminIDToUpdate)
+
+	// Broadcast via WebSocket (kirim plaintext ke websocket client)
 	if s.hub != nil {
 		event := realtime.WSEvent{
 			Type: "CS_CHAT_NEW_MESSAGE",
@@ -251,7 +279,10 @@ func (s *supportChatService) EndChat(sessionID string, requesterID string, isCS 
 		CreatedAt:   now,
 	}
 
-	if err := s.repo.EndSession(sessionID, endedBy, input.Rating, input.Feedback, endMsg); err != nil {
+	endMsgToSave := *endMsg
+	endMsgToSave.Content, _ = crypto.Encrypt(endMsg.Content)
+
+	if err := s.repo.EndSession(sessionID, endedBy, input.Rating, input.Feedback, &endMsgToSave); err != nil {
 		return errors.New("Gagal mengakhiri percakapan")
 	}
 
@@ -282,14 +313,28 @@ func (s *supportChatService) AdminGetQueue(status string, limit int, cursor stri
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	return s.repo.GetAdminQueue(status, limit, cursor)
+	sessions, err := s.repo.GetAdminQueue(status, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+	for i := range sessions {
+		sessions[i].LastMessagePreview, _ = crypto.Decrypt(sessions[i].LastMessagePreview)
+	}
+	return sessions, nil
 }
 
 func (s *supportChatService) AdminGetHistory(limit int, cursor string) ([]models.CSChatSession, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	return s.repo.GetAdminHistory(limit, cursor)
+	sessions, err := s.repo.GetAdminHistory(limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+	for i := range sessions {
+		sessions[i].LastMessagePreview, _ = crypto.Decrypt(sessions[i].LastMessagePreview)
+	}
+	return sessions, nil
 }
 
 func (s *supportChatService) AdminAssignSession(sessionID string, csAdminID string) error {

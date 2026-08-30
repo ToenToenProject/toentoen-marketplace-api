@@ -3,6 +3,7 @@ package account
 import (
 	"strings"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/crypto"
 
 	"gorm.io/gorm"
 )
@@ -152,14 +153,40 @@ func (r *profileRepository) CheckPhoneNumberExists(phone string, excludeAccountI
 }
 
 func (r *profileRepository) CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error) {
-	var countOwner, countAdmin int64
-	if err := r.db.Model(&models.Owner{}).Where("ktp_number = ? AND account_id != ?", ktp, excludeAccountID).Count(&countOwner).Error; err != nil {
+	cleanKtp := strings.TrimSpace(ktp)
+	if cleanKtp == "" {
+		return false, nil
+	}
+
+	var ownerKtps []string
+	if err := r.db.Model(&models.Owner{}).
+		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id != ?", excludeAccountID).
+		Pluck("ktp_number", &ownerKtps).Error; err != nil {
 		return false, err
 	}
-	if err := r.db.Model(&models.BusinessAdmin{}).Where("ktp_number = ? AND account_id != ?", ktp, excludeAccountID).Count(&countAdmin).Error; err != nil {
+
+	for _, k := range ownerKtps {
+		dec, _ := crypto.Decrypt(k)
+		if strings.TrimSpace(dec) == cleanKtp {
+			return true, nil
+		}
+	}
+
+	var adminKtps []string
+	if err := r.db.Model(&models.BusinessAdmin{}).
+		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id != ?", excludeAccountID).
+		Pluck("ktp_number", &adminKtps).Error; err != nil {
 		return false, err
 	}
-	return (countOwner + countAdmin) > 0, nil
+
+	for _, k := range adminKtps {
+		dec, _ := crypto.Decrypt(k)
+		if strings.TrimSpace(dec) == cleanKtp {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]string, []string, error) {

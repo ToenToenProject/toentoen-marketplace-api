@@ -9,6 +9,7 @@ import (
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -336,7 +337,14 @@ func (s *signalService) GetMySignals(customerID string) ([]models.Signal, error)
 }
 
 func (s *signalService) GetCustomerConversations(customerID string) ([]models.ConversationListItem, error) {
-	return s.signalRepo.GetCustomerConversations(customerID)
+	items, err := s.signalRepo.GetCustomerConversations(customerID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].LastMessage, _ = crypto.DecryptPointer(items[i].LastMessage)
+	}
+	return items, nil
 }
 
 func (s *signalService) GetSignalDetail(signalID, accountID, role string) (*models.Signal, error) {
@@ -478,7 +486,14 @@ func (s *signalService) GetMerchantSignalDetail(signalID, merchantAccountID stri
 }
 
 func (s *signalService) GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error) {
-	return s.signalRepo.GetMerchantConversations(merchantAccountID)
+	items, err := s.signalRepo.GetMerchantConversations(merchantAccountID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].LastMessage, _ = crypto.DecryptPointer(items[i].LastMessage)
+	}
+	return items, nil
 }
 
 func (s *signalService) ReplyToSignal(accountID, role, signalID string, input models.InitiateConversationInput) (*models.SignalConversation, error) {
@@ -524,7 +539,12 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 		if input.ImageURL != "" {
 			msg.AttachmentURL = &input.ImageURL
 		}
-		if err := s.signalRepo.CreateMessage(&msg); err != nil {
+
+		msgToSave := msg
+		msgToSave.MessageText, _ = crypto.Encrypt(msg.MessageText)
+		msgToSave.AttachmentURL, _ = crypto.EncryptPointer(msg.AttachmentURL)
+
+		if err := s.signalRepo.CreateMessage(&msgToSave); err != nil {
 			fmt.Printf("Warning: gagal menyimpan pesan pertama: %v\n", err)
 		}
 		firstMsg = &msg
@@ -616,7 +636,17 @@ func (s *signalService) GetMessages(accountID, role, conversationID string, page
 		_ = s.signalRepo.MarkMessagesAsRead(conversationID, accountID)
 	}
 
-	return s.signalRepo.GetMessagesByConversation(conversationID, page, limit)
+	messages, total, err := s.signalRepo.GetMessagesByConversation(conversationID, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for i := range messages {
+		messages[i].MessageText, _ = crypto.Decrypt(messages[i].MessageText)
+		messages[i].AttachmentURL, _ = crypto.DecryptPointer(messages[i].AttachmentURL)
+	}
+
+	return messages, total, nil
 }
 
 func (s *signalService) SendMessage(accountID, role, conversationID string, input models.SendMessageInput) (*models.SignalMessage, error) {
@@ -659,7 +689,11 @@ func (s *signalService) SendMessage(accountID, role, conversationID string, inpu
 		msg.AttachmentURL = &input.AttachmentURL
 	}
 
-	if err := s.signalRepo.CreateMessage(&msg); err != nil {
+	msgToSave := msg
+	msgToSave.MessageText, _ = crypto.Encrypt(msg.MessageText)
+	msgToSave.AttachmentURL, _ = crypto.EncryptPointer(msg.AttachmentURL)
+
+	if err := s.signalRepo.CreateMessage(&msgToSave); err != nil {
 		return nil, errors.New("gagal mengirim pesan")
 	}
 

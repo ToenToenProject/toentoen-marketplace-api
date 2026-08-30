@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -13,6 +14,17 @@ const (
 	MaxFileSizePerAttachment = 10 * 1024 * 1024 // 10MB
 	MaxTotalAttachmentsSize  = 20 * 1024 * 1024 // 20MB
 )
+
+func decryptTicket(t *models.SupportTicket) {
+	if t == nil {
+		return
+	}
+	t.Description, _ = crypto.Decrypt(t.Description)
+	t.CustomerServiceSuggestions, _ = crypto.DecryptPointer(t.CustomerServiceSuggestions)
+	for i := range t.Attachments {
+		t.Attachments[i].FileURL, _ = crypto.Decrypt(t.Attachments[i].FileURL)
+	}
+}
 
 type SupportTicketService interface {
 	CreateTicket(accountID string, userRole string, input models.CreateTicketInput) (*models.SupportTicketDetailResponse, error)
@@ -77,8 +89,9 @@ func (s *supportTicketService) CreateTicket(accountID string, userRole string, i
 	}
 
 	var attachments []models.SupportTicketAttachment
+	var attachmentsToSave []models.SupportTicketAttachment
 	for _, att := range input.Attachments {
-		attachments = append(attachments, models.SupportTicketAttachment{
+		attachment := models.SupportTicketAttachment{
 			AttachmentID: utils.GenerateUUID("TATT"),
 			TicketID:     ticketID,
 			FileURL:      att.FileURL,
@@ -86,10 +99,18 @@ func (s *supportTicketService) CreateTicket(accountID string, userRole string, i
 			FileSize:     att.FileSize,
 			ContentType:  att.ContentType,
 			CreatedAt:    now,
-		})
+		}
+		attachments = append(attachments, attachment)
+
+		attSave := attachment
+		attSave.FileURL, _ = crypto.Encrypt(attachment.FileURL)
+		attachmentsToSave = append(attachmentsToSave, attSave)
 	}
 
-	if err := s.repo.CreateTicket(ticket, attachments); err != nil {
+	ticketToSave := *ticket
+	ticketToSave.Description, _ = crypto.Encrypt(ticket.Description)
+
+	if err := s.repo.CreateTicket(&ticketToSave, attachmentsToSave); err != nil {
 		return nil, errors.New("Gagal menyimpan tiket bantuan")
 	}
 
@@ -110,6 +131,7 @@ func (s *supportTicketService) GetMyTickets(accountID string, limit int, cursor 
 
 	var responses []models.SupportTicketDetailResponse
 	for _, t := range tickets {
+		decryptTicket(&t)
 		responses = append(responses, t.FormatDetailResponse())
 	}
 	return responses, nil
@@ -125,6 +147,7 @@ func (s *supportTicketService) GetTicketDetail(ticketID string, requesterID stri
 		return nil, errors.New("Anda tidak memiliki akses ke tiket bantuan ini")
 	}
 
+	decryptTicket(ticket)
 	res := ticket.FormatDetailResponse()
 	return &res, nil
 }
@@ -141,6 +164,7 @@ func (s *supportTicketService) AdminGetTickets(status string, limit int, cursor 
 
 	var responses []models.SupportTicketDetailResponse
 	for _, t := range tickets {
+		decryptTicket(&t)
 		responses = append(responses, t.FormatDetailResponse())
 	}
 	return responses, nil
@@ -157,7 +181,9 @@ func (s *supportTicketService) AdminResolveTicket(ticketID string, input models.
 		return nil, errors.New("Saran/tanggapan customer service wajib diisi")
 	}
 
-	if err := s.repo.ResolveTicket(ticketID, input.Status, suggestions, resolvedBy); err != nil {
+	encSuggestions, _ := crypto.Encrypt(suggestions)
+
+	if err := s.repo.ResolveTicket(ticketID, input.Status, encSuggestions, resolvedBy); err != nil {
 		return nil, errors.New("Gagal memperbarui status tiket")
 	}
 
@@ -165,10 +191,12 @@ func (s *supportTicketService) AdminResolveTicket(ticketID string, input models.
 	if err != nil {
 		ticket.SupportTicketStatus = input.Status
 		ticket.CustomerServiceSuggestions = &suggestions
+		decryptTicket(ticket)
 		res := ticket.FormatDetailResponse()
 		return &res, nil
 	}
 
+	decryptTicket(updatedTicket)
 	res := updatedTicket.FormatDetailResponse()
 	return &res, nil
 }

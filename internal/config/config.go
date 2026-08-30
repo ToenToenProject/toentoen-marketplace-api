@@ -36,6 +36,10 @@ type AppConfig struct {
 	AWSAccessKey   string
 	AWSSecretKey   string
 	AWSS3Bucket    string
+
+	AppEnv            string
+	DataEncryptionKey string
+	BlindIndexKey     string
 }
 
 var Envs *AppConfig
@@ -48,6 +52,7 @@ func InitConfig() {
 
 	Envs = &AppConfig{
 		AppPort:   getEnv("PORT", "3000"),
+		AppEnv:    getEnv("APP_ENV", "development"),
 		RedisHost: getEnv("REDIS_HOST", "127.0.0.1:6379"),
 
 		DBHost: getEnvMust("DB_HOST"),
@@ -59,6 +64,9 @@ func InitConfig() {
 		JWTSecret:          getEnvMust("JWT_SECRET"),
 		GoogleClientID:     getEnvMust("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: getEnvMust("GOOGLE_CLIENT_SECRET"),
+
+		DataEncryptionKey: getEnv("DATA_ENCRYPTION_KEY", "toentoen-secret-key-32bytes-long!"),
+		BlindIndexKey:     getEnv("BLIND_INDEX_KEY", "toentoen-blind-index-key-32bytes!"),
 
 		SMTPHost:    getEnv("SMTP_HOST", "smtp.gmail.com"),
 		SMTPPort:    getEnvAsInt("SMTP_PORT", 587),

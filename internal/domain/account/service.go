@@ -7,11 +7,136 @@ import (
 	"time"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/utils"
 
 	"gorm.io/gorm"
 )
+
+func encryptOwnerKTP(owner *models.Owner) error {
+	if owner == nil {
+		return nil
+	}
+	var err error
+	if owner.KtpNumber, err = crypto.EncryptPointer(owner.KtpNumber); err != nil {
+		return err
+	}
+	if owner.KtpPhotoUrl, err = crypto.EncryptPointer(owner.KtpPhotoUrl); err != nil {
+		return err
+	}
+	if owner.KtpName, err = crypto.EncryptPointer(owner.KtpName); err != nil {
+		return err
+	}
+	if owner.KtpBirthPlace, err = crypto.EncryptPointer(owner.KtpBirthPlace); err != nil {
+		return err
+	}
+	if owner.KtpGender, err = crypto.EncryptPointer(owner.KtpGender); err != nil {
+		return err
+	}
+	if owner.KtpAddress, err = crypto.EncryptPointer(owner.KtpAddress); err != nil {
+		return err
+	}
+	if owner.KtpRtRw, err = crypto.EncryptPointer(owner.KtpRtRw); err != nil {
+		return err
+	}
+	if owner.KtpVillage, err = crypto.EncryptPointer(owner.KtpVillage); err != nil {
+		return err
+	}
+	if owner.KtpDistrict, err = crypto.EncryptPointer(owner.KtpDistrict); err != nil {
+		return err
+	}
+	if owner.KtpReligion, err = crypto.EncryptPointer(owner.KtpReligion); err != nil {
+		return err
+	}
+	if owner.KtpOccupation, err = crypto.EncryptPointer(owner.KtpOccupation); err != nil {
+		return err
+	}
+	if owner.KtpCitizenship, err = crypto.EncryptPointer(owner.KtpCitizenship); err != nil {
+		return err
+	}
+	return nil
+}
+
+func decryptOwnerKTP(owner *models.Owner) {
+	if owner == nil {
+		return
+	}
+	owner.KtpNumber, _ = crypto.DecryptPointer(owner.KtpNumber)
+	owner.KtpPhotoUrl, _ = crypto.DecryptPointer(owner.KtpPhotoUrl)
+	owner.KtpName, _ = crypto.DecryptPointer(owner.KtpName)
+	owner.KtpBirthPlace, _ = crypto.DecryptPointer(owner.KtpBirthPlace)
+	owner.KtpGender, _ = crypto.DecryptPointer(owner.KtpGender)
+	owner.KtpAddress, _ = crypto.DecryptPointer(owner.KtpAddress)
+	owner.KtpRtRw, _ = crypto.DecryptPointer(owner.KtpRtRw)
+	owner.KtpVillage, _ = crypto.DecryptPointer(owner.KtpVillage)
+	owner.KtpDistrict, _ = crypto.DecryptPointer(owner.KtpDistrict)
+	owner.KtpReligion, _ = crypto.DecryptPointer(owner.KtpReligion)
+	owner.KtpOccupation, _ = crypto.DecryptPointer(owner.KtpOccupation)
+	owner.KtpCitizenship, _ = crypto.DecryptPointer(owner.KtpCitizenship)
+}
+
+func encryptBusinessAdminKTP(admin *models.BusinessAdmin) error {
+	if admin == nil {
+		return nil
+	}
+	var err error
+	if admin.KtpNumber, err = crypto.EncryptPointer(admin.KtpNumber); err != nil {
+		return err
+	}
+	if admin.KtpPhotoUrl, err = crypto.EncryptPointer(admin.KtpPhotoUrl); err != nil {
+		return err
+	}
+	if admin.KtpName, err = crypto.EncryptPointer(admin.KtpName); err != nil {
+		return err
+	}
+	if admin.KtpBirthPlace, err = crypto.EncryptPointer(admin.KtpBirthPlace); err != nil {
+		return err
+	}
+	if admin.KtpGender, err = crypto.EncryptPointer(admin.KtpGender); err != nil {
+		return err
+	}
+	if admin.KtpAddress, err = crypto.EncryptPointer(admin.KtpAddress); err != nil {
+		return err
+	}
+	if admin.KtpRtRw, err = crypto.EncryptPointer(admin.KtpRtRw); err != nil {
+		return err
+	}
+	if admin.KtpVillage, err = crypto.EncryptPointer(admin.KtpVillage); err != nil {
+		return err
+	}
+	if admin.KtpDistrict, err = crypto.EncryptPointer(admin.KtpDistrict); err != nil {
+		return err
+	}
+	if admin.KtpReligion, err = crypto.EncryptPointer(admin.KtpReligion); err != nil {
+		return err
+	}
+	if admin.KtpOccupation, err = crypto.EncryptPointer(admin.KtpOccupation); err != nil {
+		return err
+	}
+	if admin.KtpCitizenship, err = crypto.EncryptPointer(admin.KtpCitizenship); err != nil {
+		return err
+	}
+	return nil
+}
+
+func decryptBusinessAdminKTP(admin *models.BusinessAdmin) {
+	if admin == nil {
+		return
+	}
+	admin.KtpNumber, _ = crypto.DecryptPointer(admin.KtpNumber)
+	admin.KtpPhotoUrl, _ = crypto.DecryptPointer(admin.KtpPhotoUrl)
+	admin.KtpName, _ = crypto.DecryptPointer(admin.KtpName)
+	admin.KtpBirthPlace, _ = crypto.DecryptPointer(admin.KtpBirthPlace)
+	admin.KtpGender, _ = crypto.DecryptPointer(admin.KtpGender)
+	admin.KtpAddress, _ = crypto.DecryptPointer(admin.KtpAddress)
+	admin.KtpRtRw, _ = crypto.DecryptPointer(admin.KtpRtRw)
+	admin.KtpVillage, _ = crypto.DecryptPointer(admin.KtpVillage)
+	admin.KtpDistrict, _ = crypto.DecryptPointer(admin.KtpDistrict)
+	admin.KtpReligion, _ = crypto.DecryptPointer(admin.KtpReligion)
+	admin.KtpOccupation, _ = crypto.DecryptPointer(admin.KtpOccupation)
+	admin.KtpCitizenship, _ = crypto.DecryptPointer(admin.KtpCitizenship)
+}
 
 type ProfileService interface {
 	UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error)
@@ -84,9 +209,11 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 		account.Customer = customer
 	} else if account.Role == "owner" {
 		owner, _ := s.repo.GetOwnerByAccountID(accountID)
+		decryptOwnerKTP(owner)
 		account.Owner = owner
 	} else if account.Role == "business_admin" {
 		admin, _ := s.repo.GetBusinessAdminByAccountID(accountID)
+		decryptBusinessAdminKTP(admin)
 		account.BusinessAdmin = admin
 	}
 
@@ -326,6 +453,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	if err != nil {
 		return nil, errors.New("user specific profile data not found")
 	}
+	decryptOwnerKTP(owner)
 
 	if input.KtpNumber != nil {
 		if *input.KtpNumber == "" {
@@ -396,7 +524,12 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	account.Owner = owner
 	account.AccountStatus = isAccountDataComplete(account)
 
-	if err := s.repo.SaveOwnerProfile(account, owner); err != nil {
+	ownerToSave := *owner
+	if err := encryptOwnerKTP(&ownerToSave); err != nil {
+		return nil, errors.New("failed to encrypt sensitive owner profile data")
+	}
+
+	if err := s.repo.SaveOwnerProfile(account, &ownerToSave); err != nil {
 		return nil, errors.New("failed to save owner profile data")
 	}
 	return account, nil
@@ -468,6 +601,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 	if err != nil {
 		admin = &models.BusinessAdmin{AccountID: accountID}
 	}
+	decryptBusinessAdminKTP(admin)
 
 	if input.KtpNumber != nil {
 		if *input.KtpNumber == "" {
@@ -532,7 +666,12 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 	account.BusinessAdmin = admin
 	account.AccountStatus = isAccountDataComplete(account)
 
-	if err := s.repo.SaveBusinessAdminProfile(account, admin); err != nil {
+	adminToSave := *admin
+	if err := encryptBusinessAdminKTP(&adminToSave); err != nil {
+		return nil, errors.New("failed to encrypt sensitive business admin profile data")
+	}
+
+	if err := s.repo.SaveBusinessAdminProfile(account, &adminToSave); err != nil {
 		return nil, errors.New("failed to save business admin profile data")
 	}
 

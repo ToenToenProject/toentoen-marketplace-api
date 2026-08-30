@@ -2,6 +2,7 @@ package auth
 
 import (
 	"time"
+	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -83,12 +84,15 @@ func (h *AuthHandler) VerifyLoginOTP(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, err.Error(), nil)
 	}
 
+	isProduction := config.Envs != nil && config.Envs.AppEnv == "production"
 	c.Cookie(&fiber.Cookie{
 		Name:     "auth_token",
 		Value:    token,
 		Path:     "/",
 		Expires:  time.Now().Add(24 * time.Hour),
 		HTTPOnly: true,
+		Secure:   isProduction,
+		SameSite: "Lax",
 	})
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Login berhasil", nil)

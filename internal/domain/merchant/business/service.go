@@ -6,9 +6,40 @@ import (
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/shared/permissions"
+	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
+
+func encryptBusinessLegal(b *models.Business) {
+	if b == nil {
+		return
+	}
+	b.NIB, _ = crypto.EncryptPointer(b.NIB)
+	for i := range b.Certificates {
+		if b.Certificates[i].Number != "" {
+			b.Certificates[i].Number, _ = crypto.Encrypt(b.Certificates[i].Number)
+		}
+		if b.Certificates[i].ImageURL != "" {
+			b.Certificates[i].ImageURL, _ = crypto.Encrypt(b.Certificates[i].ImageURL)
+		}
+	}
+}
+
+func decryptBusinessLegal(b *models.Business) {
+	if b == nil {
+		return
+	}
+	b.NIB, _ = crypto.DecryptPointer(b.NIB)
+	for i := range b.Certificates {
+		if b.Certificates[i].Number != "" {
+			b.Certificates[i].Number, _ = crypto.Decrypt(b.Certificates[i].Number)
+		}
+		if b.Certificates[i].ImageURL != "" {
+			b.Certificates[i].ImageURL, _ = crypto.Decrypt(b.Certificates[i].ImageURL)
+		}
+	}
+}
 
 type BusinessService interface {
 	CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error)
@@ -97,6 +128,9 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 
 	// Looping Websites dan Images manual dihapus
 
+	// Enkripsi data sensitif (NIB & Dokumen Sertifikat)
+	encryptBusinessLegal(&business)
+
 	// Panggil Repository dengan 4 Argumen saja
 	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.Tags, hours); err != nil {
 		return "", err
@@ -179,6 +213,9 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	if err != nil {
 		return nil, errors.New("business not found")
 	}
+
+	// Dekripsi dokumen sensitif untuk owner/admin
+	decryptBusinessLegal(business)
 
 	// 🪄 MAGIC: Hitung is_open_now secara live sebelum dikembalikan ke Frontend
 	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
@@ -325,6 +362,9 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	if len(input.Tags) > 0 {
 		tagIDs = &input.Tags
 	}
+
+	// Enkripsi dokumen sensitif sebelum disimpan ke basis data
+	encryptBusinessLegal(business)
 
 	if err := s.repo.UpdateBusiness(business, hoursToUpdate, catIDs, tagIDs); err != nil {
 		return fmt.Errorf("failed to update business data in the database: %w", err)

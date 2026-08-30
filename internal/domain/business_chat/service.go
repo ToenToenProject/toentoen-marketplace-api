@@ -6,6 +6,7 @@ import (
 	"time"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -61,6 +62,7 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 			}
 			lastMsg, _ = s.SendMessage(existingConv.ConversationID, customerID, sendInput)
 		}
+		existingConv.LastMessagePreview, _ = crypto.Decrypt(existingConv.LastMessagePreview)
 		return existingConv, lastMsg, false, nil
 	}
 
@@ -125,7 +127,19 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		}
 	}
 
-	if err := s.repo.CreateConversation(newConv, firstMsg); err != nil {
+	// Enkripsi pesan & preview sebelum simpan ke database
+	newConvToSave := *newConv
+	newConvToSave.LastMessagePreview, _ = crypto.Encrypt(newConv.LastMessagePreview)
+
+	var firstMsgToSave *models.DirectBusinessMessage
+	if firstMsg != nil {
+		msgCopy := *firstMsg
+		msgCopy.Content, _ = crypto.Encrypt(firstMsg.Content)
+		msgCopy.MediaURL, _ = crypto.EncryptPointer(firstMsg.MediaURL)
+		firstMsgToSave = &msgCopy
+	}
+
+	if err := s.repo.CreateConversation(&newConvToSave, firstMsgToSave); err != nil {
 		return nil, nil, false, errors.New("Gagal membuat percakapan dengan toko")
 	}
 
@@ -151,7 +165,14 @@ func (s *businessChatService) GetCustomerConversations(customerID string, limit 
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	return s.repo.GetCustomerConversations(customerID, limit, cursor)
+	items, err := s.repo.GetCustomerConversations(customerID, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].LastMessagePreview, _ = crypto.Decrypt(items[i].LastMessagePreview)
+	}
+	return items, nil
 }
 
 func (s *businessChatService) GetMerchantConversations(businessID string, requesterID string, limit int, cursor string) ([]models.MerchantBusinessConversationListItem, error) {
@@ -169,7 +190,14 @@ func (s *businessChatService) GetMerchantConversations(businessID string, reques
 		limit = 50
 	}
 
-	return s.repo.GetMerchantConversations(businessID, limit, cursor)
+	items, err := s.repo.GetMerchantConversations(businessID, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].LastMessagePreview, _ = crypto.Decrypt(items[i].LastMessagePreview)
+	}
+	return items, nil
 }
 
 func (s *businessChatService) GetMessages(conversationID string, requesterID string, limit int, cursor string) ([]models.DirectBusinessMessage, error) {
@@ -201,7 +229,17 @@ func (s *businessChatService) GetMessages(conversationID string, requesterID str
 		limit = 50
 	}
 
-	return s.repo.GetMessagesByConversationID(conversationID, limit, cursor)
+	messages, err := s.repo.GetMessagesByConversationID(conversationID, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range messages {
+		messages[i].Content, _ = crypto.Decrypt(messages[i].Content)
+		messages[i].MediaURL, _ = crypto.DecryptPointer(messages[i].MediaURL)
+	}
+
+	return messages, nil
 }
 
 func (s *businessChatService) SendMessage(conversationID string, requesterID string, input models.SendBusinessChatMessageInput) (*models.DirectBusinessMessage, error) {
@@ -269,18 +307,24 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 		CreatedAt:      now,
 	}
 
-	if err := s.repo.SaveMessage(message); err != nil {
+	// Enkripsi sebelum disimpan ke basis data
+	msgToSave := *message
+	msgToSave.Content, _ = crypto.Encrypt(message.Content)
+	msgToSave.MediaURL, _ = crypto.EncryptPointer(message.MediaURL)
+
+	if err := s.repo.SaveMessage(&msgToSave); err != nil {
 		return nil, errors.New("Gagal mengirim pesan")
 	}
 
-	_ = s.repo.UpdateConversationLastMessage(conversationID, message.Content, now)
+	encPreview, _ := crypto.Encrypt(message.Content)
+	_ = s.repo.UpdateConversationLastMessage(conversationID, encPreview, now)
 
 	// Load product detail jika ada
 	if message.ProductID != nil && *message.ProductID != "" {
 		message.ProductDetail, _ = s.repo.GetProductByID(*message.ProductID)
 	}
 
-	// Broadcast via WebSocket
+	// Broadcast via WebSocket (kirim data plaintext ke websocket)
 	if s.hub != nil {
 		event := realtime.WSEvent{
 			Type: "BUSINESS_CHAT_NEW_MESSAGE",

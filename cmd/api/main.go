@@ -272,7 +272,18 @@ func main() {
 	// ==========================================
 	api.Post("/logout", auth.Logout)
 
-	authGroup := api.Group("/auth")
+	authLimiter := limiter.New(limiter.Config{
+		Max:        15,
+		Expiration: 1 * time.Minute,
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"responseCode": "429",
+				"message":      "Terlalu banyak percobaan autentikasi. Silakan coba lagi setelah 1 menit.",
+			})
+		},
+	})
+
+	authGroup := api.Group("/auth", authLimiter)
 	authGroup.Post("/register", authHandler.Register)
 	authGroup.Post("/verify-register-otp", authHandler.VerifyRegisterOTP)
 	authGroup.Post("/login", authHandler.Login)

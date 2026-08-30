@@ -534,9 +534,10 @@ func (r *signalRepository) MarkMessagesAsRead(convID, readerID string) error {
 
 func (r *signalRepository) VerifyBusinessAccess(accountID, role, businessID string) bool {
 	var count int64
-	if role == "owner" {
+	switch role {
+	case "owner":
 		r.db.Model(&models.Business{}).Where("business_id = ? AND account_id = ?", businessID, accountID).Count(&count)
-	} else if role == "business_admin" {
+	case "business_admin":
 		r.db.Model(&models.BusinessAdminAssignment{}).Where("business_id = ? AND admin_id = ? AND is_active = ?", businessID, accountID, true).Count(&count)
 	}
 	return count > 0
