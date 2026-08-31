@@ -83,9 +83,15 @@ func ConnectDB() {
 		`ALTER TABLE business_admins ALTER COLUMN ktp_occupation TYPE TEXT`,
 		`ALTER TABLE business_admins ALTER COLUMN ktp_citizenship TYPE TEXT`,
 		`ALTER TABLE businesses ALTER COLUMN nib TYPE TEXT`,
+		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS min_budget NUMERIC`,
+		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS max_budget NUMERIC`,
+		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS max_offers INTEGER DEFAULT 5`,
+		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS offer_count INTEGER DEFAULT 0`,
 	}
 
 	for _, q := range alterQueries {
-		_ = DB.Exec(q).Error
+		if err := DB.Exec(q).Error; err != nil {
+			log.Printf("⚠️ DB Migration Exec: %s -> %v", q, err)
+		}
 	}
 }
