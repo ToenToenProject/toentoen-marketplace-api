@@ -3,6 +3,7 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -405,6 +406,12 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 			}
 		}
 
+		// Hitung persentase diskon
+		var discountPct float64
+		if isDiscounted && originalMinPrice > 0 {
+			discountPct = (p.Discount / originalMinPrice) * 100
+		}
+
 		responseList = append(responseList, models.ProductListItem{
 			ProductID:   p.ProductID,
 			ProductName: p.ProductName,
@@ -416,11 +423,18 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 			OriginalMaxPrice: originalMaxPrice,
 			FinalMinPrice:    finalMinPrice,
 			FinalMaxPrice:    finalMaxPrice,
-			IsDiscounted:     isDiscounted,
 
-			StockType:     p.StockType,
-			Rating:        p.AverageRating,
-			LikeCount:     p.LikeCount,
+			// Mapping Diskon
+			IsDiscounted:    isDiscounted,
+			Discount:        p.Discount,
+			DiscountPct:     math.Round(discountPct*10) / 10, // Pembulatan 1 desimal (misal: 20.0%)
+			DiscountStartAt: p.DiscountStartAt,
+			DiscountEndAt:   p.DiscountEndAt,
+
+			StockType:   p.StockType,
+			Rating:      p.AverageRating,
+			LikeCount:   p.LikeCount,
+			ReviewCount: p.ReviewCount,
 		})
 	}
 

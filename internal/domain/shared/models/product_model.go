@@ -153,11 +153,17 @@ type ProductListItem struct {
 	FinalMinPrice float64 `json:"final_min_price"`
 	FinalMaxPrice float64 `json:"final_max_price"`
 
-	IsDiscounted  bool    `json:"is_discounted"`
-	StockType     string  `json:"stock_type"`
-	Rating        float64 `json:"rating"`
-	LikeCount     int     `json:"like_count"`
-	ReviewCount   int     `json:"review_count"`
+	// INFO DISKON
+	IsDiscounted    bool       `json:"is_discounted"`
+	Discount        float64    `json:"discount"`           // Nominal diskon (misal: 10000 = Rp 10.000)
+	DiscountPct     float64    `json:"discount_pct"`       // Persentase diskon (misal: 20 = 20%)
+	DiscountStartAt *time.Time `json:"discount_start_at"`  // null jika tidak ada batas waktu mulai
+	DiscountEndAt   *time.Time `json:"discount_end_at"`    // null jika tidak ada batas waktu akhir
+
+	StockType   string  `json:"stock_type"`
+	Rating      float64 `json:"rating"`
+	LikeCount   int     `json:"like_count"`
+	ReviewCount int     `json:"review_count"`
 
 	// Digunakan jika detail varian ingin disertakan pada response tertentu
 	Variants []ProductVariant `json:"variants,omitempty"`
