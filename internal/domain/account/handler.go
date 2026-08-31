@@ -1,6 +1,7 @@
 package account
 
 import (
+	"strings"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -42,7 +43,10 @@ func (h *ProfileHandler) UpdateProfileCustomer(c *fiber.Ctx) error {
 		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		if strings.HasPrefix(err.Error(), "failed to") {
+			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", updatedAccount)
@@ -73,7 +77,10 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		if strings.HasPrefix(err.Error(), "failed to") {
+			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", updatedAccount)
@@ -103,7 +110,10 @@ func (h *ProfileHandler) UpdateProfileBusinessAdmin(c *fiber.Ctx) error {
 		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		if strings.HasPrefix(err.Error(), "failed to") {
+			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil admin dan data KYC berhasil diperbarui", updatedAccount)

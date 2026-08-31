@@ -515,20 +515,12 @@ func (s *signalService) ExploreSignals(accountID, businessID string, lat, lng fl
 		if errRepo == nil && len(businesses) > 0 {
 			activeBusiness = &businesses[0]
 		} else {
-			// Coba cari jika akun ditugaskan sebagai admin/staf toko di business_admin_assignments
-			var assignedBizID string
-			if errAssign := s.signalRepo.(*signalRepository).db.Table("business_admin_assignments").
-				Where("admin_id = ? AND is_active = ?", accountID, true).
-				Pluck("business_id", &assignedBizID).Error; errAssign == nil && assignedBizID != "" {
-				activeBusiness, err = s.businessRepo.FindBusinessByID(assignedBizID)
-			} else {
-				err = errors.New("tidak ada toko yang terdaftar pada akun Anda. Pastikan Anda telah membuat toko atau mengirim query parameter business_id")
-			}
+			err = fmt.Errorf("tidak ada bisnis yang ditemukan")
 		}
 	}
 
 	if err != nil || activeBusiness == nil {
-		return nil, errors.New("bisnis/toko tidak ditemukan atau akses ditolak. Pastikan menyertakan parameter business_id yang valid")
+		return nil, fmt.Errorf("bisnis tidak ditemukan atau akses ditolak")
 	}
 
 	if lat == 0 && lng == 0 {
@@ -539,7 +531,7 @@ func (s *signalService) ExploreSignals(accountID, businessID string, lat, lng fl
 	}
 
 	if lat == 0 && lng == 0 {
-		return nil, errors.New("lokasi GPS tidak tersedia. Pastikan izin lokasi HP aktif dan kirim parameter 'lat' & 'lng', atau isi titik koordinat GPS di profil toko")
+		return nil, errors.New("lokasi tidak tersedia, kirim parameter lat dan lng")
 	}
 
 	return s.signalRepo.ExploreActiveSignals(activeBusiness.BusinessID, lat, lng)

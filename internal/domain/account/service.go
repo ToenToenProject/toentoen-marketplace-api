@@ -3,6 +3,7 @@ package account
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"toentoen-backend/internal/config"
@@ -13,6 +14,56 @@ import (
 
 	"gorm.io/gorm"
 )
+
+var (
+	nikRegex   = regexp.MustCompile(`^[0-9]{16}$`)
+	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	phoneRegex = regexp.MustCompile(`^[0-9+]{9,16}$`)
+)
+
+func validateKtpNumber(ktp *string) error {
+	if ktp == nil || strings.TrimSpace(*ktp) == "" {
+		return nil
+	}
+	clean := strings.TrimSpace(*ktp)
+	if !nikRegex.MatchString(clean) {
+		return errors.New("Nomor KTP/NIK harus terdiri dari 16 digit angka")
+	}
+	return nil
+}
+
+func validateEmail(email *string) error {
+	if email == nil || strings.TrimSpace(*email) == "" {
+		return nil
+	}
+	clean := strings.TrimSpace(*email)
+	if !emailRegex.MatchString(clean) {
+		return errors.New("Format email tidak valid")
+	}
+	return nil
+}
+
+func validatePhoneNumber(phone *string) error {
+	if phone == nil || strings.TrimSpace(*phone) == "" {
+		return nil
+	}
+	clean := strings.TrimSpace(*phone)
+	if !phoneRegex.MatchString(clean) {
+		return errors.New("Nomor telepon tidak valid (minimal 9 digit angka)")
+	}
+	return nil
+}
+
+func validateDate(dateStr *string, fieldName string) error {
+	if dateStr == nil || strings.TrimSpace(*dateStr) == "" {
+		return nil
+	}
+	clean := strings.TrimSpace(*dateStr)
+	if _, err := time.Parse("2006-01-02", clean); err != nil {
+		return fmt.Errorf("Format %s tidak valid (gunakan format YYYY-MM-DD)", fieldName)
+	}
+	return nil
+}
 
 func encryptOwnerKTP(owner *models.Owner) error {
 	if owner == nil {
@@ -221,6 +272,16 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 }
 
 func (s *profileService) UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error) {
+	if err := validateEmail(input.Email); err != nil {
+		return nil, err
+	}
+	if err := validatePhoneNumber(input.PhoneNumber); err != nil {
+		return nil, err
+	}
+	if err := validateDate(input.BirthDate, "tanggal lahir"); err != nil {
+		return nil, err
+	}
+
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -388,6 +449,19 @@ func (s *profileService) ForceDeleteAccount(identifier string) error {
 }
 
 func (s *profileService) UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error) {
+	if err := validateEmail(input.Email); err != nil {
+		return nil, err
+	}
+	if err := validatePhoneNumber(input.PhoneNumber); err != nil {
+		return nil, err
+	}
+	if err := validateKtpNumber(input.KtpNumber); err != nil {
+		return nil, err
+	}
+	if err := validateDate(input.KtpBirthDate, "tanggal lahir"); err != nil {
+		return nil, err
+	}
+
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -536,6 +610,19 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 }
 
 func (s *profileService) UpdateBusinessAdminProfile(accountID string, input models.UpdateBusinessAdminKYCInput) (*models.Account, error) {
+	if err := validateEmail(input.Email); err != nil {
+		return nil, err
+	}
+	if err := validatePhoneNumber(input.PhoneNumber); err != nil {
+		return nil, err
+	}
+	if err := validateKtpNumber(input.KtpNumber); err != nil {
+		return nil, err
+	}
+	if err := validateDate(input.KtpBirthDate, "tanggal lahir"); err != nil {
+		return nil, err
+	}
+
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {

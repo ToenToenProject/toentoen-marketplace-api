@@ -25,21 +25,13 @@ func (h *MerchantHandler) ExploreSignals(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
-	businessID := strings.TrimSpace(c.Query("business_id"))
-	if businessID == "" {
-		businessID = strings.TrimSpace(c.Query("businessId"))
-	}
-	if businessID == "null" || businessID == "undefined" {
-		businessID = ""
-	}
+	businessID := c.Query("business_id")
 
 	var lat, lng float64
-	if latStr := strings.TrimSpace(c.Query("lat")); latStr != "" {
-		latStr = strings.ReplaceAll(latStr, ",", ".")
+	if latStr := c.Query("lat"); latStr != "" {
 		lat, _ = strconv.ParseFloat(latStr, 64)
 	}
-	if lngStr := strings.TrimSpace(c.Query("lng")); lngStr != "" {
-		lngStr = strings.ReplaceAll(lngStr, ",", ".")
+	if lngStr := c.Query("lng"); lngStr != "" {
 		lng, _ = strconv.ParseFloat(lngStr, 64)
 	}
 
@@ -202,4 +194,3 @@ func (h *MerchantHandler) GetProductSuggestions(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil rekomendasi produk katalog", products)
 }
-
