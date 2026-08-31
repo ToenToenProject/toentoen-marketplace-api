@@ -25,13 +25,21 @@ func (h *MerchantHandler) ExploreSignals(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
-	businessID := c.Query("business_id")
+	businessID := strings.TrimSpace(c.Query("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Query("businessId"))
+	}
+	if businessID == "null" || businessID == "undefined" {
+		businessID = ""
+	}
 
 	var lat, lng float64
-	if latStr := c.Query("lat"); latStr != "" {
+	if latStr := strings.TrimSpace(c.Query("lat")); latStr != "" {
+		latStr = strings.ReplaceAll(latStr, ",", ".")
 		lat, _ = strconv.ParseFloat(latStr, 64)
 	}
-	if lngStr := c.Query("lng"); lngStr != "" {
+	if lngStr := strings.TrimSpace(c.Query("lng")); lngStr != "" {
+		lngStr = strings.ReplaceAll(lngStr, ",", ".")
 		lng, _ = strconv.ParseFloat(lngStr, 64)
 	}
 
