@@ -48,8 +48,17 @@ func validatePhoneNumber(phone *string) error {
 		return nil
 	}
 	clean := strings.TrimSpace(*phone)
-	if !phoneRegex.MatchString(clean) {
-		return errors.New("Nomor telepon tidak valid (minimal 9 digit angka)")
+	// Hapus karakter pemisah umum seperti spasi, strip, tanda kurung
+	sanitized := strings.ReplaceAll(clean, " ", "")
+	sanitized = strings.ReplaceAll(sanitized, "-", "")
+	sanitized = strings.ReplaceAll(sanitized, "(", "")
+	sanitized = strings.ReplaceAll(sanitized, ")", "")
+
+	// Standar internasional E.164 & lokal: opsional diawali '+' lalu 7 sampai 15 digit angka
+	// Mendukung +628..., 08..., 628..., +1..., +44..., +65..., dan seluruh kode negara di dunia
+	phonePattern := regexp.MustCompile(`^\+?[0-9]{7,15}$`)
+	if !phonePattern.MatchString(sanitized) {
+		return errors.New("Nomor telepon tidak valid (masukkan nomor valid dengan format lokal seperti 08... atau internasional seperti +62... / kode negara lainnya)")
 	}
 	return nil
 }
