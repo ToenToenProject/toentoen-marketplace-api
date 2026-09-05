@@ -51,6 +51,11 @@ type Business struct {
 
 	IsManuallyClosed bool     `gorm:"default:false;column:is_manually_closed" json:"is_manually_closed"`
 	IsOpenNow        bool `gorm:"-" json:"is_open_now"`
+	IsLive           bool     `gorm:"default:false;column:is_live" json:"is_live"`
+	LivePlatform     *string  `gorm:"column:live_platform" json:"live_platform,omitempty"`
+	LiveStartedAt    *time.Time `gorm:"column:live_started_at" json:"live_started_at,omitempty"`
+	LastLiveNotifiedAt *time.Time `gorm:"column:last_live_notified_at" json:"last_live_notified_at,omitempty"`
+
 	PhoneContact     *string  `gorm:"column:phone_contact" json:"phone_contact"`
 	WhatsappContact  *string  `gorm:"column:whatsapp_contact" json:"whatsapp_contact"`
 	SocialInstagram  *string  `gorm:"column:social_instagram" json:"social_instagram"`
@@ -181,4 +186,19 @@ type BusinessWithPreview struct {
 	OwnerName           string
 	AverageRating       float64
 	TotalProductReviews int64
+}
+
+// ToggleLiveInput adalah payload untuk mengaktifkan / menonaktifkan live streaming
+type ToggleLiveInput struct {
+	IsLive   bool    `json:"is_live"`
+	Platform *string `json:"platform"` // "tiktok", "instagram", "facebook", "youtube", "other"
+}
+
+// LiveStatusResponse adalah response setelah mengubah status live streaming
+type LiveStatusResponse struct {
+	BusinessID    string     `json:"business_id"`
+	IsLive        bool       `json:"is_live"`
+	LivePlatform  *string    `json:"live_platform,omitempty"`
+	LiveStartedAt *time.Time `json:"live_started_at,omitempty"`
+	SocialURL     *string    `json:"social_url,omitempty"`
 }

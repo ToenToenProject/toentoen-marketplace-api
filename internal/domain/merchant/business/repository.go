@@ -1,6 +1,7 @@
 package business
 
 import (
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -27,6 +28,9 @@ type BusinessRepository interface {
 	UpdateBusinessRating(businessID string, avgRating float64, totalReviews int) error
 	GetBusinessListWithPreviews(ownerID string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error)
 	GetBusinessStaffAccountIDs(businessID string) ([]string, error)
+	UpdateLiveStatus(business *models.Business) error
+	GetBookmarkAccountIDs(businessID string) ([]string, error)
+	ResetLiveStatus() error
 }
 
 type businessRepository struct {
@@ -359,4 +363,33 @@ func (r *businessRepository) GetBusinessStaffAccountIDs(businessID string) ([]st
 	}
 
 	return accountIDs, nil
+}
+
+func (r *businessRepository) UpdateLiveStatus(business *models.Business) error {
+	return r.db.Model(business).Updates(map[string]interface{}{
+		"is_live":               business.IsLive,
+		"live_platform":         business.LivePlatform,
+		"live_started_at":       business.LiveStartedAt,
+		"last_live_notified_at": business.LastLiveNotifiedAt,
+		"updated_at":            time.Now(),
+	}).Error
+}
+
+func (r *businessRepository) GetBookmarkAccountIDs(businessID string) ([]string, error) {
+	var accountIDs []string
+	err := r.db.Table("business_bookmarks").
+		Where("business_id = ?", businessID).
+		Pluck("account_id", &accountIDs).Error
+	return accountIDs, err
+}
+
+func (r *businessRepository) ResetLiveStatus() error {
+	return r.db.Model(&models.Business{}).
+		Where("is_live = ?", true).
+		Updates(map[string]interface{}{
+			"is_live":         false,
+			"live_platform":   nil,
+			"live_started_at": nil,
+			"updated_at":      time.Now(),
+		}).Error
 }

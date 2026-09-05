@@ -26,6 +26,9 @@ type BusinessProfileResponse struct {
 	Category        string   `json:"category"`
 	IsOpenNow       bool     `json:"is_open_now"`
 	IsBookmarked    bool     `json:"is_bookmarked"`
+	IsLive          bool     `json:"is_live"`
+	LivePlatform    *string  `json:"live_platform,omitempty"`
+	LiveStartedAt   *time.Time `json:"live_started_at,omitempty"`
 	
 	AddressDetail   *string  `json:"address_detail"`
 	City            *string  `json:"city"`
@@ -156,6 +159,19 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		recentReviews = []models.Review{}
 	}
 
+	// Hitung status Live Streaming (otomatis kedaluwarsa jika sudah lewat 4 jam)
+	isLive := business.IsLive
+	var livePlatform *string
+	var liveStartedAt *time.Time
+	if isLive {
+		if business.LiveStartedAt != nil && time.Since(*business.LiveStartedAt) > 4*time.Hour {
+			isLive = false
+		} else {
+			livePlatform = business.LivePlatform
+			liveStartedAt = business.LiveStartedAt
+		}
+	}
+
 	return BusinessProfileResponse{
 		BusinessID:      business.BusinessID,
 		BusinessName:    bName,
@@ -163,6 +179,9 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		Category:        category,
 		IsOpenNow:       isOpenNow,
 		IsBookmarked:    isBookmarked,
+		IsLive:          isLive,
+		LivePlatform:    livePlatform,
+		LiveStartedAt:   liveStartedAt,
 		AddressDetail:   business.AddressDetail,
 		City:            business.City,
 		Province:        business.Province,
@@ -234,6 +253,18 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			bName = *business.BusinessName
 		}
 
+		isLive := business.IsLive
+		var livePlatform *string
+		var liveStartedAt *time.Time
+		if isLive {
+			if business.LiveStartedAt != nil && time.Since(*business.LiveStartedAt) > 4*time.Hour {
+				isLive = false
+			} else {
+				livePlatform = business.LivePlatform
+				liveStartedAt = business.LiveStartedAt
+			}
+		}
+
 		responses = append(responses, BusinessProfileResponse{
 			BusinessID:      business.BusinessID,
 			BusinessName:    bName,
@@ -241,6 +272,9 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			Category:        category,
 			IsOpenNow:       isOpenNow,
 			IsBookmarked:    true, // always true if fetched from bookmarks
+			IsLive:          isLive,
+			LivePlatform:    livePlatform,
+			LiveStartedAt:   liveStartedAt,
 			AddressDetail:   business.AddressDetail,
 			City:            business.City,
 			Province:        business.Province,

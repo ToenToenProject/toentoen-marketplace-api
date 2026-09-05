@@ -3,7 +3,9 @@ package business
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/crypto"
@@ -48,14 +50,16 @@ type BusinessService interface {
 	UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (error)
 	DeleteBusiness(ownerID, businessID string) error
 	ToggleStoreStatus(ownerID, businessID string) (bool, error)
+	ToggleLiveStatus(requesterID, businessID string, input models.ToggleLiveInput) (*models.LiveStatusResponse, error)
 }
 
 type businessService struct {
-	repo BusinessRepository
+	repo         BusinessRepository
+	notifService notification.NotificationService
 }
 
-func NewBusinessService(repo BusinessRepository) BusinessService {
-	return &businessService{repo}
+func NewBusinessService(repo BusinessRepository, notifService notification.NotificationService) BusinessService {
+	return &businessService{repo, notifService}
 }
 
 func toPointerOrNil(s string) *string {
@@ -437,4 +441,174 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	}
 
 	return business.IsManuallyClosed, nil
+}
+
+func formatSocialURL(platform string, raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return raw
+	}
+	cleanUser := strings.TrimPrefix(raw, "@")
+	switch strings.ToLower(platform) {
+	case "tiktok":
+		return fmt.Sprintf("https://www.tiktok.com/@%s", cleanUser)
+	case "instagram":
+		return fmt.Sprintf("https://www.instagram.com/%s", cleanUser)
+	case "facebook":
+		return fmt.Sprintf("https://www.facebook.com/%s", cleanUser)
+	case "youtube":
+		return fmt.Sprintf("https://www.youtube.com/@%s", cleanUser)
+	default:
+		return fmt.Sprintf("https://%s", raw)
+	}
+}
+
+func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input models.ToggleLiveInput) (*models.LiveStatusResponse, error) {
+	business, err := s.repo.FindBusinessByID(businessID)
+	if err != nil {
+		return nil, errors.New("bisnis tidak ditemukan")
+	}
+
+	// 1. Verifikasi hak akses: Owner atau Admin toko yang aktif
+	isOwner := business.AccountID == requesterID
+	if !isOwner {
+		var assignment models.BusinessAdminAssignment
+		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
+			return nil, errors.New("forbidden: Anda tidak memiliki akses untuk mengelola siaran live toko ini")
+		}
+	}
+
+	now := time.Now()
+
+	// 2. Jika mengaktifkan Live Streaming (Toggle ON)
+	if input.IsLive {
+		if input.Platform == nil || strings.TrimSpace(*input.Platform) == "" {
+			return nil, errors.New("platform live streaming wajib dipilih (contoh: tiktok, instagram, facebook, youtube)")
+		}
+
+		platform := strings.ToLower(strings.TrimSpace(*input.Platform))
+		var socialURL string
+
+		// Validasi kelengkapan akun media sosial di profil toko
+		switch platform {
+		case "tiktok":
+			if business.SocialTiktok == nil || strings.TrimSpace(*business.SocialTiktok) == "" {
+				return nil, errors.New("silakan lengkapi akun/link TikTok di profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
+			}
+			socialURL = formatSocialURL("tiktok", *business.SocialTiktok)
+		case "instagram":
+			if business.SocialInstagram == nil || strings.TrimSpace(*business.SocialInstagram) == "" {
+				return nil, errors.New("silakan lengkapi akun/link Instagram di profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
+			}
+			socialURL = formatSocialURL("instagram", *business.SocialInstagram)
+		case "facebook":
+			found := ""
+			for _, w := range business.SocialWebsites {
+				if strings.Contains(strings.ToLower(w), "facebook.com") || strings.Contains(strings.ToLower(w), "fb.com") {
+					found = w
+					break
+				}
+			}
+			if found == "" {
+				return nil, errors.New("silakan lengkapi link Facebook di daftar tautan profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
+			}
+			socialURL = formatSocialURL("facebook", found)
+		case "youtube":
+			found := ""
+			for _, w := range business.SocialWebsites {
+				if strings.Contains(strings.ToLower(w), "youtube.com") || strings.Contains(strings.ToLower(w), "youtu.be") {
+					found = w
+					break
+				}
+			}
+			if found == "" {
+				return nil, errors.New("silakan lengkapi link YouTube di daftar tautan profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
+			}
+			socialURL = formatSocialURL("youtube", found)
+		default:
+			// Fallback jika platform lain
+			if len(business.SocialWebsites) > 0 {
+				socialURL = business.SocialWebsites[0]
+			} else if business.SocialTiktok != nil && *business.SocialTiktok != "" {
+				socialURL = formatSocialURL("tiktok", *business.SocialTiktok)
+			} else if business.SocialInstagram != nil && *business.SocialInstagram != "" {
+				socialURL = formatSocialURL("instagram", *business.SocialInstagram)
+			} else {
+				return nil, errors.New("silakan lengkapi akun/tautan media sosial di profil toko Anda terlebih dahulu")
+			}
+		}
+
+		business.IsLive = true
+		business.LivePlatform = &platform
+		business.LiveStartedAt = &now
+
+		// Poin 1: Cooldown spam notifikasi (15 menit)
+		shouldSendNotif := false
+		if business.LastLiveNotifiedAt == nil || now.Sub(*business.LastLiveNotifiedAt) > 15*time.Minute {
+			shouldSendNotif = true
+			business.LastLiveNotifiedAt = &now
+		}
+
+		if err := s.repo.UpdateLiveStatus(business); err != nil {
+			return nil, errors.New("gagal memperbarui status live toko")
+		}
+
+		// Poin 4 & 7: Broadcast notifikasi secara asinkron di background goroutine
+		if shouldSendNotif && s.notifService != nil {
+			bName := "Toko"
+			if business.BusinessName != nil && strings.TrimSpace(*business.BusinessName) != "" {
+				bName = strings.TrimSpace(*business.BusinessName)
+			}
+			platformDisplay := strings.ToUpper(platform[:1]) + platform[1:]
+			bizID := business.BusinessID
+			reqID := requesterID
+			sURL := socialURL
+
+			go func() {
+				customerIDs, err := s.repo.GetBookmarkAccountIDs(bizID)
+				if err != nil || len(customerIDs) == 0 {
+					return
+				}
+
+				title := fmt.Sprintf("🔴 %s sedang Live Streaming!", bName)
+				body := fmt.Sprintf("Toko %s sedang siaran langsung di %s. Kunjungi profilnya sekarang!", bName, platformDisplay)
+				data := map[string]interface{}{
+					"business_id":   bizID,
+					"business_name": bName,
+					"live_platform": platform,
+					"social_url":    sURL,
+					"screen":        "business_profile",
+					"click_action":  "FLUTTER_NOTIFICATION_CLICK",
+					"action":        "open_business_profile",
+				}
+
+				s.notifService.SendNotification(customerIDs, reqID, "merchant_live", bizID, title, body, data, nil)
+			}()
+		}
+
+		return &models.LiveStatusResponse{
+			BusinessID:    business.BusinessID,
+			IsLive:        true,
+			LivePlatform:  &platform,
+			LiveStartedAt: &now,
+			SocialURL:     &socialURL,
+		}, nil
+	}
+
+	// 3. Jika mematikan Live Streaming (Toggle OFF)
+	business.IsLive = false
+	business.LivePlatform = nil
+	business.LiveStartedAt = nil
+
+	if err := s.repo.UpdateLiveStatus(business); err != nil {
+		return nil, errors.New("gagal menonaktifkan status live toko")
+	}
+
+	return &models.LiveStatusResponse{
+		BusinessID: business.BusinessID,
+		IsLive:     false,
+	}, nil
 }

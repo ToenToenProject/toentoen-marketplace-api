@@ -191,3 +191,38 @@ func (h *BusinessHandler) ToggleStoreStatus(c *fiber.Ctx) error {
 		"is_manually_closed": isClosed,
 	})
 }
+
+func (h *BusinessHandler) ToggleLiveStatus(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
+
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input models.ToggleLiveInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	res, errSvc := h.service.ToggleLiveStatus(requesterID, businessID, input)
+	if errSvc != nil {
+		if strings.Contains(errSvc.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
+		}
+		if strings.Contains(errSvc.Error(), "forbidden") || strings.Contains(errSvc.Error(), "tidak memiliki akses") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	msg := "Siaran live streaming berhasil diaktifkan"
+	if !res.IsLive {
+		msg = "Siaran live streaming berhasil dinonaktifkan"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, res)
+}

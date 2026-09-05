@@ -65,8 +65,9 @@ func startMidnightResetWorker(businessRepo business.BusinessRepository) {
 			time.Sleep(durationUntilMidnight)
 
 			// BANGUN! Eksekusi reset database
-			log.Println("[CRON] Menjalankan reset is_manually_closed ke false...")
+			log.Println("[CRON] Menjalankan reset is_manually_closed ke false dan reset status live streaming...")
 			businessRepo.ResetManualCloseStatus()
+			businessRepo.ResetLiveStatus()
 		}
 	}()
 }
@@ -113,9 +114,14 @@ func main() {
 	profileService := account.NewProfileService(profileRepo)
 	profileHandler := account.NewProfileHandler(profileService)
 
+	// 🔔 INIT NOTIFICATION SERVICE
+	notifRepo := notification.NewNotificationRepository(database.DB)
+	notifService := notification.NewNotificationService(notifRepo, wsHub)
+	notifHandler := notification.NewNotificationHandler(notifService)
+
 	businessRepo := business.NewBusinessRepository(database.DB)
 	startMidnightResetWorker(businessRepo) // Jalankan cron job
-	businessService := business.NewBusinessService(businessRepo)
+	businessService := business.NewBusinessService(businessRepo, notifService)
 	businessHandler := business.NewBusinessHandler(businessService)
 
 	productRepo := catalog.NewProductRepository(database.DB)
@@ -125,11 +131,6 @@ func main() {
 	productGroupRepo := catalog.NewProductGroupRepository(database.DB)
 	productGroupService := catalog.NewProductGroupService(productGroupRepo)
 	productGroupHandler := catalog.NewProductGroupHandler(productGroupService)
-
-	// 🔔 INIT NOTIFICATION SERVICE
-	notifRepo := notification.NewNotificationRepository(database.DB)
-	notifService := notification.NewNotificationService(notifRepo, wsHub)
-	notifHandler := notification.NewNotificationHandler(notifService)
 
 	// 🪄 INIT BUSINESS ADMIN (BARU)
 	businessAdminRepo := admin.NewBusinessAdminRepository(database.DB)
@@ -521,6 +522,8 @@ func main() {
 	sharedBusinessScope.Put("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/toggle-status", businessHandler.ToggleStoreStatus)
+	sharedBusinessScope.Patch("/toggle-live", businessHandler.ToggleLiveStatus)
+	sharedBusinessScope.Post("/toggle-live", businessHandler.ToggleLiveStatus)
 
 	// -> Products
 	productRoutes := sharedBusinessScope.Group("/products")

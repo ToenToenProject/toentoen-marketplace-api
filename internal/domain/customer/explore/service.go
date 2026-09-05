@@ -171,13 +171,20 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 			bookmarkBoost = 1.5
 		}
 
+		// Live Streaming Boost (+2.0 jika toko sedang live streaming)
+		liveBoost := 0.0
+		if p.Business != nil && p.Business.IsLive {
+			liveBoost = 2.0
+		}
+
 		// F. Hitung Skor Akhir
-		// Bobot: Proximity (30%), Affinity (30%), Recency (20%), Engagement (20%) + Bookmark Boost
+		// Bobot: Proximity (30%), Affinity (30%), Recency (20%), Engagement (20%) + Bookmark & Live Boost
 		finalScore := (proximityScore * 0.30) +
 			(affinityScore * 0.30) +
 			(recencyScore * 0.20) +
 			(engagementScore * 0.20) +
-			bookmarkBoost
+			bookmarkBoost +
+			liveBoost
 
 		// G. Seen Penalty (Jika postingan sudah dilihat dalam 24 jam terakhir, beri penalti agar konten baru naik)
 		if seenPostIDs[p.PostID] {
