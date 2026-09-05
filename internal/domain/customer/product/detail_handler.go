@@ -21,8 +21,8 @@ func (h *ProductDetailHandler) GetProductDetail(c *fiber.Ctx) error {
 
 	res, err := h.service.GetProductDetail(productID)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Product not found", nil)
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Produk tidak ditemukan", nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Product detail retrieved successfully", res)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail produk berhasil diambil", res)
 }

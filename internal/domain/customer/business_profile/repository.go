@@ -46,7 +46,7 @@ func (r *repository) GetBusinessDetail(businessID string) (models.Business, erro
 	
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return business, errors.New("business not found")
+			return business, errors.New("bisnis tidak ditemukan")
 		}
 		return business, err
 	}

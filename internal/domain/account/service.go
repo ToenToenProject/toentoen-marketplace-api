@@ -294,7 +294,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.New("account not found")
+			return nil, errors.New("Akun tidak ditemukan")
 		}
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("username already in use")
+			return nil, errors.New("Username sudah digunakan")
 		}
 		account.Username = cleanUsername
 	}
@@ -322,7 +322,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("email already in use")
+			return nil, errors.New("Email sudah digunakan")
 		}
 		account.Email = input.Email
 	}
@@ -332,7 +332,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("phone number already in use")
+			return nil, errors.New("Nomor telepon sudah digunakan")
 		}
 		account.PhoneNumber = input.PhoneNumber
 	}
@@ -342,7 +342,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 
 	customer, err := s.repo.GetCustomerByAccountID(accountID)
 	if err != nil {
-		return nil, errors.New("user specific profile data not found")
+		return nil, errors.New("Data profil pengguna tidak ditemukan")
 	}
 
 	if input.Bio != nil {
@@ -363,7 +363,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 	account.AccountStatus = isAccountDataComplete(account)
 
 	if err := s.repo.SaveCustomerProfile(account, customer); err != nil {
-		return nil, errors.New("failed to save user profile data")
+		return nil, errors.New("Gagal menyimpan data profil pengguna")
 	}
 
 	return account, nil
@@ -477,7 +477,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.New("account not found")
+			return nil, errors.New("Akun tidak ditemukan")
 		}
 		return nil, err
 	}
@@ -498,7 +498,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("username already in use")
+			return nil, errors.New("Username sudah digunakan")
 		}
 		account.Username = cleanUsername
 	}
@@ -508,7 +508,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("email already in use")
+			return nil, errors.New("Email sudah digunakan")
 		}
 		account.Email = input.Email
 	}
@@ -518,7 +518,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("phone number already in use")
+			return nil, errors.New("Nomor telepon sudah digunakan")
 		}
 		account.PhoneNumber = input.PhoneNumber
 	}
@@ -537,7 +537,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 
 	owner, err := s.repo.GetOwnerByAccountID(accountID)
 	if err != nil {
-		return nil, errors.New("user specific profile data not found")
+		return nil, errors.New("Data profil pengguna tidak ditemukan")
 	}
 	decryptOwnerKTP(owner)
 
@@ -550,7 +550,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 				return nil, err
 			}
 			if exists {
-				return nil, errors.New("ktp number already in use")
+				return nil, errors.New("Nomor KTP sudah digunakan")
 			}
 			owner.KtpNumber = input.KtpNumber
 		}
@@ -612,11 +612,11 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 
 	ownerToSave := *owner
 	if err := encryptOwnerKTP(&ownerToSave); err != nil {
-		return nil, errors.New("failed to encrypt sensitive owner profile data")
+		return nil, errors.New("Gagal mengenkripsi data profil pemilik")
 	}
 
 	if err := s.repo.SaveOwnerProfile(account, &ownerToSave); err != nil {
-		return nil, errors.New("failed to save owner profile data")
+		return nil, errors.New("Gagal menyimpan data profil pemilik")
 	}
 	return account, nil
 }
@@ -638,7 +638,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.New("account not found")
+			return nil, errors.New("Akun tidak ditemukan")
 		}
 		return nil, err
 	}
@@ -659,7 +659,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("username already in use")
+			return nil, errors.New("Username sudah digunakan")
 		}
 		account.Username = cleanUsername
 	}
@@ -669,7 +669,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("email already in use")
+			return nil, errors.New("Email sudah digunakan")
 		}
 		account.Email = input.Email
 	}
@@ -679,7 +679,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("phone number already in use")
+			return nil, errors.New("Nomor telepon sudah digunakan")
 		}
 		account.PhoneNumber = input.PhoneNumber
 	}
@@ -711,7 +711,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 				return nil, err
 			}
 			if exists {
-				return nil, errors.New("ktp number already in use")
+				return nil, errors.New("Nomor KTP sudah digunakan")
 			}
 			admin.KtpNumber = input.KtpNumber
 		}
@@ -767,11 +767,11 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 
 	adminToSave := *admin
 	if err := encryptBusinessAdminKTP(&adminToSave); err != nil {
-		return nil, errors.New("failed to encrypt sensitive business admin profile data")
+		return nil, errors.New("Gagal mengenkripsi data profil admin bisnis")
 	}
 
 	if err := s.repo.SaveBusinessAdminProfile(account, &adminToSave); err != nil {
-		return nil, errors.New("failed to save business admin profile data")
+		return nil, errors.New("Gagal menyimpan data profil admin bisnis")
 	}
 
 	return account, nil

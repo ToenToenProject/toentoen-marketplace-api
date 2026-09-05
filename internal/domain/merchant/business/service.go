@@ -143,7 +143,7 @@ func (s *businessService) GetMyBusinesses(ownerID, search string, categoryID int
 	// Teruskan parameter pencarian dan filter ke repository
 	businessesWithPreview, err := s.repo.GetBusinessListWithPreviews(ownerID, search, categoryID, tagIDs, cursor, limit+1)
 	if err != nil {
-		return nil, errors.New("failed to retrieve business list")
+		return nil, errors.New("gagal mengambil daftar bisnis")
 	}
 
 	var responseList []models.BusinessListItem
@@ -211,7 +211,7 @@ func (s *businessService) GetMyBusinesses(ownerID, search string, categoryID int
 func (s *businessService) GetBusinessDetail(businessID string) (*models.Business, error) {
 	business, err := s.repo.FindBusinessByID(businessID)
 	if err != nil {
-		return nil, errors.New("business not found")
+		return nil, errors.New("bisnis tidak ditemukan")
 	}
 
 	// Dekripsi dokumen sensitif untuk owner/admin
@@ -226,7 +226,7 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 func (s *businessService) UpdateBusiness(requesterID, businessID string, input models.UpdateBusinessInput) (error) {
 	business, err := s.repo.FindBusinessByID(businessID)
 	if err != nil {
-		return errors.New("business is not found")
+		return errors.New("bisnis tidak ditemukan")
 	}
 
 	// Verifikasi apakah requester adalah owner atau admin aktif di toko ini
@@ -234,12 +234,12 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	if !isOwner {
 		var assignment models.BusinessAdminAssignment
 		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
-			return errors.New("you don't have access to update this business")
+			return errors.New("forbidden: Anda tidak memiliki akses untuk memperbarui bisnis ini")
 		}
 
 		if assignment.Role == "staff" && (len(input.Hours) > 0 || len(input.EventSchedules) > 0) {
 			if !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
-				return errors.New("you don't have permission to change business hours")
+				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah jam operasional bisnis")
 			}
 		}
 	}
@@ -250,7 +250,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 	if input.Handle != "" {
 		if s.repo.CheckHandleExists(input.Handle, business.BusinessID) {
-			return errors.New("handle already exists, please choose another one")
+			return errors.New("handle sudah digunakan, silakan pilih yang lain")
 		}
 		business.Handle = &input.Handle
 	}
@@ -367,7 +367,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	encryptBusinessLegal(business)
 
 	if err := s.repo.UpdateBusiness(business, hoursToUpdate, catIDs, tagIDs); err != nil {
-		return fmt.Errorf("failed to update business data in the database: %w", err)
+		return fmt.Errorf("gagal memperbarui data bisnis di database: %w", err)
 	}
 
 	return nil
@@ -376,7 +376,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 	business, err := s.repo.FindBusinessByIDAndOwner(businessID, ownerID)
 	if err != nil {
-		return errors.New("business is not found or you don't have access")
+		return errors.New("bisnis tidak ditemukan atau Anda tidak memiliki akses")
 	}
 
 	return s.repo.DeleteBusiness(business)
@@ -385,18 +385,18 @@ func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (bool, error) {
 	business, err := s.repo.FindBusinessByID(businessID)
 	if err != nil {
-		return false, errors.New("business is not found")
+		return false, errors.New("bisnis tidak ditemukan")
 	}
 
 	isOwner := business.AccountID == requesterID
 	if !isOwner {
 		var assignment models.BusinessAdminAssignment
 		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
-			return false, errors.New("you don't have access to toggle store status")
+			return false, errors.New("forbidden: Anda tidak memiliki akses untuk mengubah status toko")
 		}
 
 		if assignment.Role == "staff" && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
-			return false, errors.New("you don't have permission to change store operational status")
+			return false, errors.New("forbidden: Anda tidak memiliki izin untuk mengubah status operasional toko")
 		}
 	}
 
@@ -433,7 +433,7 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	// Jika validasi aman, simpan status barunya
 	business.IsManuallyClosed = newStatus
 	if err := s.repo.ToggleStoreStatus(business); err != nil {
-		return false, errors.New("failed to update store status")
+		return false, errors.New("gagal memperbarui status toko")
 	}
 
 	return business.IsManuallyClosed, nil

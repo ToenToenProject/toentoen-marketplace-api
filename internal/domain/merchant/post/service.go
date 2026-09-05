@@ -29,7 +29,7 @@ func NewBusinessPostService(postRepo BusinessPostRepository, productRepo catalog
 func (s *businessPostService) CreatePost(requesterID, role, businessID string, input models.CreatePostInput) (*models.BusinessPost, error) {
 	// Cek Otoritas
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden: you don't have access to this business")
+		return nil, errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
 	}
 
 	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermCreatePost) {
@@ -38,10 +38,10 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 
 	// 🛡️ VALIDASI ATURAN BISNIS
 	if len(input.Images) > 5 {
-		return nil, errors.New("maximum 5 images allowed per post")
+		return nil, errors.New("maksimal 5 gambar diperbolehkan per postingan")
 	}
 	if strings.TrimSpace(input.Content) == "" && len(input.Images) == 0 && input.VideoURL == "" {
-		return nil, errors.New("post cannot be completely empty")
+		return nil, errors.New("postingan tidak boleh kosong")
 	}
 
 	var videoPtr *string
@@ -58,7 +58,7 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 	}
 
 	if err := s.postRepo.CreatePost(&post); err != nil {
-		return nil, errors.New("failed to create post")
+		return nil, errors.New("gagal membuat postingan")
 	}
 	return &post, nil
 }
@@ -70,7 +70,7 @@ func (s *businessPostService) GetPosts(businessID string, page, limit int) ([]mo
 
 func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID string, input models.UpdatePostInput) (*models.BusinessPost, error) {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden: you don't have access to this business")
+		return nil, errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
 	}
 
 	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermCreatePost) {
@@ -79,11 +79,11 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 
 	post, err := s.postRepo.GetPostByID(postID)
 	if err != nil || post == nil || post.BusinessID != businessID {
-		return nil, errors.New("post not found in this business")
+		return nil, errors.New("postingan tidak ditemukan di bisnis ini")
 	}
 
 	if input.Images != nil && len(*input.Images) > 5 {
-		return nil, errors.New("maximum 5 images allowed per post")
+		return nil, errors.New("maksimal 5 gambar diperbolehkan per postingan")
 	}
 
 	if input.Content != nil {
@@ -101,14 +101,14 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 	}
 
 	if err := s.postRepo.UpdatePost(post); err != nil {
-		return nil, errors.New("failed to update post")
+		return nil, errors.New("gagal memperbarui postingan")
 	}
 	return post, nil
 }
 
 func (s *businessPostService) DeletePost(requesterID, role, businessID, postID string) error {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
-		return errors.New("forbidden: you don't have access to this business")
+		return errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
 	}
 	return s.postRepo.DeletePost(postID, businessID)
 }
@@ -116,7 +116,7 @@ func (s *businessPostService) DeletePost(requesterID, role, businessID, postID s
 func (s *businessPostService) ToggleLike(accountID, postID string) (string, error) {
 	status, err := s.postRepo.ToggleLike(postID, accountID)
 	if err != nil {
-		return "", errors.New("failed to process like action")
+		return "", errors.New("gagal memproses aksi like")
 	}
 	return status, nil
 }

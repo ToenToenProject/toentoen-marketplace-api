@@ -40,7 +40,7 @@ func NewProductDetailService(repo ProductDetailRepository) ProductDetailService 
 func (s *productDetailService) GetProductDetail(productID string) (*ProductDetailResponse, error) {
 	prod, bus, err := s.repo.GetProductWithBusiness(productID)
 	if err != nil {
-		return nil, errors.New("product not found")
+		return nil, errors.New("produk tidak ditemukan")
 	}
 
 	// Calculate prices

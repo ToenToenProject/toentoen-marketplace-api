@@ -38,7 +38,7 @@ func NewProductService(repo ProductRepository) ProductService {
 // 1. CREATE PRODUCT
 func (s *productService) CreateProduct(requesterID, role, businessID string, input models.CreateProductInput) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return errors.New("forbidden: you don't have access to manage products for this business")
+		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
 
 	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddDeleteProducts) {
@@ -68,7 +68,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 	}
 
 	if err := s.repo.CreateProduct(&product); err != nil {
-		return fmt.Errorf("failed to create product: %w", err)
+		return fmt.Errorf("gagal membuat produk: %w", err)
 	}
 	return nil
 }
@@ -102,7 +102,7 @@ func (s *productService) AddVariant(requesterID, role, businessID, productID str
 	}
 
 	if err := s.repo.CreateVariant(&variant); err != nil {
-		return errors.New("failed to add variant")
+		return errors.New("gagal menambahkan varian")
 	}
 	return nil
 }
@@ -118,7 +118,7 @@ func (s *productService) UpdateVariant(requesterID, role, businessID, productID,
 
 	variant, err := s.repo.GetVariantByID(variantID, productID)
 	if err != nil {
-		return errors.New("variant not found")
+		return errors.New("varian tidak ditemukan")
 	}
 
 	if input.SKU != nil {
@@ -138,7 +138,7 @@ func (s *productService) UpdateVariant(requesterID, role, businessID, productID,
 	}
 
 	if err := s.repo.UpdateVariant(variant); err != nil {
-		return errors.New("failed to update variant")
+		return errors.New("gagal memperbarui varian")
 	}
 	return nil
 }
@@ -153,7 +153,7 @@ func (s *productService) RemoveVariant(requesterID, role, businessID, productID,
 	}
 
 	if err := s.repo.DeleteVariant(variantID, productID); err != nil {
-		return errors.New("failed to delete variant")
+		return errors.New("gagal menghapus varian")
 	}
 	return nil
 }
@@ -161,7 +161,7 @@ func (s *productService) RemoveVariant(requesterID, role, businessID, productID,
 // 2. UPDATE PRODUCT
 func (s *productService) UpdateProduct(requesterID, role, businessID, productID string, input models.UpdateProductInput) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return errors.New("forbidden: you don't have access to manage products for this business")
+		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
 
 	if role == "business_admin" {
@@ -180,7 +180,7 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 
 	product, err := s.repo.GetProductByID(productID, businessID)
 	if err != nil {
-		return errors.New("product not found in this business")
+		return errors.New("produk tidak ditemukan di bisnis ini")
 	}
 
 	if input.ProductGroupID != nil {
@@ -226,7 +226,7 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	}
 
 	if err := s.repo.UpdateProduct(product); err != nil {
-		return errors.New("failed to update product")
+		return errors.New("gagal memperbarui produk")
 	}
 	return nil
 }
@@ -234,7 +234,7 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 // 3. DELETE PRODUCT
 func (s *productService) DeleteProduct(requesterID, role, businessID, productID string) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return errors.New("forbidden: you don't have access to manage products for this business")
+		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
 
 	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddDeleteProducts) {
@@ -242,7 +242,7 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 	}
 
 	if err := s.repo.DeleteProduct(productID, businessID); err != nil {
-		return errors.New("failed to delete product")
+		return errors.New("gagal menghapus produk")
 	}
 	return nil
 }
@@ -251,12 +251,12 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 // Ganti fungsi ini di internal/services/product_service.go
 func (s *productService) GetProductDetail(requesterID, role, businessID, productID string) (*models.ProductDetailResponse, error) {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden: you don't have access to view products for this business")
+		return nil, errors.New("forbidden: Anda tidak memiliki akses untuk melihat produk di bisnis ini")
 	}
 
 	p, err := s.repo.GetProductByID(productID, businessID)
 	if err != nil {
-		return nil, errors.New("product not found")
+		return nil, errors.New("produk tidak ditemukan")
 	}
 
 	// --- 🛠️ MESIN KALKULATOR DISKON & HARGA VARIAN ---
@@ -342,7 +342,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 
 func (s *productService) GetAllProducts(requesterID, role, businessID string, search, productGroupID, stockType string, isActive *bool, sort string, cursor string, limit int) (*models.GetProductsResponse, error) {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden: you don't have access to view products for this business")
+		return nil, errors.New("forbidden: Anda tidak memiliki akses untuk melihat produk di bisnis ini")
 	}
 
 	products, err := s.repo.GetProducts(businessID, search, productGroupID, stockType, isActive, sort, cursor, limit+1)
@@ -457,7 +457,7 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 // 6. BULK UPDATE STATUS
 func (s *productService) BulkUpdateStatus(requesterID, role, businessID string, productIDs []string, isActive bool) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return errors.New("forbidden: you don't have access to manage products for this business")
+		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
 	return s.repo.BulkUpdateStatus(businessID, productIDs, isActive)
 }
@@ -465,7 +465,7 @@ func (s *productService) BulkUpdateStatus(requesterID, role, businessID string, 
 // 7. BULK DELETE
 func (s *productService) BulkDelete(requesterID, role, businessID string, productIDs []string) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return errors.New("forbidden: you don't have access to manage products for this business")
+		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
 	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddDeleteProducts) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk menghapus produk")

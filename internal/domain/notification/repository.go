@@ -83,7 +83,7 @@ func (r *notificationRepository) MarkAsRead(accountID, notifID string) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("notification not found or you don't have access")
+		return errors.New("notifikasi tidak ditemukan atau Anda tidak memiliki akses")
 	}
 	return nil
 }

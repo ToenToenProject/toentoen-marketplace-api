@@ -37,13 +37,13 @@ func (h *ProfileHandler) UpdateProfileCustomer(c *fiber.Ctx) error {
 
 	updatedAccount, err := h.service.UpdateCustomerProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" {
+		if err.Error() == "Email sudah digunakan" || err.Error() == "Nomor telepon sudah digunakan" || err.Error() == "Username sudah digunakan" || err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" {
 			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
 		}
-		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
+		if err.Error() == "Akun tidak ditemukan" || err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
-		if strings.HasPrefix(err.Error(), "failed to") {
+		if strings.HasPrefix(err.Error(), "Gagal") || strings.HasPrefix(err.Error(), "gagal") || strings.HasPrefix(err.Error(), "failed to") {
 			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
@@ -71,13 +71,13 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 
 	updatedAccount, err := h.service.UpdateOwnerProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" || err.Error() == "ktp number already in use" {
+		if err.Error() == "Email sudah digunakan" || err.Error() == "Nomor telepon sudah digunakan" || err.Error() == "Username sudah digunakan" || err.Error() == "Nomor KTP sudah digunakan" || err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" || err.Error() == "ktp number already in use" {
 			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
 		}
-		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
+		if err.Error() == "Akun tidak ditemukan" || err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
-		if strings.HasPrefix(err.Error(), "failed to") {
+		if strings.HasPrefix(err.Error(), "Gagal") || strings.HasPrefix(err.Error(), "gagal") || strings.HasPrefix(err.Error(), "failed to") {
 			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
@@ -104,13 +104,13 @@ func (h *ProfileHandler) UpdateProfileBusinessAdmin(c *fiber.Ctx) error {
 
 	updatedAccount, err := h.service.UpdateBusinessAdminProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" || err.Error() == "ktp number already in use" {
+		if err.Error() == "Email sudah digunakan" || err.Error() == "Nomor telepon sudah digunakan" || err.Error() == "Username sudah digunakan" || err.Error() == "Nomor KTP sudah digunakan" || err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" || err.Error() == "ktp number already in use" {
 			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
 		}
-		if err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
+		if err.Error() == "Akun tidak ditemukan" || err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
 			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
 		}
-		if strings.HasPrefix(err.Error(), "failed to") {
+		if strings.HasPrefix(err.Error(), "Gagal") || strings.HasPrefix(err.Error(), "gagal") || strings.HasPrefix(err.Error(), "failed to") {
 			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)

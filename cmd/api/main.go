@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/signal"
 
+	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/customer/product"
 	"toentoen-backend/internal/domain/customer/profile"
 	"toentoen-backend/internal/domain/customer/report"
@@ -36,6 +38,7 @@ import (
 	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/storage"
+	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -210,7 +213,25 @@ func main() {
 	// ==========================================
 	// 3. FIBER APP SETUP
 	// ==========================================
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			var e *fiber.Error
+			if errors.As(err, &e) {
+				code = e.Code
+			}
+			msg := "Terjadi kesalahan pada server"
+			respCode := constants.InternalServerErr
+			if code == fiber.StatusNotFound {
+				msg = "Rute tidak ditemukan"
+				respCode = constants.DataNotFound
+			} else if code == fiber.StatusMethodNotAllowed {
+				msg = "Metode permintaan tidak diizinkan"
+				respCode = constants.InvalidParam
+			}
+			return utils.SendResponse(c, code, respCode, msg, nil)
+		},
+	})
 
 	// Security & Core Middlewares
 	app.Use(recover.New())
@@ -665,6 +686,11 @@ func main() {
 	incomingTransferGroup := api.Group("/merchant/transfers", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
 	incomingTransferGroup.Get("/incoming", businessTransferHandler.GetIncomingTransfers)
 	incomingTransferGroup.Post("/:transfer_id/respond", businessTransferHandler.RespondTransfer)
+
+	// Fallback untuk rute yang tidak terdaftar (404)
+	app.Use(func(c *fiber.Ctx) error {
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Rute tidak ditemukan", nil)
+	})
 
 	// ==========================================
 	// 4. START SERVER

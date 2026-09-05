@@ -19,7 +19,7 @@ func NewNotificationHandler(service NotificationService) *NotificationHandler {
 func (h *NotificationHandler) GetMyNotifications(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 	accountID := accountIDValue.(string)
 
@@ -49,7 +49,7 @@ func (h *NotificationHandler) GetMyNotifications(c *fiber.Ctx) error {
 func (h *NotificationHandler) GetUnreadCount(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 	accountID := accountIDValue.(string)
 
@@ -66,7 +66,7 @@ func (h *NotificationHandler) GetUnreadCount(c *fiber.Ctx) error {
 func (h *NotificationHandler) MarkAsRead(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 	accountID := accountIDValue.(string)
 	notifID := c.Params("id")
@@ -81,7 +81,7 @@ func (h *NotificationHandler) MarkAsRead(c *fiber.Ctx) error {
 func (h *NotificationHandler) MarkAllAsRead(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 	accountID := accountIDValue.(string)
 
@@ -95,13 +95,13 @@ func (h *NotificationHandler) MarkAllAsRead(c *fiber.Ctx) error {
 func (h *NotificationHandler) DeleteNotification(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 	accountID := accountIDValue.(string)
 	notifID := c.Params("id")
 
 	if notifID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Notification ID wajib diisi", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "ID notifikasi wajib diisi", nil)
 	}
 
 	if err := h.service.DeleteNotification(accountID, notifID); err != nil {
@@ -114,7 +114,7 @@ func (h *NotificationHandler) DeleteNotification(c *fiber.Ctx) error {
 func (h *NotificationHandler) DeleteAllNotifications(c *fiber.Ctx) error {
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Tidak ada sesi (Unauthorized)", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 	accountID := accountIDValue.(string)
 

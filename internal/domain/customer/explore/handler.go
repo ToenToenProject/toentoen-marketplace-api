@@ -41,15 +41,15 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 
 	// Validate nearest requirement
 	if req.Sort == "nearest" && (req.Lat == 0 || req.Lng == 0) {
-		return utils.SendResponse(c, 400, "11", "lat and lng are required for 'nearest' sorting", nil)
+		return utils.SendResponse(c, 400, "11", "Latitude dan longitude wajib diisi untuk pengurutan 'terdekat'", nil)
 	}
 
 	res, err := h.service.GetExploreBusinesses(req)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to search businesses", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal mencari bisnis", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", res)
+	return utils.SendResponse(c, 200, "00", "Berhasil memuat eksplorasi bisnis", res)
 }
 
 func (h *ExploreHandler) GetTimeline(c *fiber.Ctx) error {
@@ -78,10 +78,10 @@ func (h *ExploreHandler) GetTimeline(c *fiber.Ctx) error {
 
 	posts, err := h.service.GetTimelinePosts(query, accountID)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to get timeline posts", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal memuat postingan linimasa", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", posts)
+	return utils.SendResponse(c, 200, "00", "Berhasil memuat linimasa", posts)
 }
 
 func (h *ExploreHandler) RecordFeedEvents(c *fiber.Ctx) error {
@@ -101,6 +101,6 @@ func (h *ExploreHandler) RecordFeedEvents(c *fiber.Ctx) error {
 		_ = h.service.RecordFeedEvents(accID, batch)
 	}(accountID, input)
 
-	return utils.SendResponse(c, fiber.StatusOK, "00", "Events recorded successfully", nil)
+	return utils.SendResponse(c, fiber.StatusOK, "00", "Aktivitas feed berhasil direkam", nil)
 }
 

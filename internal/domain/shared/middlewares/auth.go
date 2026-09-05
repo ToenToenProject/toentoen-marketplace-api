@@ -17,23 +17,23 @@ func RequireAuth(c *fiber.Ctx) error {
 	tokenString = c.Cookies("auth_token")
 
 	if tokenString == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User token is not found, please retry login!"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Token pengguna tidak ditemukan, silakan login kembali"})
 	}
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Encription methode is not valid")
+			return nil, fmt.Errorf("Metode enkripsi tidak valid")
 		}
 		return []byte(config.Envs.JWTSecret), nil
 	})
 
 	if err != nil || !token.Valid {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Session is not valid or expired"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid atau telah kedaluwarsa"})
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Failed to read session data"})
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Gagal membaca data sesi pengguna"})
 	}
 
 	accountID, ok := claims["account_id"].(string)
@@ -43,7 +43,7 @@ func RequireAuth(c *fiber.Ctx) error {
 			if account.LastLoginAt != nil {
 				if iatFloat, ok := claims["iat"].(float64); ok {
 					if int64(iatFloat) < account.LastLoginAt.Unix() {
-						return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Session is no longer valid, please login again"})
+						return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi Anda sudah tidak valid, silakan login kembali"})
 					}
 				}
 			}
@@ -65,7 +65,7 @@ func OptionalAuth(c *fiber.Ctx) error {
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Encription methode is not valid")
+			return nil, fmt.Errorf("Metode enkripsi tidak valid")
 		}
 		return []byte(config.Envs.JWTSecret), nil
 	})

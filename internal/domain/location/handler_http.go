@@ -90,7 +90,7 @@ func (h *HTTPLocationHandler) TrackMerchant(c *fiber.Ctx) error {
 func (h *HTTPLocationHandler) UpdateLocationHTTP(c *fiber.Ctx) error {
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
 	var update LocationUpdate

@@ -11,14 +11,14 @@ func AllowRoles(allowedRoles ...string) fiber.Handler {
 		roleValue := c.Locals("role")
 		if roleValue == nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "This role is not found, ensure this route have passed RequireAuth method ",
+				"error": "Role pengguna tidak ditemukan, pastikan rute ini melewati proses otentikasi",
 			})
 		}
 
 		userRole, ok := roleValue.(string)
 		if !ok {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Role format is not valid",
+				"error": "Format role tidak valid",
 			})
 		}
 
@@ -27,7 +27,7 @@ func AllowRoles(allowedRoles ...string) fiber.Handler {
 		if !isAllowed {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"status": "fail",
-				"error":  "Your role (" + userRole + ") is not allowed to access this page",
+				"error":  "Role Anda (" + userRole + ") tidak memiliki izin untuk mengakses halaman ini",
 			})
 		}
 

@@ -17,21 +17,21 @@ func NewMyActivityHandler(service MyActivityService) *MyActivityHandler {
 func (h *MyActivityHandler) GetMyProfileSummary(c *fiber.Ctx) error {
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
 	if errAuth != nil {
-		return utils.SendResponse(c, 401, "99", "Unauthorized", nil)
+		return utils.SendResponse(c, 401, "99", "Sesi tidak valid", nil)
 	}
 
 	summary, err := h.service.GetMyProfileSummary(accountID)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to get profile summary", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal memuat ringkasan profil", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", summary)
+	return utils.SendResponse(c, 200, "00", "Berhasil memuat ringkasan profil", summary)
 }
 
 func (h *MyActivityHandler) GetMyComments(c *fiber.Ctx) error {
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
 	if errAuth != nil {
-		return utils.SendResponse(c, 401, "99", "Unauthorized", nil)
+		return utils.SendResponse(c, 401, "99", "Sesi tidak valid", nil)
 	}
 
 	page, _ := strconv.Atoi(c.Query("page", "1"))
@@ -39,16 +39,16 @@ func (h *MyActivityHandler) GetMyComments(c *fiber.Ctx) error {
 
 	comments, err := h.service.GetMyComments(accountID, page, limit)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to get comments", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal memuat komentar", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", comments)
+	return utils.SendResponse(c, 200, "00", "Berhasil memuat komentar", comments)
 }
 
 func (h *MyActivityHandler) GetMyBusinessReviews(c *fiber.Ctx) error {
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
 	if errAuth != nil {
-		return utils.SendResponse(c, 401, "99", "Unauthorized", nil)
+		return utils.SendResponse(c, 401, "99", "Sesi tidak valid", nil)
 	}
 
 	page, _ := strconv.Atoi(c.Query("page", "1"))
@@ -56,16 +56,16 @@ func (h *MyActivityHandler) GetMyBusinessReviews(c *fiber.Ctx) error {
 
 	reviews, err := h.service.GetMyBusinessReviews(accountID, page, limit)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to get reviews", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal memuat ulasan", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", reviews)
+	return utils.SendResponse(c, 200, "00", "Berhasil memuat ulasan", reviews)
 }
 
 func (h *MyActivityHandler) GetMyBookmarks(c *fiber.Ctx) error {
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
 	if errAuth != nil {
-		return utils.SendResponse(c, 401, "99", "Unauthorized", nil)
+		return utils.SendResponse(c, 401, "99", "Sesi tidak valid", nil)
 	}
 
 	page, _ := strconv.Atoi(c.Query("page", "1"))
@@ -73,16 +73,16 @@ func (h *MyActivityHandler) GetMyBookmarks(c *fiber.Ctx) error {
 
 	bookmarks, err := h.service.GetMyBookmarks(accountID, page, limit)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to get bookmarks", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal memuat toko tersimpan", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", bookmarks)
+	return utils.SendResponse(c, 200, "00", "Berhasil memuat toko tersimpan", bookmarks)
 }
 
 func (h *MyActivityHandler) GetMyWishlists(c *fiber.Ctx) error {
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
 	if errAuth != nil {
-		return utils.SendResponse(c, 401, "99", "Unauthorized", nil)
+		return utils.SendResponse(c, 401, "99", "Sesi tidak valid", nil)
 	}
 
 	page, _ := strconv.Atoi(c.Query("page", "1"))
@@ -90,26 +90,26 @@ func (h *MyActivityHandler) GetMyWishlists(c *fiber.Ctx) error {
 
 	wishlists, err := h.service.GetMyWishlists(accountID, page, limit)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to get wishlists", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal memuat daftar keinginan", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", wishlists)
+	return utils.SendResponse(c, 200, "00", "Berhasil memuat daftar keinginan", wishlists)
 }
 
 func (h *MyActivityHandler) ToggleWishlist(c *fiber.Ctx) error {
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
 	if errAuth != nil {
-		return utils.SendResponse(c, 401, "99", "Unauthorized", nil)
+		return utils.SendResponse(c, 401, "99", "Sesi tidak valid", nil)
 	}
 
 	productID := c.Params("product_id")
 	
 	isAdded, err := h.service.ToggleWishlist(accountID, productID)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Failed to toggle wishlist", nil)
+		return utils.SendResponse(c, 500, "99", "Gagal mengubah status daftar keinginan", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Success", fiber.Map{
+	return utils.SendResponse(c, 200, "00", "Berhasil memperbarui daftar keinginan", fiber.Map{
 		"is_wishlisted": isAdded,
 	})
 }

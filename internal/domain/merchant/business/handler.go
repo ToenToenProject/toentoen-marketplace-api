@@ -120,10 +120,16 @@ func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
 
 	err = h.service.UpdateBusiness(requesterID, businessID, input)
 	if err != nil {
-		if err.Error() == "handle already exists" {
+		if strings.Contains(err.Error(), "handle sudah digunakan") || strings.Contains(err.Error(), "handle already exists") {
 			return utils.SendResponse(c, fiber.StatusConflict, constants.HandleTaken, "Handle sudah digunakan, silakan pilih yang lain", nil)
 		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.ForbiddenAccess, err.Error(), nil)
+		if strings.Contains(err.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+		}
+		if strings.Contains(err.Error(), "tidak memiliki akses") || strings.Contains(err.Error(), "tidak memiliki izin") || strings.Contains(err.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data toko berhasil diperbarui", nil)
@@ -170,7 +176,10 @@ func (h *BusinessHandler) ToggleStoreStatus(c *fiber.Ctx) error {
 
 	isClosed, errSvc := h.service.ToggleStoreStatus(requesterID, businessID)
 	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, errSvc.Error(), nil)
+		if strings.Contains(errSvc.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
 	}
 
 	msg := "Toko sekarang berstatus Buka"

@@ -36,7 +36,7 @@ func NewAnalyticsService(ar AnalyticsRepository, pr catalog.ProductRepository) A
 
 func (s *analyticsService) GetDailyAnalytics(requesterID, role, businessID string) (*models.DailyAnalyticsResponse, error) {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden: you don't have access to this business analytics")
+		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
 	}
 
 	limit := 6
@@ -58,7 +58,7 @@ func (s *analyticsService) GetDailyAnalytics(requesterID, role, businessID strin
 
 func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, startDate, endDate string) (*models.HistoryAnalyticsResponse, error) {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden: you don't have access to this business analytics")
+		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
 	}
 
 	// Validasi format tanggal dan urutan
@@ -129,7 +129,7 @@ func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, st
 
 func (s *analyticsService) GetExploreAnalytics(requesterID, role, businessID, keyword string) (*models.ExploreAnalyticsResponse, error) {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("forbidden: you don't have access to this business analytics")
+		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
 	}
 
 	limit := 5

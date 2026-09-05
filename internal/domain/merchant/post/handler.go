@@ -36,6 +36,9 @@ func (h *BusinessPostHandler) CreatePost(c *fiber.Ctx) error {
 
 	_, errSvc := h.service.CreatePost(requesterID, role, businessID, input)
 	if errSvc != nil {
+		if strings.Contains(errSvc.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
@@ -93,6 +96,12 @@ func (h *BusinessPostHandler) UpdatePost(c *fiber.Ctx) error {
 
 	updatedPost, errSvc := h.service.UpdatePost(requesterID, role, businessID, postID, input)
 	if errSvc != nil {
+		if strings.Contains(errSvc.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
+		if strings.Contains(errSvc.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
@@ -111,6 +120,9 @@ func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
 
 	// Panggil service untuk mengeksekusi penghapusan
 	if errSvc := h.service.DeletePost(requesterID, role, businessID, postID); errSvc != nil {
+		if strings.Contains(errSvc.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 

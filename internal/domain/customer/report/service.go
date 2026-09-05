@@ -45,15 +45,15 @@ func (s *service) SubmitReport(accountID, businessID string, req SubmitReportReq
 		return err
 	}
 	if !exists {
-		return errors.New("business not found")
+		return errors.New("bisnis tidak ditemukan")
 	}
 
 	if req.Reason == "" {
-		return errors.New("reason is required")
+		return errors.New("alasan laporan wajib diisi")
 	}
 
 	if req.Reason == "Other" && (req.Description == nil || *req.Description == "") {
-		return errors.New("description is required when reason is 'Other'")
+		return errors.New("deskripsi wajib diisi ketika alasan adalah 'Lainnya'")
 	}
 
 	var evidences []models.BusinessReportEvidence

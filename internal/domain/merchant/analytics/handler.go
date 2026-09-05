@@ -20,7 +20,7 @@ func (h *AnalyticsHandler) GetDailyAnalytics(c *fiber.Ctx) error {
 	
 	requesterID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
 	data, errSvc := h.service.GetDailyAnalytics(requesterID, role, businessID)
@@ -28,7 +28,7 @@ func (h *AnalyticsHandler) GetDailyAnalytics(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daily analytics retrieved", data)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data analitik harian berhasil dimuat", data)
 }
 
 func (h *AnalyticsHandler) GetHistoryAnalytics(c *fiber.Ctx) error {
@@ -39,12 +39,12 @@ func (h *AnalyticsHandler) GetHistoryAnalytics(c *fiber.Ctx) error {
 	endDate := c.Query("end_date")
 
 	if startDate == "" || endDate == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "start_date and end_date are required (Format: YYYY-MM-DD)", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "start_date dan end_date wajib diisi (Format: YYYY-MM-DD)", nil)
 	}
 
 	requesterID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
 	data, errSvc := h.service.GetHistoryAnalytics(requesterID, role, businessID, startDate, endDate)
@@ -52,7 +52,7 @@ func (h *AnalyticsHandler) GetHistoryAnalytics(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "History analytics retrieved", data)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data riwayat analitik berhasil dimuat", data)
 }
 
 func (h *AnalyticsHandler) GetExploreAnalytics(c *fiber.Ctx) error {
@@ -61,7 +61,7 @@ func (h *AnalyticsHandler) GetExploreAnalytics(c *fiber.Ctx) error {
 
 	requesterID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Unauthorized", nil)
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
 	data, errSvc := h.service.GetExploreAnalytics(requesterID, role, businessID, keyword)
@@ -69,7 +69,7 @@ func (h *AnalyticsHandler) GetExploreAnalytics(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Explore analytics retrieved", data)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data analitik pencarian berhasil dimuat", data)
 }
 
 // TrackImpressions menerima batch impression dari Flutter (fire-and-forget, selalu 200 OK)

@@ -56,7 +56,7 @@ func (s *productGroupService) CreateGroup(businessID string, input models.Create
 func (s *productGroupService) UpdateGroup(businessID, productGroupID string, input models.UpdateGroupInput) error {
 	group, err := s.repo.GetGroupByID(businessID, productGroupID)
 	if err != nil {
-		return errors.New("group not found")
+		return errors.New("grup produk tidak ditemukan")
 	}
 
 	// Cek duplikat jika user mengubah nama
@@ -94,7 +94,7 @@ func (s *productGroupService) UpdateGroupContents(businessID, productGroupID str
 	// Pastikan grupnya valid
 	_, err := s.repo.GetGroupByID(businessID, productGroupID)
 	if err != nil {
-		return errors.New("group not found")
+		return errors.New("grup produk tidak ditemukan")
 	}
 
 	// 🪄 PERBAIKAN: Panggil kembali fungsi repository untuk menghapus dari grup
@@ -119,7 +119,7 @@ func (s *productGroupService) UpdateGroupContents(businessID, productGroupID str
 func (s *productGroupService) DeleteGroup(businessID, productGroupID string) error {
 	count, err := s.repo.CountProductsInGroup(businessID, productGroupID)
 	if err != nil {
-		return errors.New("failed to verify group contents")
+		return errors.New("gagal memverifikasi isi grup produk")
 	}
 
 	// LOGIKA PENTING: Cegah hapus jika ada isinya
