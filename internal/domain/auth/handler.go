@@ -112,7 +112,7 @@ func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP telah dikirim ke email/WA Anda", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP telah dikirim ke email Anda", nil)
 }
 
 func (h *AuthHandler) VerifyForgotOTP(c *fiber.Ctx) error {

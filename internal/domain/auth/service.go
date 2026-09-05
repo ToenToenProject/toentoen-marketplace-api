@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 	"time"
 	"toentoen-backend/internal/config"
@@ -51,27 +52,43 @@ func cleanIdentifier(identifier string) string {
 }
 
 func isEmail(identifier string) bool {
-	return strings.Contains(identifier, "@")
+	addr, err := mail.ParseAddress(identifier)
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(addr.Address, "@")
+	return len(parts) == 2 && strings.Contains(parts[1], ".")
 }
 
 func (s *authService) sendOTP(identifier string, email *string, phoneNumber *string, redisPrefix string) error {
+	if !isEmail(identifier) {
+		return errors.New("Layanan verifikasi OTP melalui nomor telepon/WhatsApp sedang dalam tahap pengembangan. Silakan gunakan alamat email.")
+	}
+
+	if email == nil || strings.TrimSpace(*email) == "" {
+		return errors.New("Alamat email tidak ditemukan untuk pengiriman kode verifikasi")
+	}
+
 	otp := utils.GenerateNumericOTP(6)
 	redisKey := fmt.Sprintf("%s:%s", redisPrefix, identifier)
 
 	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
-		return errors.New("Gagal memproses kode verifikasi")
+		return errors.New("Gagal memproses kode verifikasi pada sistem")
 	}
 
-	if isEmail(identifier) && email != nil {
-		go utils.SendEmailOTP(*email, otp)
-	} else if phoneNumber != nil {
-		go func(phone, code string) {
-			if err := utils.SendWAOTP(phone, code); err != nil {
-				fmt.Printf("❌ Gagal mengirim WA OTP ke %s: %v\n", phone, err)
-			} else {
-				fmt.Printf("✅ WA OTP berhasil dikirim ke %s\n", phone)
-			}
-		}(*phoneNumber, otp)
+	subject := "Kode Verifikasi ToenToen"
+	switch redisPrefix {
+	case "register_otp":
+		subject = "Kode Verifikasi Registrasi Akun ToenToen"
+	case "login_otp":
+		subject = "Kode Verifikasi Login ToenToen"
+	case "forgot_otp":
+		subject = "Kode Verifikasi Reset Password ToenToen"
+	}
+
+	if err := utils.SendEmailOTP(*email, otp, subject); err != nil {
+		config.RDB.Del(config.Ctx, redisKey)
+		return fmt.Errorf("Gagal mengirim kode verifikasi ke email: %w", err)
 	}
 
 	return nil
@@ -79,15 +96,21 @@ func (s *authService) sendOTP(identifier string, email *string, phoneNumber *str
 
 func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
+	if !isEmail(input.Identifier) {
+		return errors.New("Pendaftaran menggunakan nomor telepon belum tersedia saat ini karena layanan OTP nomor telepon sedang dalam pengembangan. Silakan daftar menggunakan email.")
+	}
+
 	existingAccount, err := s.repo.FindByIdentifier(input.Identifier)
 
 	if err == nil {
 		switch existingAccount.AccountStatus {
 		case "active":
-			return errors.New("Akun dengan email/nomor ini sudah terdaftar dan aktif. Silakan langsung login.")
+			return errors.New("Akun dengan email ini sudah terdaftar dan aktif. Silakan langsung login.")
 		case "inactive":
-			s.sendOTP(input.Identifier, existingAccount.Email, existingAccount.PhoneNumber, "register_otp")
-			return errors.New("Akun sudah terdaftar namun belum aktif. Kami telah mengirimkan ulang kode verifikasi yang baru, silakan cek email/WA Anda.")
+			if err := s.sendOTP(input.Identifier, existingAccount.Email, existingAccount.PhoneNumber, "register_otp"); err != nil {
+				return err
+			}
+			return errors.New("Akun sudah terdaftar namun belum aktif. Kami telah mengirimkan ulang kode verifikasi yang baru, silakan cek kotak masuk/spam email Anda.")
 		default:
 			return errors.New("Akun ini tidak dapat digunakan. Silakan hubungi layanan bantuan.")
 		}
@@ -110,12 +133,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		LastName:      "Account",
 		AuthProvider:  "local",
 		AccountStatus: "inactive",
-	}
-
-	if isEmail(input.Identifier) {
-		account.Email = &input.Identifier
-	} else {
-		account.PhoneNumber = &input.Identifier
+		Email:         &input.Identifier,
 	}
 
 	if err := s.repo.CreateAccountWithProfile(&account, input.Role); err != nil {
@@ -155,6 +173,10 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 
 func (s *authService) Login(input models.LoginUnifiedInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
+	if !isEmail(input.Identifier) {
+		return errors.New("Login menggunakan nomor telepon belum tersedia saat ini karena layanan verifikasi nomor telepon sedang dalam pengembangan. Silakan login menggunakan email.")
+	}
+
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -166,7 +188,7 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	switch account.AccountStatus {
 	case "inactive":
 		if account.Role != "owner" && account.Role != "business_admin" {
-			return errors.New("Akun anda belum aktif. Silakan cek email/WA Anda untuk OTP verifikasi.")
+			return errors.New("Akun anda belum aktif. Silakan cek email Anda untuk OTP verifikasi.")
 		}
 	case "suspended":
 		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
@@ -215,6 +237,10 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 
 func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
+	if !isEmail(input.Identifier) {
+		return errors.New("Layanan reset kata sandi menggunakan nomor telepon sedang dalam pengembangan. Silakan gunakan email terdaftar Anda.")
+	}
+
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
 		return errors.New("Akun tidak ditemukan")
@@ -371,7 +397,10 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 		return errors.New("Gagal memproses kode verifikasi")
 	}
 
-	go utils.SendEmailOTP(newEmailClean, otp)
+	if err := utils.SendEmailOTP(newEmailClean, otp, "Kode Verifikasi Perubahan Email ToenToen"); err != nil {
+		config.RDB.Del(config.Ctx, redisKey)
+		return fmt.Errorf("Gagal mengirim kode verifikasi ke email baru: %w", err)
+	}
 
 	return nil
 }
@@ -405,65 +434,11 @@ func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEma
 }
 
 func (s *authService) RequestPhoneChange(accountID string, input models.RequestPhoneChangeInput) error {
-	account, err := s.repo.FindByID(accountID)
-	if err != nil {
-		return errors.New("Sesi pengguna tidak valid")
-	}
-
-	currentPhoneClean := cleanIdentifier(input.CurrentPhone)
-	newPhoneClean := cleanIdentifier(input.NewPhone)
-
-	if account.PhoneNumber != nil && cleanIdentifier(*account.PhoneNumber) != currentPhoneClean {
-		return errors.New("Nomor telepon saat ini tidak cocok dengan data akun Anda")
-	}
-
-	if currentPhoneClean == newPhoneClean {
-		return errors.New("Nomor telepon baru tidak boleh sama dengan nomor saat ini")
-	}
-
-	// Cek apakah nomor telepon baru sudah dipakai akun lain
-	if exists, err := s.repo.FindByIdentifier(newPhoneClean); err == nil && exists != nil && exists.AccountID != accountID {
-		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
-	}
-
-	otp := utils.GenerateNumericOTP(6)
-	redisKey := fmt.Sprintf("change_phone_otp:%s", newPhoneClean)
-
-	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
-		return errors.New("Gagal memproses kode verifikasi")
-	}
-
-	go utils.SendWAOTP(newPhoneClean, otp)
-
-	return nil
+	return errors.New("Layanan verifikasi nomor telepon/WhatsApp sedang dalam tahap pengembangan. Fitur ubah nomor telepon belum dapat digunakan saat ini.")
 }
 
 func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPhoneChangeInput) error {
-	newPhoneClean := cleanIdentifier(input.NewPhone)
-	redisKey := fmt.Sprintf("change_phone_otp:%s", newPhoneClean)
-	attemptKey := fmt.Sprintf("change_phone_attempts:%s", newPhoneClean)
-
-	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
-	if err == redis.Nil || storedOTP != input.OTP {
-		attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
-		if attempts == 1 {
-			config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
-		}
-		if attempts >= 5 {
-			config.RDB.Del(config.Ctx, redisKey)
-			config.RDB.Del(config.Ctx, attemptKey)
-			return errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
-		}
-		return errors.New("OTP tidak valid atau sudah kadaluarsa")
-	}
-
-	if err := s.repo.UpdatePhoneNumber(accountID, newPhoneClean); err != nil {
-		return errors.New("Gagal memperbarui nomor telepon")
-	}
-
-	config.RDB.Del(config.Ctx, redisKey)
-	config.RDB.Del(config.Ctx, attemptKey)
-	return nil
+	return errors.New("Layanan verifikasi nomor telepon/WhatsApp sedang dalam tahap pengembangan.")
 }
 
 func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {

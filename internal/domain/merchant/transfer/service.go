@@ -132,19 +132,24 @@ func (s *businessTransferService) InitiateTransfer(ownerID, businessID string, i
 	// 5. Kirimkan OTP ke kontak Owner Lama
 	destination := ""
 	channel := strings.ToLower(input.Channel)
-	if channel == "whatsapp" && currentOwner.PhoneNumber != nil && *currentOwner.PhoneNumber != "" {
-		go utils.SendWAOTP(*currentOwner.PhoneNumber, otp)
-		destination = utils.MaskPhoneNumber(*currentOwner.PhoneNumber)
-	} else if currentOwner.Email != nil && *currentOwner.Email != "" {
+	if channel == "whatsapp" {
+		config.RDB.Del(config.Ctx, otpKey)
+		config.RDB.Del(config.Ctx, targetKey)
+		return nil, errors.New("Layanan OTP via WhatsApp/nomor telepon sedang dalam tahap pengembangan. Silakan pilih pengiriman melalui email.")
+	}
+
+	if currentOwner.Email != nil && strings.TrimSpace(*currentOwner.Email) != "" {
 		channel = "email"
-		go utils.SendEmailOTP(*currentOwner.Email, otp)
 		destination = utils.MaskEmail(*currentOwner.Email)
-	} else if currentOwner.PhoneNumber != nil && *currentOwner.PhoneNumber != "" {
-		channel = "whatsapp"
-		go utils.SendWAOTP(*currentOwner.PhoneNumber, otp)
-		destination = utils.MaskPhoneNumber(*currentOwner.PhoneNumber)
+		if err := utils.SendEmailOTP(*currentOwner.Email, otp, "Kode Verifikasi Otorisasi Pengalihan Bisnis ToenToen"); err != nil {
+			config.RDB.Del(config.Ctx, otpKey)
+			config.RDB.Del(config.Ctx, targetKey)
+			return nil, fmt.Errorf("Gagal mengirim kode OTP ke email: %w", err)
+		}
 	} else {
-		return nil, errors.New("Akun Anda tidak memiliki email atau nomor telepon yang valid untuk verifikasi OTP")
+		config.RDB.Del(config.Ctx, otpKey)
+		config.RDB.Del(config.Ctx, targetKey)
+		return nil, errors.New("Layanan OTP via nomor telepon sedang dalam tahap pengembangan. Akun Anda tidak memiliki email terdaftar untuk menerima OTP otorisasi.")
 	}
 
 	return map[string]interface{}{

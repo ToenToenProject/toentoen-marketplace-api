@@ -375,6 +375,13 @@ func (s *profileService) RequestDeleteOTP(accountID string) error {
 		return errors.New("Akun tidak ditemukan")
 	}
 
+	if account.Email == nil || strings.TrimSpace(*account.Email) == "" {
+		if account.PhoneNumber != nil && strings.TrimSpace(*account.PhoneNumber) != "" {
+			return errors.New("Layanan verifikasi OTP via nomor telepon sedang dalam tahap pengembangan. Akun Anda belum memiliki email untuk menerima kode OTP penghapusan akun.")
+		}
+		return errors.New("Akun Anda tidak memiliki email terdaftar untuk menerima kode OTP penghapusan akun")
+	}
+
 	otp := utils.GenerateNumericOTP(6)
 	redisKey := fmt.Sprintf("delete_otp:%s", accountID)
 
@@ -382,13 +389,9 @@ func (s *profileService) RequestDeleteOTP(accountID string) error {
 		return errors.New("Gagal memproses kode OTP")
 	}
 
-	// Send OTP via Email or WhatsApp depending on which one is available
-	if account.Email != nil && *account.Email != "" {
-		go utils.SendEmailOTP(*account.Email, otp)
-	} else if account.PhoneNumber != nil && *account.PhoneNumber != "" {
-		go utils.SendWAOTP(*account.PhoneNumber, otp)
-	} else {
-		return errors.New("Tidak ada Email/No. HP untuk mengirim OTP")
+	if err := utils.SendEmailOTP(*account.Email, otp, "Kode Verifikasi Penghapusan Akun ToenToen"); err != nil {
+		config.RDB.Del(config.Ctx, redisKey)
+		return fmt.Errorf("Gagal mengirim kode OTP ke email: %w", err)
 	}
 
 	return nil

@@ -1,106 +1,114 @@
 package utils
 
 import (
-	"bytes"
-	"encoding/json"
+	"crypto/tls"
+	"errors"
 	"fmt"
-	"math/rand"
-	"net/http"
+	"log"
 	"os"
-	"time"
+	"strconv"
+	"strings"
 
 	"gopkg.in/gomail.v2"
 )
 
-func SendEmailOTP(toEmail string, otp string) {
+// SendEmailOTP mengirimkan kode OTP ke alamat email tujuan.
+// Mengembalikan error jika pengiriman gagal agar caller dapat menangani kegagalan dengan tepat.
+func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
+	toEmail = strings.TrimSpace(toEmail)
+	if toEmail == "" {
+		return errors.New("alamat email tujuan tidak boleh kosong")
+	}
+
+	smtpHost := os.Getenv("SMTP_HOST")
+	if smtpHost == "" {
+		smtpHost = "smtp.gmail.com"
+	}
+
+	smtpPort := 587
+	if p := os.Getenv("SMTP_PORT"); p != "" {
+		if pInt, err := strconv.Atoi(p); err == nil && pInt > 0 {
+			smtpPort = pInt
+		}
+	}
+
+	smtpEmail := os.Getenv("SMTP_EMAIL")
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+
+	if smtpEmail == "" || smtpPassword == "" {
+		log.Printf("[OTP-EMAIL-ERROR] SMTP credentials (SMTP_EMAIL / SMTP_PASSWORD) belum diatur di environment variable")
+		return errors.New("konfigurasi server email belum lengkap")
+	}
+
+	subject := "Kode Verifikasi ToenToen"
+	if len(customSubject) > 0 && strings.TrimSpace(customSubject[0]) != "" {
+		subject = strings.TrimSpace(customSubject[0])
+	}
+
 	mailer := gomail.NewMessage()
-	mailer.SetHeader("From", os.Getenv("SMTP_EMAIL"))
+	mailer.SetAddressHeader("From", smtpEmail, "ToenToen Support")
 	mailer.SetHeader("To", toEmail)
-	mailer.SetHeader("Subject", "Kode Verifikasi Login ToenToen")
+	mailer.SetHeader("Subject", subject)
 
-	body := fmt.Sprintf(`
-		<h2>Halo!</h2>
-		<p>Kode verifikasi (OTP) Anda adalah: <b>%s</b></p>
-		<p>Kode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.</p>
-	`, otp)
-	mailer.SetBody("text/html", body)
+	// Plain text fallback
+	plainBody := fmt.Sprintf("Halo!\n\nKode verifikasi (OTP) Anda adalah: %s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.\n\nSalam,\nTim ToenToen", otp)
+	mailer.SetBody("text/plain", plainBody)
 
-	dialer := gomail.NewDialer(
-		os.Getenv("SMTP_HOST"),
-		587,
-		os.Getenv("SMTP_EMAIL"),
-		os.Getenv("SMTP_PASSWORD"),
-	)
+	// HTML body
+	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<style>
+		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 20px; color: #333; }
+		.container { max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+		.logo { font-size: 24px; font-weight: 700; color: #0077b6; margin-bottom: 24px; text-align: center; }
+		.greeting { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+		.desc { font-size: 14px; line-height: 1.6; color: #555; margin-bottom: 24px; }
+		.otp-box { background: #f0f7ff; border: 2px dashed #0077b6; border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 24px; }
+		.otp-code { font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0077b6; }
+		.warning { font-size: 12px; color: #888; text-align: center; line-height: 1.5; }
+		.footer { margin-top: 32px; border-top: 1px solid #eee; padding-top: 16px; font-size: 11px; color: #aaa; text-align: center; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="logo">ToenToen</div>
+		<div class="greeting">Halo!</div>
+		<div class="desc">Gunakan kode verifikasi berikut untuk melanjutkan proses verifikasi di ToenToen:</div>
+		<div class="otp-box">
+			<div class="otp-code">%s</div>
+		</div>
+		<div class="warning">
+			Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>
+			Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun termasuk pihak ToenToen.
+		</div>
+		<div class="footer">
+			Email ini dikirim otomatis oleh sistem ToenToen. Jika Anda tidak merasa meminta kode ini, silakan abaikan pesan ini.
+		</div>
+	</div>
+</body>
+</html>`, otp)
+	mailer.AddAlternative("text/html", htmlBody)
 
-	err := dialer.DialAndSend(mailer)
-	if err != nil {
-		fmt.Printf("❌ Gagal mengirim email ke %s: %v\n", toEmail, err)
-	} else {
-		fmt.Printf("✅ Email OTP berhasil dikirim ke %s\n", toEmail)
-	}
-}
+	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)
 
-func generateUniqueOTPMessage(otp string) string {
-	greetings := []string{
-		"Halo kak!",
-		"Selamat datang,",
-		"Hai sobat ToenToen,",
-		"Salam hangat!",
-		"Halo pengguna ToenToen,",
-	}
-
-	ctas := []string{
-		"Balas 'OK' jika kamu sudah berhasil masuk ya.",
-		"Ketik 'SIP' kalau aplikasinya sudah bisa dibuka.",
-		"Balas pesan ini jika kamu mengalami kendala login.",
-		"Ketik 'DONE' setelah memasukkan kode ini.",
-	}
-
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	randomGreeting := greetings[r.Intn(len(greetings))]
-	randomCTA := ctas[r.Intn(len(ctas))]
-
-	currentTime := time.Now().Format("02 Jan 2006, 15:04:05")
-
-	msg := fmt.Sprintf("%s\n\nKode verifikasi ToenToen Anda adalah: \n\n*%s*\n\n_Diminta pada: %s_\n_Rahasiakan kode ini dari siapa pun._\n\n%s", randomGreeting, otp, currentTime, randomCTA)
-
-	return msg
-}
-
-func SendWAOTP(phoneNumber string, otp string) error {
-	message := generateUniqueOTPMessage(otp)
-
-	payload := map[string]interface{}{
-		"target":  phoneNumber,
-		"message": message,
-		"delay":   "1",
+	skipVerify := os.Getenv("SMTP_SKIP_VERIFY") == "true"
+	dialer.TLSConfig = &tls.Config{
+		ServerName:         smtpHost,
+		InsecureSkipVerify: skipVerify,
 	}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return err
+	if err := dialer.DialAndSend(mailer); err != nil {
+		log.Printf("[OTP-EMAIL-ERROR] Gagal mengirim email OTP ke %s via %s:%d: %v", toEmail, smtpHost, smtpPort, err)
+		return fmt.Errorf("gagal mengirim email OTP: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", "https://api.fonnte.com/send", bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return err
-	}
-
-	fonnteToken := os.Getenv("FONNTE_TOKEN")
-	req.Header.Set("Authorization", fonnteToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Failed sent OTP to WA, Fonnte status: %d", resp.StatusCode)
-	}
-
+	log.Printf("[OTP-EMAIL-SUCCESS] Email OTP berhasil dikirim ke %s", toEmail)
 	return nil
+}
+
+// SendWAOTP dinonaktifkan sementara karena layanan OTP via WhatsApp/nomor telepon masih dalam tahap pengembangan.
+func SendWAOTP(phoneNumber string, otp string) error {
+	return errors.New("layanan OTP via nomor telepon/WhatsApp sedang dalam tahap pengembangan")
 }
