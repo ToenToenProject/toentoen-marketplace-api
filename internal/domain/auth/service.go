@@ -195,11 +195,14 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 		return errors.New("Akun tidak ditemukan")
 	}
 
-	newStatus := "active"
-	if account.Role == "owner" || account.Role == "business_admin" {
-		newStatus = "inactive"
+	if account.AccountStatus == "banned" {
+		return errors.New("Akun anda telah diblokir dari platform")
+	}
+	if account.AccountStatus == "suspended" {
+		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	}
 
+	newStatus := "active"
 	if err := s.repo.UpdateAccountStatus(input.Identifier, newStatus); err != nil {
 		return errors.New("Gagal mengaktifkan akun")
 	}
@@ -223,9 +226,7 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 
 	switch account.AccountStatus {
 	case "inactive":
-		if account.Role != "owner" && account.Role != "business_admin" {
-			return errors.New("Akun anda belum aktif. Silakan cek email Anda untuk OTP verifikasi.")
-		}
+		return errors.New("Akun anda belum aktif. Silakan cek email Anda untuk OTP verifikasi.")
 	case "suspended":
 		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	case "banned":

@@ -221,38 +221,18 @@ func isAccountDataComplete(account *models.Account) string {
 		return "inactive"
 	}
 
-	switch account.Role {
-	case "owner":
-		if account.Email != nil &&
-			account.PhoneNumber != nil &&
-			account.FirstName != "" &&
-			account.Username != "" &&
-			account.PasswordHash != nil &&
-			account.Gender != nil &&
-			account.Owner != nil &&
-			account.Owner.KtpNumber != nil &&
-			*account.Owner.KtpNumber != "" &&
-			account.Owner.KtpPhotoUrl != nil &&
-			*account.Owner.KtpPhotoUrl != "" {
-			return "active"
-		}
-		return "inactive"
-
-	case "business_admin":
-		if account.BusinessAdmin != nil &&
-			account.BusinessAdmin.KtpNumber != nil && *account.BusinessAdmin.KtpNumber != "" &&
-			account.BusinessAdmin.KtpPhotoUrl != nil && *account.BusinessAdmin.KtpPhotoUrl != "" {
-			return "active"
-		}
-		return "inactive"
-
-	case "customer":
-		// Akun customer sudah aktif sejak OTP, jangan sampai ditimpa jadi inactive
-		return "active"
-
-	default:
-		return "inactive"
+	// Jangan mengubah status jika akun sedang ditangguhkan atau diblokir
+	if account.AccountStatus == "suspended" || account.AccountStatus == "banned" {
+		return account.AccountStatus
 	}
+
+	// Karena verifikasi via nomor telepon belum tersedia, status akun aktif/verified
+	// hanya ditentukan jika pengguna sudah memiliki email terdaftar dan terverifikasi
+	if account.Email != nil && strings.TrimSpace(*account.Email) != "" {
+		return "active"
+	}
+
+	return "inactive"
 }
 
 func (s *profileService) GetMyProfile(accountID string) (*models.Account, error) {
