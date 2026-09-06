@@ -486,7 +486,7 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 	// 2. Jika mengaktifkan Live Streaming (Toggle ON)
 	if input.IsLive {
 		if input.Platform == nil || strings.TrimSpace(*input.Platform) == "" {
-			return nil, errors.New("platform live streaming wajib dipilih (contoh: tiktok, instagram, facebook, youtube)")
+			return nil, errors.New("platform live streaming wajib dipilih ('tiktok' atau 'instagram')")
 		}
 
 		platform := strings.ToLower(strings.TrimSpace(*input.Platform))
@@ -496,49 +496,16 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 		switch platform {
 		case "tiktok":
 			if business.SocialTiktok == nil || strings.TrimSpace(*business.SocialTiktok) == "" {
-				return nil, errors.New("silakan lengkapi akun/link TikTok di profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
+				return nil, errors.New("bisnis ini belum mempunyai sosial media TikTok. Silakan lengkapi profil media sosial TikTok bisnis Anda terlebih dahulu sebelum mengaktifkan Live Streaming")
 			}
 			socialURL = formatSocialURL("tiktok", *business.SocialTiktok)
 		case "instagram":
 			if business.SocialInstagram == nil || strings.TrimSpace(*business.SocialInstagram) == "" {
-				return nil, errors.New("silakan lengkapi akun/link Instagram di profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
+				return nil, errors.New("bisnis ini belum mempunyai sosial media Instagram. Silakan lengkapi profil media sosial Instagram bisnis Anda terlebih dahulu sebelum mengaktifkan Live Streaming")
 			}
 			socialURL = formatSocialURL("instagram", *business.SocialInstagram)
-		case "facebook":
-			found := ""
-			for _, w := range business.SocialWebsites {
-				if strings.Contains(strings.ToLower(w), "facebook.com") || strings.Contains(strings.ToLower(w), "fb.com") {
-					found = w
-					break
-				}
-			}
-			if found == "" {
-				return nil, errors.New("silakan lengkapi link Facebook di daftar tautan profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
-			}
-			socialURL = formatSocialURL("facebook", found)
-		case "youtube":
-			found := ""
-			for _, w := range business.SocialWebsites {
-				if strings.Contains(strings.ToLower(w), "youtube.com") || strings.Contains(strings.ToLower(w), "youtu.be") {
-					found = w
-					break
-				}
-			}
-			if found == "" {
-				return nil, errors.New("silakan lengkapi link YouTube di daftar tautan profil toko Anda terlebih dahulu sebelum mengaktifkan status Live")
-			}
-			socialURL = formatSocialURL("youtube", found)
 		default:
-			// Fallback jika platform lain
-			if len(business.SocialWebsites) > 0 {
-				socialURL = business.SocialWebsites[0]
-			} else if business.SocialTiktok != nil && *business.SocialTiktok != "" {
-				socialURL = formatSocialURL("tiktok", *business.SocialTiktok)
-			} else if business.SocialInstagram != nil && *business.SocialInstagram != "" {
-				socialURL = formatSocialURL("instagram", *business.SocialInstagram)
-			} else {
-				return nil, errors.New("silakan lengkapi akun/tautan media sosial di profil toko Anda terlebih dahulu")
-			}
+			return nil, errors.New("platform live streaming tidak valid. Platform yang didukung saat ini hanya 'tiktok' dan 'instagram'")
 		}
 
 		business.IsLive = true

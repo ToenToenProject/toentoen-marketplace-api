@@ -191,7 +191,7 @@ type BusinessWithPreview struct {
 // ToggleLiveInput adalah payload untuk mengaktifkan / menonaktifkan live streaming
 type ToggleLiveInput struct {
 	IsLive   bool    `json:"is_live"`
-	Platform *string `json:"platform"` // "tiktok", "instagram", "facebook", "youtube", "other"
+	Platform *string `json:"platform"` // "tiktok" atau "instagram"
 }
 
 // LiveStatusResponse adalah response setelah mengubah status live streaming
