@@ -94,10 +94,14 @@ type BusinessAdmin struct {
 	KtpDistrict    *string   `gorm:"type:text;column:ktp_district" json:"ktp_district"`
 	KtpReligion    *string   `gorm:"type:text;column:ktp_religion" json:"ktp_religion"`
 	KtpOccupation  *string   `gorm:"type:text;column:ktp_occupation" json:"ktp_occupation"`
-	KtpCitizenship *string   `gorm:"type:text;column:ktp_citizenship" json:"ktp_citizenship"`
-	InvitationCode *string   `gorm:"unique;column:invitation_code" json:"invitation_code"`
-	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+	KtpCitizenship     *string    `gorm:"type:text;column:ktp_citizenship" json:"ktp_citizenship"`
+	InvitationCode     *string    `gorm:"unique;column:invitation_code" json:"invitation_code"`
+	KycStatus          string     `gorm:"default:'unverified';column:kyc_status" json:"kyc_status"`
+	KycRejectionReason *string    `gorm:"type:text;column:kyc_rejection_reason" json:"kyc_rejection_reason"`
+	KycSubmittedAt     *time.Time `gorm:"column:kyc_submitted_at" json:"kyc_submitted_at"`
+	KycVerifiedAt      *time.Time `gorm:"column:kyc_verified_at" json:"kyc_verified_at"`
+	CreatedAt          time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt          time.Time  `gorm:"column:updated_at" json:"updated_at"`
 
 	Account     *Account                  `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 	Assignments []BusinessAdminAssignment `gorm:"foreignKey:AdminID;references:AccountID" json:"assignments"`

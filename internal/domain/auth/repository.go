@@ -2,6 +2,7 @@ package auth
 
 import (
 	"strings"
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 
@@ -11,6 +12,8 @@ import (
 type AuthRepository interface {
 	CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error
 	UpdateAccountStatus(identifier string, status string) error
+	UpdateEmailVerified(identifier string, verifiedAt time.Time, newStatus string) error
+	UpdatePhoneVerified(identifier string, verifiedAt time.Time, newStatus string) error
 	FindByIdentifier(identifier string) (*models.Account, error)
 	FindByID(id string) (*models.Account, error)
 	Update(account *models.Account) error
@@ -64,8 +67,32 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 
 func (r *authRepository) UpdateAccountStatus(identifier string, status string) error {
 	return r.db.Model(&models.Account{}).
-		Where("email = ? OR phone_number = ?", identifier, identifier).
+		Where("LOWER(email) = LOWER(?) OR phone_number = ?", identifier, identifier).
 		Update("account_status", status).Error
+}
+
+func (r *authRepository) UpdateEmailVerified(identifier string, verifiedAt time.Time, newStatus string) error {
+	updates := map[string]interface{}{
+		"email_verified_at": verifiedAt,
+	}
+	if newStatus != "" {
+		updates["account_status"] = newStatus
+	}
+	return r.db.Model(&models.Account{}).
+		Where("LOWER(email) = LOWER(?) OR phone_number = ?", identifier, identifier).
+		Updates(updates).Error
+}
+
+func (r *authRepository) UpdatePhoneVerified(identifier string, verifiedAt time.Time, newStatus string) error {
+	updates := map[string]interface{}{
+		"phone_verified_at": verifiedAt,
+	}
+	if newStatus != "" {
+		updates["account_status"] = newStatus
+	}
+	return r.db.Model(&models.Account{}).
+		Where("LOWER(email) = LOWER(?) OR phone_number = ?", identifier, identifier).
+		Updates(updates).Error
 }
 
 func (r *authRepository) FindByIdentifier(identifier string) (*models.Account, error) {

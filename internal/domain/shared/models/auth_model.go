@@ -14,10 +14,12 @@ type Account struct {
 	PasswordHash  *string    `json:"-"`
 	Role          string     `json:"role"`
 	Gender        *string    `json:"gender"`
-	AccountStatus string     `gorm:"default:'inactive'" json:"accountStatus"`
-	LastLoginAt   *time.Time `json:"lastLoginAt"`
-	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"createdAt"`
-	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
+	AccountStatus     string     `gorm:"default:'inactive'" json:"accountStatus"`
+	EmailVerifiedAt   *time.Time `json:"emailVerifiedAt"`
+	PhoneVerifiedAt   *time.Time `json:"phoneVerifiedAt"`
+	LastLoginAt       *time.Time `json:"lastLoginAt"`
+	CreatedAt         time.Time  `gorm:"autoCreateTime" json:"createdAt"`
+	UpdatedAt         time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 
 	Customer      *Customer      `gorm:"foreignKey:AccountID;references:AccountID" json:"customer,omitempty"`
 	Owner         *Owner         `gorm:"foreignKey:AccountID;references:AccountID" json:"owner,omitempty"`
@@ -34,23 +36,27 @@ type Customer struct {
 }
 
 type Owner struct {
-	AccountID      string    `gorm:"primaryKey;column:account_id" json:"accountId"`
-	KtpNumber      *string   `gorm:"type:text;column:ktp_number" json:"ktpNumber"`
-	KtpPhotoUrl    *string   `gorm:"type:text;column:ktp_photo_url" json:"ktpPhotoUrl"`
-	ReferralCode   *string   `gorm:"column:referral_code" json:"referralCode"`
-	Country        *string   `gorm:"column:country" json:"country"`
-	KtpName        *string   `gorm:"type:text;column:ktp_name" json:"ktpName"`
-	KtpBirthPlace  *string   `gorm:"type:text;column:ktp_birth_place" json:"ktpBirthPlace"`
-	KtpBirthDate   *string   `gorm:"type:date;column:ktp_birth_date" json:"ktpBirthDate"`
-	KtpGender      *string   `gorm:"type:text;column:ktp_gender" json:"ktpGender"`
-	KtpAddress     *string   `gorm:"type:text;column:ktp_address" json:"ktpAddress"`
-	KtpRtRw        *string   `gorm:"type:text;column:ktp_rt_rw" json:"ktpRtRw"`
-	KtpVillage     *string   `gorm:"type:text;column:ktp_village" json:"ktpVillage"`
-	KtpDistrict    *string   `gorm:"type:text;column:ktp_district" json:"ktpDistrict"`
-	KtpReligion    *string   `gorm:"type:text;column:ktp_religion" json:"ktpReligion"`
-	KtpOccupation  *string   `gorm:"type:text;column:ktp_occupation" json:"ktpOccupation"`
-	KtpCitizenship *string   `gorm:"type:text;column:ktp_citizenship" json:"ktpCitizenship"`
-	CreatedAt      time.Time `gorm:"column:created_at" json:"createdAt"`
+	AccountID          string     `gorm:"primaryKey;column:account_id" json:"accountId"`
+	KtpNumber          *string    `gorm:"type:text;column:ktp_number" json:"ktpNumber"`
+	KtpPhotoUrl        *string    `gorm:"type:text;column:ktp_photo_url" json:"ktpPhotoUrl"`
+	ReferralCode       *string    `gorm:"column:referral_code" json:"referralCode"`
+	Country            *string    `gorm:"column:country" json:"country"`
+	KtpName            *string    `gorm:"type:text;column:ktp_name" json:"ktpName"`
+	KtpBirthPlace      *string    `gorm:"type:text;column:ktp_birth_place" json:"ktpBirthPlace"`
+	KtpBirthDate       *string    `gorm:"type:date;column:ktp_birth_date" json:"ktpBirthDate"`
+	KtpGender          *string    `gorm:"type:text;column:ktp_gender" json:"ktpGender"`
+	KtpAddress         *string    `gorm:"type:text;column:ktp_address" json:"ktpAddress"`
+	KtpRtRw            *string    `gorm:"type:text;column:ktp_rt_rw" json:"ktpRtRw"`
+	KtpVillage         *string    `gorm:"type:text;column:ktp_village" json:"ktpVillage"`
+	KtpDistrict        *string    `gorm:"type:text;column:ktp_district" json:"ktpDistrict"`
+	KtpReligion        *string    `gorm:"type:text;column:ktp_religion" json:"ktpReligion"`
+	KtpOccupation      *string    `gorm:"type:text;column:ktp_occupation" json:"ktpOccupation"`
+	KtpCitizenship     *string    `gorm:"type:text;column:ktp_citizenship" json:"ktpCitizenship"`
+	KycStatus          string     `gorm:"default:'unverified';column:kyc_status" json:"kycStatus"`
+	KycRejectionReason *string    `gorm:"type:text;column:kyc_rejection_reason" json:"kycRejectionReason"`
+	KycSubmittedAt     *time.Time `gorm:"column:kyc_submitted_at" json:"kycSubmittedAt"`
+	KycVerifiedAt      *time.Time `gorm:"column:kyc_verified_at" json:"kycVerifiedAt"`
+	CreatedAt          time.Time  `gorm:"column:created_at" json:"createdAt"`
 }
 
 func (Owner) TableName() string {

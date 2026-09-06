@@ -75,6 +75,74 @@ func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun berhasil diverifikasi. Silakan login.", nil)
 }
 
+func (h *AuthHandler) SendEmailOTP(c *fiber.Ctx) error {
+	var input models.SendEmailOTPInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.SendEmailOTP(input.Email); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP verifikasi berhasil dikirimkan ke email Anda", nil)
+}
+
+func (h *AuthHandler) VerifyEmailOTP(c *fiber.Ctx) error {
+	var input models.VerifyEmailOTPInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.VerifyEmailOTP(input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Email berhasil diverifikasi.", nil)
+}
+
+func (h *AuthHandler) SendPhoneOTP(c *fiber.Ctx) error {
+	var input models.SendPhoneOTPInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.SendPhoneOTP(input.Phone); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP berhasil dikirimkan", nil)
+}
+
+func (h *AuthHandler) VerifyPhoneOTP(c *fiber.Ctx) error {
+	var input models.VerifyPhoneOTPInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if err := h.service.VerifyPhoneOTP(input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Nomor telepon berhasil diverifikasi", nil)
+}
+
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var input models.LoginUnifiedInput
 	if err := c.BodyParser(&input); err != nil {

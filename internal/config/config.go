@@ -37,9 +37,10 @@ type AppConfig struct {
 	AWSSecretKey   string
 	AWSS3Bucket    string
 
-	AppEnv            string
-	DataEncryptionKey string
-	BlindIndexKey     string
+	AppEnv                   string
+	DataEncryptionKey        string
+	BlindIndexKey            string
+	RequirePhoneVerification bool
 }
 
 var Envs *AppConfig
@@ -81,6 +82,8 @@ func InitConfig() {
 		AWSAccessKey: getEnvMust("AWS_ACCESS_KEY_ID"),
 		AWSSecretKey: getEnvMust("AWS_SECRET_ACCESS_KEY"),
 		AWSS3Bucket:  getEnvMust("AWS_S3_BUCKET"),
+
+		RequirePhoneVerification: getEnv("REQUIRE_PHONE_VERIFICATION", "false") == "true",
 	}
 }
 

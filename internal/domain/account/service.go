@@ -203,6 +203,8 @@ type ProfileService interface {
 	UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error)
 	UpdateBusinessAdminProfile(accountID string, input models.UpdateBusinessAdminKYCInput) (*models.Account, error)
 	GetMyProfile(accountID string) (*models.Account, error)
+	GetKYCStatus(accountID string) (*models.KYCStatusResponse, error)
+	SubmitKYC(accountID string, input models.SubmitKYCInput) error
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
 	ForceDeleteAccount(identifier string) error
@@ -764,6 +766,202 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 	}
 
 	return account, nil
+}
+
+func (s *profileService) GetKYCStatus(accountID string) (*models.KYCStatusResponse, error) {
+	account, err := s.repo.GetAccountByID(accountID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New("Akun tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	res := &models.KYCStatusResponse{
+		Role:      account.Role,
+		KycStatus: "unverified",
+	}
+
+	switch account.Role {
+	case "owner":
+		owner, err := s.repo.GetOwnerByAccountID(accountID)
+		if err == nil && owner != nil {
+			if owner.KycStatus != "" {
+				res.KycStatus = owner.KycStatus
+			}
+			res.RejectionReason = owner.KycRejectionReason
+			res.SubmittedAt = owner.KycSubmittedAt
+			res.VerifiedAt = owner.KycVerifiedAt
+		}
+	case "business_admin":
+		admin, err := s.repo.GetBusinessAdminByAccountID(accountID)
+		if err == nil && admin != nil {
+			if admin.KycStatus != "" {
+				res.KycStatus = admin.KycStatus
+			}
+			res.RejectionReason = admin.KycRejectionReason
+			res.SubmittedAt = admin.KycSubmittedAt
+			res.VerifiedAt = admin.KycVerifiedAt
+		}
+	default:
+		res.KycStatus = "verified"
+	}
+
+	res.IsVerified = res.KycStatus == "verified"
+	return res, nil
+}
+
+func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput) error {
+	account, err := s.repo.GetAccountByID(accountID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.New("Akun tidak ditemukan")
+		}
+		return err
+	}
+
+	if account.Role != "owner" && account.Role != "business_admin" {
+		return errors.New("Pengajuan verifikasi identitas (KYC) hanya berlaku untuk merchant owner dan business admin")
+	}
+
+	cleanKtp := strings.TrimSpace(input.KtpNumber)
+	if err := validateKtpNumber(&cleanKtp); err != nil {
+		return err
+	}
+
+	cleanPhoto := strings.TrimSpace(input.KtpPhotoUrl)
+	if cleanPhoto == "" {
+		return errors.New("Foto KTP wajib diunggah")
+	}
+
+	if err := validateDate(input.KtpBirthDate, "tanggal lahir KTP"); err != nil {
+		return err
+	}
+
+	exists, err := s.repo.CheckKtpNumberExists(cleanKtp, accountID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return errors.New("Nomor KTP sudah terdaftar pada akun lain")
+	}
+
+	now := time.Now()
+	newStatus := "pending"
+
+	switch account.Role {
+	case "owner":
+		owner, err := s.repo.GetOwnerByAccountID(accountID)
+		if err != nil {
+			owner = &models.Owner{AccountID: accountID}
+		}
+
+		owner.KtpNumber = &cleanKtp
+		owner.KtpPhotoUrl = &cleanPhoto
+		owner.KycStatus = newStatus
+		owner.KycSubmittedAt = &now
+		owner.KycRejectionReason = nil
+
+		if input.KtpName != nil {
+			owner.KtpName = input.KtpName
+		}
+		if input.KtpBirthPlace != nil {
+			owner.KtpBirthPlace = input.KtpBirthPlace
+		}
+		if input.KtpBirthDate != nil {
+			owner.KtpBirthDate = input.KtpBirthDate
+		}
+		if input.KtpGender != nil {
+			owner.KtpGender = input.KtpGender
+		}
+		if input.KtpAddress != nil {
+			owner.KtpAddress = input.KtpAddress
+		}
+		if input.KtpRtRw != nil {
+			owner.KtpRtRw = input.KtpRtRw
+		}
+		if input.KtpVillage != nil {
+			owner.KtpVillage = input.KtpVillage
+		}
+		if input.KtpDistrict != nil {
+			owner.KtpDistrict = input.KtpDistrict
+		}
+		if input.KtpReligion != nil {
+			owner.KtpReligion = input.KtpReligion
+		}
+		if input.KtpOccupation != nil {
+			owner.KtpOccupation = input.KtpOccupation
+		}
+		if input.KtpCitizenship != nil {
+			owner.KtpCitizenship = input.KtpCitizenship
+		}
+
+		ownerToSave := *owner
+		if err := encryptOwnerKTP(&ownerToSave); err != nil {
+			return errors.New("Gagal mengenkripsi data KTP")
+		}
+
+		if err := s.repo.SaveOwnerProfile(account, &ownerToSave); err != nil {
+			return errors.New("Gagal menyimpan pengajuan verifikasi KYC")
+		}
+
+	case "business_admin":
+		admin, err := s.repo.GetBusinessAdminByAccountID(accountID)
+		if err != nil {
+			admin = &models.BusinessAdmin{AccountID: accountID}
+		}
+
+		admin.KtpNumber = &cleanKtp
+		admin.KtpPhotoUrl = &cleanPhoto
+		admin.KycStatus = newStatus
+		admin.KycSubmittedAt = &now
+		admin.KycRejectionReason = nil
+
+		if input.KtpName != nil {
+			admin.KtpName = input.KtpName
+		}
+		if input.KtpBirthPlace != nil {
+			admin.KtpBirthPlace = input.KtpBirthPlace
+		}
+		if input.KtpBirthDate != nil {
+			admin.KtpBirthDate = input.KtpBirthDate
+		}
+		if input.KtpGender != nil {
+			admin.KtpGender = input.KtpGender
+		}
+		if input.KtpAddress != nil {
+			admin.KtpAddress = input.KtpAddress
+		}
+		if input.KtpRtRw != nil {
+			admin.KtpRtRw = input.KtpRtRw
+		}
+		if input.KtpVillage != nil {
+			admin.KtpVillage = input.KtpVillage
+		}
+		if input.KtpDistrict != nil {
+			admin.KtpDistrict = input.KtpDistrict
+		}
+		if input.KtpReligion != nil {
+			admin.KtpReligion = input.KtpReligion
+		}
+		if input.KtpOccupation != nil {
+			admin.KtpOccupation = input.KtpOccupation
+		}
+		if input.KtpCitizenship != nil {
+			admin.KtpCitizenship = input.KtpCitizenship
+		}
+
+		adminToSave := *admin
+		if err := encryptBusinessAdminKTP(&adminToSave); err != nil {
+			return errors.New("Gagal mengenkripsi data KTP")
+		}
+
+		if err := s.repo.SaveBusinessAdminProfile(account, &adminToSave); err != nil {
+			return errors.New("Gagal menyimpan pengajuan verifikasi KYC")
+		}
+	}
+
+	return nil
 }
 
 

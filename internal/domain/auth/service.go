@@ -19,6 +19,11 @@ type AuthService interface {
 	Register(input models.RegisterUnifiedInput) error
 	CheckReferralCode(code string) (*models.CheckReferralResponse, error)
 	VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error
+	SendEmailOTP(email string) error
+	VerifyEmailOTP(input models.VerifyEmailOTPInput) error
+	SendPhoneOTP(phone string) error
+	VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error
+	EvaluateAccountStatus(account *models.Account) string
 	Login(input models.LoginUnifiedInput) error
 	VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error)
 	ForgotPassword(input models.ForgotPasswordInput) error
@@ -81,6 +86,8 @@ func (s *authService) sendOTP(identifier string, email *string, phoneNumber *str
 	switch redisPrefix {
 	case "register_otp":
 		subject = "Kode Verifikasi Registrasi Akun ToenToen"
+	case "email_verify_otp":
+		subject = "Kode Verifikasi Email ToenToen"
 	case "login_otp":
 		subject = "Kode Verifikasi Login ToenToen"
 	case "forgot_otp":
@@ -179,6 +186,26 @@ func (s *authService) CheckReferralCode(code string) (*models.CheckReferralRespo
 	}, nil
 }
 
+func (s *authService) EvaluateAccountStatus(account *models.Account) string {
+	if account == nil {
+		return "inactive"
+	}
+	if account.AccountStatus == "banned" || account.AccountStatus == "suspended" {
+		return account.AccountStatus
+	}
+
+	isEmailOK := account.EmailVerifiedAt != nil
+	isPhoneOK := true
+	if config.Envs != nil && config.Envs.RequirePhoneVerification {
+		isPhoneOK = account.PhoneVerifiedAt != nil
+	}
+
+	if isEmailOK && isPhoneOK {
+		return "active"
+	}
+	return "inactive"
+}
+
 func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
 	redisKey := fmt.Sprintf("register_otp:%s", input.Identifier)
@@ -202,12 +229,90 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	}
 
-	newStatus := "active"
-	if err := s.repo.UpdateAccountStatus(input.Identifier, newStatus); err != nil {
+	now := time.Now()
+	account.EmailVerifiedAt = &now
+	newStatus := s.EvaluateAccountStatus(account)
+
+	if err := s.repo.UpdateEmailVerified(input.Identifier, now, newStatus); err != nil {
 		return errors.New("Gagal mengaktifkan akun")
 	}
 
 	return nil
+}
+
+func (s *authService) SendEmailOTP(email string) error {
+	cleanEmail := strings.ToLower(strings.TrimSpace(email))
+	if !isEmail(cleanEmail) {
+		return errors.New("Format alamat email tidak valid")
+	}
+
+	account, err := s.repo.FindByIdentifier(cleanEmail)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errors.New("Akun dengan email ini tidak ditemukan")
+		}
+		return errors.New("Terjadi kesalahan sistem saat mencari data akun")
+	}
+
+	if account.AccountStatus == "banned" {
+		return errors.New("Akun anda telah diblokir dari platform")
+	}
+	if account.AccountStatus == "suspended" {
+		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+	}
+
+	return s.sendOTP(cleanEmail, account.Email, account.PhoneNumber, "email_verify_otp")
+}
+
+func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
+	cleanEmail := strings.ToLower(strings.TrimSpace(input.Email))
+	if !isEmail(cleanEmail) {
+		return errors.New("Format alamat email tidak valid")
+	}
+
+	redisKey := fmt.Sprintf("email_verify_otp:%s", cleanEmail)
+	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+	if err == redis.Nil || storedOTP != input.OTP {
+		// Fallback check register_otp jikalau kode OTP diminta dari registrasi
+		regKey := fmt.Sprintf("register_otp:%s", cleanEmail)
+		storedRegOTP, regErr := config.RDB.Get(config.Ctx, regKey).Result()
+		if regErr == redis.Nil || storedRegOTP != input.OTP {
+			return errors.New("OTP tidak valid atau sudah kadaluarsa")
+		}
+		config.RDB.Del(config.Ctx, regKey)
+	} else {
+		config.RDB.Del(config.Ctx, redisKey)
+	}
+
+	account, err := s.repo.FindByIdentifier(cleanEmail)
+	if err != nil {
+		return errors.New("Akun tidak ditemukan")
+	}
+
+	if account.AccountStatus == "banned" {
+		return errors.New("Akun anda telah diblokir dari platform")
+	}
+	if account.AccountStatus == "suspended" {
+		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+	}
+
+	now := time.Now()
+	account.EmailVerifiedAt = &now
+	newStatus := s.EvaluateAccountStatus(account)
+
+	if err := s.repo.UpdateEmailVerified(cleanEmail, now, newStatus); err != nil {
+		return errors.New("Gagal memverifikasi email")
+	}
+
+	return nil
+}
+
+func (s *authService) SendPhoneOTP(phone string) error {
+	return errors.New("Layanan verifikasi OTP melalui nomor telepon/WhatsApp sedang dalam tahap pengembangan. Silakan gunakan alamat email.")
+}
+
+func (s *authService) VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error {
+	return errors.New("Layanan verifikasi OTP melalui nomor telepon/WhatsApp sedang dalam tahap pengembangan.")
 }
 
 func (s *authService) Login(input models.LoginUnifiedInput) error {

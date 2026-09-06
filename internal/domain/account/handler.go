@@ -187,3 +187,41 @@ func (h *ProfileHandler) ForceDeleteAccount(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun " + input.Identifier + " telah dihapus secara permanen.", nil)
 }
+
+func (h *ProfileHandler) GetKYCStatus(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	res, err := h.service.GetKYCStatus(accountID)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Status KYC berhasil diambil", res)
+}
+
+func (h *ProfileHandler) SubmitKYC(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	var input models.SubmitKYCInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
+	}
+	if errs := utils.ValidateStruct(&input); errs != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Data KYC tidak lengkap", errs)
+	}
+
+	if err := h.service.SubmitKYC(accountID, input); err != nil {
+		if strings.Contains(err.Error(), "sudah terdaftar") {
+			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pengajuan verifikasi KYC berhasil dikirimkan dan sedang dalam peninjauan", nil)
+}

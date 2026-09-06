@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type RegisterUnifiedInput struct {
 	Identifier   string  `json:"identifier" validate:"required"`
 	Password     string  `json:"password" validate:"required,min=6"`
@@ -78,5 +80,48 @@ type CheckReferralResponse struct {
 	Code    string `json:"code"`
 	IsValid bool   `json:"is_valid"`
 	Message string `json:"message"`
+}
+
+type SendEmailOTPInput struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+type VerifyEmailOTPInput struct {
+	Email string `json:"email" validate:"required,email"`
+	OTP   string `json:"otp" validate:"required,len=6"`
+}
+
+type SendPhoneOTPInput struct {
+	Phone string `json:"phone" validate:"required"`
+}
+
+type VerifyPhoneOTPInput struct {
+	Phone string `json:"phone" validate:"required"`
+	OTP   string `json:"otp" validate:"required,len=6"`
+}
+
+type KYCStatusResponse struct {
+	Role            string     `json:"role"`
+	KycStatus       string     `json:"kycStatus"`
+	RejectionReason *string    `json:"rejectionReason,omitempty"`
+	SubmittedAt     *time.Time `json:"submittedAt,omitempty"`
+	VerifiedAt      *time.Time `json:"verifiedAt,omitempty"`
+	IsVerified      bool       `json:"isVerified"`
+}
+
+type SubmitKYCInput struct {
+	KtpNumber      string  `json:"ktpNumber" validate:"required,len=16"`
+	KtpPhotoUrl    string  `json:"ktpPhotoUrl" validate:"required,url"`
+	KtpName        *string `json:"ktpName"`
+	KtpBirthPlace  *string `json:"ktpBirthPlace"`
+	KtpBirthDate   *string `json:"ktpBirthDate"`
+	KtpGender      *string `json:"ktpGender"`
+	KtpAddress     *string `json:"ktpAddress"`
+	KtpRtRw        *string `json:"ktpRtRw"`
+	KtpVillage     *string `json:"ktpVillage"`
+	KtpDistrict    *string `json:"ktpDistrict"`
+	KtpReligion    *string `json:"ktpReligion"`
+	KtpOccupation  *string `json:"ktpOccupation"`
+	KtpCitizenship *string `json:"ktpCitizenship"`
 }
 

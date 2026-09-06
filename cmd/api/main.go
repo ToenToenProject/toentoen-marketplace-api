@@ -325,6 +325,10 @@ func main() {
 	authGroup.Post("/email/change/verify", middlewares.RequireAuth, authHandler.VerifyEmailChange)
 	authGroup.Post("/phone/change/request", middlewares.RequireAuth, authHandler.RequestPhoneChange)
 	authGroup.Post("/phone/change/verify", middlewares.RequireAuth, authHandler.VerifyPhoneChange)
+	authGroup.Post("/email/send-otp", authHandler.SendEmailOTP)
+	authGroup.Post("/email/verify-otp", authHandler.VerifyEmailOTP)
+	authGroup.Post("/phone/send-otp", authHandler.SendPhoneOTP)
+	authGroup.Post("/phone/verify-otp", authHandler.VerifyPhoneOTP)
 
 	// ==========================================
 	// ROUTES: CUSTOMER BUSINESS PROFILE
@@ -346,6 +350,9 @@ func main() {
 	// ==========================================
 	protected := api.Group("/account", middlewares.RequireAuth)
 	protected.Get("/profile/me", profileHandler.GetMyProfile)
+	protected.Get("/kyc/status", profileHandler.GetKYCStatus)
+	protected.Post("/kyc/submit", profileHandler.SubmitKYC)
+	protected.Put("/kyc/submit", profileHandler.SubmitKYC)
 	protected.Put("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Patch("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Post("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
@@ -513,7 +520,7 @@ func main() {
 
 	// Owner-only Business Management
 	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
-	ownerBusinessGroup.Post("/", businessHandler.CreateBusiness)
+	ownerBusinessGroup.Post("/", middlewares.RequireKYC, businessHandler.CreateBusiness)
 	ownerBusinessGroup.Get("/", businessHandler.GetMyBusinesses)
 	ownerBusinessGroup.Put("/:id", businessHandler.UpdateBusiness)
 	ownerBusinessGroup.Delete("/:id", businessHandler.DeleteBusiness)
@@ -523,15 +530,15 @@ func main() {
 	sharedBusinessScope.Get("/", businessHandler.GetBusinessDetail)
 	sharedBusinessScope.Put("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/", businessHandler.UpdateBusiness)
-	sharedBusinessScope.Patch("/toggle-status", businessHandler.ToggleStoreStatus)
-	sharedBusinessScope.Patch("/toggle-live", businessHandler.ToggleLiveStatus)
-	sharedBusinessScope.Post("/toggle-live", businessHandler.ToggleLiveStatus)
+	sharedBusinessScope.Patch("/toggle-status", middlewares.RequireKYC, businessHandler.ToggleStoreStatus)
+	sharedBusinessScope.Patch("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
+	sharedBusinessScope.Post("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 
 	// -> Products
 	productRoutes := sharedBusinessScope.Group("/products")
-	productRoutes.Post("/", productHandler.CreateProduct)
+	productRoutes.Post("/", middlewares.RequireKYC, productHandler.CreateProduct)
 	productRoutes.Get("/", productHandler.GetFlatProducts)
-	productRoutes.Post("/:product_id/variants", productHandler.AddVariant)
+	productRoutes.Post("/:product_id/variants", middlewares.RequireKYC, productHandler.AddVariant)
 	productRoutes.Patch("/:product_id/variants/:variant_id", productHandler.UpdateVariant)
 	productRoutes.Delete("/:product_id/variants/:variant_id", productHandler.DeleteVariant)
 	productRoutes.Get("/:product_id", productHandler.GetProductDetail)
@@ -551,7 +558,7 @@ func main() {
 
 	// -> Posts & Comments
 	postRoutes := sharedBusinessScope.Group("/posts")
-	postRoutes.Post("/", businessPostHandler.CreatePost)
+	postRoutes.Post("/", middlewares.RequireKYC, businessPostHandler.CreatePost)
 	postRoutes.Get("/", businessPostHandler.GetPosts)
 	postRoutes.Get("/:post_id", businessPostHandler.GetPostDetail)
 	postRoutes.Put("/:post_id", businessPostHandler.UpdatePost)
@@ -669,7 +676,7 @@ func main() {
 	// ==========================================
 	// ROUTES: STORE OWNERSHIP TRANSFER (Transfer Bisnis)
 	// ==========================================
-	bizTransferGroup := api.Group("/merchant/businesses/:business_id/transfer", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
+	bizTransferGroup := api.Group("/merchant/businesses/:business_id/transfer", middlewares.RequireAuth, middlewares.AllowRoles("owner"), middlewares.RequireKYC)
 	bizTransferGroup.Post("/check-target", businessTransferHandler.CheckTarget)
 	bizTransferGroup.Post("/initiate", businessTransferHandler.InitiateTransfer)
 	bizTransferGroup.Post("/verify-otp", businessTransferHandler.VerifyOTP)
@@ -677,7 +684,7 @@ func main() {
 
 	incomingTransferGroup := api.Group("/merchant/transfers", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
 	incomingTransferGroup.Get("/incoming", businessTransferHandler.GetIncomingTransfers)
-	incomingTransferGroup.Post("/:transfer_id/respond", businessTransferHandler.RespondTransfer)
+	incomingTransferGroup.Post("/:transfer_id/respond", middlewares.RequireKYC, businessTransferHandler.RespondTransfer)
 
 	// Fallback untuk rute yang tidak terdaftar (404)
 	app.Use(func(c *fiber.Ctx) error {

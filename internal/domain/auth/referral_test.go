@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"testing"
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -16,6 +17,12 @@ func (m *mockAuthRepo) CreateAccountWithProfile(account *models.Account, role st
 	return nil
 }
 func (m *mockAuthRepo) UpdateAccountStatus(identifier string, status string) error {
+	return nil
+}
+func (m *mockAuthRepo) UpdateEmailVerified(identifier string, verifiedAt time.Time, newStatus string) error {
+	return nil
+}
+func (m *mockAuthRepo) UpdatePhoneVerified(identifier string, verifiedAt time.Time, newStatus string) error {
 	return nil
 }
 func (m *mockAuthRepo) FindByIdentifier(identifier string) (*models.Account, error) {
