@@ -131,8 +131,6 @@ func (r *authRepository) LoadAssociations(account *models.Account) error {
 		r.db.Model(account).Association("Owner").Find(&account.Owner)
 	case "business_admin":
 		r.db.Model(account).Association("BusinessAdmin").Find(&account.BusinessAdmin)
-	case "platform_admin":
-		r.db.Model(account).Association("PlatformAdmin").Find(&account.PlatformAdmin)
 	}
 	return nil
 }

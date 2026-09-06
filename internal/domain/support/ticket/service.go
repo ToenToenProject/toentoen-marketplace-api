@@ -30,8 +30,6 @@ type SupportTicketService interface {
 	CreateTicket(accountID string, userRole string, input models.CreateTicketInput) (*models.SupportTicketDetailResponse, error)
 	GetMyTickets(accountID string, limit int, cursor string) ([]models.SupportTicketDetailResponse, error)
 	GetTicketDetail(ticketID string, requesterID string, isCS bool) (*models.SupportTicketDetailResponse, error)
-	AdminGetTickets(status string, limit int, cursor string) ([]models.SupportTicketDetailResponse, error)
-	AdminResolveTicket(ticketID string, input models.ResolveTicketInput, resolvedBy string) (*models.SupportTicketDetailResponse, error)
 }
 
 type supportTicketService struct {
@@ -149,54 +147,5 @@ func (s *supportTicketService) GetTicketDetail(ticketID string, requesterID stri
 
 	decryptTicket(ticket)
 	res := ticket.FormatDetailResponse()
-	return &res, nil
-}
-
-func (s *supportTicketService) AdminGetTickets(status string, limit int, cursor string) ([]models.SupportTicketDetailResponse, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-
-	tickets, err := s.repo.GetAdminTickets(status, limit, cursor)
-	if err != nil {
-		return nil, errors.New("Gagal mengambil daftar tiket admin")
-	}
-
-	var responses []models.SupportTicketDetailResponse
-	for _, t := range tickets {
-		decryptTicket(&t)
-		responses = append(responses, t.FormatDetailResponse())
-	}
-	return responses, nil
-}
-
-func (s *supportTicketService) AdminResolveTicket(ticketID string, input models.ResolveTicketInput, resolvedBy string) (*models.SupportTicketDetailResponse, error) {
-	ticket, err := s.repo.GetTicketByID(ticketID)
-	if err != nil {
-		return nil, errors.New("Tiket bantuan tidak ditemukan")
-	}
-
-	suggestions := strings.TrimSpace(input.CustomerServiceSuggestions)
-	if suggestions == "" {
-		return nil, errors.New("Saran/tanggapan customer service wajib diisi")
-	}
-
-	encSuggestions, _ := crypto.Encrypt(suggestions)
-
-	if err := s.repo.ResolveTicket(ticketID, input.Status, encSuggestions, resolvedBy); err != nil {
-		return nil, errors.New("Gagal memperbarui status tiket")
-	}
-
-	updatedTicket, err := s.repo.GetTicketByID(ticketID)
-	if err != nil {
-		ticket.SupportTicketStatus = input.Status
-		ticket.CustomerServiceSuggestions = &suggestions
-		decryptTicket(ticket)
-		res := ticket.FormatDetailResponse()
-		return &res, nil
-	}
-
-	decryptTicket(updatedTicket)
-	res := updatedTicket.FormatDetailResponse()
 	return &res, nil
 }

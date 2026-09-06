@@ -252,7 +252,7 @@ func (s *service) DeleteReport(reportID, requesterAccountID, role string) error 
 	}
 
 	isOwner := strings.EqualFold(strings.TrimSpace(report.AccountID), strings.TrimSpace(requesterAccountID))
-	isAdmin := strings.EqualFold(role, "admin") || strings.EqualFold(role, "platform_admin") || strings.EqualFold(role, "superadmin")
+	isAdmin := strings.EqualFold(role, "admin") || strings.EqualFold(role, "superadmin")
 
 	if !isOwner && !isAdmin {
 		return errors.New("tidak memiliki izin untuk menghapus laporan ini")

@@ -17,9 +17,6 @@ type SupportChatService interface {
 	GetChatMessages(sessionID string, requesterID string, isCS bool, limit int, cursor string) ([]models.CSChatMessage, error)
 	SendMessage(sessionID string, senderID string, senderType string, senderName string, input models.SendCSMessageInput) (*models.CSChatMessage, error)
 	EndChat(sessionID string, requesterID string, isCS bool, input models.EndCSChatInput) error
-	AdminGetQueue(status string, limit int, cursor string) ([]models.CSChatSession, error)
-	AdminGetHistory(limit int, cursor string) ([]models.CSChatSession, error)
-	AdminAssignSession(sessionID string, csAdminID string) error
 }
 
 type supportChatService struct {
@@ -116,7 +113,7 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 			Type: "CS_CHAT_NEW_SESSION",
 			Data: newSession,
 		}
-		s.hub.BroadcastToRole("platform_admin", event)
+		s.hub.BroadcastToRole("cs", event)
 	}
 
 	return newSession, greetingMsg, true, nil
@@ -240,7 +237,7 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 		if session.CSAdminID != nil && *session.CSAdminID != "" {
 			s.hub.SendToAccount(*session.CSAdminID, event)
 		} else {
-			s.hub.BroadcastToRole("platform_admin", event)
+			s.hub.BroadcastToRole("cs", event)
 		}
 	}
 
@@ -302,48 +299,9 @@ func (s *supportChatService) EndChat(sessionID string, requesterID string, isCS 
 		if session.CSAdminID != nil && *session.CSAdminID != "" {
 			s.hub.SendToAccount(*session.CSAdminID, event)
 		} else {
-			s.hub.BroadcastToRole("platform_admin", event)
+			s.hub.BroadcastToRole("cs", event)
 		}
 	}
 
 	return nil
-}
-
-func (s *supportChatService) AdminGetQueue(status string, limit int, cursor string) ([]models.CSChatSession, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-	sessions, err := s.repo.GetAdminQueue(status, limit, cursor)
-	if err != nil {
-		return nil, err
-	}
-	for i := range sessions {
-		sessions[i].LastMessagePreview, _ = crypto.Decrypt(sessions[i].LastMessagePreview)
-	}
-	return sessions, nil
-}
-
-func (s *supportChatService) AdminGetHistory(limit int, cursor string) ([]models.CSChatSession, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-	sessions, err := s.repo.GetAdminHistory(limit, cursor)
-	if err != nil {
-		return nil, err
-	}
-	for i := range sessions {
-		sessions[i].LastMessagePreview, _ = crypto.Decrypt(sessions[i].LastMessagePreview)
-	}
-	return sessions, nil
-}
-
-func (s *supportChatService) AdminAssignSession(sessionID string, csAdminID string) error {
-	session, err := s.repo.GetSessionByID(sessionID)
-	if err != nil {
-		return errors.New("Sesi live chat tidak ditemukan")
-	}
-	if session.Status == "ended" {
-		return errors.New("Sesi live chat sudah berakhir")
-	}
-	return s.repo.AssignCSToSession(sessionID, csAdminID)
 }

@@ -22,7 +22,6 @@ type Account struct {
 	Customer      *Customer      `gorm:"foreignKey:AccountID;references:AccountID" json:"customer,omitempty"`
 	Owner         *Owner         `gorm:"foreignKey:AccountID;references:AccountID" json:"owner,omitempty"`
 	BusinessAdmin *BusinessAdmin `gorm:"foreignKey:AccountID;references:AccountID" json:"business_admin,omitempty"`
-	PlatformAdmin *PlatformAdmin `gorm:"foreignKey:AccountID;references:AccountID" json:"platform_admin,omitempty"`
 }
 
 type Customer struct {
@@ -56,11 +55,6 @@ type Owner struct {
 
 func (Owner) TableName() string {
 	return "owners"
-}
-
-type PlatformAdmin struct {
-	AccountID string `gorm:"primaryKey" json:"accountId"`
-	Role      string `json:"role"`
 }
 
 type RegisterFCMTokenInput struct {

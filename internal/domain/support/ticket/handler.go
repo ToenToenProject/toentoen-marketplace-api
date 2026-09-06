@@ -71,7 +71,7 @@ func (h *SupportTicketHandler) GetTicketDetail(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "ticket_id wajib diisi", nil)
 	}
 
-	isCS := role == "platform_admin" || role == "customer_service" || role == "cs" || role == "super_admin"
+	isCS := role == "customer_service" || role == "cs" || role == "super_admin"
 
 	detail, errSvc := h.service.GetTicketDetail(ticketID, accountID, isCS)
 	if errSvc != nil {
@@ -81,45 +81,3 @@ func (h *SupportTicketHandler) GetTicketDetail(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail tiket berhasil dimuat", detail)
 }
 
-// AdminGetTickets mengambil antrian tiket masuk untuk dashboard Customer Service
-func (h *SupportTicketHandler) AdminGetTickets(c *fiber.Ctx) error {
-	status := strings.TrimSpace(c.Query("status", ""))
-	limit := c.QueryInt("limit", 50)
-	cursor := strings.TrimSpace(c.Query("cursor", ""))
-
-	tickets, errSvc := h.service.AdminGetTickets(status, limit, cursor)
-	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errSvc.Error(), nil)
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar tiket admin berhasil dimuat", tickets)
-}
-
-// AdminResolveTicket memberikan balasan dan memperbarui status tiket
-func (h *SupportTicketHandler) AdminResolveTicket(c *fiber.Ctx) error {
-	accountID, _, err := utils.GetRequesterInfo(c)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
-	}
-
-	ticketID := strings.TrimSpace(c.Params("ticket_id"))
-	if ticketID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "ticket_id wajib diisi", nil)
-	}
-
-	var input models.ResolveTicketInput
-	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
-	}
-
-	if errors := utils.ValidateStruct(&input); errors != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
-	}
-
-	res, errSvc := h.service.AdminResolveTicket(ticketID, input, accountID)
-	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Tiket berhasil ditanggapi dan diperbarui", res)
-}

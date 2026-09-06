@@ -86,7 +86,7 @@ func (h *SupportChatHandler) GetMessages(c *fiber.Ctx) error {
 
 	limit := c.QueryInt("limit", 50)
 	cursor := strings.TrimSpace(c.Query("cursor", ""))
-	isCS := role == "platform_admin" || role == "customer_service" || role == "cs" || role == "super_admin"
+	isCS := role == "customer_service" || role == "cs" || role == "super_admin"
 
 	messages, errSvc := h.service.GetChatMessages(sessionID, accountID, isCS, limit, cursor)
 	if errSvc != nil {
@@ -119,7 +119,7 @@ func (h *SupportChatHandler) SendMessage(c *fiber.Ctx) error {
 
 	senderType := "user"
 	senderName := "Pengguna ToenToen"
-	isCS := role == "platform_admin" || role == "customer_service" || role == "cs" || role == "super_admin"
+	isCS := role == "customer_service" || role == "cs" || role == "super_admin"
 
 	if isCS {
 		senderType = "cs"
@@ -153,64 +153,10 @@ func (h *SupportChatHandler) EndChat(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	isCS := role == "platform_admin" || role == "customer_service" || role == "cs" || role == "super_admin"
+	isCS := role == "customer_service" || role == "cs" || role == "super_admin"
 	if errSvc := h.service.EndChat(sessionID, accountID, isCS, input); errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sesi live chat telah berhasil diakhiri. Terima kasih atas masukan Anda!", nil)
-}
-
-// AdminGetQueue mengambil antrian live chat untuk dashboard CS
-func (h *SupportChatHandler) AdminGetQueue(c *fiber.Ctx) error {
-	status := strings.TrimSpace(c.Query("status", ""))
-	limit := c.QueryInt("limit", 50)
-	cursor := strings.TrimSpace(c.Query("cursor", ""))
-
-	sessions, err := h.service.AdminGetQueue(status, limit, cursor)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Antrian live chat berhasil dimuat", sessions)
-}
-
-// AdminGetHistory mengambil riwayat seluruh sesi chat yang sudah selesai (ended)
-func (h *SupportChatHandler) AdminGetHistory(c *fiber.Ctx) error {
-	limit := c.QueryInt("limit", 50)
-	cursor := strings.TrimSpace(c.Query("cursor", ""))
-
-	sessions, err := h.service.AdminGetHistory(limit, cursor)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Riwayat live chat berhasil dimuat", sessions)
-}
-
-// AdminAssignSession menugaskan CS tertentu untuk menangani sesi live chat
-func (h *SupportChatHandler) AdminAssignSession(c *fiber.Ctx) error {
-	accountID, _, err := utils.GetRequesterInfo(c)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
-	}
-
-	sessionID := getSessionIDParam(c)
-	if sessionID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "session_id wajib diisi", nil)
-	}
-
-	var input models.AssignCSChatInput
-	_ = c.BodyParser(&input)
-
-	csAdminID := accountID
-	if input.CSAdminID != "" {
-		csAdminID = input.CSAdminID
-	}
-
-	if errSvc := h.service.AdminAssignSession(sessionID, csAdminID); errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sesi chat berhasil ditugaskan ke CS", nil)
 }

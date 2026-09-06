@@ -644,14 +644,6 @@ func main() {
 	supportGroup.Post("/:room_id/messages", supportChatHandler.SendMessage)
 	supportGroup.Post("/:room_id/end", supportChatHandler.EndChat)
 
-	// Rute Khusus Admin/CS Dashboard
-	csAdminAuth := middlewares.AllowRoles("platform_admin", "customer_service", "cs", "super_admin")
-	supportAdminGroup := api.Group("/support/chat/admin", middlewares.RequireAuth, csAdminAuth)
-	supportAdminGroup.Get("/queue", supportChatHandler.AdminGetQueue)
-	supportAdminGroup.Get("/history", supportChatHandler.AdminGetHistory)
-	supportAdminGroup.Post("/:session_id/assign", supportChatHandler.AdminAssignSession)
-	supportAdminGroup.Post("/:room_id/assign", supportChatHandler.AdminAssignSession)
-
 	// ==========================================
 	// ROUTES: SUPPORT TICKETS (Tiket Bantuan)
 	// ==========================================
@@ -659,11 +651,6 @@ func main() {
 	ticketGroup.Post("/", supportTicketHandler.CreateTicket)
 	ticketGroup.Get("/", supportTicketHandler.GetMyTickets)
 	ticketGroup.Get("/:ticket_id", supportTicketHandler.GetTicketDetail)
-
-	// Rute Khusus Admin/CS Ticket Resolution
-	ticketAdminGroup := api.Group("/support/tickets/admin", middlewares.RequireAuth, csAdminAuth)
-	ticketAdminGroup.Get("/queue", supportTicketHandler.AdminGetTickets)
-	ticketAdminGroup.Post("/:ticket_id/resolve", supportTicketHandler.AdminResolveTicket)
 
 	// ==========================================
 	// ROUTES: DIRECT BUSINESS CHAT (Chat Toko)
