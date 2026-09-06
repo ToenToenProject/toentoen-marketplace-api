@@ -110,18 +110,73 @@ type KYCStatusResponse struct {
 }
 
 type SubmitKYCInput struct {
-	KtpNumber      string  `json:"ktpNumber" validate:"required,len=16"`
-	KtpPhotoUrl    string  `json:"ktpPhotoUrl" validate:"required,url"`
-	KtpName        *string `json:"ktpName"`
-	KtpBirthPlace  *string `json:"ktpBirthPlace"`
-	KtpBirthDate   *string `json:"ktpBirthDate"`
-	KtpGender      *string `json:"ktpGender"`
-	KtpAddress     *string `json:"ktpAddress"`
-	KtpRtRw        *string `json:"ktpRtRw"`
-	KtpVillage     *string `json:"ktpVillage"`
-	KtpDistrict    *string `json:"ktpDistrict"`
-	KtpReligion    *string `json:"ktpReligion"`
-	KtpOccupation  *string `json:"ktpOccupation"`
-	KtpCitizenship *string `json:"ktpCitizenship"`
+	KtpNumber           string  `json:"ktp_number"`
+	KtpNumberCamel      string  `json:"ktpNumber"`
+	KtpPhotoUrl         string  `json:"ktp_photo_url"`
+	KtpPhotoUrlCamel    string  `json:"ktpPhotoUrl"`
+	KtpName             *string `json:"ktp_name"`
+	KtpNameCamel        *string `json:"ktpName"`
+	KtpBirthPlace       *string `json:"ktp_birth_place"`
+	KtpBirthPlaceCamel  *string `json:"ktpBirthPlace"`
+	KtpBirthDate        *string `json:"ktp_birth_date"`
+	KtpBirthDateCamel   *string `json:"ktpBirthDate"`
+	KtpGender           *string `json:"ktp_gender"`
+	KtpGenderCamel      *string `json:"ktpGender"`
+	KtpAddress          *string `json:"ktp_address"`
+	KtpAddressCamel     *string `json:"ktpAddress"`
+	KtpRtRw             *string `json:"ktp_rt_rw"`
+	KtpRtRwCamel        *string `json:"ktpRtRw"`
+	KtpVillage          *string `json:"ktp_village"`
+	KtpVillageCamel     *string `json:"ktpVillage"`
+	KtpDistrict         *string `json:"ktp_district"`
+	KtpDistrictCamel    *string `json:"ktpDistrict"`
+	KtpReligion         *string `json:"ktp_religion"`
+	KtpReligionCamel    *string `json:"ktpReligion"`
+	KtpOccupation       *string `json:"ktp_occupation"`
+	KtpOccupationCamel  *string `json:"ktpOccupation"`
+	KtpCitizenship      *string `json:"ktp_citizenship"`
+	KtpCitizenshipCamel *string `json:"ktpCitizenship"`
+}
+
+func (input *SubmitKYCInput) Normalize() {
+	if input.KtpNumber == "" {
+		input.KtpNumber = input.KtpNumberCamel
+	}
+	if input.KtpPhotoUrl == "" {
+		input.KtpPhotoUrl = input.KtpPhotoUrlCamel
+	}
+	if input.KtpName == nil {
+		input.KtpName = input.KtpNameCamel
+	}
+	if input.KtpBirthPlace == nil {
+		input.KtpBirthPlace = input.KtpBirthPlaceCamel
+	}
+	if input.KtpBirthDate == nil {
+		input.KtpBirthDate = input.KtpBirthDateCamel
+	}
+	if input.KtpGender == nil {
+		input.KtpGender = input.KtpGenderCamel
+	}
+	if input.KtpAddress == nil {
+		input.KtpAddress = input.KtpAddressCamel
+	}
+	if input.KtpRtRw == nil {
+		input.KtpRtRw = input.KtpRtRwCamel
+	}
+	if input.KtpVillage == nil {
+		input.KtpVillage = input.KtpVillageCamel
+	}
+	if input.KtpDistrict == nil {
+		input.KtpDistrict = input.KtpDistrictCamel
+	}
+	if input.KtpReligion == nil {
+		input.KtpReligion = input.KtpReligionCamel
+	}
+	if input.KtpOccupation == nil {
+		input.KtpOccupation = input.KtpOccupationCamel
+	}
+	if input.KtpCitizenship == nil {
+		input.KtpCitizenship = input.KtpCitizenshipCamel
+	}
 }
 

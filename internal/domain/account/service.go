@@ -812,6 +812,8 @@ func (s *profileService) GetKYCStatus(accountID string) (*models.KYCStatusRespon
 }
 
 func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput) error {
+	input.Normalize()
+
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
