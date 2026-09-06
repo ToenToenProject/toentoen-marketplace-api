@@ -17,6 +17,7 @@ type AuthRepository interface {
 	UpdateEmail(accountID string, newEmail string) error
 	UpdatePhoneNumber(accountID string, newPhone string) error
 	LoadAssociations(account *models.Account) error
+	FindReferralCode(code string) (*models.ReferralCode, error)
 }
 
 type authRepository struct {
@@ -40,7 +41,11 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 			}
 
 		case "owner":
-			if err := tx.Create(&models.Owner{AccountID: account.AccountID}).Error; err != nil {
+			ownerRecord := models.Owner{AccountID: account.AccountID}
+			if account.Owner != nil && account.Owner.ReferralCode != nil {
+				ownerRecord.ReferralCode = account.Owner.ReferralCode
+			}
+			if err := tx.Create(&ownerRecord).Error; err != nil {
 				return err
 			}
 
@@ -130,4 +135,17 @@ func (r *authRepository) LoadAssociations(account *models.Account) error {
 		r.db.Model(account).Association("PlatformAdmin").Find(&account.PlatformAdmin)
 	}
 	return nil
+}
+
+func (r *authRepository) FindReferralCode(code string) (*models.ReferralCode, error) {
+	var ref models.ReferralCode
+	cleanCode := strings.TrimSpace(code)
+	if cleanCode == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	err := r.db.Where("LOWER(code) = LOWER(?) AND is_active = true", cleanCode).First(&ref).Error
+	if err != nil {
+		return nil, err
+	}
+	return &ref, nil
 }

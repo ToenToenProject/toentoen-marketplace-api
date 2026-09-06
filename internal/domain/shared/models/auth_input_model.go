@@ -1,10 +1,11 @@
 package models
 
 type RegisterUnifiedInput struct {
-	Identifier string  `json:"identifier" validate:"required"`
-	Password   string  `json:"password" validate:"required,min=6"`
-	Role       string  `json:"role" validate:"required"`
-	FromRole   *string `json:"from_role"`
+	Identifier   string  `json:"identifier" validate:"required"`
+	Password     string  `json:"password" validate:"required,min=6"`
+	Role         string  `json:"role" validate:"required"`
+	FromRole     *string `json:"from_role"`
+	ReferralCode *string `json:"referral_code"`
 }
 
 type VerifyRegisterOTPInput struct {
@@ -68,3 +69,14 @@ type CreateBusinessAdminInput struct {
 	Identifier string `json:"identifier" validate:"required"`
 	Password   string `json:"password" validate:"required,min=6"`
 }
+
+type CheckReferralInput struct {
+	Code string `json:"code" query:"code" validate:"required"`
+}
+
+type CheckReferralResponse struct {
+	Code    string `json:"code"`
+	IsValid bool   `json:"is_valid"`
+	Message string `json:"message"`
+}
+

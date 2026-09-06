@@ -306,6 +306,8 @@ func main() {
 	})
 
 	authGroup := api.Group("/auth", authLimiter)
+	authGroup.Get("/check-referral", authHandler.CheckReferralCode)
+	authGroup.Post("/check-referral", authHandler.CheckReferralCode)
 	authGroup.Post("/register", authHandler.Register)
 	authGroup.Post("/verify-register-otp", authHandler.VerifyRegisterOTP)
 	authGroup.Post("/login", authHandler.Login)

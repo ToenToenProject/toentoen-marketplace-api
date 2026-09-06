@@ -17,6 +17,7 @@ import (
 
 type AuthService interface {
 	Register(input models.RegisterUnifiedInput) error
+	CheckReferralCode(code string) (*models.CheckReferralResponse, error)
 	VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error
 	Login(input models.LoginUnifiedInput) error
 	VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error)
@@ -100,6 +101,16 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		return errors.New("Pendaftaran menggunakan nomor telepon belum tersedia saat ini karena layanan OTP nomor telepon sedang dalam pengembangan. Silakan daftar menggunakan email.")
 	}
 
+	var cleanRefCode *string
+	if input.Role == "owner" && input.ReferralCode != nil && strings.TrimSpace(*input.ReferralCode) != "" {
+		code := strings.TrimSpace(*input.ReferralCode)
+		ref, err := s.repo.FindReferralCode(code)
+		if err != nil || !ref.IsActive {
+			return errors.New("Kode referral tidak ditemukan")
+		}
+		cleanRefCode = &ref.Code
+	}
+
 	existingAccount, err := s.repo.FindByIdentifier(input.Identifier)
 
 	if err == nil {
@@ -136,11 +147,36 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		Email:         &input.Identifier,
 	}
 
+	if input.Role == "owner" && cleanRefCode != nil {
+		account.Owner = &models.Owner{
+			AccountID:    account.AccountID,
+			ReferralCode: cleanRefCode,
+		}
+	}
+
 	if err := s.repo.CreateAccountWithProfile(&account, input.Role); err != nil {
 		return errors.New("Gagal menyimpan data akun baru")
 	}
 
 	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "register_otp")
+}
+
+func (s *authService) CheckReferralCode(code string) (*models.CheckReferralResponse, error) {
+	cleanCode := strings.TrimSpace(code)
+	if cleanCode == "" {
+		return nil, errors.New("Kode referral tidak boleh kosong")
+	}
+
+	ref, err := s.repo.FindReferralCode(cleanCode)
+	if err != nil || !ref.IsActive {
+		return nil, errors.New("Kode referral tidak ditemukan")
+	}
+
+	return &models.CheckReferralResponse{
+		Code:    ref.Code,
+		IsValid: true,
+		Message: "Kode referral valid dan tersedia",
+	}, nil
 }
 
 func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error {

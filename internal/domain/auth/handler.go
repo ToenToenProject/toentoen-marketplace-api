@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"strings"
 	"time"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/constants"
@@ -16,6 +17,28 @@ type AuthHandler struct {
 
 func NewAuthHandler(service AuthService) *AuthHandler {
 	return &AuthHandler{service}
+}
+
+func (h *AuthHandler) CheckReferralCode(c *fiber.Ctx) error {
+	code := c.Query("code")
+	if code == "" {
+		var body models.CheckReferralInput
+		if err := c.BodyParser(&body); err == nil {
+			code = body.Code
+		}
+	}
+
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Kode referral wajib diisi", nil)
+	}
+
+	res, err := h.service.CheckReferralCode(code)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, res.Message, res)
 }
 
 func (h *AuthHandler) Register(c *fiber.Ctx) error {

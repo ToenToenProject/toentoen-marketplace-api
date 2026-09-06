@@ -564,10 +564,19 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	}
 
 	if input.ReferralCode != nil {
-		if *input.ReferralCode == "" {
-			owner.ReferralCode = nil
-		} else {
-			owner.ReferralCode = input.ReferralCode
+		cleanInput := strings.TrimSpace(*input.ReferralCode)
+		hasExistingCode := owner.ReferralCode != nil && strings.TrimSpace(*owner.ReferralCode) != ""
+
+		if hasExistingCode {
+			if cleanInput == "" || !strings.EqualFold(cleanInput, strings.TrimSpace(*owner.ReferralCode)) {
+				return nil, errors.New("Kode referral sudah terisi dan tidak dapat diubah kembali")
+			}
+		} else if cleanInput != "" {
+			ref, err := s.repo.FindReferralCode(cleanInput)
+			if err != nil || !ref.IsActive {
+				return nil, errors.New("Kode referral tidak ditemukan")
+			}
+			owner.ReferralCode = &ref.Code
 		}
 	}
 	if input.Country != nil {
