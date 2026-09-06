@@ -573,10 +573,10 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 			}
 		} else if cleanInput != "" {
 			ref, err := s.repo.FindReferralCode(cleanInput)
-			if err != nil || !ref.IsActive {
+			if err != nil || !ref.IsActive || ref.ReferralCode == nil || *ref.ReferralCode == "" {
 				return nil, errors.New("Kode referral tidak ditemukan")
 			}
-			owner.ReferralCode = &ref.Code
+			owner.ReferralCode = ref.ReferralCode
 		}
 	}
 	if input.Country != nil {

@@ -9,7 +9,7 @@ import (
 type mockProfileRepo struct {
 	account       *models.Account
 	owner         *models.Owner
-	referralCodes map[string]*models.ReferralCode
+	referralCodes map[string]*models.ReferralUser
 }
 
 func (m *mockProfileRepo) GetAccountByID(accountID string) (*models.Account, error) {
@@ -51,7 +51,7 @@ func (m *mockProfileRepo) CheckPhoneNumberExists(phone string, excludeAccountID 
 func (m *mockProfileRepo) CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error) {
 	return false, nil
 }
-func (m *mockProfileRepo) FindReferralCode(code string) (*models.ReferralCode, error) {
+func (m *mockProfileRepo) FindReferralCode(code string) (*models.ReferralUser, error) {
 	ref, exists := m.referralCodes[code]
 	if !exists {
 		return nil, errors.New("record not found")
@@ -60,16 +60,17 @@ func (m *mockProfileRepo) FindReferralCode(code string) (*models.ReferralCode, e
 }
 
 func TestUpdateOwnerProfileReferralCode(t *testing.T) {
-	referralCodes := map[string]*models.ReferralCode{
-		"PROMO2026": {Code: "PROMO2026", IsActive: true},
+	codePromo := "PROMO2026"
+	referralCodes := map[string]*models.ReferralUser{
+		"PROMO2026": {ReferralCode: &codePromo, IsActive: true},
 	}
 
 	t.Run("owner already has referral code - reject change", func(t *testing.T) {
 		existingCode := "PROMO2026"
 		newCode := "NEWCODE"
 		repo := &mockProfileRepo{
-			account: &models.Account{AccountID: "ACC_1", Role: "owner"},
-			owner:   &models.Owner{AccountID: "ACC_1", ReferralCode: &existingCode},
+			account:       &models.Account{AccountID: "ACC_1", Role: "owner"},
+			owner:         &models.Owner{AccountID: "ACC_1", ReferralCode: &existingCode},
 			referralCodes: referralCodes,
 		}
 		service := NewProfileService(repo)
@@ -89,8 +90,8 @@ func TestUpdateOwnerProfileReferralCode(t *testing.T) {
 		existingCode := "PROMO2026"
 		sameCode := "promo2026"
 		repo := &mockProfileRepo{
-			account: &models.Account{AccountID: "ACC_1", Role: "owner"},
-			owner:   &models.Owner{AccountID: "ACC_1", ReferralCode: &existingCode},
+			account:       &models.Account{AccountID: "ACC_1", Role: "owner"},
+			owner:         &models.Owner{AccountID: "ACC_1", ReferralCode: &existingCode},
 			referralCodes: referralCodes,
 		}
 		service := NewProfileService(repo)
@@ -106,8 +107,8 @@ func TestUpdateOwnerProfileReferralCode(t *testing.T) {
 	t.Run("owner has no referral code - reject invalid code", func(t *testing.T) {
 		invalidCode := "UNKNOWN"
 		repo := &mockProfileRepo{
-			account: &models.Account{AccountID: "ACC_1", Role: "owner"},
-			owner:   &models.Owner{AccountID: "ACC_1", ReferralCode: nil},
+			account:       &models.Account{AccountID: "ACC_1", Role: "owner"},
+			owner:         &models.Owner{AccountID: "ACC_1", ReferralCode: nil},
 			referralCodes: referralCodes,
 		}
 		service := NewProfileService(repo)
@@ -126,8 +127,8 @@ func TestUpdateOwnerProfileReferralCode(t *testing.T) {
 	t.Run("owner has no referral code - successfully set valid code", func(t *testing.T) {
 		validCode := "PROMO2026"
 		repo := &mockProfileRepo{
-			account: &models.Account{AccountID: "ACC_1", Role: "owner"},
-			owner:   &models.Owner{AccountID: "ACC_1", ReferralCode: nil},
+			account:       &models.Account{AccountID: "ACC_1", Role: "owner"},
+			owner:         &models.Owner{AccountID: "ACC_1", ReferralCode: nil},
 			referralCodes: referralCodes,
 		}
 		service := NewProfileService(repo)

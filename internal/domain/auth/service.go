@@ -105,10 +105,10 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	if input.Role == "owner" && input.ReferralCode != nil && strings.TrimSpace(*input.ReferralCode) != "" {
 		code := strings.TrimSpace(*input.ReferralCode)
 		ref, err := s.repo.FindReferralCode(code)
-		if err != nil || !ref.IsActive {
+		if err != nil || !ref.IsActive || ref.ReferralCode == nil || *ref.ReferralCode == "" {
 			return errors.New("Kode referral tidak ditemukan")
 		}
-		cleanRefCode = &ref.Code
+		cleanRefCode = ref.ReferralCode
 	}
 
 	existingAccount, err := s.repo.FindByIdentifier(input.Identifier)
@@ -168,12 +168,12 @@ func (s *authService) CheckReferralCode(code string) (*models.CheckReferralRespo
 	}
 
 	ref, err := s.repo.FindReferralCode(cleanCode)
-	if err != nil || !ref.IsActive {
+	if err != nil || !ref.IsActive || ref.ReferralCode == nil || *ref.ReferralCode == "" {
 		return nil, errors.New("Kode referral tidak ditemukan")
 	}
 
 	return &models.CheckReferralResponse{
-		Code:    ref.Code,
+		Code:    *ref.ReferralCode,
 		IsValid: true,
 		Message: "Kode referral valid dan tersedia",
 	}, nil

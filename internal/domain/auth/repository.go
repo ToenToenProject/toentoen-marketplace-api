@@ -17,7 +17,7 @@ type AuthRepository interface {
 	UpdateEmail(accountID string, newEmail string) error
 	UpdatePhoneNumber(accountID string, newPhone string) error
 	LoadAssociations(account *models.Account) error
-	FindReferralCode(code string) (*models.ReferralCode, error)
+	FindReferralCode(code string) (*models.ReferralUser, error)
 }
 
 type authRepository struct {
@@ -135,15 +135,17 @@ func (r *authRepository) LoadAssociations(account *models.Account) error {
 	return nil
 }
 
-func (r *authRepository) FindReferralCode(code string) (*models.ReferralCode, error) {
-	var ref models.ReferralCode
+func (r *authRepository) FindReferralCode(code string) (*models.ReferralUser, error) {
+	var user models.ReferralUser
 	cleanCode := strings.TrimSpace(code)
 	if cleanCode == "" {
 		return nil, gorm.ErrRecordNotFound
 	}
-	err := r.db.Where("LOWER(code) = LOWER(?) AND is_active = true", cleanCode).First(&ref).Error
+	err := r.db.Table("operations.users").
+		Where("LOWER(referral_code) = LOWER(?) AND is_active = true", cleanCode).
+		First(&user).Error
 	if err != nil {
 		return nil, err
 	}
-	return &ref, nil
+	return &user, nil
 }

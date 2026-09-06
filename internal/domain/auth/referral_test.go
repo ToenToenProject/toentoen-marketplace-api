@@ -9,7 +9,7 @@ import (
 )
 
 type mockAuthRepo struct {
-	referralCodes map[string]*models.ReferralCode
+	referralCodes map[string]*models.ReferralUser
 }
 
 func (m *mockAuthRepo) CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error {
@@ -36,7 +36,7 @@ func (m *mockAuthRepo) UpdatePhoneNumber(accountID string, newPhone string) erro
 func (m *mockAuthRepo) LoadAssociations(account *models.Account) error {
 	return nil
 }
-func (m *mockAuthRepo) FindReferralCode(code string) (*models.ReferralCode, error) {
+func (m *mockAuthRepo) FindReferralCode(code string) (*models.ReferralUser, error) {
 	ref, exists := m.referralCodes[code]
 	if !exists {
 		return nil, errors.New("record not found")
@@ -45,10 +45,12 @@ func (m *mockAuthRepo) FindReferralCode(code string) (*models.ReferralCode, erro
 }
 
 func TestCheckReferralCode(t *testing.T) {
+	codePromo := "PROMO2026"
+	codeExpired := "EXPIRED"
 	mockRepo := &mockAuthRepo{
-		referralCodes: map[string]*models.ReferralCode{
-			"PROMO2026": {Code: "PROMO2026", IsActive: true},
-			"EXPIRED":   {Code: "EXPIRED", IsActive: false},
+		referralCodes: map[string]*models.ReferralUser{
+			"PROMO2026": {ReferralCode: &codePromo, IsActive: true},
+			"EXPIRED":   {ReferralCode: &codeExpired, IsActive: false},
 		},
 	}
 	service := NewAuthService(mockRepo)
@@ -95,9 +97,10 @@ func TestCheckReferralCode(t *testing.T) {
 }
 
 func TestRegisterWithReferralCode(t *testing.T) {
+	codePromo := "PROMO2026"
 	mockRepo := &mockAuthRepo{
-		referralCodes: map[string]*models.ReferralCode{
-			"PROMO2026": {Code: "PROMO2026", IsActive: true},
+		referralCodes: map[string]*models.ReferralUser{
+			"PROMO2026": {ReferralCode: &codePromo, IsActive: true},
 		},
 	}
 	service := NewAuthService(mockRepo)

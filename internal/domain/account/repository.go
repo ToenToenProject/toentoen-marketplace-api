@@ -25,7 +25,7 @@ type ProfileRepository interface {
 	CheckEmailExists(email string, excludeAccountID string) (bool, error)
 	CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error)
 	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
-	FindReferralCode(code string) (*models.ReferralCode, error)
+	FindReferralCode(code string) (*models.ReferralUser, error)
 }
 
 type profileRepository struct {
@@ -424,16 +424,18 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 	return deletedBusinessIDs, deletedProductIDs, err
 }
 
-func (r *profileRepository) FindReferralCode(code string) (*models.ReferralCode, error) {
-	var ref models.ReferralCode
+func (r *profileRepository) FindReferralCode(code string) (*models.ReferralUser, error) {
+	var user models.ReferralUser
 	cleanCode := strings.TrimSpace(code)
 	if cleanCode == "" {
 		return nil, gorm.ErrRecordNotFound
 	}
-	err := r.db.Where("LOWER(code) = LOWER(?) AND is_active = true", cleanCode).First(&ref).Error
+	err := r.db.Table("operations.users").
+		Where("LOWER(referral_code) = LOWER(?) AND is_active = true", cleanCode).
+		First(&user).Error
 	if err != nil {
 		return nil, err
 	}
-	return &ref, nil
+	return &user, nil
 }
 

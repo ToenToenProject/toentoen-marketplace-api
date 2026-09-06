@@ -2,15 +2,17 @@ package models
 
 import "time"
 
-type ReferralCode struct {
-	ID          uint      `gorm:"primaryKey;column:id" json:"id"`
-	Code        string    `gorm:"uniqueIndex;column:code;not null" json:"code"`
-	Description *string   `gorm:"column:description" json:"description,omitempty"`
-	IsActive    bool      `gorm:"default:true;column:is_active" json:"is_active"`
-	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+type ReferralUser struct {
+	ID           string    `gorm:"primaryKey;column:id" json:"id"`
+	WorkerID     string    `gorm:"column:worker_id" json:"worker_id"`
+	Name         string    `gorm:"column:name" json:"name"`
+	Role         string    `gorm:"column:role" json:"role"`
+	ReferralCode *string   `gorm:"column:referral_code" json:"referral_code"`
+	IsActive     bool      `gorm:"column:is_active" json:"is_active"`
+	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
-func (ReferralCode) TableName() string {
-	return "referral_codes"
+func (ReferralUser) TableName() string {
+	return "operations.users"
 }
