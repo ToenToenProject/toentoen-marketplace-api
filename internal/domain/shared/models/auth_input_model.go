@@ -114,6 +114,8 @@ type SubmitKYCInput struct {
 	KtpNumberCamel      string  `json:"ktpNumber"`
 	KtpPhotoUrl         string  `json:"ktp_photo_url"`
 	KtpPhotoUrlCamel    string  `json:"ktpPhotoUrl"`
+	SelfiePhotoUrl      string  `json:"selfie_photo_url"`
+	SelfiePhotoUrlCamel string  `json:"selfiePhotoUrl"`
 	KtpName             *string `json:"ktp_name"`
 	KtpNameCamel        *string `json:"ktpName"`
 	KtpBirthPlace       *string `json:"ktp_birth_place"`
@@ -144,6 +146,9 @@ func (input *SubmitKYCInput) Normalize() {
 	}
 	if input.KtpPhotoUrl == "" {
 		input.KtpPhotoUrl = input.KtpPhotoUrlCamel
+	}
+	if input.SelfiePhotoUrl == "" {
+		input.SelfiePhotoUrl = input.SelfiePhotoUrlCamel
 	}
 	if input.KtpName == nil {
 		input.KtpName = input.KtpNameCamel

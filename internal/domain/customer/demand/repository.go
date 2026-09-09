@@ -97,14 +97,14 @@ func (r *demandRepository) GetOwnerTokensByCategory(categoryName string) ([]stri
 	
 	// Kita melakukan 3 kali JOIN sekarang:
 	// 1. Join ke device_tokens untuk mendapatkan alamat FCM HP Owner
-	// 2. Join ke business_categories (Tabel Jembatan / Pivot Table)
-	// 3. Join ke categories untuk mencocokkan namanya
+	// 2. Join ke business_has_categories (Tabel Jembatan / Pivot Table)
+	// 3. Join ke business_categories untuk mencocokkan namanya
 	err := r.db.Table("businesses").
 		Select("DISTINCT device_tokens.fcm_token").
 		Joins("JOIN device_tokens ON device_tokens.account_id = businesses.account_id").
-		Joins("JOIN business_categories ON business_categories.business_id = businesses.business_id").
-		Joins("JOIN categories ON categories.category_id = business_categories.category_id").
-		Where("categories.name = ?", categoryName).
+		Joins("JOIN business_has_categories ON business_has_categories.business_id = businesses.business_id").
+		Joins("JOIN business_categories ON business_categories.category_id = business_has_categories.category_id").
+		Where("business_categories.name = ?", categoryName).
 		Pluck("device_tokens.fcm_token", &tokens).Error
 
 	return tokens, err

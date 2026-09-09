@@ -33,11 +33,11 @@ func RequireKYC(c *fiber.Ctx) error {
 			})
 		}
 		if owner.KycStatus != "verified" {
-			message := "Fitur ini memerlukan verifikasi identitas merchant (KYC). Silakan lengkapi berkas KTP Anda di menu Profil."
+			message := "Fitur ini memerlukan verifikasi identitas merchant (KYC). Silakan lengkapi berkas identitas Anda di menu Profil."
 			if owner.KycStatus == "pending" {
-				message = "Dokumen identitas (KYC) Anda sedang dalam proses peninjauan oleh tim kami. Harap menunggu hingga proses verifikasi selesai."
+				message = "akun sedang dalam verifikasi, mohon tunggu"
 			} else if owner.KycStatus == "rejected" {
-				message = "Pengajuan verifikasi identitas (KYC) Anda ditolak. Silakan periksa alasan penolakan dan unggah ulang berkas KTP yang valid."
+				message = "Pengajuan verifikasi identitas (KYC) Anda ditolak. Silakan periksa alasan penolakan dan ajukan ulang berkas yang valid."
 			}
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"responseCode": "403",
@@ -55,11 +55,11 @@ func RequireKYC(c *fiber.Ctx) error {
 			})
 		}
 		if admin.KycStatus != "verified" {
-			message := "Fitur ini memerlukan verifikasi identitas admin (KYC). Silakan lengkapi berkas KTP Anda."
+			message := "Fitur ini memerlukan verifikasi identitas admin (KYC). Silakan lengkapi berkas identitas Anda."
 			if admin.KycStatus == "pending" {
-				message = "Dokumen identitas (KYC) Anda sedang dalam proses peninjauan oleh tim kami."
+				message = "akun sedang dalam verifikasi, mohon tunggu"
 			} else if admin.KycStatus == "rejected" {
-				message = "Pengajuan verifikasi identitas (KYC) Anda ditolak. Silakan unggah ulang berkas yang valid."
+				message = "Pengajuan verifikasi identitas (KYC) Anda ditolak. Silakan ajukan ulang berkas yang valid."
 			}
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"responseCode": "403",

@@ -85,6 +85,9 @@ func encryptOwnerKTP(owner *models.Owner) error {
 	if owner.KtpPhotoUrl, err = crypto.EncryptPointer(owner.KtpPhotoUrl); err != nil {
 		return err
 	}
+	if owner.SelfiePhotoUrl, err = crypto.EncryptPointer(owner.SelfiePhotoUrl); err != nil {
+		return err
+	}
 	if owner.KtpName, err = crypto.EncryptPointer(owner.KtpName); err != nil {
 		return err
 	}
@@ -124,6 +127,7 @@ func decryptOwnerKTP(owner *models.Owner) {
 	}
 	owner.KtpNumber, _ = crypto.DecryptPointer(owner.KtpNumber)
 	owner.KtpPhotoUrl, _ = crypto.DecryptPointer(owner.KtpPhotoUrl)
+	owner.SelfiePhotoUrl, _ = crypto.DecryptPointer(owner.SelfiePhotoUrl)
 	owner.KtpName, _ = crypto.DecryptPointer(owner.KtpName)
 	owner.KtpBirthPlace, _ = crypto.DecryptPointer(owner.KtpBirthPlace)
 	owner.KtpGender, _ = crypto.DecryptPointer(owner.KtpGender)
@@ -145,6 +149,9 @@ func encryptBusinessAdminKTP(admin *models.BusinessAdmin) error {
 		return err
 	}
 	if admin.KtpPhotoUrl, err = crypto.EncryptPointer(admin.KtpPhotoUrl); err != nil {
+		return err
+	}
+	if admin.SelfiePhotoUrl, err = crypto.EncryptPointer(admin.SelfiePhotoUrl); err != nil {
 		return err
 	}
 	if admin.KtpName, err = crypto.EncryptPointer(admin.KtpName); err != nil {
@@ -186,6 +193,7 @@ func decryptBusinessAdminKTP(admin *models.BusinessAdmin) {
 	}
 	admin.KtpNumber, _ = crypto.DecryptPointer(admin.KtpNumber)
 	admin.KtpPhotoUrl, _ = crypto.DecryptPointer(admin.KtpPhotoUrl)
+	admin.SelfiePhotoUrl, _ = crypto.DecryptPointer(admin.SelfiePhotoUrl)
 	admin.KtpName, _ = crypto.DecryptPointer(admin.KtpName)
 	admin.KtpBirthPlace, _ = crypto.DecryptPointer(admin.KtpBirthPlace)
 	admin.KtpGender, _ = crypto.DecryptPointer(admin.KtpGender)
@@ -263,9 +271,6 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 }
 
 func (s *profileService) UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error) {
-	if err := validateEmail(input.Email); err != nil {
-		return nil, err
-	}
 	if err := validatePhoneNumber(input.PhoneNumber); err != nil {
 		return nil, err
 	}
@@ -297,16 +302,6 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 			return nil, errors.New("Username sudah digunakan")
 		}
 		account.Username = cleanUsername
-	}
-	if input.Email != nil && *input.Email != "" {
-		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, errors.New("Email sudah digunakan")
-		}
-		account.Email = input.Email
 	}
 	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
 		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
@@ -443,16 +438,7 @@ func (s *profileService) ForceDeleteAccount(identifier string) error {
 }
 
 func (s *profileService) UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error) {
-	if err := validateEmail(input.Email); err != nil {
-		return nil, err
-	}
 	if err := validatePhoneNumber(input.PhoneNumber); err != nil {
-		return nil, err
-	}
-	if err := validateKtpNumber(input.KtpNumber); err != nil {
-		return nil, err
-	}
-	if err := validateDate(input.KtpBirthDate, "tanggal lahir"); err != nil {
 		return nil, err
 	}
 
@@ -484,16 +470,6 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 		}
 		account.Username = cleanUsername
 	}
-	if input.Email != nil && *input.Email != "" {
-		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, errors.New("Email sudah digunakan")
-		}
-		account.Email = input.Email
-	}
 	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
 		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
 		if err != nil {
@@ -521,29 +497,6 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	if err != nil {
 		return nil, errors.New("Data profil pengguna tidak ditemukan")
 	}
-	decryptOwnerKTP(owner)
-
-	if input.KtpNumber != nil {
-		if *input.KtpNumber == "" {
-			owner.KtpNumber = nil
-		} else {
-			exists, err := s.repo.CheckKtpNumberExists(*input.KtpNumber, accountID)
-			if err != nil {
-				return nil, err
-			}
-			if exists {
-				return nil, errors.New("Nomor KTP sudah digunakan")
-			}
-			owner.KtpNumber = input.KtpNumber
-		}
-	}
-	if input.KtpPhotoUrl != nil {
-		if *input.KtpPhotoUrl == "" {
-			owner.KtpPhotoUrl = nil
-		} else {
-			owner.KtpPhotoUrl = input.KtpPhotoUrl
-		}
-	}
 
 	if input.ReferralCode != nil {
 		cleanInput := strings.TrimSpace(*input.ReferralCode)
@@ -564,65 +517,18 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	if input.Country != nil {
 		owner.Country = input.Country
 	}
-	if input.KtpName != nil {
-		owner.KtpName = input.KtpName
-	}
-	if input.KtpBirthPlace != nil {
-		owner.KtpBirthPlace = input.KtpBirthPlace
-	}
-	if input.KtpBirthDate != nil {
-		owner.KtpBirthDate = input.KtpBirthDate
-	}
-	if input.KtpGender != nil {
-		owner.KtpGender = input.KtpGender
-	}
-	if input.KtpAddress != nil {
-		owner.KtpAddress = input.KtpAddress
-	}
-	if input.KtpRtRw != nil {
-		owner.KtpRtRw = input.KtpRtRw
-	}
-	if input.KtpVillage != nil {
-		owner.KtpVillage = input.KtpVillage
-	}
-	if input.KtpDistrict != nil {
-		owner.KtpDistrict = input.KtpDistrict
-	}
-	if input.KtpReligion != nil {
-		owner.KtpReligion = input.KtpReligion
-	}
-	if input.KtpOccupation != nil {
-		owner.KtpOccupation = input.KtpOccupation
-	}
-	if input.KtpCitizenship != nil {
-		owner.KtpCitizenship = input.KtpCitizenship
-	}
 
 	account.Owner = owner
 	account.AccountStatus = isAccountDataComplete(account)
 
-	ownerToSave := *owner
-	if err := encryptOwnerKTP(&ownerToSave); err != nil {
-		return nil, errors.New("Gagal mengenkripsi data profil pemilik")
-	}
-
-	if err := s.repo.SaveOwnerProfile(account, &ownerToSave); err != nil {
+	if err := s.repo.SaveOwnerProfile(account, owner); err != nil {
 		return nil, errors.New("Gagal menyimpan data profil pemilik")
 	}
 	return account, nil
 }
 
 func (s *profileService) UpdateBusinessAdminProfile(accountID string, input models.UpdateBusinessAdminKYCInput) (*models.Account, error) {
-	if err := validateEmail(input.Email); err != nil {
-		return nil, err
-	}
 	if err := validatePhoneNumber(input.PhoneNumber); err != nil {
-		return nil, err
-	}
-	if err := validateKtpNumber(input.KtpNumber); err != nil {
-		return nil, err
-	}
-	if err := validateDate(input.KtpBirthDate, "tanggal lahir"); err != nil {
 		return nil, err
 	}
 
@@ -654,16 +560,6 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 		}
 		account.Username = cleanUsername
 	}
-	if input.Email != nil && *input.Email != "" {
-		exists, err := s.repo.CheckEmailExists(*input.Email, accountID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, errors.New("Email sudah digunakan")
-		}
-		account.Email = input.Email
-	}
 	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
 		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
 		if err != nil {
@@ -691,77 +587,11 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 	if err != nil {
 		admin = &models.BusinessAdmin{AccountID: accountID}
 	}
-	decryptBusinessAdminKTP(admin)
-
-	if input.KtpNumber != nil {
-		if *input.KtpNumber == "" {
-			admin.KtpNumber = nil
-		} else {
-			exists, err := s.repo.CheckKtpNumberExists(*input.KtpNumber, accountID)
-			if err != nil {
-				return nil, err
-			}
-			if exists {
-				return nil, errors.New("Nomor KTP sudah digunakan")
-			}
-			admin.KtpNumber = input.KtpNumber
-		}
-	}
-	if input.KtpPhotoUrl != nil {
-		if *input.KtpPhotoUrl == "" {
-			admin.KtpPhotoUrl = nil
-		} else {
-			admin.KtpPhotoUrl = input.KtpPhotoUrl
-		}
-	}
-	if input.Country != nil {
-		// Country disimpan di tabel owners, untuk admin kita skip atau bisa disimpan di account level jika ada kolom
-		// Sementara diabaikan karena tidak ada kolom country di business_admins
-		_ = input.Country
-	}
-	if input.KtpName != nil {
-		admin.KtpName = input.KtpName
-	}
-	if input.KtpBirthPlace != nil {
-		admin.KtpBirthPlace = input.KtpBirthPlace
-	}
-	if input.KtpBirthDate != nil {
-		admin.KtpBirthDate = input.KtpBirthDate
-	}
-	if input.KtpGender != nil {
-		admin.KtpGender = input.KtpGender
-	}
-	if input.KtpAddress != nil {
-		admin.KtpAddress = input.KtpAddress
-	}
-	if input.KtpRtRw != nil {
-		admin.KtpRtRw = input.KtpRtRw
-	}
-	if input.KtpVillage != nil {
-		admin.KtpVillage = input.KtpVillage
-	}
-	if input.KtpDistrict != nil {
-		admin.KtpDistrict = input.KtpDistrict
-	}
-	if input.KtpReligion != nil {
-		admin.KtpReligion = input.KtpReligion
-	}
-	if input.KtpOccupation != nil {
-		admin.KtpOccupation = input.KtpOccupation
-	}
-	if input.KtpCitizenship != nil {
-		admin.KtpCitizenship = input.KtpCitizenship
-	}
 
 	account.BusinessAdmin = admin
 	account.AccountStatus = isAccountDataComplete(account)
 
-	adminToSave := *admin
-	if err := encryptBusinessAdminKTP(&adminToSave); err != nil {
-		return nil, errors.New("Gagal mengenkripsi data profil admin bisnis")
-	}
-
-	if err := s.repo.SaveBusinessAdminProfile(account, &adminToSave); err != nil {
+	if err := s.repo.SaveBusinessAdminProfile(account, admin); err != nil {
 		return nil, errors.New("Gagal menyimpan data profil admin bisnis")
 	}
 
@@ -826,6 +656,30 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 		return errors.New("Pengajuan verifikasi identitas (KYC) hanya berlaku untuk merchant owner dan business admin")
 	}
 
+	// Periksa status pengajuan KYC saat ini: jika pending atau verified, jangan izinkan submit ulang
+	switch account.Role {
+	case "owner":
+		owner, err := s.repo.GetOwnerByAccountID(accountID)
+		if err == nil && owner != nil {
+			if owner.KycStatus == "pending" {
+				return errors.New("Dokumen identitas Anda sedang dalam proses verifikasi. Harap menunggu hingga proses verifikasi selesai.")
+			}
+			if owner.KycStatus == "verified" {
+				return errors.New("Akun Anda sudah terverifikasi KYC")
+			}
+		}
+	case "business_admin":
+		admin, err := s.repo.GetBusinessAdminByAccountID(accountID)
+		if err == nil && admin != nil {
+			if admin.KycStatus == "pending" {
+				return errors.New("Dokumen identitas Anda sedang dalam proses verifikasi. Harap menunggu hingga proses verifikasi selesai.")
+			}
+			if admin.KycStatus == "verified" {
+				return errors.New("Akun Anda sudah terverifikasi KYC")
+			}
+		}
+	}
+
 	cleanKtp := strings.TrimSpace(input.KtpNumber)
 	if err := validateKtpNumber(&cleanKtp); err != nil {
 		return err
@@ -834,6 +688,11 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 	cleanPhoto := strings.TrimSpace(input.KtpPhotoUrl)
 	if cleanPhoto == "" {
 		return errors.New("Foto KTP wajib diunggah")
+	}
+
+	cleanSelfie := strings.TrimSpace(input.SelfiePhotoUrl)
+	if cleanSelfie == "" {
+		return errors.New("Foto selfie wajib diunggah")
 	}
 
 	if err := validateDate(input.KtpBirthDate, "tanggal lahir KTP"); err != nil {
@@ -860,8 +719,10 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 
 		owner.KtpNumber = &cleanKtp
 		owner.KtpPhotoUrl = &cleanPhoto
+		owner.SelfiePhotoUrl = &cleanSelfie
 		owner.KycStatus = newStatus
 		owner.KycSubmittedAt = &now
+		owner.KycVerifiedAt = nil
 		owner.KycRejectionReason = nil
 
 		if input.KtpName != nil {
@@ -915,8 +776,10 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 
 		admin.KtpNumber = &cleanKtp
 		admin.KtpPhotoUrl = &cleanPhoto
+		admin.SelfiePhotoUrl = &cleanSelfie
 		admin.KycStatus = newStatus
 		admin.KycSubmittedAt = &now
+		admin.KycVerifiedAt = nil
 		admin.KycRejectionReason = nil
 
 		if input.KtpName != nil {

@@ -16,7 +16,7 @@ type Account struct {
 	Gender        *string    `json:"gender"`
 	AccountStatus     string     `gorm:"default:'inactive'" json:"accountStatus"`
 	EmailVerifiedAt   *time.Time `json:"emailVerifiedAt"`
-	PhoneVerifiedAt   *time.Time `json:"phoneVerifiedAt"`
+	PhoneVerifiedAt   *time.Time `gorm:"column:phone_verified_at" json:"-"`
 	LastLoginAt       *time.Time `json:"lastLoginAt"`
 	CreatedAt         time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt         time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
@@ -39,6 +39,7 @@ type Owner struct {
 	AccountID          string     `gorm:"primaryKey;column:account_id" json:"accountId"`
 	KtpNumber          *string    `gorm:"type:text;column:ktp_number" json:"ktpNumber"`
 	KtpPhotoUrl        *string    `gorm:"type:text;column:ktp_photo_url" json:"ktpPhotoUrl"`
+	SelfiePhotoUrl     *string    `gorm:"type:text;column:selfie_photo_url" json:"selfiePhotoUrl"`
 	ReferralCode       *string    `gorm:"column:referral_code" json:"referralCode"`
 	Country            *string    `gorm:"column:country" json:"country"`
 	KtpName            *string    `gorm:"type:text;column:ktp_name" json:"ktpName"`

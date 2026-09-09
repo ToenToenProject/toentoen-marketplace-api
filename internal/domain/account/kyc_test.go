@@ -68,7 +68,7 @@ func TestKYCService(t *testing.T) {
 		}
 	})
 
-	t.Run("SubmitKYC successfully updates status to pending", func(t *testing.T) {
+	t.Run("SubmitKYC validates missing selfie photo", func(t *testing.T) {
 		owner := &models.Owner{AccountID: "ACC_OWNER", KycStatus: "unverified"}
 		repo := &mockProfileRepo{
 			account: &models.Account{AccountID: "ACC_OWNER", Role: "owner"},
@@ -80,8 +80,90 @@ func TestKYCService(t *testing.T) {
 			KtpNumber:   "3171012345670001",
 			KtpPhotoUrl: "https://s3.amazonaws.com/toentoen/ktp/owner.jpg",
 		})
+		if err == nil {
+			t.Fatal("expected error for missing selfie photo, got nil")
+		}
+	})
+
+	t.Run("SubmitKYC rejects submission when KYC status is pending", func(t *testing.T) {
+		owner := &models.Owner{AccountID: "ACC_OWNER", KycStatus: "pending"}
+		repo := &mockProfileRepo{
+			account: &models.Account{AccountID: "ACC_OWNER", Role: "owner"},
+			owner:   owner,
+		}
+		service := NewProfileService(repo)
+
+		err := service.SubmitKYC("ACC_OWNER", models.SubmitKYCInput{
+			KtpNumber:      "3171012345670001",
+			KtpPhotoUrl:    "https://s3.amazonaws.com/toentoen/ktp/owner.jpg",
+			SelfiePhotoUrl: "https://s3.amazonaws.com/toentoen/selfie/owner.jpg",
+		})
+		if err == nil {
+			t.Fatal("expected error for re-submitting when pending, got nil")
+		}
+	})
+
+	t.Run("SubmitKYC rejects submission when KYC status is verified", func(t *testing.T) {
+		owner := &models.Owner{AccountID: "ACC_OWNER", KycStatus: "verified"}
+		repo := &mockProfileRepo{
+			account: &models.Account{AccountID: "ACC_OWNER", Role: "owner"},
+			owner:   owner,
+		}
+		service := NewProfileService(repo)
+
+		err := service.SubmitKYC("ACC_OWNER", models.SubmitKYCInput{
+			KtpNumber:      "3171012345670001",
+			KtpPhotoUrl:    "https://s3.amazonaws.com/toentoen/ktp/owner.jpg",
+			SelfiePhotoUrl: "https://s3.amazonaws.com/toentoen/selfie/owner.jpg",
+		})
+		if err == nil {
+			t.Fatal("expected error for re-submitting when already verified, got nil")
+		}
+	})
+
+	t.Run("SubmitKYC successfully updates status to pending", func(t *testing.T) {
+		owner := &models.Owner{AccountID: "ACC_OWNER", KycStatus: "unverified"}
+		repo := &mockProfileRepo{
+			account: &models.Account{AccountID: "ACC_OWNER", Role: "owner"},
+			owner:   owner,
+		}
+		service := NewProfileService(repo)
+
+		err := service.SubmitKYC("ACC_OWNER", models.SubmitKYCInput{
+			KtpNumber:      "3171012345670001",
+			KtpPhotoUrl:    "https://s3.amazonaws.com/toentoen/ktp/owner.jpg",
+			SelfiePhotoUrl: "https://s3.amazonaws.com/toentoen/selfie/owner.jpg",
+		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+		if owner.KycStatus != "pending" {
+			t.Errorf("expected KycStatus pending, got %s", owner.KycStatus)
+		}
+	})
+
+	t.Run("SubmitKYC allows re-submit when rejected", func(t *testing.T) {
+		reason := "Foto KTP buram"
+		owner := &models.Owner{AccountID: "ACC_OWNER", KycStatus: "rejected", KycRejectionReason: &reason}
+		repo := &mockProfileRepo{
+			account: &models.Account{AccountID: "ACC_OWNER", Role: "owner"},
+			owner:   owner,
+		}
+		service := NewProfileService(repo)
+
+		err := service.SubmitKYC("ACC_OWNER", models.SubmitKYCInput{
+			KtpNumber:      "3171012345670001",
+			KtpPhotoUrl:    "https://s3.amazonaws.com/toentoen/ktp/owner.jpg",
+			SelfiePhotoUrl: "https://s3.amazonaws.com/toentoen/selfie/owner.jpg",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if owner.KycStatus != "pending" {
+			t.Errorf("expected KycStatus pending, got %s", owner.KycStatus)
+		}
+		if owner.KycRejectionReason != nil {
+			t.Errorf("expected KycRejectionReason to be reset, got %v", owner.KycRejectionReason)
 		}
 	})
 }

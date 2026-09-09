@@ -194,13 +194,7 @@ func (s *authService) EvaluateAccountStatus(account *models.Account) string {
 		return account.AccountStatus
 	}
 
-	isEmailOK := account.EmailVerifiedAt != nil
-	isPhoneOK := true
-	if config.Envs != nil && config.Envs.RequirePhoneVerification {
-		isPhoneOK = account.PhoneVerifiedAt != nil
-	}
-
-	if isEmailOK && isPhoneOK {
+	if account.EmailVerifiedAt != nil {
 		return "active"
 	}
 	return "inactive"
@@ -549,6 +543,21 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 
 func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEmailChangeInput) error {
 	newEmailClean := strings.ToLower(strings.TrimSpace(input.NewEmail))
+	if !isEmail(newEmailClean) {
+		return errors.New("Format alamat email tidak valid")
+	}
+
+	account, err := s.repo.FindByID(accountID)
+	if err != nil {
+		return errors.New("Akun tidak ditemukan")
+	}
+	if account.AccountStatus == "banned" {
+		return errors.New("Akun anda telah diblokir dari platform")
+	}
+	if account.AccountStatus == "suspended" {
+		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+	}
+
 	redisKey := fmt.Sprintf("change_email_otp:%s", newEmailClean)
 	attemptKey := fmt.Sprintf("change_email_attempts:%s", newEmailClean)
 

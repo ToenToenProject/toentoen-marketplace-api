@@ -336,8 +336,8 @@ func main() {
 	customerBusinessGroup := api.Group("/customer/businesses")
 	customerBusinessGroup.Get("/bookmarks", middlewares.RequireAuth, businessProfileHandler.GetBookmarks)
 	customerBusinessGroup.Get("/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
-	customerBusinessGroup.Post("/:business_id/bookmark", middlewares.RequireAuth, businessProfileHandler.ToggleBookmark)
-	customerBusinessGroup.Post("/:business_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
+	customerBusinessGroup.Post("/:business_id/bookmark", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleBookmark)
+	customerBusinessGroup.Post("/:business_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	// Products
 	customerBusinessGroup.Get("/:business_id/product-groups", businessProfileHandler.GetProductGroups)
@@ -351,8 +351,8 @@ func main() {
 	protected := api.Group("/account", middlewares.RequireAuth)
 	protected.Get("/profile/me", profileHandler.GetMyProfile)
 	protected.Get("/kyc/status", profileHandler.GetKYCStatus)
-	protected.Post("/kyc/submit", profileHandler.SubmitKYC)
-	protected.Put("/kyc/submit", profileHandler.SubmitKYC)
+	protected.Post("/kyc/submit", middlewares.RequireEmailVerified, profileHandler.SubmitKYC)
+	protected.Put("/kyc/submit", middlewares.RequireEmailVerified, profileHandler.SubmitKYC)
 	protected.Put("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Patch("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Post("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
@@ -390,6 +390,9 @@ func main() {
 	// Khusus untuk pengujian / backdoor menghapus berdasarkan identifier:
 	api.Post("/account/force-delete", profileHandler.ForceDeleteAccount)
 
+	// Endpoint Internal untuk Service toentoen-internal-operations (Trigger WebSocket & Push Notification)
+	api.Post("/internal/notifications", notifHandler.SendInternalNotification)
+
 	// My Activity
 	myActivityGroup := protected.Group("/my-activity")
 	myActivityGroup.Get("/summary", myActivityHandler.GetMyProfileSummary)
@@ -398,12 +401,12 @@ func main() {
 	myActivityGroup.Get("/bookmarks", myActivityHandler.GetMyBookmarks)
 	myActivityGroup.Get("/wishlist", myActivityHandler.GetMyWishlists)
 
-	api.Post("/customer/wishlist/:product_id", middlewares.RequireAuth, myActivityHandler.ToggleWishlist)
+	api.Post("/customer/wishlist/:product_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.ToggleWishlist)
 
 	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - CUSTOMER
 	// ==========================================
-	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth)
+	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	customerSignalGroup.Post("/", customerSignalHandler.CreateSignal)
 	customerSignalGroup.Get("/me", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
@@ -411,13 +414,13 @@ func main() {
 	customerSignalGroup.Delete("/:signal_id", customerSignalHandler.DeleteSignal)
 	customerSignalGroup.Put("/:signal_id/complete", customerSignalHandler.CompleteSignal)
 
-	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth)
+	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	customerConvGroup.Get("/", customerSignalHandler.GetMyConversations)
 	customerConvGroup.Get("/:conversation_id/messages", customerSignalHandler.GetMessages)
 	customerConvGroup.Post("/:conversation_id/messages", customerSignalHandler.SendMessage)
 
 	// 4. UNIFIED ROUTES (UNIVERSAL REPORTS, LIKES, COMMENTS, REVIEWS)
-	reportsGroup := api.Group("/reports", middlewares.RequireAuth)
+	reportsGroup := api.Group("/reports", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	reportsGroup.Post("/", reportHandler.CreateReport)
 	reportsGroup.Get("/", reportHandler.GetAllReports)
 	reportsGroup.Get("/my", reportHandler.GetMyReports)
@@ -425,55 +428,55 @@ func main() {
 	reportsGroup.Delete("/:report_id", reportHandler.DeleteReport)
 	reportsGroup.Patch("/:report_id/status", reportHandler.UpdateReportStatus)
 
-	commentsGroup := api.Group("/comments", middlewares.RequireAuth)
+	commentsGroup := api.Group("/comments", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	commentsGroup.Post("/:comment_id/like", productInteractionHandler.ToggleUnifiedCommentLike)
 	commentsGroup.Delete("/:comment_id", productInteractionHandler.DeleteUnifiedComment)
 	commentsGroup.Post("/:comment_id/report", reportHandler.CreateReport)
 
 	reviewsGroup := api.Group("/reviews")
-	reviewsGroup.Post("/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedReviewLike)
-	reviewsGroup.Post("/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
-	reviewsGroup.Post("/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
+	reviewsGroup.Post("/:review_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedReviewLike)
+	reviewsGroup.Post("/:review_id/replies", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddReviewReply)
+	reviewsGroup.Post("/:review_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	businessReviewGroup := api.Group("/business/reviews")
-	businessReviewGroup.Post("/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
-	businessReviewGroup.Post("/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedReviewLike)
-	businessReviewGroup.Delete("/replies/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteUnifiedComment)
-	businessReviewGroup.Post("/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
+	businessReviewGroup.Post("/:review_id/replies", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddReviewReply)
+	businessReviewGroup.Post("/:review_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedReviewLike)
+	businessReviewGroup.Delete("/replies/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.DeleteUnifiedComment)
+	businessReviewGroup.Post("/:review_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	publicProductRoutes := api.Group("/products")
 	// 1. Detail & Like Produk
 	publicProductRoutes.Get("/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
-	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleLike)
+	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleLike)
 
 	// 2. Review Produk (Ulasan Berbintang 1-5 + Min 10 Kata)
-	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, productInteractionHandler.AddProductReview)
+	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddProductReview)
 	publicProductRoutes.Get("/:product_id/reviews", middlewares.OptionalAuth, productInteractionHandler.GetProductReviews)
 	publicProductRoutes.Get("/:product_id/reviews/smart", middlewares.OptionalAuth, productInteractionHandler.GetSmartDisplayProductReviews)
 	publicProductRoutes.Get("/reviews/detail/:review_id", middlewares.OptionalAuth, productInteractionHandler.GetProductReviewDetail)
-	publicProductRoutes.Put("/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.UpdateProductReview)
-	publicProductRoutes.Delete("/reviews/:review_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductReview)
-	publicProductRoutes.Post("/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedReviewLike)
-	publicProductRoutes.Post("/reviews/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
-	publicProductRoutes.Delete("/reviews/replies/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteReviewReply)
-	publicProductRoutes.Post("/reviews/replies/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedCommentLike)
-	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
-	publicProductRoutes.Post("/reviews/replies/:comment_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
-	publicProductRoutes.Post("/:product_id/comments", middlewares.RequireAuth, productInteractionHandler.AddProductComment)
-	publicProductRoutes.Put("/:product_id/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.EditProductComment)
-	publicProductRoutes.Delete("/:product_id/comments/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteProductComment)
+	publicProductRoutes.Put("/reviews/:review_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.UpdateProductReview)
+	publicProductRoutes.Delete("/reviews/:review_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.DeleteProductReview)
+	publicProductRoutes.Post("/reviews/:review_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedReviewLike)
+	publicProductRoutes.Post("/reviews/:review_id/replies", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddReviewReply)
+	publicProductRoutes.Delete("/reviews/replies/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.DeleteReviewReply)
+	publicProductRoutes.Post("/reviews/replies/:comment_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedCommentLike)
+	publicProductRoutes.Post("/reviews/:review_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
+	publicProductRoutes.Post("/reviews/replies/:comment_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
+	publicProductRoutes.Post("/:product_id/comments", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddProductComment)
+	publicProductRoutes.Put("/:product_id/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.EditProductComment)
+	publicProductRoutes.Delete("/:product_id/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.DeleteProductComment)
 	publicProductRoutes.Get("/:product_id/comments", middlewares.OptionalAuth, productInteractionHandler.GetProductComments)
-	publicProductRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedCommentLike)
-	publicProductRoutes.Post("/comments/:comment_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
+	publicProductRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedCommentLike)
+	publicProductRoutes.Post("/comments/:comment_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	publicPostRoutes := api.Group("/posts")
-	publicPostRoutes.Post("/:post_id/like", middlewares.RequireAuth, postInteractionHandler.ToggleLike)
-	publicPostRoutes.Post("/:post_id/comments", middlewares.RequireAuth, postInteractionHandler.AddPostComment)
-	publicPostRoutes.Put("/:post_id/comments/:comment_id", middlewares.RequireAuth, postInteractionHandler.EditPostComment)
-	publicPostRoutes.Delete("/:post_id/comments/:comment_id", middlewares.RequireAuth, postInteractionHandler.DeletePostComment)
+	publicPostRoutes.Post("/:post_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.ToggleLike)
+	publicPostRoutes.Post("/:post_id/comments", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.AddPostComment)
+	publicPostRoutes.Put("/:post_id/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.EditPostComment)
+	publicPostRoutes.Delete("/:post_id/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.DeletePostComment)
 	publicPostRoutes.Get("/:post_id/comments", middlewares.OptionalAuth, postInteractionHandler.GetPostComments)
-	publicPostRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedCommentLike)
-	publicPostRoutes.Post("/:post_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
+	publicPostRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedCommentLike)
+	publicPostRoutes.Post("/:post_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	// ==========================================
 	// ROUTES: BUSINESS OWNER / ADMIN ACTIONS
@@ -519,8 +522,8 @@ func main() {
 	sharedAccess := middlewares.AllowRoles("owner", "business_admin")
 
 	// Owner-only Business Management
-	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.AllowRoles("owner"))
-	ownerBusinessGroup.Post("/", middlewares.RequireKYC, businessHandler.CreateBusiness)
+	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"))
+	ownerBusinessGroup.Post("/", businessHandler.CreateBusiness)
 	ownerBusinessGroup.Get("/", businessHandler.GetMyBusinesses)
 	ownerBusinessGroup.Put("/:id", businessHandler.UpdateBusiness)
 	ownerBusinessGroup.Delete("/:id", businessHandler.DeleteBusiness)
@@ -536,9 +539,9 @@ func main() {
 
 	// -> Products
 	productRoutes := sharedBusinessScope.Group("/products")
-	productRoutes.Post("/", middlewares.RequireKYC, productHandler.CreateProduct)
+	productRoutes.Post("/", productHandler.CreateProduct)
 	productRoutes.Get("/", productHandler.GetFlatProducts)
-	productRoutes.Post("/:product_id/variants", middlewares.RequireKYC, productHandler.AddVariant)
+	productRoutes.Post("/:product_id/variants", productHandler.AddVariant)
 	productRoutes.Patch("/:product_id/variants/:variant_id", productHandler.UpdateVariant)
 	productRoutes.Delete("/:product_id/variants/:variant_id", productHandler.DeleteVariant)
 	productRoutes.Get("/:product_id", productHandler.GetProductDetail)
@@ -590,9 +593,9 @@ func main() {
 	// ==========================================
 	reviewGroup := api.Group("/reviews")
 	// Review Toko (Customer Buat, Edit, Hapus)
-	reviewGroup.Post("/business/:business_id", middlewares.RequireAuth, reviewHandler.CreateReview)
-	reviewGroup.Put("/business/reviews/:review_id", middlewares.RequireAuth, reviewHandler.UpdateReview)
-	reviewGroup.Delete("/business/reviews/:review_id", middlewares.RequireAuth, reviewHandler.DeleteReview)
+	reviewGroup.Post("/business/:business_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, reviewHandler.CreateReview)
+	reviewGroup.Put("/business/reviews/:review_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, reviewHandler.UpdateReview)
+	reviewGroup.Delete("/business/reviews/:review_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, reviewHandler.DeleteReview)
 
 	// Get Reviews Toko (Smart display 5 review, Paginated list, Detail)
 	reviewGroup.Get("/business/:business_id/smart", middlewares.OptionalAuth, reviewHandler.GetSmartDisplayReviews)
@@ -604,12 +607,12 @@ func main() {
 	api.Get("/business/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)
 
 	// Balasan & Like Review Toko (Legacy Alias)
-	reviewGroup.Post("/business/reviews/:review_id/replies", middlewares.RequireAuth, productInteractionHandler.AddReviewReply)
-	reviewGroup.Delete("/business/replies/:comment_id", middlewares.RequireAuth, productInteractionHandler.DeleteUnifiedComment)
-	reviewGroup.Post("/business/reviews/:review_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedReviewLike)
-	reviewGroup.Post("/business/replies/:comment_id/like", middlewares.RequireAuth, productInteractionHandler.ToggleUnifiedCommentLike)
-	reviewGroup.Post("/business/reviews/:review_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
-	reviewGroup.Post("/business/replies/:comment_id/report", middlewares.RequireAuth, reportHandler.CreateReport)
+	reviewGroup.Post("/business/reviews/:review_id/replies", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddReviewReply)
+	reviewGroup.Delete("/business/replies/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.DeleteUnifiedComment)
+	reviewGroup.Post("/business/reviews/:review_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedReviewLike)
+	reviewGroup.Post("/business/replies/:comment_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedCommentLike)
+	reviewGroup.Post("/business/reviews/:review_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
+	reviewGroup.Post("/business/replies/:comment_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	// ==========================================
 	// ROUTES: CUSTOMER EXPLORE & ANALYTICS
@@ -640,7 +643,7 @@ func main() {
 	// ==========================================
 	// ROUTES: SUPPORT LIVE CHAT (Customer Service)
 	// ==========================================
-	supportGroup := api.Group("/support/chat", middlewares.RequireAuth)
+	supportGroup := api.Group("/support/chat", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	supportGroup.Post("/initiate", supportChatHandler.InitiateChat)
 	supportGroup.Get("/active", supportChatHandler.GetActiveChat)
 	supportGroup.Get("/:session_id/messages", supportChatHandler.GetMessages)
@@ -654,7 +657,7 @@ func main() {
 	// ==========================================
 	// ROUTES: SUPPORT TICKETS (Tiket Bantuan)
 	// ==========================================
-	ticketGroup := api.Group("/support/tickets", middlewares.RequireAuth)
+	ticketGroup := api.Group("/support/tickets", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	ticketGroup.Post("/", supportTicketHandler.CreateTicket)
 	ticketGroup.Get("/", supportTicketHandler.GetMyTickets)
 	ticketGroup.Get("/:ticket_id", supportTicketHandler.GetTicketDetail)
@@ -662,14 +665,14 @@ func main() {
 	// ==========================================
 	// ROUTES: DIRECT BUSINESS CHAT (Chat Toko)
 	// ==========================================
-	customerBizChat := api.Group("/customer/business-chat", middlewares.RequireAuth)
+	customerBizChat := api.Group("/customer/business-chat", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	customerBizChat.Post("/:business_id/initiate", businessChatHandler.InitiateChat)
 	customerBizChat.Get("/conversations", businessChatHandler.GetCustomerConversations)
 
-	merchantBizChat := api.Group("/merchant/business-chat", middlewares.RequireAuth)
+	merchantBizChat := api.Group("/merchant/business-chat", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	merchantBizChat.Get("/:business_id/conversations", businessChatHandler.GetMerchantConversations)
 
-	sharedBizChat := api.Group("/business-chat", middlewares.RequireAuth)
+	sharedBizChat := api.Group("/business-chat", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	sharedBizChat.Get("/:conversation_id/messages", businessChatHandler.GetMessages)
 	sharedBizChat.Post("/:conversation_id/messages", businessChatHandler.SendMessage)
 

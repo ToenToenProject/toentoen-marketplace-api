@@ -28,9 +28,13 @@ func (Tag) TableName() string {
 }
 
 type UserPreferredCategory struct {
-	AccountID  string     `gorm:"primaryKey;column:account_id" json:"account_id"`
-	CategoryID string     `gorm:"primaryKey;column:category_id" json:"category_id"`
+	AccountID  string    `gorm:"primaryKey;column:account_id" json:"account_id"`
+	CategoryID string    `gorm:"primaryKey;column:category_id" json:"category_id"`
 	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (UserPreferredCategory) TableName() string {
+	return "customer_preferred_categories"
 }
 
 type BusinessHasCategory struct {

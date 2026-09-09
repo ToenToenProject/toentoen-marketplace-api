@@ -124,3 +124,41 @@ func (h *NotificationHandler) DeleteAllNotifications(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Semua notifikasi berhasil dihapus", nil)
 }
+
+// InternalNotificationInput payload untuk endpoint internal antar-service
+type InternalNotificationInput struct {
+	RecipientIDs   []string               `json:"recipient_ids"`
+	TriggerActorID string                 `json:"trigger_actor_id"`
+	Type           string                 `json:"type"`
+	ReferenceID    string                 `json:"reference_id"`
+	Title          string                 `json:"title"`
+	Body           string                 `json:"body"`
+	Data           map[string]interface{} `json:"data"`
+}
+
+// SendInternalNotification memproses pengiriman notifikasi dari internal service lain (misal: Operations Platform / KYC Review)
+// Endpoint ini langsung memicu penyimpanan DB, broadcast WebSocket, dan FCM Push Notification
+func (h *NotificationHandler) SendInternalNotification(c *fiber.Ctx) error {
+	var input InternalNotificationInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InvalidParam, "Format payload tidak valid", nil)
+	}
+
+	if len(input.RecipientIDs) == 0 || input.Type == "" || input.Title == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "recipient_ids, type, dan title wajib diisi", nil)
+	}
+
+	go h.service.SendNotification(
+		input.RecipientIDs,
+		input.TriggerActorID,
+		input.Type,
+		input.ReferenceID,
+		input.Title,
+		input.Body,
+		input.Data,
+		nil,
+	)
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Notifikasi internal berhasil diproses dan dikirimkan", nil)
+}
+

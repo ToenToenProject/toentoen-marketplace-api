@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"fmt"
+	"strings"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
@@ -14,7 +15,16 @@ import (
 func RequireAuth(c *fiber.Ctx) error {
 	var tokenString string
 
-	tokenString = c.Cookies("auth_token")
+	authHeader := c.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	} else if authHeader != "" {
+		tokenString = strings.TrimSpace(authHeader)
+	}
+
+	if tokenString == "" {
+		tokenString = c.Cookies("auth_token")
+	}
 
 	if tokenString == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Token pengguna tidak ditemukan, silakan login kembali"})
@@ -39,12 +49,13 @@ func RequireAuth(c *fiber.Ctx) error {
 	accountID, ok := claims["account_id"].(string)
 	if ok {
 		var account models.Account
-		if err := database.DB.Select("last_login_at").Where("account_id = ?", accountID).First(&account).Error; err == nil {
-			if account.LastLoginAt != nil {
-				if iatFloat, ok := claims["iat"].(float64); ok {
-					if int64(iatFloat) < account.LastLoginAt.Unix() {
-						return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi Anda sudah tidak valid, silakan login kembali"})
-					}
+		if err := database.DB.Select("last_login_at").Where("account_id = ?", accountID).First(&account).Error; err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Akun tidak ditemukan atau telah dihapus, silakan login kembali"})
+		}
+		if account.LastLoginAt != nil {
+			if iatFloat, ok := claims["iat"].(float64); ok {
+				if int64(iatFloat) < account.LastLoginAt.Unix() {
+					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi Anda sudah tidak valid, silakan login kembali"})
 				}
 			}
 		}
@@ -57,7 +68,18 @@ func RequireAuth(c *fiber.Ctx) error {
 }
 
 func OptionalAuth(c *fiber.Ctx) error {
-	tokenString := c.Cookies("auth_token")
+	var tokenString string
+
+	authHeader := c.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	} else if authHeader != "" {
+		tokenString = strings.TrimSpace(authHeader)
+	}
+
+	if tokenString == "" {
+		tokenString = c.Cookies("auth_token")
+	}
 
 	if tokenString == "" {
 		return c.Next()

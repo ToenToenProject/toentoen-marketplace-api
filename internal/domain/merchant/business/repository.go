@@ -272,13 +272,13 @@ func (r *businessRepository) GetBusinessListWithPreviews(ownerID string, search 
 	// --- 2. LOGIKA FILTER KATEGORI ---
 	if categoryID > 0 {
 		// Subquery: Cari ID bisnis yang punya kategori ini di tabel pivot
-		query = query.Where("business_id IN (SELECT business_id FROM business_categories WHERE category_id = ?)", categoryID)
+		query = query.Where("business_id IN (SELECT business_id FROM business_has_categories WHERE category_id = ?)", categoryID)
 	}
 
 	// --- 3. LOGIKA FILTER TAGS ---
 	if len(tagIDs) > 0 {
 		// Subquery: Cari ID bisnis yang punya MINIMAL SALAH SATU tag yang dikirim (OR logic)
-		query = query.Where("business_id IN (SELECT business_id FROM business_tags WHERE tag_id IN ?)", tagIDs)
+		query = query.Where("business_id IN (SELECT business_id FROM business_has_tags WHERE tag_id IN ?)", tagIDs)
 	}
 	
 	// --- 4. LOGIKA KURSOR & SORTING ---

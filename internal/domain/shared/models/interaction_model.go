@@ -30,7 +30,7 @@ type ProductComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account  *Account         `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+	Account  *Account         `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
 	Product  *Product         `gorm:"foreignKey:ProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"product,omitempty"`
 	Business *Business        `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 	Replies  []ProductComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`
@@ -71,7 +71,7 @@ type BusinessPostComment struct {
 	UpdatedAt            time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt            gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
-	Account  *Account              `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+	Account  *Account              `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
 	Post     *BusinessPost         `gorm:"foreignKey:PostID;references:PostID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"post,omitempty"`
 	Business *Business             `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 	Replies  []BusinessPostComment `gorm:"foreignKey:ReplyToCommentID;references:CommentID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"replies,omitempty"`

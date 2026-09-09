@@ -116,7 +116,7 @@ func (h *ProfileHandler) UpdateProfileBusinessAdmin(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil admin dan data KYC berhasil diperbarui", updatedAccount)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil admin berhasil diperbarui", updatedAccount)
 }
 
 func (h *ProfileHandler) GetMyProfile(c *fiber.Ctx) error {
@@ -132,6 +132,9 @@ func (h *ProfileHandler) GetMyProfile(c *fiber.Ctx) error {
 
 	account, err := h.service.GetMyProfile(accountID)
 	if err != nil {
+		if err.Error() == "akun tidak ditemukan" {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Akun tidak ditemukan atau telah dihapus, silakan login kembali", nil)
+		}
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 

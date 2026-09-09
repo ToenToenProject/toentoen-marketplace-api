@@ -33,7 +33,7 @@ func NewAuthRepository(db *gorm.DB) AuthRepository {
 
 func (r *authRepository) CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(account).Error; err != nil {
+		if err := tx.Omit("Owner", "Customer", "BusinessAdmin").Create(account).Error; err != nil {
 			return err
 		}
 
@@ -139,9 +139,14 @@ func (r *authRepository) Update(account *models.Account) error {
 }
 
 func (r *authRepository) UpdateEmail(accountID string, newEmail string) error {
+	now := time.Now()
 	return r.db.Model(&models.Account{}).
 		Where("account_id = ?", accountID).
-		Update("email", newEmail).Error
+		Updates(map[string]interface{}{
+			"email":             newEmail,
+			"email_verified_at": &now,
+			"account_status":    "active",
+		}).Error
 }
 
 func (r *authRepository) UpdatePhoneNumber(accountID string, newPhone string) error {
