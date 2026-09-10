@@ -52,7 +52,6 @@ services:
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_EMAIL=${SMTP_EMAIL}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - FONNTE_TOKEN=${FONNTE_TOKEN}
       - REDIS_HOST=redis-cache
       - REDIS_PORT=6379
       - MEILI_HOST=http://meilisearch:7700

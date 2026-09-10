@@ -27,7 +27,6 @@ type AppConfig struct {
 	SMTPPort    int
 	SMTPEmail   string
 	SMTPPass    string
-	FonnteToken string
 
 	MeiliHost      string
 	MeiliMasterKey string
@@ -73,7 +72,6 @@ func InitConfig() {
 		SMTPPort:    getEnvAsInt("SMTP_PORT", 587),
 		SMTPEmail:   getEnvMust("SMTP_EMAIL"),
 		SMTPPass:    getEnvMust("SMTP_PASSWORD"),
-		FonnteToken: getEnv("FONNTE_TOKEN", ""),
 
 		MeiliHost:      getEnv("MEILI_HOST", "http://localhost:7700"),
 		MeiliMasterKey: getEnvMust("MEILI_MASTER_KEY"),
