@@ -34,8 +34,8 @@ func ConnectDB() {
 
 	log.Println("🚀 Connected to Database successfully")
 
-	// Auto-migrate models
-	if err := DB.AutoMigrate(
+	// Auto-migrate models individually so one model issue does not block others
+	modelsToMigrate := []interface{}{
 		&models.Owner{},
 		&models.BusinessAdmin{},
 		&models.CSChatSession{},
@@ -52,8 +52,11 @@ func ConnectDB() {
 		&models.SignalImage{},
 		&models.SignalConversation{},
 		&models.SignalMessage{},
-	); err != nil {
-		log.Printf("⚠️ AutoMigrate models: %v", err)
+	}
+	for _, m := range modelsToMigrate {
+		if err := DB.AutoMigrate(m); err != nil {
+			log.Printf("⚠️ AutoMigrate model %T: %v", m, err)
+		}
 	}
 
 	// Ensure columns in owners, business_admins, and businesses can store encrypted ciphertext (TEXT)

@@ -1,7 +1,9 @@
 package account
 
 import (
+	"fmt"
 	"strings"
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/crypto"
 
@@ -196,9 +198,23 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 	var deletedProductIDs []string
 
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		// Helper function to delete and catch errors immediately
+		isRelationNotExist := func(err error) bool {
+			if err == nil {
+				return false
+			}
+			errMsg := strings.ToLower(err.Error())
+			return strings.Contains(errMsg, "42p01") || strings.Contains(errMsg, "does not exist")
+		}
+
+		// Helper function to delete with savepoint protection so missing tables never abort transaction
 		del := func(condition string, arg interface{}, model interface{}) error {
+			sp := fmt.Sprintf("sp_del_%d", time.Now().UnixNano())
+			tx.SavePoint(sp)
 			if err := tx.Unscoped().Where(condition, arg).Delete(model).Error; err != nil {
+				if isRelationNotExist(err) {
+					tx.RollbackTo(sp)
+					return nil
+				}
 				return err
 			}
 			return nil
@@ -208,10 +224,37 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 			if len(arg) == 0 {
 				return nil
 			}
+			sp := fmt.Sprintf("sp_delin_%d", time.Now().UnixNano())
+			tx.SavePoint(sp)
 			if err := tx.Unscoped().Where(condition, arg).Delete(model).Error; err != nil {
+				if isRelationNotExist(err) {
+					tx.RollbackTo(sp)
+					return nil
+				}
 				return err
 			}
 			return nil
+		}
+
+		updateNull := func(model interface{}, condition string, arg interface{}, column string) error {
+			sp := fmt.Sprintf("sp_upd_%d", time.Now().UnixNano())
+			tx.SavePoint(sp)
+			if err := tx.Model(model).Where(condition, arg).Update(column, nil).Error; err != nil {
+				if isRelationNotExist(err) {
+					tx.RollbackTo(sp)
+					return nil
+				}
+				return err
+			}
+			return nil
+		}
+
+		delRaw := func(query string, arg interface{}) {
+			sp := fmt.Sprintf("sp_raw_%d", time.Now().UnixNano())
+			tx.SavePoint(sp)
+			if err := tx.Exec(query, arg).Error; err != nil {
+				tx.RollbackTo(sp)
+			}
 		}
 
 		// 1. Clean up common interactions, tokens, and comments for any account
@@ -226,37 +269,37 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 
 		// Product Comments & Discussions
 		if err := del("account_id = ?", accountID, &models.ProductCommentLike{}); err != nil { return err }
-		if err := tx.Model(&models.ProductComment{}).Where("replied_to_account_id = ?", accountID).Update("replied_to_account_id", nil).Error; err != nil { return err }
+		if err := updateNull(&models.ProductComment{}, "replied_to_account_id = ?", accountID, "replied_to_account_id"); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.ProductComment{}); err != nil { return err }
 
 		// Product Reviews & Comments
 		if err := del("account_id = ?", accountID, &models.ProductReviewLike{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.ProductReviewCommentLike{}); err != nil { return err }
-		if err := tx.Model(&models.ProductReviewComment{}).Where("replied_to_account_id = ?", accountID).Update("replied_to_account_id", nil).Error; err != nil { return err }
+		if err := updateNull(&models.ProductReviewComment{}, "replied_to_account_id = ?", accountID, "replied_to_account_id"); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.ProductReviewComment{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.ProductReview{}); err != nil { return err }
 
 		// Business Reviews & Comments
 		if err := del("account_id = ?", accountID, &models.BusinessReviewLike{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.BusinessReviewCommentLike{}); err != nil { return err }
-		if err := tx.Model(&models.BusinessReviewComment{}).Where("replied_to_account_id = ?", accountID).Update("replied_to_account_id", nil).Error; err != nil { return err }
+		if err := updateNull(&models.BusinessReviewComment{}, "replied_to_account_id = ?", accountID, "replied_to_account_id"); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.BusinessReviewComment{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.Review{}); err != nil { return err }
 
 		// Business Posts Interactions
 		if err := del("account_id = ?", accountID, &models.BusinessPostLike{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.BusinessPostCommentLike{}); err != nil { return err }
-		if err := tx.Model(&models.BusinessPostComment{}).Where("replied_to_account_id = ?", accountID).Update("replied_to_account_id", nil).Error; err != nil { return err }
+		if err := updateNull(&models.BusinessPostComment{}, "replied_to_account_id = ?", accountID, "replied_to_account_id"); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.BusinessPostComment{}); err != nil { return err }
 
 		// Direct Business Chat & CS Live Chat & Support Tickets & Transfers
 		if err := del("customer_id = ?", accountID, &models.DirectBusinessConversation{}); err != nil { return err }
 		if err := del("sender_id = ?", accountID, &models.DirectBusinessMessage{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.CSChatSession{}); err != nil { return err }
-		if err := tx.Model(&models.CSChatSession{}).Where("cs_admin_id = ?", accountID).Update("cs_admin_id", nil).Error; err != nil { return err }
+		if err := updateNull(&models.CSChatSession{}, "cs_admin_id = ?", accountID, "cs_admin_id"); err != nil { return err }
 		if err := del("sender_id = ?", accountID, &models.CSChatMessage{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.SupportTicket{}); err != nil { return err }
-		if err := tx.Model(&models.SupportTicket{}).Where("resolved_by = ?", accountID).Update("resolved_by", nil).Error; err != nil { return err }
+		if err := updateNull(&models.SupportTicket{}, "resolved_by = ?", accountID, "resolved_by"); err != nil { return err }
 		if err := del("current_owner_id = ?", accountID, &models.BusinessTransferRequest{}); err != nil { return err }
 		if err := del("target_account_id = ?", accountID, &models.BusinessTransferRequest{}); err != nil { return err }
 
@@ -272,9 +315,9 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 		if err := del("account_id = ?", accountID, &models.ProductCommentReport{}); err != nil { return err }
 
 		// Legacy interaction and notification tables if they exist
-		_ = tx.Exec("DELETE FROM notifications WHERE recipient_account_id = ?", accountID).Error
-		_ = tx.Exec("DELETE FROM likes WHERE account_id = ?", accountID).Error
-		_ = tx.Exec("DELETE FROM bookmarks WHERE account_id = ?", accountID).Error
+		delRaw("DELETE FROM notifications WHERE recipient_account_id = ?", accountID)
+		delRaw("DELETE FROM likes WHERE account_id = ?", accountID)
+		delRaw("DELETE FROM bookmarks WHERE account_id = ?", accountID)
 
 		// 2. Delete Role-Specific Entities
 		if role == "customer" {
@@ -458,13 +501,13 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 				_ = del("business_id = ?", b.BusinessID, &models.UserPostInteraction{})
 				_ = del("business_id = ?", b.BusinessID, &models.DirectBusinessConversation{})
 				_ = del("business_id = ?", b.BusinessID, &models.BusinessTransferRequest{})
-				_ = tx.Model(&models.CSChatSession{}).Where("business_id = ?", b.BusinessID).Update("business_id", nil).Error
-				_ = tx.Model(&models.SupportTicket{}).Where("business_id = ?", b.BusinessID).Update("business_id", nil).Error
+				_ = updateNull(&models.CSChatSession{}, "business_id = ?", b.BusinessID, "business_id")
+				_ = updateNull(&models.SupportTicket{}, "business_id = ?", b.BusinessID, "business_id")
 
 				// Clear legacy tables if present
-				_ = tx.Exec("DELETE FROM notifications WHERE recipient_business_id = ?", b.BusinessID).Error
-				_ = tx.Exec("DELETE FROM likes WHERE business_id = ?", b.BusinessID).Error
-				_ = tx.Exec("DELETE FROM transactions WHERE business_id = ?", b.BusinessID).Error
+				delRaw("DELETE FROM notifications WHERE recipient_business_id = ?", b.BusinessID)
+				delRaw("DELETE FROM likes WHERE business_id = ?", b.BusinessID)
+				delRaw("DELETE FROM transactions WHERE business_id = ?", b.BusinessID)
 
 				// Clear join tables
 				if err := tx.Exec("DELETE FROM business_has_categories WHERE business_id = ?", b.BusinessID).Error; err != nil {
