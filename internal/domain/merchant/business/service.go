@@ -70,14 +70,37 @@ func toPointerOrNil(s string) *string {
 }
 
 func parseDatePointer(dateStr string) *time.Time {
-	if dateStr == "" {
+	cleanDate := strings.TrimSpace(dateStr)
+	if cleanDate == "" {
 		return nil
 	}
-	t, err := time.Parse(time.DateOnly, dateStr)
-	if err != nil {
-		return nil
+
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		time.DateOnly,
+		"2006-01-02 15:04:05",
 	}
-	return &t
+
+	for _, layout := range formats {
+		if t, err := time.Parse(layout, cleanDate); err == nil {
+			return &t
+		}
+	}
+
+	return nil
+}
+
+func deduplicateInt64(slice []int64) []int64 {
+	seen := make(map[int64]bool, len(slice))
+	result := make([]int64, 0, len(slice))
+	for _, val := range slice {
+		if !seen[val] && val > 0 {
+			seen[val] = true
+			result = append(result, val)
+		}
+	}
+	return result
 }
 
 func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error) {
@@ -221,16 +244,34 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	// Dekripsi dokumen sensitif untuk owner/admin
 	decryptBusinessLegal(business)
 
+	// Set alias field agar backward-compatible dan konsisten
+	business.BusinessNameAlias = business.BusinessName
+	business.SocialWebsitesAlias = business.SocialWebsites
+
 	// 🪄 MAGIC: Hitung is_open_now secara live sebelum dikembalikan ke Frontend
 	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
 
 	return business, nil
 }
 
-func (s *businessService) UpdateBusiness(requesterID, businessID string, input models.UpdateBusinessInput) (error) {
+func (s *businessService) UpdateBusiness(requesterID, businessID string, input models.UpdateBusinessInput) error {
 	business, err := s.repo.FindBusinessByID(businessID)
 	if err != nil {
 		return errors.New("bisnis tidak ditemukan")
+	}
+
+	// Dekripsi dulu dokumen sensitif lama agar tidak terjadi double-encryption saat disimpan ulang
+	decryptBusinessLegal(business)
+
+	// Resolusi alias jika field utama tidak diisi namun alias diisi
+	if input.BusinessName == nil && input.Name != nil {
+		input.BusinessName = input.Name
+	}
+	if input.SocialWebsites == nil && input.Websites != nil {
+		input.SocialWebsites = input.Websites
+	}
+	if input.AddressDetail == nil && input.Address != nil {
+		input.AddressDetail = input.Address
 	}
 
 	// Verifikasi apakah requester adalah owner atau admin aktif di toko ini
@@ -241,109 +282,249 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 			return errors.New("forbidden: Anda tidak memiliki akses untuk memperbarui bisnis ini")
 		}
 
-		if assignment.Role == "staff" && (len(input.Hours) > 0 || len(input.EventSchedules) > 0) {
+		hasHoursUpdate := (input.Hours != nil && len(*input.Hours) > 0) || (input.EventSchedules != nil && len(*input.EventSchedules) > 0)
+		if assignment.Role == "staff" && hasHoursUpdate {
 			if !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
 				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah jam operasional bisnis")
 			}
 		}
 	}
 
-	// Update field sederhana
-	if input.BusinessName != "" {
-		business.BusinessName = &input.BusinessName
-	}
-	if input.Handle != "" {
-		if s.repo.CheckHandleExists(input.Handle, business.BusinessID) {
-			return errors.New("handle sudah digunakan, silakan pilih yang lain")
+	// ==========================================
+	// 1. ATRIBUT WAJIB (MANDATORY FIELDS)
+	// ==========================================
+	if input.BusinessName != nil {
+		cleanName := strings.TrimSpace(*input.BusinessName)
+		if cleanName == "" {
+			return errors.New("nama bisnis wajib diisi dan tidak boleh kosong")
 		}
-		business.Handle = &input.Handle
-	}
-	if input.Email != "" {
-		business.Email = &input.Email
+		business.BusinessName = &cleanName
 	}
 
-	if input.BusinessDetails != "" {
-		business.BusinessDetails = &input.BusinessDetails
-	}
-	if input.NIB != "" {
-		business.NIB = &input.NIB
-	}
-	if input.Country != "" {
-		business.Country = &input.Country
-	}
-	if input.Province != "" {
-		business.Province = &input.Province
-	}
-	if input.City != "" {
-		business.City = &input.City
-	}
-	if input.AddressDetail != "" {
-		business.AddressDetail = &input.AddressDetail
-	}
-	if input.GoogleMapsLink != "" {
-		business.GoogleMapsLink = &input.GoogleMapsLink
-	}
-	
-	// Address, StartDate, EndDate dihapus karena tidak ada di model
-	
-	if input.Latitude != 0 {
-		business.Latitude = &input.Latitude
-	}
-	if input.Longitude != 0 {
-		business.Longitude = &input.Longitude
+	if input.Email != nil {
+		cleanEmail := strings.TrimSpace(*input.Email)
+		if cleanEmail == "" {
+			return errors.New("email bisnis wajib diisi dan tidak boleh kosong")
+		}
+		business.Email = &cleanEmail
 	}
 
-	business.IsLocationShared = input.IsLocationShared
-	
-	if input.VenueName != "" {
-		business.VenueName = &input.VenueName
-	}
-	if input.EventStartDate != "" {
-		business.EventStartDate = parseDatePointer(input.EventStartDate)
-	}
-	if input.EventEndDate != "" {
-		business.EventEndDate = parseDatePointer(input.EventEndDate)
-	}
-	if len(input.EventSchedules) > 0 {
-		business.EventSchedules = input.EventSchedules
+	if input.Handle != nil {
+		cleanHandle := strings.TrimSpace(*input.Handle)
+		if cleanHandle != "" {
+			if s.repo.CheckHandleExists(cleanHandle, business.BusinessID) {
+				return errors.New("handle sudah digunakan, silakan pilih yang lain")
+			}
+			business.Handle = &cleanHandle
+		} else {
+			business.Handle = nil
+		}
 	}
 
-	if input.StoreType != "" {
-		business.StoreType = &input.StoreType
+	if input.StoreType != nil {
+		cleanStoreType := strings.TrimSpace(*input.StoreType)
+		if cleanStoreType == "" {
+			return errors.New("tipe toko wajib diisi dan tidak boleh kosong")
+		}
+		business.StoreType = &cleanStoreType
 	}
 
-	if input.PhoneContact != "" {
-		business.PhoneContact = &input.PhoneContact
-	}
-	if input.WhatsappContact != "" {
-		business.WhatsappContact = &input.WhatsappContact
-	}
-	if input.SocialInstagram != "" {
-		business.SocialInstagram = &input.SocialInstagram
-	}
-	if input.SocialTiktok != "" {
-		business.SocialTiktok = &input.SocialTiktok
-	}
-	if input.LogoURL != "" {
-		business.LogoURL = &input.LogoURL
+	// ==========================================
+	// 2. ATRIBUT OPSIONAL (OPTIONAL FIELDS - UPDATE OR CLEAR)
+	// ==========================================
+	if input.LogoURL != nil {
+		cleanLogo := strings.TrimSpace(*input.LogoURL)
+		if cleanLogo == "" {
+			business.LogoURL = nil
+		} else {
+			business.LogoURL = &cleanLogo
+		}
 	}
 
-	// 🪄 Update Field JSONB
-	if len(input.BusinessImages) > 0 {
-		business.BusinessImages = input.BusinessImages
-	}
-	if len(input.Certificates) > 0 {
-		business.Certificates = input.Certificates
-	}
-	if len(input.SocialWebsites) > 0 {
-		business.SocialWebsites = input.SocialWebsites
+	if input.BusinessDetails != nil {
+		cleanDetails := strings.TrimSpace(*input.BusinessDetails)
+		if cleanDetails == "" {
+			business.BusinessDetails = nil
+		} else {
+			business.BusinessDetails = &cleanDetails
+		}
 	}
 
-	// Update Hours (tetap butuh pointer ke array untuk di-pass ke repo)
+	if input.NIB != nil {
+		cleanNIB := strings.TrimSpace(*input.NIB)
+		if cleanNIB == "" {
+			business.NIB = nil
+		} else {
+			business.NIB = &cleanNIB
+		}
+	}
+
+	if input.Country != nil {
+		cleanCountry := strings.TrimSpace(*input.Country)
+		if cleanCountry == "" {
+			defCountry := "Indonesia"
+			business.Country = &defCountry
+		} else {
+			business.Country = &cleanCountry
+		}
+	}
+
+	if input.Province != nil {
+		cleanProvince := strings.TrimSpace(*input.Province)
+		if cleanProvince == "" {
+			business.Province = nil
+		} else {
+			business.Province = &cleanProvince
+		}
+	}
+
+	if input.City != nil {
+		cleanCity := strings.TrimSpace(*input.City)
+		if cleanCity == "" {
+			business.City = nil
+		} else {
+			business.City = &cleanCity
+		}
+	}
+
+	if input.AddressDetail != nil {
+		cleanAddress := strings.TrimSpace(*input.AddressDetail)
+		if cleanAddress == "" {
+			business.AddressDetail = nil
+		} else {
+			business.AddressDetail = &cleanAddress
+		}
+	}
+
+	if input.GoogleMapsLink != nil {
+		cleanLink := strings.TrimSpace(*input.GoogleMapsLink)
+		if cleanLink == "" {
+			business.GoogleMapsLink = nil
+		} else {
+			business.GoogleMapsLink = &cleanLink
+		}
+	}
+
+	if input.Latitude != nil {
+		business.Latitude = input.Latitude
+	}
+	if input.Longitude != nil {
+		business.Longitude = input.Longitude
+	}
+
+	if input.IsLocationShared != nil {
+		business.IsLocationShared = *input.IsLocationShared
+	}
+
+	if input.VenueName != nil {
+		cleanVenue := strings.TrimSpace(*input.VenueName)
+		if cleanVenue == "" {
+			business.VenueName = nil
+		} else {
+			business.VenueName = &cleanVenue
+		}
+	}
+
+	if input.EventStartDate != nil {
+		cleanDate := strings.TrimSpace(*input.EventStartDate)
+		if cleanDate == "" {
+			business.EventStartDate = nil
+		} else {
+			business.EventStartDate = parseDatePointer(cleanDate)
+		}
+	}
+
+	if input.EventEndDate != nil {
+		cleanDate := strings.TrimSpace(*input.EventEndDate)
+		if cleanDate == "" {
+			business.EventEndDate = nil
+		} else {
+			business.EventEndDate = parseDatePointer(cleanDate)
+		}
+	}
+
+	if input.EventSchedules != nil {
+		business.EventSchedules = *input.EventSchedules
+	}
+
+	if input.PhoneContact != nil {
+		cleanPhone := strings.TrimSpace(*input.PhoneContact)
+		if cleanPhone == "" {
+			business.PhoneContact = nil
+		} else {
+			business.PhoneContact = &cleanPhone
+		}
+	}
+
+	if input.WhatsappContact != nil {
+		cleanWA := strings.TrimSpace(*input.WhatsappContact)
+		if cleanWA == "" {
+			business.WhatsappContact = nil
+		} else {
+			business.WhatsappContact = &cleanWA
+		}
+	}
+
+	if input.SocialInstagram != nil {
+		cleanIG := strings.TrimSpace(*input.SocialInstagram)
+		if cleanIG == "" {
+			business.SocialInstagram = nil
+		} else {
+			business.SocialInstagram = &cleanIG
+		}
+	}
+
+	if input.SocialTiktok != nil {
+		cleanTT := strings.TrimSpace(*input.SocialTiktok)
+		if cleanTT == "" {
+			business.SocialTiktok = nil
+		} else {
+			business.SocialTiktok = &cleanTT
+		}
+	}
+
+	// ==========================================
+	// 3. ATRIBUT KOLEKSI (COLLECTIONS / JSONB)
+	// ==========================================
+	if input.BusinessImages != nil {
+		if *input.BusinessImages == nil {
+			business.BusinessImages = []string{}
+		} else {
+			business.BusinessImages = *input.BusinessImages
+		}
+	}
+	if input.Certificates != nil {
+		if *input.Certificates == nil {
+			business.Certificates = []models.BusinessCertificate{}
+		} else {
+			business.Certificates = *input.Certificates
+		}
+	}
+	if input.SocialWebsites != nil {
+		if *input.SocialWebsites == nil {
+			business.SocialWebsites = []string{}
+		} else {
+			business.SocialWebsites = *input.SocialWebsites
+		}
+	}
+
+	// ==========================================
+	// 4. ATRIBUT RELASI (HOURS, CATEGORIES, TAGS)
+	// ==========================================
 	var hoursToUpdate *[]models.BusinessHour
-	if len(input.Hours) > 0 {
+	if input.Hours != nil {
+		seenDays := make(map[int]bool)
 		var mappedHours []models.BusinessHour
-		for _, h := range input.Hours {
+		for _, h := range *input.Hours {
+			if h.DayOfWeek < 0 || h.DayOfWeek > 6 {
+				return errors.New("day_of_week pada jam operasional harus bernilai antara 0 (Minggu) sampai 6 (Sabtu)")
+			}
+			// Cegah duplikasi hari dalam array jam operasional
+			if seenDays[h.DayOfWeek] {
+				continue
+			}
+			seenDays[h.DayOfWeek] = true
+
 			hour := models.BusinessHour{
 				DayOfWeek: h.DayOfWeek,
 				OpenTime:  toPointerOrNil(h.OpenTime),
@@ -354,23 +535,29 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		hoursToUpdate = &mappedHours
 	}
 
-	// Looping Update Websites dan Images manual dihapus
-
-	// Lempar ke repository dengan jumlah parameter yang baru (array JSONB tidak perlu dilempar terpisah)
-	// Kita cukup melempar CategoryIDs dan TagIDs karena masih butuh update ke tabel pivot (many-to-many)
 	var catIDs *[]int64
-	if len(input.CategoryIDs) > 0 {
-		catIDs = &input.CategoryIDs
+	if input.CategoryIDs != nil {
+		uniqueCats := deduplicateInt64(*input.CategoryIDs)
+		catIDs = &uniqueCats
 	}
+
 	var tagIDs *[]int64
-	if len(input.Tags) > 0 {
-		tagIDs = &input.Tags
+	if input.Tags != nil {
+		uniqueTags := deduplicateInt64(*input.Tags)
+		tagIDs = &uniqueTags
 	}
 
 	// Enkripsi dokumen sensitif sebelum disimpan ke basis data
 	encryptBusinessLegal(business)
 
 	if err := s.repo.UpdateBusiness(business, hoursToUpdate, catIDs, tagIDs); err != nil {
+		errStr := err.Error()
+		if strings.Contains(errStr, "business_has_categories") || strings.Contains(errStr, "business_categories") {
+			return errors.New("satu atau lebih kategori yang dipilih tidak valid atau tidak ditemukan")
+		}
+		if strings.Contains(errStr, "business_has_tags") || strings.Contains(errStr, "business_tags") {
+			return errors.New("satu atau lebih tag yang dipilih tidak valid atau tidak ditemukan")
+		}
 		return fmt.Errorf("gagal memperbarui data bisnis di database: %w", err)
 	}
 

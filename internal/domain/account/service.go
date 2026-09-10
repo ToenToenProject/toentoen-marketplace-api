@@ -287,10 +287,14 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 	}
 
 	if input.FirstName != nil {
-		account.FirstName = *input.FirstName
+		cleanFirst := strings.TrimSpace(*input.FirstName)
+		if cleanFirst == "" {
+			return nil, errors.New("Nama depan wajib diisi dan tidak boleh kosong")
+		}
+		account.FirstName = cleanFirst
 	}
 	if input.LastName != nil {
-		account.LastName = *input.LastName
+		account.LastName = strings.TrimSpace(*input.LastName)
 	}
 	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
 		cleanUsername := strings.TrimSpace(*input.Username)
@@ -314,7 +318,12 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 		account.PhoneNumber = input.PhoneNumber
 	}
 	if input.Gender != nil {
-		account.Gender = input.Gender
+		cleanGender := strings.TrimSpace(*input.Gender)
+		if cleanGender == "" {
+			account.Gender = nil
+		} else {
+			account.Gender = &cleanGender
+		}
 	}
 
 	customer, err := s.repo.GetCustomerByAccountID(accountID)
@@ -323,10 +332,20 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 	}
 
 	if input.Bio != nil {
-		customer.Bio = input.Bio
+		cleanBio := strings.TrimSpace(*input.Bio)
+		if cleanBio == "" {
+			customer.Bio = nil
+		} else {
+			customer.Bio = &cleanBio
+		}
 	}
 	if input.ProfilePictureUrl != nil {
-		account.ProfilePictureUrl = input.ProfilePictureUrl
+		cleanPic := strings.TrimSpace(*input.ProfilePictureUrl)
+		if cleanPic == "" {
+			account.ProfilePictureUrl = nil
+		} else {
+			account.ProfilePictureUrl = &cleanPic
+		}
 	}
 	if input.BirthDate != nil {
 		if *input.BirthDate == "" {
@@ -451,13 +470,22 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	}
 
 	if input.FirstName != nil {
-		account.FirstName = *input.FirstName
+		cleanFirst := strings.TrimSpace(*input.FirstName)
+		if cleanFirst == "" {
+			return nil, errors.New("Nama depan wajib diisi dan tidak boleh kosong")
+		}
+		account.FirstName = cleanFirst
 	}
 	if input.LastName != nil {
-		account.LastName = *input.LastName
+		account.LastName = strings.TrimSpace(*input.LastName)
 	}
 	if input.ProfilePictureUrl != nil {
-		account.ProfilePictureUrl = input.ProfilePictureUrl
+		cleanPic := strings.TrimSpace(*input.ProfilePictureUrl)
+		if cleanPic == "" {
+			account.ProfilePictureUrl = nil
+		} else {
+			account.ProfilePictureUrl = &cleanPic
+		}
 	}
 	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
 		cleanUsername := strings.TrimSpace(*input.Username)

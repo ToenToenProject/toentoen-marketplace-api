@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -190,15 +191,27 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		product.ProductPreview = *input.ProductPreview
 	}
 	if input.ProductName != nil {
-		product.ProductName = *input.ProductName
+		cleanName := strings.TrimSpace(*input.ProductName)
+		if cleanName == "" {
+			return errors.New("nama produk wajib diisi dan tidak boleh kosong")
+		}
+		product.ProductName = cleanName
 	}
 	if input.ProductOrigin != nil {
-		product.ProductOrigin = *input.ProductOrigin
+		cleanOrigin := strings.TrimSpace(*input.ProductOrigin)
+		if cleanOrigin == "" {
+			product.ProductOrigin = "domestic"
+		} else {
+			product.ProductOrigin = cleanOrigin
+		}
 	}
 	if input.ProductDescription != nil {
-		product.ProductDescription = *input.ProductDescription
+		product.ProductDescription = strings.TrimSpace(*input.ProductDescription)
 	}
 	if input.Price != nil {
+		if *input.Price < 0 {
+			return errors.New("harga produk tidak boleh bernilai negatif")
+		}
 		product.Price = *input.Price
 	}
 	if input.Discount != nil {
@@ -209,9 +222,6 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 			product.DiscountEndAt = nil
 		}
 	}
-	if input.Discount != nil {
-		product.Discount = *input.Discount
-	}
 	if input.DiscountStartAt != nil {
 		product.DiscountStartAt = input.DiscountStartAt
 	}
@@ -219,7 +229,11 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		product.DiscountEndAt = input.DiscountEndAt
 	}
 	if input.StockType != nil {
-		product.StockType = *input.StockType
+		cleanStock := strings.TrimSpace(*input.StockType)
+		if cleanStock == "" {
+			return errors.New("tipe stok wajib diisi dan tidak boleh kosong")
+		}
+		product.StockType = cleanStock
 	}
 	if input.IsActive != nil {
 		product.IsActive = *input.IsActive

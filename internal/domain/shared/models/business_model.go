@@ -20,10 +20,11 @@ type Business struct {
 	BusinessID string `gorm:"primaryKey;column:business_id" json:"business_id"`
 	AccountID  string `gorm:"column:account_id" json:"account_id"`
 
-	LogoURL      *string `gorm:"column:logo_url" json:"logo_url"`
-	BusinessName *string `gorm:"not null;column:business_name" json:"name"`
-	Handle       *string `gorm:"unique;column:handle" json:"handle"`
-	Email        *string `gorm:"not null;column:email" json:"email"`
+	LogoURL           *string  `gorm:"column:logo_url" json:"logo_url"`
+	BusinessName      *string  `gorm:"not null;column:business_name" json:"name"`
+	BusinessNameAlias *string  `gorm:"-" json:"business_name,omitempty"`
+	Handle            *string  `gorm:"unique;column:handle" json:"handle"`
+	Email             *string  `gorm:"not null;column:email" json:"email"`
 
 	Status           string `gorm:"default:'draft';column:status" json:"status"`
 	SubscriptionTier string `gorm:"default:'free';column:subscription_tier" json:"subscription_tier"`
@@ -56,11 +57,12 @@ type Business struct {
 	LiveStartedAt    *time.Time `gorm:"column:live_started_at" json:"live_started_at,omitempty"`
 	LastLiveNotifiedAt *time.Time `gorm:"column:last_live_notified_at" json:"last_live_notified_at,omitempty"`
 
-	PhoneContact     *string  `gorm:"column:phone_contact" json:"phone_contact"`
-	WhatsappContact  *string  `gorm:"column:whatsapp_contact" json:"whatsapp_contact"`
-	SocialInstagram  *string  `gorm:"column:social_instagram" json:"social_instagram"`
-	SocialTiktok     *string  `gorm:"column:social_tiktok" json:"social_tiktok"`
-	SocialWebsites   []string `gorm:"type:jsonb;serializer:json;column:social_website" json:"websites"`
+	PhoneContact        *string  `gorm:"column:phone_contact" json:"phone_contact"`
+	WhatsappContact     *string  `gorm:"column:whatsapp_contact" json:"whatsapp_contact"`
+	SocialInstagram     *string  `gorm:"column:social_instagram" json:"social_instagram"`
+	SocialTiktok        *string  `gorm:"column:social_tiktok" json:"social_tiktok"`
+	SocialWebsites      []string `gorm:"type:jsonb;serializer:json;column:social_website" json:"websites"`
+	SocialWebsitesAlias []string `gorm:"-" json:"social_websites,omitempty"`
 
 	AverageRating float64   `gorm:"default:0;column:average_rating" json:"average_rating"`
 	ReviewCount   int64     `gorm:"default:0;column:review_count" json:"review_count"`
@@ -128,41 +130,44 @@ type BusinessHourInput struct {
 }
 
 type UpdateBusinessInput struct {
-	LogoURL      string `json:"logo_url"`
-	BusinessName string `json:"business_name"`
-	Handle       string `json:"handle"`
-	Email        string `json:"email"`
+	LogoURL      *string `json:"logo_url"`
+	BusinessName *string `json:"business_name"`
+	Name         *string `json:"name"` // Alias untuk business_name
+	Handle       *string `json:"handle"`
+	Email        *string `json:"email"`
 
-	BusinessImages []string `json:"business_images" validate:"max=5"`
-	Certificates   []BusinessCertificate `json:"certificates" validate:"max=5"`
+	BusinessImages *[]string              `json:"business_images" validate:"omitempty,max=5"`
+	Certificates   *[]BusinessCertificate `json:"certificates" validate:"omitempty,max=5"`
 
-	CategoryIDs     []int64  `json:"category_ids"`
-	Tags            []int64  `json:"tags"`
-	BusinessDetails string   `json:"business_details" validate:"max=2000"`
+	CategoryIDs     *[]int64 `json:"category_ids"`
+	Tags            *[]int64 `json:"tags"`
+	BusinessDetails *string  `json:"business_details" validate:"omitempty,max=2000"`
 
-	NIB             string  `json:"nib"`
-	Country         string  `json:"country"`
-	Province        string  `json:"province"`
-	City            string  `json:"city"`
-	AddressDetail   string  `json:"address_detail"`
-	GoogleMapsLink  string  `json:"google_maps_link"`
-	Latitude        float64 `json:"latitude"`
-	Longitude       float64 `json:"longitude"`
+	NIB            *string  `json:"nib"`
+	Country        *string  `json:"country"`
+	Province       *string  `json:"province"`
+	City           *string  `json:"city"`
+	AddressDetail  *string  `json:"address_detail"`
+	Address        *string  `json:"address"` // Alias untuk address_detail
+	GoogleMapsLink *string  `json:"google_maps_link"`
+	Latitude       *float64 `json:"latitude"`
+	Longitude      *float64 `json:"longitude"`
 
-	IsLocationShared bool    `json:"is_location_shared"`
-	VenueName        string  `json:"venue_name"`
-	EventStartDate   string  `json:"event_start_date"`
-	EventEndDate     string  `json:"event_end_date"`
-	EventSchedules   []EventSchedule `json:"event_schedules"`
+	IsLocationShared *bool            `json:"is_location_shared"`
+	VenueName        *string          `json:"venue_name"`
+	EventStartDate   *string          `json:"event_start_date"`
+	EventEndDate     *string          `json:"event_end_date"`
+	EventSchedules   *[]EventSchedule `json:"event_schedules"`
 
-	StoreType string              `json:"store_type"`
-	Hours     []BusinessHourInput `json:"hours"`
+	StoreType *string              `json:"store_type"`
+	Hours     *[]BusinessHourInput `json:"hours"`
 
-	PhoneContact    string   `json:"phone_contact"`
-	WhatsappContact string   `json:"whatsapp_contact"`
-	SocialInstagram string   `json:"social_instagram"`
-	SocialTiktok    string   `json:"social_tiktok"`
-	SocialWebsites  []string `json:"social_websites"`
+	PhoneContact    *string   `json:"phone_contact"`
+	WhatsappContact *string   `json:"whatsapp_contact"`
+	SocialInstagram *string   `json:"social_instagram"`
+	SocialTiktok    *string   `json:"social_tiktok"`
+	SocialWebsites  *[]string `json:"social_websites"`
+	Websites        *[]string `json:"websites"` // Alias untuk social_websites
 }
 
 type BusinessListItem struct {
