@@ -11,6 +11,7 @@ import (
 
 type mockAuthRepo struct {
 	referralCodes map[string]*models.ReferralUser
+	accounts      map[string]*models.Account
 }
 
 func (m *mockAuthRepo) CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error {
@@ -26,6 +27,11 @@ func (m *mockAuthRepo) UpdatePhoneVerified(identifier string, verifiedAt time.Ti
 	return nil
 }
 func (m *mockAuthRepo) FindByIdentifier(identifier string) (*models.Account, error) {
+	if m.accounts != nil {
+		if acc, ok := m.accounts[identifier]; ok {
+			return acc, nil
+		}
+	}
 	return nil, gorm.ErrRecordNotFound
 }
 func (m *mockAuthRepo) FindByID(id string) (*models.Account, error) {
@@ -112,20 +118,47 @@ func TestRegisterWithReferralCode(t *testing.T) {
 	}
 	service := NewAuthService(mockRepo)
 
-	t.Run("owner with invalid referral code", func(t *testing.T) {
-		invalidCode := "INVALID"
+	t.Run("registration with phone number not available yet", func(t *testing.T) {
 		input := models.RegisterUnifiedInput{
-			Identifier:   "merchant@example.com",
-			Password:     "secret123",
-			Role:         "owner",
-			ReferralCode: &invalidCode,
+			Identifier: "081234567890",
+			Password:   "secret123",
+			Role:       "customer",
 		}
 		err := service.Register(input)
 		if err == nil {
-			t.Fatal("expected error for invalid referral code, got nil")
+			t.Fatal("expected error for phone number registration, got nil")
 		}
-		if err.Error() != "Kode referral tidak ditemukan" {
-			t.Errorf("unexpected error message: %v", err)
+	})
+
+	t.Run("registration with already active account", func(t *testing.T) {
+		activeEmail := "active@example.com"
+		repoWithActive := &mockAuthRepo{
+			accounts: map[string]*models.Account{
+				activeEmail: {
+					Email:         &activeEmail,
+					AccountStatus: "active",
+				},
+			},
+		}
+		svc := NewAuthService(repoWithActive)
+		err := svc.Register(models.RegisterUnifiedInput{
+			Identifier: activeEmail,
+			Password:   "secret123",
+			Role:       "customer",
+		})
+		if err == nil || err.Error() != "Akun dengan email ini sudah terdaftar dan aktif. Silakan langsung login." {
+			t.Fatalf("expected already active error, got: %v", err)
+		}
+	})
+
+	t.Run("verify register OTP with expired or missing OTP", func(t *testing.T) {
+		err := service.VerifyRegisterOTP(models.VerifyRegisterOTPInput{
+			Identifier: "nonexistent@example.com",
+			OTP:        "999999",
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid or missing OTP, got nil")
 		}
 	})
 }
+

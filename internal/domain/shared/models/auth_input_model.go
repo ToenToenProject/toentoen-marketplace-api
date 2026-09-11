@@ -15,6 +15,14 @@ type VerifyRegisterOTPInput struct {
 	OTP        string `json:"otp" validate:"required,len=6"`
 }
 
+type PendingRegistration struct {
+	Identifier   string  `json:"identifier"`
+	PasswordHash string  `json:"password_hash"`
+	Role         string  `json:"role"`
+	ReferralCode *string `json:"referral_code,omitempty"`
+	OTP          string  `json:"otp"`
+}
+
 type LoginUnifiedInput struct {
 	Identifier string `json:"identifier" validate:"required"`
 	Password   string `json:"password" validate:"required"`

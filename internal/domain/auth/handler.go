@@ -55,7 +55,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Akun anda sudah dibuat, silakan verifikasi OTP", nil)
+	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Kode verifikasi OTP telah dikirimkan ke email Anda, silakan verifikasi untuk menyelesaikan pendaftaran", nil)
 }
 
 func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
@@ -72,7 +72,7 @@ func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun berhasil diverifikasi. Silakan login.", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pendaftaran berhasil dan akun Anda telah aktif. Silakan login.", nil)
 }
 
 func (h *AuthHandler) SendEmailOTP(c *fiber.Ctx) error {

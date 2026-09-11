@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -119,7 +120,6 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	}
 
 	existingAccount, err := s.repo.FindByIdentifier(input.Identifier)
-
 	if err == nil {
 		switch existingAccount.AccountStatus {
 		case "active":
@@ -142,30 +142,43 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	}
 	pwd := string(passwordHash)
 
-	account := models.Account{
-		AccountID:     utils.GenerateUUID("ACC"),
-		PasswordHash:  &pwd,
-		Role:          input.Role,
-		Username:      utils.GenerateRandomUsername(input.Identifier),
-		FirstName:     "New",
-		LastName:      "Account",
-		AuthProvider:  "local",
-		AccountStatus: "inactive",
-		Email:         &input.Identifier,
+	otp := utils.GenerateNumericOTP(6)
+
+	pendingData := models.PendingRegistration{
+		Identifier:   input.Identifier,
+		PasswordHash: pwd,
+		Role:         input.Role,
+		ReferralCode: cleanRefCode,
+		OTP:          otp,
 	}
 
-	if input.Role == "owner" && cleanRefCode != nil {
-		account.Owner = &models.Owner{
-			AccountID:    account.AccountID,
-			ReferralCode: cleanRefCode,
+	pendingJSON, err := json.Marshal(pendingData)
+	if err != nil {
+		return errors.New("Gagal memproses data pendaftaran sementara")
+	}
+
+	pendingKey := fmt.Sprintf("register_pending:%s", input.Identifier)
+	otpKey := fmt.Sprintf("register_otp:%s", input.Identifier)
+
+	// Simpan data pendaftaran sementara dan kode OTP ke Redis (TTL 5 menit)
+	if config.RDB != nil {
+		if err := config.RDB.Set(config.Ctx, pendingKey, string(pendingJSON), 5*time.Minute).Err(); err != nil {
+			return errors.New("Gagal menyimpan data verifikasi ke sistem")
 		}
+		_ = config.RDB.Set(config.Ctx, otpKey, otp, 5*time.Minute).Err()
 	}
 
-	if err := s.repo.CreateAccountWithProfile(&account, input.Role); err != nil {
-		return errors.New("Gagal menyimpan data akun baru")
+	// Kirim kode verifikasi ke email
+	subject := "Kode Verifikasi Registrasi Akun ToenToen"
+	if err := utils.SendEmailOTP(input.Identifier, otp, subject); err != nil {
+		if config.RDB != nil {
+			config.RDB.Del(config.Ctx, pendingKey)
+			config.RDB.Del(config.Ctx, otpKey)
+		}
+		return fmt.Errorf("Gagal mengirim kode verifikasi ke email: %w", err)
 	}
 
-	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "register_otp")
+	return nil
 }
 
 func (s *authService) CheckReferralCode(code string) (*models.CheckReferralResponse, error) {
@@ -202,18 +215,77 @@ func (s *authService) EvaluateAccountStatus(account *models.Account) string {
 
 func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
-	redisKey := fmt.Sprintf("register_otp:%s", input.Identifier)
-	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+	pendingKey := fmt.Sprintf("register_pending:%s", input.Identifier)
+	otpKey := fmt.Sprintf("register_otp:%s", input.Identifier)
 
-	if err == redis.Nil || storedOTP != input.OTP {
-		return errors.New("OTP tidak valid atau sudah kadaluarsa")
+	if config.RDB != nil {
+		storedJSON, err := config.RDB.Get(config.Ctx, pendingKey).Result()
+		if err == nil && storedJSON != "" {
+			var pending models.PendingRegistration
+			if err := json.Unmarshal([]byte(storedJSON), &pending); err != nil {
+				return errors.New("Gagal membaca data pendaftaran sementara")
+			}
+
+			if pending.OTP != input.OTP {
+				return errors.New("OTP tidak valid atau sudah kadaluarsa")
+			}
+
+			// Idempotency check: pastikan email belum didaftarkan di database
+			existingAccount, errFind := s.repo.FindByIdentifier(input.Identifier)
+			if errFind == nil && existingAccount != nil {
+				config.RDB.Del(config.Ctx, pendingKey)
+				config.RDB.Del(config.Ctx, otpKey)
+				if existingAccount.AccountStatus == "active" {
+					return errors.New("Akun sudah terdaftar dan aktif. Silakan langsung login.")
+				}
+			}
+
+			now := time.Now()
+			account := models.Account{
+				AccountID:       utils.GenerateUUID("ACC"),
+				PasswordHash:    &pending.PasswordHash,
+				Role:            pending.Role,
+				Username:        utils.GenerateRandomUsername(pending.Identifier),
+				FirstName:       "New",
+				LastName:        "Account",
+				AuthProvider:    "local",
+				AccountStatus:   "active", // Akun langsung aktif saat OTP berhasil diverifikasi
+				Email:           &pending.Identifier,
+				EmailVerifiedAt: &now, // Email langsung terverifikasi
+			}
+
+			if pending.Role == "owner" && pending.ReferralCode != nil && *pending.ReferralCode != "" {
+				account.Owner = &models.Owner{
+					AccountID:    account.AccountID,
+					ReferralCode: pending.ReferralCode,
+				}
+			}
+
+			// Simpan akun dan profil ke database PostgreSQL secara atomik
+			if err := s.repo.CreateAccountWithProfile(&account, pending.Role); err != nil {
+				return errors.New("Gagal membuat akun baru di database")
+			}
+
+			// Bersihkan kunci sementara dari Redis
+			config.RDB.Del(config.Ctx, pendingKey)
+			config.RDB.Del(config.Ctx, otpKey)
+
+			return nil
+		}
 	}
 
-	config.RDB.Del(config.Ctx, redisKey)
+	// Alur Fallback: Jika data pending tidak ada di Redis, cek register_otp warisan untuk akun inactive lama
+	if config.RDB != nil {
+		storedOTP, errOTP := config.RDB.Get(config.Ctx, otpKey).Result()
+		if errOTP == redis.Nil || storedOTP != input.OTP {
+			return errors.New("OTP tidak valid atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
+		}
+		config.RDB.Del(config.Ctx, otpKey)
+	}
 
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
-		return errors.New("Akun tidak ditemukan")
+		return errors.New("Data pendaftaran tidak ditemukan atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
 	}
 
 	if account.AccountStatus == "banned" {
@@ -241,21 +313,36 @@ func (s *authService) SendEmailOTP(email string) error {
 	}
 
 	account, err := s.repo.FindByIdentifier(cleanEmail)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return errors.New("Akun dengan email ini tidak ditemukan")
+	if err == nil {
+		if account.AccountStatus == "banned" {
+			return errors.New("Akun anda telah diblokir dari platform")
 		}
+		if account.AccountStatus == "suspended" {
+			return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+		}
+		return s.sendOTP(cleanEmail, account.Email, account.PhoneNumber, "email_verify_otp")
+	} else if err != gorm.ErrRecordNotFound {
 		return errors.New("Terjadi kesalahan sistem saat mencari data akun")
 	}
 
-	if account.AccountStatus == "banned" {
-		return errors.New("Akun anda telah diblokir dari platform")
-	}
-	if account.AccountStatus == "suspended" {
-		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+	// Jika akun belum ada di database, cek apakah sedang dalam status pending registration di Redis
+	if config.RDB != nil {
+		pendingKey := fmt.Sprintf("register_pending:%s", cleanEmail)
+		storedJSON, errRedis := config.RDB.Get(config.Ctx, pendingKey).Result()
+		if errRedis == nil && storedJSON != "" {
+			var pending models.PendingRegistration
+			if err := json.Unmarshal([]byte(storedJSON), &pending); err == nil {
+				newOTP := utils.GenerateNumericOTP(6)
+				pending.OTP = newOTP
+				updatedJSON, _ := json.Marshal(pending)
+				_ = config.RDB.Set(config.Ctx, pendingKey, string(updatedJSON), 5*time.Minute).Err()
+				_ = config.RDB.Set(config.Ctx, fmt.Sprintf("register_otp:%s", cleanEmail), newOTP, 5*time.Minute).Err()
+				return utils.SendEmailOTP(cleanEmail, newOTP, "Kode Verifikasi Registrasi Akun ToenToen")
+			}
+		}
 	}
 
-	return s.sendOTP(cleanEmail, account.Email, account.PhoneNumber, "email_verify_otp")
+	return errors.New("Akun dengan email ini tidak ditemukan")
 }
 
 func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
