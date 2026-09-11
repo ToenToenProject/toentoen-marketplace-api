@@ -325,14 +325,21 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 		if err := updateNull(&models.BusinessPostComment{}, "replied_to_account_id = ?", accountID, "replied_to_account_id"); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.BusinessPostComment{}); err != nil { return err }
 
-		// Direct Business Chat & CS Live Chat & Support Tickets & Transfers
-		if err := del("customer_id = ?", accountID, &models.DirectBusinessConversation{}); err != nil { return err }
+		// Direct Business Chat (messages first, then conversations)
 		if err := del("sender_id = ?", accountID, &models.DirectBusinessMessage{}); err != nil { return err }
+		if err := del("customer_id = ?", accountID, &models.DirectBusinessConversation{}); err != nil { return err }
+
+		// CS Live Chat (messages first, then sessions)
+		if err := del("sender_id = ?", accountID, &models.CSChatMessage{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.CSChatSession{}); err != nil { return err }
 		if err := updateNull(&models.CSChatSession{}, "cs_admin_id = ?", accountID, "cs_admin_id"); err != nil { return err }
-		if err := del("sender_id = ?", accountID, &models.CSChatMessage{}); err != nil { return err }
+
+		// Support Tickets (attachments cascade via FK, but explicit for safety)
+		delRaw("DELETE FROM support_ticket_attachments WHERE ticket_id IN (SELECT ticket_id FROM support_tickets WHERE account_id = ?)", accountID)
 		if err := del("account_id = ?", accountID, &models.SupportTicket{}); err != nil { return err }
 		if err := updateNull(&models.SupportTicket{}, "resolved_by = ?", accountID, "resolved_by"); err != nil { return err }
+
+		// Business Transfer Requests
 		if err := del("current_owner_id = ?", accountID, &models.BusinessTransferRequest{}); err != nil { return err }
 		if err := del("target_account_id = ?", accountID, &models.BusinessTransferRequest{}); err != nil { return err }
 
@@ -351,6 +358,8 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 		delRaw("DELETE FROM notifications WHERE recipient_account_id = ?", accountID)
 		delRaw("DELETE FROM likes WHERE account_id = ?", accountID)
 		delRaw("DELETE FROM bookmarks WHERE account_id = ?", accountID)
+		// Legacy demand_signals v1 (account_id ON DELETE CASCADE, but table may not exist)
+		delRaw("DELETE FROM demand_signals WHERE account_id = ?", accountID)
 
 		// 2. Delete Role-Specific Entities
 		if role == "customer" {
