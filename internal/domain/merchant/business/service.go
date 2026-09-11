@@ -591,37 +591,10 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 		}
 	}
 
-	if len(business.Hours) == 0 {
-		database.DB.Where("business_id = ?", businessID).Find(&business.Hours)
-	}
-
 	// Nilai baru yang akan di-apply (Flip)
 	newStatus := !business.IsManuallyClosed
 
-	// 🚨 LOGIKA VALIDASI: Jika owner mau MEMBUKA toko (newStatus == false)
-	if newStatus == false {
-		loc, _ := time.LoadLocation("Asia/Jakarta")
-		currentDay := int(time.Now().In(loc).Weekday())
-
-		hasValidSchedule := false
-
-		// Cek apakah di array "Hours" ada jadwal untuk hari ini (berarti buka)
-		fmt.Printf("DEBUG: currentDay=%d, HoursCount=%d\n", currentDay, len(business.Hours))
-		for _, h := range business.Hours {
-			fmt.Printf("DEBUG: Checking h.DayOfWeek=%d\n", h.DayOfWeek)
-			if h.DayOfWeek == currentDay {
-				hasValidSchedule = true
-				break
-			}
-		}
-
-		// Jika hari ini tidak ada jadwalnya (berarti libur)
-		if !hasValidSchedule {
-			return true, errors.New("Toko tidak bisa dibuka. Jadwal hari ini kosong (toko libur). Silakan perbarui jadwal buka toko Anda terlebih dahulu")
-		}
-	}
-
-	// Jika validasi aman, simpan status barunya
+	// Simpan status barunya
 	business.IsManuallyClosed = newStatus
 	if err := s.repo.ToggleStoreStatus(business); err != nil {
 		return false, errors.New("gagal memperbarui status toko")
