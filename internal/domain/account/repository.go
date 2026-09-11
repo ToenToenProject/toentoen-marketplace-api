@@ -49,7 +49,40 @@ func (r *profileRepository) GetAccountByID(accountID string) (*models.Account, e
 
 func (r *profileRepository) GetAccountByIdentifier(identifier string) (*models.Account, error) {
 	var account models.Account
-	err := r.db.Where("email = ? OR phone_number = ? OR username = ?", identifier, identifier, identifier).First(&account).Error
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	// 1. Direct match by account_id (e.g. ACC-xxx)
+	if strings.HasPrefix(identifier, "ACC-") || strings.HasPrefix(identifier, "ACC_") {
+		if err := r.db.Where("account_id = ?", identifier).First(&account).Error; err == nil {
+			return &account, nil
+		}
+	}
+
+	// 2. Email match (case-insensitive)
+	if strings.Contains(identifier, "@") {
+		err := r.db.Where("LOWER(email) = LOWER(?) OR account_id = ?", identifier, identifier).First(&account).Error
+		if err != nil {
+			return nil, err
+		}
+		return &account, nil
+	}
+
+	// 3. Phone format variations (08xxx, 628xxx, +628xxx)
+	clean := strings.TrimPrefix(identifier, "+")
+	var phones []string
+	if strings.HasPrefix(clean, "08") {
+		phones = []string{clean, "62" + clean[1:], "+62" + clean[1:]}
+	} else if strings.HasPrefix(clean, "628") {
+		phones = []string{clean, "0" + clean[2:], "+" + clean}
+	} else {
+		phones = []string{identifier, "+" + identifier, clean}
+	}
+
+	// 4. Combined lookup: phone, username, or account_id
+	err := r.db.Where("phone_number IN ? OR LOWER(username) = LOWER(?) OR account_id = ?", phones, identifier, identifier).First(&account).Error
 	if err != nil {
 		return nil, err
 	}
@@ -537,6 +570,9 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 
 		// 2. Finally delete the Account
 		if err := del("account_id = ?", accountID, &models.Account{}); err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM accounts WHERE account_id = ?", accountID).Error; err != nil {
 			return err
 		}
 

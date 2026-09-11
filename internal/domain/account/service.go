@@ -431,7 +431,8 @@ func (s *profileService) VerifyDeleteOTPAndExecute(accountID string, otp string)
 }
 
 func (s *profileService) ForceDeleteAccount(identifier string) error {
-	account, err := s.repo.GetAccountByIdentifier(identifier)
+	cleanIdentifier := strings.TrimSpace(identifier)
+	account, err := s.repo.GetAccountByIdentifier(cleanIdentifier)
 	if err != nil {
 		return errors.New("akun tidak ditemukan")
 	}
@@ -441,6 +442,14 @@ func (s *profileService) ForceDeleteAccount(identifier string) error {
 	if err != nil {
 		return errors.New("Gagal menghapus akun: " + err.Error())
 	}
+
+	// Clean up Redis keys
+	if account.Email != nil && *account.Email != "" {
+		config.RDB.Del(config.Ctx, fmt.Sprintf("login_otp:%s", *account.Email))
+		config.RDB.Del(config.Ctx, fmt.Sprintf("register_otp:%s", *account.Email))
+		config.RDB.Del(config.Ctx, fmt.Sprintf("pwd_otp:%s", *account.Email))
+	}
+	config.RDB.Del(config.Ctx, fmt.Sprintf("delete_otp:%s", account.AccountID))
 
 	// Clean up Meilisearch
 	if len(deletedBusinessIDs) > 0 || len(deletedProductIDs) > 0 {
