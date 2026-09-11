@@ -68,11 +68,25 @@ func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.VerifyRegisterOTP(input); err != nil {
+	token, err := h.service.VerifyRegisterOTP(input)
+	if err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pendaftaran berhasil dan akun Anda telah aktif. Silakan login.", nil)
+	isProduction := config.Envs != nil && config.Envs.AppEnv == "production"
+	c.Cookie(&fiber.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Path:     "/",
+		Expires:  time.Now().Add(24 * time.Hour),
+		HTTPOnly: true,
+		Secure:   isProduction,
+		SameSite: "Lax",
+	})
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pendaftaran berhasil dan Anda telah otomatis masuk", fiber.Map{
+		"token": token,
+	})
 }
 
 func (h *AuthHandler) SendEmailOTP(c *fiber.Ctx) error {

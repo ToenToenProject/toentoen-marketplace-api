@@ -19,7 +19,7 @@ import (
 type AuthService interface {
 	Register(input models.RegisterUnifiedInput) error
 	CheckReferralCode(code string) (*models.CheckReferralResponse, error)
-	VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error
+	VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (string, error)
 	SendEmailOTP(email string) error
 	VerifyEmailOTP(input models.VerifyEmailOTPInput) error
 	SendPhoneOTP(phone string) error
@@ -213,7 +213,7 @@ func (s *authService) EvaluateAccountStatus(account *models.Account) string {
 	return "inactive"
 }
 
-func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) error {
+func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (string, error) {
 	input.Identifier = cleanIdentifier(input.Identifier)
 	pendingKey := fmt.Sprintf("register_pending:%s", input.Identifier)
 	otpKey := fmt.Sprintf("register_otp:%s", input.Identifier)
@@ -223,11 +223,11 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 		if err == nil && storedJSON != "" {
 			var pending models.PendingRegistration
 			if err := json.Unmarshal([]byte(storedJSON), &pending); err != nil {
-				return errors.New("Gagal membaca data pendaftaran sementara")
+				return "", errors.New("Gagal membaca data pendaftaran sementara")
 			}
 
 			if pending.OTP != input.OTP {
-				return errors.New("OTP tidak valid atau sudah kadaluarsa")
+				return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
 			}
 
 			// Idempotency check: pastikan email belum didaftarkan di database
@@ -236,7 +236,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 				config.RDB.Del(config.Ctx, pendingKey)
 				config.RDB.Del(config.Ctx, otpKey)
 				if existingAccount.AccountStatus == "active" {
-					return errors.New("Akun sudah terdaftar dan aktif. Silakan langsung login.")
+					return "", errors.New("Akun sudah terdaftar dan aktif. Silakan langsung login.")
 				}
 			}
 
@@ -252,6 +252,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 				AccountStatus:   "active", // Akun langsung aktif saat OTP berhasil diverifikasi
 				Email:           &pending.Identifier,
 				EmailVerifiedAt: &now, // Email langsung terverifikasi
+				LastLoginAt:     &now, // Sesi login langsung tercatat aktif
 			}
 
 			if pending.Role == "owner" && pending.ReferralCode != nil && *pending.ReferralCode != "" {
@@ -263,14 +264,20 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 
 			// Simpan akun dan profil ke database PostgreSQL secara atomik
 			if err := s.repo.CreateAccountWithProfile(&account, pending.Role); err != nil {
-				return errors.New("Gagal membuat akun baru di database")
+				return "", errors.New("Gagal membuat akun baru di database")
 			}
 
 			// Bersihkan kunci sementara dari Redis
 			config.RDB.Del(config.Ctx, pendingKey)
 			config.RDB.Del(config.Ctx, otpKey)
 
-			return nil
+			// Terbitkan sesi login otomatis
+			token, err := utils.GenerateToken(account.AccountID, account.Role)
+			if err != nil {
+				return "", errors.New("Akun berhasil dibuat, namun gagal membuat sesi login otomatis")
+			}
+
+			return token, nil
 		}
 	}
 
@@ -278,32 +285,39 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) err
 	if config.RDB != nil {
 		storedOTP, errOTP := config.RDB.Get(config.Ctx, otpKey).Result()
 		if errOTP == redis.Nil || storedOTP != input.OTP {
-			return errors.New("OTP tidak valid atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
+			return "", errors.New("OTP tidak valid atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
 		}
 		config.RDB.Del(config.Ctx, otpKey)
 	}
 
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
-		return errors.New("Data pendaftaran tidak ditemukan atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
+		return "", errors.New("Data pendaftaran tidak ditemukan atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
 	}
 
 	if account.AccountStatus == "banned" {
-		return errors.New("Akun anda telah diblokir dari platform")
+		return "", errors.New("Akun anda telah diblokir dari platform")
 	}
 	if account.AccountStatus == "suspended" {
-		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+		return "", errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	}
 
 	now := time.Now()
 	account.EmailVerifiedAt = &now
+	account.LastLoginAt = &now
 	newStatus := s.EvaluateAccountStatus(account)
 
 	if err := s.repo.UpdateEmailVerified(input.Identifier, now, newStatus); err != nil {
-		return errors.New("Gagal mengaktifkan akun")
+		return "", errors.New("Gagal mengaktifkan akun")
+	}
+	_ = s.repo.Update(account)
+
+	token, err := utils.GenerateToken(account.AccountID, account.Role)
+	if err != nil {
+		return "", errors.New("Akun berhasil diaktifkan, namun gagal membuat sesi login otomatis")
 	}
 
-	return nil
+	return token, nil
 }
 
 func (s *authService) SendEmailOTP(email string) error {

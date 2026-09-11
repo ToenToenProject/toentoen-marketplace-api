@@ -152,12 +152,15 @@ func TestRegisterWithReferralCode(t *testing.T) {
 	})
 
 	t.Run("verify register OTP with expired or missing OTP", func(t *testing.T) {
-		err := service.VerifyRegisterOTP(models.VerifyRegisterOTPInput{
+		token, err := service.VerifyRegisterOTP(models.VerifyRegisterOTPInput{
 			Identifier: "nonexistent@example.com",
 			OTP:        "999999",
 		})
 		if err == nil {
 			t.Fatal("expected error for invalid or missing OTP, got nil")
+		}
+		if token != "" {
+			t.Errorf("expected empty token on error, got: %s", token)
 		}
 	})
 }
