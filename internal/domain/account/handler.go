@@ -2,6 +2,8 @@ package account
 
 import (
 	"strings"
+	"time"
+	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -148,10 +150,13 @@ func (h *ProfileHandler) RequestDeleteOTP(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.RequestDeleteOTP(accountID); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InternalServerErr, err.Error(), nil)
+		if err.Error() == "Akun tidak ditemukan" || strings.Contains(strings.ToLower(err.Error()), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "OTP penghapusan akun telah dikirim", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP penghapusan akun telah dikirim ke email terdaftar Anda", nil)
 }
 
 func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
@@ -168,9 +173,24 @@ func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Input tidak lengkap", errs)
 	}
 
-	if err := h.service.VerifyDeleteOTPAndExecute(accountID, input.OTP); err != nil {
+	if err := h.service.VerifyDeleteOTPAndExecute(accountID, strings.TrimSpace(input.OTP)); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "otp") {
+			return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InternalServerErr, err.Error(), nil)
 	}
+
+	// Hapus cookie sesi saat akun berhasil dihapus
+	isProduction := config.Envs != nil && config.Envs.AppEnv == "production"
+	c.Cookie(&fiber.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Now().Add(-24 * time.Hour),
+		HTTPOnly: true,
+		Secure:   isProduction,
+		SameSite: "Lax",
+	})
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun dan seluruh jejak Anda telah berhasil dihapus secara permanen.", nil)
 }

@@ -396,7 +396,8 @@ func (s *profileService) RequestDeleteOTP(accountID string) error {
 func (s *profileService) VerifyDeleteOTPAndExecute(accountID string, otp string) error {
 	redisKey := fmt.Sprintf("delete_otp:%s", accountID)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
-	if err != nil || storedOTP != otp {
+	cleanOTP := strings.TrimSpace(otp)
+	if err != nil || storedOTP != cleanOTP {
 		return errors.New("OTP salah atau kedaluwarsa")
 	}
 

@@ -376,6 +376,8 @@ func main() {
 	protected.Post("/phone/change/verify", authHandler.VerifyPhoneChange)
 	protected.Post("/delete/request", profileHandler.RequestDeleteOTP)
 	protected.Delete("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
+	protected.Post("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
+	protected.Post("/delete/verify", profileHandler.VerifyDeleteOTPAndExecute)
 
 	// Notifications
 	notifGroup := protected.Group("/notifications")
