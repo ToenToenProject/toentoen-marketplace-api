@@ -84,9 +84,7 @@ func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
 		SameSite: "Lax",
 	})
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pendaftaran berhasil dan Anda telah otomatis masuk", fiber.Map{
-		"token": token,
-	})
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pendaftaran berhasil dan Anda telah otomatis masuk", nil)
 }
 
 func (h *AuthHandler) SendEmailOTP(c *fiber.Ctx) error {
