@@ -1,0 +1,21 @@
+# Version control
+.git
+.gitignore
+
+# Binaries and executables
+*.exe
+server
+api.exe
+
+# Temporary files & logs
+tmp/
+*.log
+.air.toml
+
+# Keys and credentials
+*.pem
+*.key
+*.pub
+
+# Local scripts
+*.py
