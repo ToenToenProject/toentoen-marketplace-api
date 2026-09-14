@@ -45,3 +45,13 @@ func (h *MetaHandler) GetStoreTypes(c *fiber.Ctx) error {
 	storeTypes := h.service.GetStoreTypes()
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil tipe bisnis", storeTypes)
 }
+
+func (h *MetaHandler) GetOccupations(c *fiber.Ctx) error {
+	occupations, err := h.service.GetOccupations()
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar pekerjaan", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar pekerjaan", occupations)
+}
+

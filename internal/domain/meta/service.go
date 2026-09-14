@@ -8,6 +8,7 @@ type MetaService interface {
 	GetCategories() ([]models.Category, error)
 	GetTags(categoryID *int64) ([]models.Tag, error)
 	GetStoreTypes() []map[string]string
+	GetOccupations() ([]models.Occupation, error)
 }
 
 type metaService struct {
@@ -39,3 +40,8 @@ func (s *metaService) GetStoreTypes() []map[string]string {
 		{"label": "Acara/Musiman", "value": "event"},
 	}
 }
+
+func (s *metaService) GetOccupations() ([]models.Occupation, error) {
+	return s.metaRepo.GetAllOccupations()
+}
+

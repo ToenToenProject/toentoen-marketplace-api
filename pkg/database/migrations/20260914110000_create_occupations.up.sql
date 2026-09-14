@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS occupations (
+    id SERIAL PRIMARY KEY,
+    label VARCHAR(255) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT true
+);

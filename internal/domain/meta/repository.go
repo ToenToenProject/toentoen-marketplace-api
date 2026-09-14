@@ -9,6 +9,7 @@ import (
 type MetaRepository interface {
 	GetAllCategories() ([]models.Category, error)
 	GetAllTags(categoryID *int64) ([]models.Tag, error)
+	GetAllOccupations() ([]models.Occupation, error)
 }
 
 type metaRepository struct {
@@ -34,3 +35,10 @@ func (r *metaRepository) GetAllTags(categoryID *int64) ([]models.Tag, error) {
 	err := query.Find(&tags).Error
 	return tags, err
 }
+
+func (r *metaRepository) GetAllOccupations() ([]models.Occupation, error) {
+	var occupations []models.Occupation
+	err := r.db.Where("is_active = ?", true).Order("label ASC").Find(&occupations).Error
+	return occupations, err
+}
+

@@ -277,6 +277,7 @@ func main() {
 	metaGroup.Get("/categories", metaHandler.GetCategories)
 	metaGroup.Get("/tags", metaHandler.GetTags)
 	metaGroup.Get("/store-types", metaHandler.GetStoreTypes)
+	metaGroup.Get("/occupations", metaHandler.GetOccupations)
 
 	// ==========================================
 	// ROUTE: WEBSOCKET (Real-Time)
