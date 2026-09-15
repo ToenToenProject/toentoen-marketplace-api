@@ -22,7 +22,9 @@ type Product struct {
 	ProductDescription string   `gorm:"column:product_description" json:"product_description"`
 
 	Price           float64    `gorm:"column:price" json:"price"`
+	DiscountType    string     `gorm:"column:discount_type;default:'nominal'" json:"discount_type"`
 	Discount        float64    `gorm:"column:discount;default:0" json:"discount"`
+	MaxDiscount     *float64   `gorm:"column:max_discount" json:"max_discount,omitempty"`
 	DiscountStartAt *time.Time `gorm:"column:discount_start_at" json:"discount_start_at"`
 	DiscountEndAt   *time.Time `gorm:"column:discount_end_at" json:"discount_end_at"`
 
@@ -32,6 +34,8 @@ type Product struct {
 	MaxPrice    float64 `gorm:"->;column:max_price" json:"max_price"`
 
 	StockType         string `gorm:"column:stock_type;default:'in_stock'" json:"stock_type"`
+	StockQuantity     int    `gorm:"column:stock_quantity;default:0" json:"stock_quantity"`
+	LowStockThreshold int    `gorm:"column:low_stock_threshold;default:5" json:"low_stock_threshold"`
 
 	Tags      []string `gorm:"column:tags;type:jsonb;serializer:json;default:'[]'" json:"tags"`
 	IsActive  bool     `gorm:"column:is_active;default:true" json:"is_active"`
@@ -90,17 +94,21 @@ type UpdateVariantInput struct {
 // ==========================================
 
 type CreateProductInput struct {
-	ProductGroupID     *string  `json:"product_group_id"`
-	ProductPreview     []string `json:"product_preview" validate:"max=10"`
-	ProductName        string   `json:"product_name" validate:"required"`
-	ProductOrigin      string   `json:"product_origin"`
-	ProductDescription string   `json:"product_description" validate:"max=300"`
-	Price              float64  `json:"price" validate:"required,min=0"`
-	Discount           float64  `json:"discount"`
+	ProductGroupID     *string    `json:"product_group_id"`
+	ProductPreview     []string   `json:"product_preview" validate:"max=10"`
+	ProductName        string     `json:"product_name" validate:"required"`
+	ProductOrigin      string     `json:"product_origin"`
+	ProductDescription string     `json:"product_description" validate:"max=300"`
+	Price              float64    `json:"price" validate:"required,min=0"`
+	DiscountType       *string    `json:"discount_type"` // "nominal" atau "percentage"
+	Discount           float64    `json:"discount"`
+	MaxDiscount        *float64   `json:"max_discount"`  // Maksimal potongan dalam Rupiah (opsional)
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
 	DiscountEndAt      *time.Time `json:"discount_end_at"`
 
 	StockType         string `json:"stock_type"` // in_stock, out_of_stock, limited
+	StockQuantity     *int   `json:"stock_quantity"`
+	LowStockThreshold *int   `json:"low_stock_threshold"`
 
 	Tags     []string `json:"tags"`
 	IsActive *bool    `json:"is_active"`
@@ -113,10 +121,14 @@ type UpdateProductInput struct {
 	ProductOrigin      *string    `json:"product_origin"`
 	ProductDescription *string    `json:"product_description" validate:"max=300"`
 	Price              *float64   `json:"price"`
+	DiscountType       *string    `json:"discount_type"`
 	Discount           *float64   `json:"discount"`
+	MaxDiscount        *float64   `json:"max_discount"`
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
 	DiscountEndAt      *time.Time `json:"discount_end_at"`
 	StockType          *string    `json:"stock_type"`
+	StockQuantity      *int       `json:"stock_quantity"`
+	LowStockThreshold  *int       `json:"low_stock_threshold"`
 	IsActive           *bool      `json:"is_active"`
 }
 
@@ -155,10 +167,13 @@ type ProductListItem struct {
 
 	// INFO DISKON
 	IsDiscounted    bool       `json:"is_discounted"`
-	Discount        float64    `json:"discount"`           // Nominal diskon (misal: 10000 = Rp 10.000)
-	DiscountPct     float64    `json:"discount_pct"`       // Persentase diskon (misal: 20 = 20%)
-	DiscountStartAt *time.Time `json:"discount_start_at"`  // null jika tidak ada batas waktu mulai
-	DiscountEndAt   *time.Time `json:"discount_end_at"`    // null jika tidak ada batas waktu akhir
+	DiscountType    string     `json:"discount_type"`          // "nominal" atau "percentage"
+	Discount        float64    `json:"discount"`               // Nilai diskon input (misal: 10000 atau 20)
+	DiscountAmount  float64    `json:"discount_amount"`        // Potongan harga riil dalam Rupiah setelah max_discount
+	DiscountPct     float64    `json:"discount_pct"`           // Persentase diskon (misal: 20 = 20%)
+	MaxDiscount     *float64   `json:"max_discount,omitempty"` // Batas maksimal diskon jika ada
+	DiscountStartAt *time.Time `json:"discount_start_at"`      // null jika tidak ada batas waktu mulai
+	DiscountEndAt   *time.Time `json:"discount_end_at"`        // null jika tidak ada batas waktu akhir
 
 	StockType   string  `json:"stock_type"`
 	Rating      float64 `json:"rating"`
@@ -186,7 +201,11 @@ type ProductDetailResponse struct {
 	ProductDescription string   `json:"product_description"`
 
 	Price           float64    `json:"price"` // Harga dasar di DB (opsional untuk referensi)
+	DiscountType    string     `json:"discount_type"`
 	Discount        float64    `json:"discount"`
+	DiscountAmount  float64    `json:"discount_amount"`
+	DiscountPct     float64    `json:"discount_pct"`
+	MaxDiscount     *float64   `json:"max_discount,omitempty"`
 	DiscountStartAt *time.Time `json:"discount_start_at"`
 	DiscountEndAt   *time.Time `json:"discount_end_at"`
 
@@ -199,6 +218,8 @@ type ProductDetailResponse struct {
 	IsDiscounted     bool    `json:"is_discounted"`
 
 	StockType         string `json:"stock_type"`
+	StockQuantity     int    `json:"stock_quantity"`
+	LowStockThreshold int    `json:"low_stock_threshold"`
 
 	Tags         []string         `json:"tags"`
 	IsActive     bool             `json:"is_active"`

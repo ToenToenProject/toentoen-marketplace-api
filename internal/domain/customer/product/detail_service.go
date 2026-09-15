@@ -3,6 +3,7 @@ package product
 import (
 	"errors"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/utils"
 )
 
 type ProductDetailResponse struct {
@@ -15,6 +16,10 @@ type ProductDetailResponse struct {
 	ReviewCount        int      `json:"review_count"`
 	Price              float64  `json:"price"`
 	OriginalPrice      *float64 `json:"original_price,omitempty"` // Harga coret (hanya jika diskon)
+	IsDiscounted       bool     `json:"is_discounted"`
+	DiscountType       string   `json:"discount_type"`
+	DiscountAmount     float64  `json:"discount_amount"` // Potongan harga (Rupiah)
+	DiscountPct        float64  `json:"discount_pct"`    // Besaran diskon (%)
 	Tags               []string `json:"tags"`
 	BusinessID         string   `json:"business_id"`
 	BusinessName       string   `json:"business_name"`
@@ -46,10 +51,20 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 	// Calculate prices
 	finalPrice := prod.Price
 	var originalPrice *float64
+	var discountAmount float64
+	var discountPct float64
+	isDiscounted := false
+
 	if prod.Discount > 0 {
-		finalPrice = prod.Price - (prod.Price * (prod.Discount / 100))
-		original := prod.Price
-		originalPrice = &original
+		cut, pct := utils.CalculateProductDiscount(prod.Price, prod.DiscountType, prod.Discount, prod.MaxDiscount)
+		if cut > 0 {
+			isDiscounted = true
+			finalPrice = prod.Price - cut
+			original := prod.Price
+			originalPrice = &original
+			discountAmount = cut
+			discountPct = pct
+		}
 	}
 
 	stockStatus := "In Stock"
@@ -72,6 +87,10 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		ReviewCount:        prod.ReviewCount,
 		Price:              finalPrice,
 		OriginalPrice:      originalPrice,
+		IsDiscounted:       isDiscounted,
+		DiscountType:       prod.DiscountType,
+		DiscountAmount:     discountAmount,
+		DiscountPct:        discountPct,
 		Tags:               prod.Tags,
 		BusinessID:         bus.BusinessID,
 		BusinessName:       bName,
@@ -87,9 +106,19 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 	for _, sim := range similars {
 		simPrice := sim.Price
 		var simOriginal float64
+		var discountAmount float64
+		var discountPct float64
+		isDiscounted := false
+
 		if sim.Discount > 0 {
-			simOriginal = sim.Price
-			simPrice = sim.Price - (sim.Price * (sim.Discount / 100))
+			cut, pct := utils.CalculateProductDiscount(sim.Price, sim.DiscountType, sim.Discount, sim.MaxDiscount)
+			if cut > 0 {
+				isDiscounted = true
+				simOriginal = sim.Price
+				simPrice = sim.Price - cut
+				discountAmount = cut
+				discountPct = pct
+			}
 		}
 		
 		img := ""
@@ -109,7 +138,12 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 			HasVariants:      sim.HasVariants,
 			OriginalMinPrice: simOriginal, // Simplified
 			FinalMinPrice:    simPrice,
-			IsDiscounted:     sim.Discount > 0,
+			IsDiscounted:     isDiscounted,
+			DiscountType:     sim.DiscountType,
+			Discount:         sim.Discount,
+			DiscountAmount:   discountAmount,
+			DiscountPct:      discountPct,
+			MaxDiscount:      sim.MaxDiscount,
 			StockType:        st,
 			Rating:           sim.AverageRating,
 			LikeCount:        sim.LikeCount,

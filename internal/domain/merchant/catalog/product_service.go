@@ -3,7 +3,6 @@ package catalog
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
@@ -51,6 +50,58 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		isActive = *input.IsActive
 	}
 
+	discountType := "nominal"
+	if input.DiscountType != nil {
+		cleanType := strings.ToLower(strings.TrimSpace(*input.DiscountType))
+		if cleanType != "" {
+			if cleanType != "nominal" && cleanType != "percentage" {
+				return errors.New("tipe diskon tidak valid, pilih 'nominal' atau 'percentage'")
+			}
+			discountType = cleanType
+		}
+	}
+
+	if input.Discount < 0 {
+		return errors.New("nilai diskon tidak boleh bernilai negatif")
+	}
+
+	if discountType == "percentage" && input.Discount > 100 {
+		return errors.New("persentase diskon tidak boleh melebihi 100%")
+	}
+
+	if discountType == "nominal" && input.Discount > input.Price {
+		return errors.New("nominal diskon tidak boleh melebihi harga produk")
+	}
+
+	if input.MaxDiscount != nil && *input.MaxDiscount < 0 {
+		return errors.New("maksimal diskon tidak boleh bernilai negatif")
+	}
+
+	discountStartAt := input.DiscountStartAt
+	discountEndAt := input.DiscountEndAt
+	maxDiscount := input.MaxDiscount
+	if input.Discount == 0 {
+		discountStartAt = nil
+		discountEndAt = nil
+		maxDiscount = nil
+	}
+
+	stockQuantity := 0
+	if input.StockQuantity != nil {
+		if *input.StockQuantity < 0 {
+			return errors.New("jumlah stok tidak boleh bernilai negatif")
+		}
+		stockQuantity = *input.StockQuantity
+	}
+
+	lowStockThreshold := 5
+	if input.LowStockThreshold != nil {
+		if *input.LowStockThreshold < 0 {
+			return errors.New("ambang batas stok menipis tidak boleh bernilai negatif")
+		}
+		lowStockThreshold = *input.LowStockThreshold
+	}
+
 	product := models.Product{
 		ProductID:          utils.GenerateUUID("PRD"),
 		BusinessID:         businessID,
@@ -60,10 +111,14 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		ProductOrigin:      input.ProductOrigin,
 		ProductDescription: input.ProductDescription,
 		Price:              input.Price,
+		DiscountType:       discountType,
 		Discount:           input.Discount,
-		DiscountStartAt:    input.DiscountStartAt,
-		DiscountEndAt:      input.DiscountEndAt,
+		MaxDiscount:        maxDiscount,
+		DiscountStartAt:    discountStartAt,
+		DiscountEndAt:      discountEndAt,
 		StockType:          input.StockType,
+		StockQuantity:      stockQuantity,
+		LowStockThreshold:  lowStockThreshold,
 		Tags:               input.Tags,
 		IsActive:           isActive,
 	}
@@ -172,7 +227,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 
 		hasOtherDetails := input.ProductGroupID != nil || input.ProductName != nil || input.ProductOrigin != nil ||
 			input.ProductDescription != nil || input.Price != nil || input.Discount != nil ||
-			input.StockType != nil || input.IsActive != nil ||
+			input.DiscountType != nil || input.MaxDiscount != nil ||
+			input.StockType != nil || input.StockQuantity != nil || input.LowStockThreshold != nil || input.IsActive != nil ||
 			input.DiscountStartAt != nil || input.DiscountEndAt != nil
 		if hasOtherDetails && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
 			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah detail produk")
@@ -214,14 +270,40 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		}
 		product.Price = *input.Price
 	}
+	if input.DiscountType != nil {
+		cleanType := strings.ToLower(strings.TrimSpace(*input.DiscountType))
+		if cleanType != "nominal" && cleanType != "percentage" {
+			return errors.New("tipe diskon tidak valid, pilih 'nominal' atau 'percentage'")
+		}
+		product.DiscountType = cleanType
+	}
+	if input.MaxDiscount != nil {
+		if *input.MaxDiscount < 0 {
+			return errors.New("maksimal diskon tidak boleh bernilai negatif")
+		}
+		product.MaxDiscount = input.MaxDiscount
+	}
 	if input.Discount != nil {
+		if *input.Discount < 0 {
+			return errors.New("nilai diskon tidak boleh bernilai negatif")
+		}
 		product.Discount = *input.Discount
 
 		if *input.Discount == 0 {
 			product.DiscountStartAt = nil
 			product.DiscountEndAt = nil
+			product.MaxDiscount = nil
 		}
 	}
+
+	// Validasi silang tipe diskon vs nilai & harga
+	if product.DiscountType == "percentage" && product.Discount > 100 {
+		return errors.New("persentase diskon tidak boleh melebihi 100%")
+	}
+	if product.DiscountType == "nominal" && product.Discount > product.Price {
+		return errors.New("nominal diskon tidak boleh melebihi harga produk")
+	}
+
 	if input.DiscountStartAt != nil {
 		product.DiscountStartAt = input.DiscountStartAt
 	}
@@ -234,6 +316,18 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 			return errors.New("tipe stok wajib diisi dan tidak boleh kosong")
 		}
 		product.StockType = cleanStock
+	}
+	if input.StockQuantity != nil {
+		if *input.StockQuantity < 0 {
+			return errors.New("jumlah stok tidak boleh bernilai negatif")
+		}
+		product.StockQuantity = *input.StockQuantity
+	}
+	if input.LowStockThreshold != nil {
+		if *input.LowStockThreshold < 0 {
+			return errors.New("ambang batas stok menipis tidak boleh bernilai negatif")
+		}
+		product.LowStockThreshold = *input.LowStockThreshold
 	}
 	if input.IsActive != nil {
 		product.IsActive = *input.IsActive
@@ -288,8 +382,10 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 	finalMinPrice := originalMinPrice
 	finalMaxPrice := originalMaxPrice
 	isDiscounted := false
+	var discountAmount float64
+	var discountPct float64
 
-	// Cek apakah ada nominal diskon yang dipasang
+	// Cek apakah ada nominal/persen diskon yang dipasang
 	if p.Discount > 0 {
 		isDiscountActive := true
 		
@@ -302,16 +398,13 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 
 		if isDiscountActive {
 			isDiscounted = true
-			finalMinPrice = originalMinPrice - p.Discount
-			finalMaxPrice = originalMaxPrice - p.Discount
+			minCut, pct := utils.CalculateProductDiscount(originalMinPrice, p.DiscountType, p.Discount, p.MaxDiscount)
+			maxCut, _ := utils.CalculateProductDiscount(originalMaxPrice, p.DiscountType, p.Discount, p.MaxDiscount)
 
-			// Safety Guard: Mencegah harga jebol ke angka minus/negatif
-			if finalMinPrice < 0 {
-				finalMinPrice = 0
-			}
-			if finalMaxPrice < 0 {
-				finalMaxPrice = 0
-			}
+			finalMinPrice = originalMinPrice - minCut
+			finalMaxPrice = originalMaxPrice - maxCut
+			discountAmount = minCut
+			discountPct = pct
 		}
 	}
 
@@ -325,7 +418,11 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		ProductOrigin:      p.ProductOrigin,
 		ProductDescription: p.ProductDescription,
 		Price:              p.Price,
+		DiscountType:       p.DiscountType,
 		Discount:           p.Discount,
+		DiscountAmount:     discountAmount,
+		DiscountPct:        discountPct,
+		MaxDiscount:        p.MaxDiscount,
 		DiscountStartAt:    p.DiscountStartAt,
 		DiscountEndAt:      p.DiscountEndAt,
 
@@ -336,15 +433,17 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		FinalMaxPrice:    finalMaxPrice,
 		IsDiscounted:     isDiscounted,
 
-		StockType:    p.StockType,
-		Tags:         p.Tags,
-		IsActive:     p.IsActive,
-		Rating:       p.AverageRating,
-		LikeCount:    p.LikeCount,
-		CreatedAt:    p.CreatedAt,
-		UpdatedAt:    p.UpdatedAt,
-		Group:        p.Group,
-		Variants:     p.Variants,
+		StockType:         p.StockType,
+		StockQuantity:     p.StockQuantity,
+		LowStockThreshold: p.LowStockThreshold,
+		Tags:              p.Tags,
+		IsActive:          p.IsActive,
+		Rating:            p.AverageRating,
+		LikeCount:         p.LikeCount,
+		CreatedAt:         p.CreatedAt,
+		UpdatedAt:         p.UpdatedAt,
+		Group:             p.Group,
+		Variants:          p.Variants,
 	}
 
 	return response, nil
@@ -397,6 +496,8 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 		finalMinPrice := originalMinPrice
 		finalMaxPrice := originalMaxPrice
 		isDiscounted := false
+		var discountAmount float64
+		var discountPct float64
 
 		if p.Discount > 0 {
 			isDiscountActive := true
@@ -408,22 +509,14 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 
 			if isDiscountActive {
 				isDiscounted = true
-				finalMinPrice = originalMinPrice - p.Discount
-				finalMaxPrice = originalMaxPrice - p.Discount
+				minCut, pct := utils.CalculateProductDiscount(originalMinPrice, p.DiscountType, p.Discount, p.MaxDiscount)
+				maxCut, _ := utils.CalculateProductDiscount(originalMaxPrice, p.DiscountType, p.Discount, p.MaxDiscount)
 
-				if finalMinPrice < 0 {
-					finalMinPrice = 0
-				}
-				if finalMaxPrice < 0 {
-					finalMaxPrice = 0
-				}
+				finalMinPrice = originalMinPrice - minCut
+				finalMaxPrice = originalMaxPrice - maxCut
+				discountAmount = minCut
+				discountPct = pct
 			}
-		}
-
-		// Hitung persentase diskon
-		var discountPct float64
-		if isDiscounted && originalMinPrice > 0 {
-			discountPct = (p.Discount / originalMinPrice) * 100
 		}
 
 		responseList = append(responseList, models.ProductListItem{
@@ -440,8 +533,11 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 
 			// Mapping Diskon
 			IsDiscounted:    isDiscounted,
+			DiscountType:    p.DiscountType,
 			Discount:        p.Discount,
-			DiscountPct:     math.Round(discountPct*10) / 10, // Pembulatan 1 desimal (misal: 20.0%)
+			DiscountAmount:  discountAmount,
+			DiscountPct:     discountPct,
+			MaxDiscount:     p.MaxDiscount,
 			DiscountStartAt: p.DiscountStartAt,
 			DiscountEndAt:   p.DiscountEndAt,
 

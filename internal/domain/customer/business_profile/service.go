@@ -6,6 +6,7 @@ import (
 
 	"toentoen-backend/internal/domain/merchant/analytics"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/utils"
 )
 
 type SimpleProductResponse struct {
@@ -14,6 +15,10 @@ type SimpleProductResponse struct {
 	ProductPreview []string `json:"product_preview"`
 	Price          float64  `json:"price"`
 	OriginalPrice  *float64 `json:"original_price,omitempty"`
+	IsDiscounted   bool     `json:"is_discounted"`
+	DiscountType   string   `json:"discount_type"`
+	DiscountAmount float64  `json:"discount_amount"` // Potongan harga (Rupiah)
+	DiscountPct    float64  `json:"discount_pct"`    // Besaran diskon (%)
 	AverageRating  float64  `json:"average_rating"`
 	ReviewCount    int      `json:"review_count"`
 	StockStatus    string   `json:"stock_status"`
@@ -305,10 +310,20 @@ func (s *service) GetAllProductGroups(businessID string) ([]models.ProductGroup,
 func mapToSimpleProduct(p models.Product) SimpleProductResponse {
 	var originalPrice *float64
 	currentPrice := p.Price
+	var discountAmount float64
+	var discountPct float64
+	isDiscounted := false
+
 	if p.Discount > 0 {
-		currentPrice = p.Price - p.Discount
-		orig := p.Price
-		originalPrice = &orig
+		cut, pct := utils.CalculateProductDiscount(p.Price, p.DiscountType, p.Discount, p.MaxDiscount)
+		if cut > 0 {
+			isDiscounted = true
+			currentPrice = p.Price - cut
+			orig := p.Price
+			originalPrice = &orig
+			discountAmount = cut
+			discountPct = pct
+		}
 	}
 
 	stockStatus := "Out of Stock"
@@ -322,6 +337,10 @@ func mapToSimpleProduct(p models.Product) SimpleProductResponse {
 		ProductPreview: p.ProductPreview,
 		Price:          currentPrice,
 		OriginalPrice:  originalPrice,
+		IsDiscounted:   isDiscounted,
+		DiscountType:   p.DiscountType,
+		DiscountAmount: discountAmount,
+		DiscountPct:    discountPct,
 		AverageRating:  p.AverageRating,
 		ReviewCount:    p.ReviewCount,
 		StockStatus:    stockStatus,
