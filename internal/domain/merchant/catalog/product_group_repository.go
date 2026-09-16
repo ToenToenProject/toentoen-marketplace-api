@@ -8,6 +8,7 @@ import (
 )
 
 type ProductGroupRepository interface {
+	CheckBusinessExists(businessID string) bool
 	CheckNameExists(businessID, name string) bool
 	GetGroups(businessID string) ([]models.ProductGroup, error)
 	CreateGroup(group *models.ProductGroup) error
@@ -29,6 +30,12 @@ type productGroupRepository struct {
 
 func NewProductGroupRepository(db *gorm.DB) ProductGroupRepository {
 	return &productGroupRepository{db}
+}
+
+func (r *productGroupRepository) CheckBusinessExists(businessID string) bool {
+	var count int64
+	r.db.Model(&models.Business{}).Where("business_id = ?", businessID).Count(&count)
+	return count > 0
 }
 
 func (r *productGroupRepository) CheckNameExists(businessID, name string) bool {

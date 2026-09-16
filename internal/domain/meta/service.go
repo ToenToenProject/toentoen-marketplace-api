@@ -29,19 +29,18 @@ func (s *metaService) GetTags(categoryID *int64) ([]models.Tag, error) {
 
 func (s *metaService) GetStoreTypes() []map[string]string {
 	return []map[string]string{
-		{"label": "Rumah", "value": "home"},
-		{"label": "Keliling", "value": "mobile"},
-		{"label": "Gerobak", "value": "stand"},
-		{"label": "Toko", "value": "store"},
-		{"label": "Ruko", "value": "shophouse"},
-		{"label": "Pasar", "value": "market"},
-		{"label": "Alun - alun", "value": "plaza"},
-		{"label": "Pusat Belanja", "value": "mall"},
-		{"label": "Acara/Musiman", "value": "event"},
+		{"label": "Rumah", "label_en": "Home", "value": "home"},
+		{"label": "Keliling", "label_en": "Mobile", "value": "mobile"},
+		{"label": "Gerobak", "label_en": "Stand", "value": "stand"},
+		{"label": "Toko", "label_en": "Store", "value": "store"},
+		{"label": "Ruko", "label_en": "Shophouse", "value": "shophouse"},
+		{"label": "Pasar", "label_en": "Market", "value": "market"},
+		{"label": "Alun - alun", "label_en": "Plaza", "value": "plaza"},
+		{"label": "Pusat Belanja", "label_en": "Mall", "value": "mall"},
+		{"label": "Acara/Musiman", "label_en": "Event/Seasonal", "value": "event"},
 	}
 }
 
 func (s *metaService) GetOccupations() ([]models.Occupation, error) {
 	return s.metaRepo.GetAllOccupations()
 }
-

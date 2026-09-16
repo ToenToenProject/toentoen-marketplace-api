@@ -18,6 +18,10 @@ type Account struct {
 	EmailVerifiedAt   *time.Time `json:"emailVerifiedAt"`
 	PhoneVerifiedAt   *time.Time `gorm:"column:phone_verified_at" json:"-"`
 	LastLoginAt       *time.Time `json:"lastLoginAt"`
+	AcceptedTermsAt   *time.Time `gorm:"column:accepted_terms_at" json:"acceptedTermsAt,omitempty"`
+	TermsVersion      *string    `gorm:"column:terms_version" json:"termsVersion,omitempty"`
+	AcceptedPrivacyAt *time.Time `gorm:"column:accepted_privacy_at" json:"acceptedPrivacyAt,omitempty"`
+	PrivacyVersion    *string    `gorm:"column:privacy_version" json:"privacyVersion,omitempty"`
 	CreatedAt         time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt         time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 

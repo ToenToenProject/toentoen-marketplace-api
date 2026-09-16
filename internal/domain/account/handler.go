@@ -248,3 +248,22 @@ func (h *ProfileHandler) SubmitKYC(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pengajuan verifikasi KYC berhasil dikirimkan dan sedang dalam peninjauan", nil)
 }
+
+func (h *ProfileHandler) SubmitConsent(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	var input models.ConsentInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
+	}
+
+	updatedAccount, err := h.service.UpdateConsent(accountID, input)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Persetujuan Syarat & Ketentuan serta Kebijakan Privasi berhasil disimpan", updatedAccount)
+}

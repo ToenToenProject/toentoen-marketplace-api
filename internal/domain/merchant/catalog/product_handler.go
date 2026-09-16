@@ -43,7 +43,10 @@ func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
 		if strings.Contains(errSvc.Error(), "forbidden") {
 			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
 		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errSvc.Error(), nil)
+		if strings.HasPrefix(errSvc.Error(), "gagal membuat produk:") {
+			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errSvc.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Produk berhasil dibuat", nil)

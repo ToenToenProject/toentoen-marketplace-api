@@ -3,6 +3,7 @@ package account
 import (
 	"errors"
 	"testing"
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 )
 
@@ -57,6 +58,15 @@ func (m *mockProfileRepo) FindReferralCode(code string) (*models.ReferralUser, e
 		return nil, errors.New("record not found")
 	}
 	return ref, nil
+}
+func (m *mockProfileRepo) UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error {
+	if m.account != nil && m.account.AccountID == accountID {
+		m.account.AcceptedTermsAt = acceptedTermsAt
+		m.account.TermsVersion = termsVersion
+		m.account.AcceptedPrivacyAt = acceptedPrivacyAt
+		m.account.PrivacyVersion = privacyVersion
+	}
+	return nil
 }
 
 func TestUpdateOwnerProfileReferralCode(t *testing.T) {

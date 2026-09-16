@@ -104,6 +104,22 @@ func deduplicateInt64(slice []int64) []int64 {
 }
 
 func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error) {
+	emailVerified, kycStatus, err := s.repo.GetOwnerKYCStatus(ownerID)
+	if err != nil {
+		return "", errors.New("akun pemilik bisnis tidak ditemukan")
+	}
+
+	if !emailVerified {
+		return "", errors.New("Email akun Anda belum terverifikasi. Silakan verifikasi email Anda terlebih dahulu sebelum membuat bisnis.")
+	}
+
+	if kycStatus != "pending" && kycStatus != "verified" {
+		if kycStatus == "rejected" {
+			return "", errors.New("Pengajuan verifikasi identitas (KYC) Anda ditolak. Silakan periksa alasan penolakan dan ajukan ulang berkas KYC Anda sebelum membuat bisnis.")
+		}
+		return "", errors.New("Anda belum dapat membuat bisnis karena pengajuan verifikasi identitas (KYC) Anda belum dikirimkan. Silakan lengkapi dan ajukan KYC terlebih dahulu.")
+	}
+
 	business := models.Business{
 		BusinessID:       utils.GenerateUUID("BUS"),
 		AccountID:        ownerID,

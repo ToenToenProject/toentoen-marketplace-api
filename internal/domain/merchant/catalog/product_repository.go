@@ -11,6 +11,7 @@ import (
 type ProductRepository interface {
 	HasAccessToBusiness(accountID, role, businessID string) bool
 	HasPermission(accountID, businessID, permKey string) bool
+	CheckProductGroupExists(businessID, productGroupID string) bool
 	CreateProduct(product *models.Product) error
 
 	// Fitur Varian
@@ -56,6 +57,12 @@ func (r *productRepository) HasAccessToBusiness(accountID, role, businessID stri
 
 func (r *productRepository) HasPermission(accountID, businessID, permKey string) bool {
 	return permissions.HasPermission(r.db, accountID, businessID, permKey)
+}
+
+func (r *productRepository) CheckProductGroupExists(businessID, productGroupID string) bool {
+	var count int64
+	r.db.Model(&models.ProductGroup{}).Where("business_id = ? AND product_group_id = ?", businessID, productGroupID).Count(&count)
+	return count > 0
 }
 
 // 2. CREATE

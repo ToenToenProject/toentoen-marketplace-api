@@ -23,6 +23,32 @@ type PendingRegistration struct {
 	OTP          string  `json:"otp"`
 }
 
+type ConsentInput struct {
+	AcceptedTerms        *bool   `json:"accepted_terms"`
+	AcceptedTermsCamel   *bool   `json:"acceptedTerms"`
+	TermsVersion         *string `json:"terms_version"`
+	TermsVersionCamel    *string `json:"termsVersion"`
+	AcceptedPrivacy      *bool   `json:"accepted_privacy"`
+	AcceptedPrivacyCamel *bool   `json:"acceptedPrivacy"`
+	PrivacyVersion       *string `json:"privacy_version"`
+	PrivacyVersionCamel  *string `json:"privacyVersion"`
+}
+
+func (c *ConsentInput) Normalize() {
+	if c.AcceptedTerms == nil && c.AcceptedTermsCamel != nil {
+		c.AcceptedTerms = c.AcceptedTermsCamel
+	}
+	if c.TermsVersion == nil && c.TermsVersionCamel != nil {
+		c.TermsVersion = c.TermsVersionCamel
+	}
+	if c.AcceptedPrivacy == nil && c.AcceptedPrivacyCamel != nil {
+		c.AcceptedPrivacy = c.AcceptedPrivacyCamel
+	}
+	if c.PrivacyVersion == nil && c.PrivacyVersionCamel != nil {
+		c.PrivacyVersion = c.PrivacyVersionCamel
+	}
+}
+
 type LoginUnifiedInput struct {
 	Identifier string `json:"identifier" validate:"required"`
 	Password   string `json:"password" validate:"required"`
@@ -109,43 +135,57 @@ type VerifyPhoneOTPInput struct {
 }
 
 type KYCStatusResponse struct {
-	Role            string     `json:"role"`
-	KycStatus       string     `json:"kycStatus"`
-	RejectionReason *string    `json:"rejectionReason,omitempty"`
-	SubmittedAt     *time.Time `json:"submittedAt,omitempty"`
-	VerifiedAt      *time.Time `json:"verifiedAt,omitempty"`
-	IsVerified      bool       `json:"isVerified"`
+	Role               string     `json:"role"`
+	KycStatus          string     `json:"kycStatus"`
+	RejectionReason    *string    `json:"rejectionReason,omitempty"`
+	SubmittedAt        *time.Time `json:"submittedAt,omitempty"`
+	VerifiedAt         *time.Time `json:"verifiedAt,omitempty"`
+	IsVerified         bool       `json:"isVerified"`
+	AcceptedTermsAt    *time.Time `json:"acceptedTermsAt,omitempty"`
+	TermsVersion       *string    `json:"termsVersion,omitempty"`
+	AcceptedPrivacyAt  *time.Time `json:"acceptedPrivacyAt,omitempty"`
+	PrivacyVersion     *string    `json:"privacyVersion,omitempty"`
+	HasAcceptedTerms   bool       `json:"hasAcceptedTerms"`
+	HasAcceptedPrivacy bool       `json:"hasAcceptedPrivacy"`
 }
 
 type SubmitKYCInput struct {
-	KtpNumber           string  `json:"ktp_number"`
-	KtpNumberCamel      string  `json:"ktpNumber"`
-	KtpPhotoUrl         string  `json:"ktp_photo_url"`
-	KtpPhotoUrlCamel    string  `json:"ktpPhotoUrl"`
-	SelfiePhotoUrl      string  `json:"selfie_photo_url"`
-	SelfiePhotoUrlCamel string  `json:"selfiePhotoUrl"`
-	KtpName             *string `json:"ktp_name"`
-	KtpNameCamel        *string `json:"ktpName"`
-	KtpBirthPlace       *string `json:"ktp_birth_place"`
-	KtpBirthPlaceCamel  *string `json:"ktpBirthPlace"`
-	KtpBirthDate        *string `json:"ktp_birth_date"`
-	KtpBirthDateCamel   *string `json:"ktpBirthDate"`
-	KtpGender           *string `json:"ktp_gender"`
-	KtpGenderCamel      *string `json:"ktpGender"`
-	KtpAddress          *string `json:"ktp_address"`
-	KtpAddressCamel     *string `json:"ktpAddress"`
-	KtpRtRw             *string `json:"ktp_rt_rw"`
-	KtpRtRwCamel        *string `json:"ktpRtRw"`
-	KtpVillage          *string `json:"ktp_village"`
-	KtpVillageCamel     *string `json:"ktpVillage"`
-	KtpDistrict         *string `json:"ktp_district"`
-	KtpDistrictCamel    *string `json:"ktpDistrict"`
-	KtpReligion         *string `json:"ktp_religion"`
-	KtpReligionCamel    *string `json:"ktpReligion"`
-	KtpOccupation       *string `json:"ktp_occupation"`
-	KtpOccupationCamel  *string `json:"ktpOccupation"`
-	KtpCitizenship      *string `json:"ktp_citizenship"`
-	KtpCitizenshipCamel *string `json:"ktpCitizenship"`
+	KtpNumber            string  `json:"ktp_number"`
+	KtpNumberCamel       string  `json:"ktpNumber"`
+	KtpPhotoUrl          string  `json:"ktp_photo_url"`
+	KtpPhotoUrlCamel     string  `json:"ktpPhotoUrl"`
+	SelfiePhotoUrl       string  `json:"selfie_photo_url"`
+	SelfiePhotoUrlCamel  string  `json:"selfiePhotoUrl"`
+	KtpName              *string `json:"ktp_name"`
+	KtpNameCamel         *string `json:"ktpName"`
+	KtpBirthPlace        *string `json:"ktp_birth_place"`
+	KtpBirthPlaceCamel   *string `json:"ktpBirthPlace"`
+	KtpBirthDate         *string `json:"ktp_birth_date"`
+	KtpBirthDateCamel    *string `json:"ktpBirthDate"`
+	KtpGender            *string `json:"ktp_gender"`
+	KtpGenderCamel       *string `json:"ktpGender"`
+	KtpAddress           *string `json:"ktp_address"`
+	KtpAddressCamel      *string `json:"ktpAddress"`
+	KtpRtRw              *string `json:"ktp_rt_rw"`
+	KtpRtRwCamel         *string `json:"ktpRtRw"`
+	KtpVillage           *string `json:"ktp_village"`
+	KtpVillageCamel      *string `json:"ktpVillage"`
+	KtpDistrict          *string `json:"ktp_district"`
+	KtpDistrictCamel     *string `json:"ktpDistrict"`
+	KtpReligion          *string `json:"ktp_religion"`
+	KtpReligionCamel     *string `json:"ktpReligion"`
+	KtpOccupation        *string `json:"ktp_occupation"`
+	KtpOccupationCamel   *string `json:"ktpOccupation"`
+	KtpCitizenship       *string `json:"ktp_citizenship"`
+	KtpCitizenshipCamel  *string `json:"ktpCitizenship"`
+	AcceptedTerms        *bool   `json:"accepted_terms"`
+	AcceptedTermsCamel   *bool   `json:"acceptedTerms"`
+	TermsVersion         *string `json:"terms_version"`
+	TermsVersionCamel    *string `json:"termsVersion"`
+	AcceptedPrivacy      *bool   `json:"accepted_privacy"`
+	AcceptedPrivacyCamel *bool   `json:"acceptedPrivacy"`
+	PrivacyVersion       *string `json:"privacy_version"`
+	PrivacyVersionCamel  *string `json:"privacyVersion"`
 }
 
 func (input *SubmitKYCInput) Normalize() {
@@ -190,6 +230,18 @@ func (input *SubmitKYCInput) Normalize() {
 	}
 	if input.KtpCitizenship == nil {
 		input.KtpCitizenship = input.KtpCitizenshipCamel
+	}
+	if input.AcceptedTerms == nil && input.AcceptedTermsCamel != nil {
+		input.AcceptedTerms = input.AcceptedTermsCamel
+	}
+	if input.TermsVersion == nil && input.TermsVersionCamel != nil {
+		input.TermsVersion = input.TermsVersionCamel
+	}
+	if input.AcceptedPrivacy == nil && input.AcceptedPrivacyCamel != nil {
+		input.AcceptedPrivacy = input.AcceptedPrivacyCamel
+	}
+	if input.PrivacyVersion == nil && input.PrivacyVersionCamel != nil {
+		input.PrivacyVersion = input.PrivacyVersionCamel
 	}
 }
 

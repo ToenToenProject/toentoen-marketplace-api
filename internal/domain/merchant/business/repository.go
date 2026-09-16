@@ -31,6 +31,7 @@ type BusinessRepository interface {
 	UpdateLiveStatus(business *models.Business) error
 	GetBookmarkAccountIDs(businessID string) ([]string, error)
 	ResetLiveStatus() error
+	GetOwnerKYCStatus(ownerID string) (emailVerified bool, kycStatus string, err error)
 }
 
 type businessRepository struct {
@@ -393,3 +394,23 @@ func (r *businessRepository) ResetLiveStatus() error {
 			"updated_at":      time.Now(),
 		}).Error
 }
+
+func (r *businessRepository) GetOwnerKYCStatus(ownerID string) (bool, string, error) {
+	var account models.Account
+	if err := r.db.Select("email_verified_at").Where("account_id = ?", ownerID).First(&account).Error; err != nil {
+		return false, "", err
+	}
+	emailVerified := account.EmailVerifiedAt != nil
+
+	var owner models.Owner
+	if err := r.db.Select("kyc_status").Where("account_id = ?", ownerID).First(&owner).Error; err != nil {
+		return emailVerified, "unverified", nil
+	}
+
+	kycStatus := owner.KycStatus
+	if kycStatus == "" {
+		kycStatus = "unverified"
+	}
+
+	return emailVerified, kycStatus, nil
+}

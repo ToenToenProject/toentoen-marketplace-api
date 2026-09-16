@@ -102,10 +102,21 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		lowStockThreshold = *input.LowStockThreshold
 	}
 
+	var productGroupID *string
+	if input.ProductGroupID != nil {
+		cleanGroupID := strings.TrimSpace(*input.ProductGroupID)
+		if cleanGroupID != "" {
+			if !s.repo.CheckProductGroupExists(businessID, cleanGroupID) {
+				return fmt.Errorf("grup produk dengan ID '%s' tidak ditemukan pada bisnis ini", cleanGroupID)
+			}
+			productGroupID = &cleanGroupID
+		}
+	}
+
 	product := models.Product{
 		ProductID:          utils.GenerateUUID("PRD"),
 		BusinessID:         businessID,
-		ProductGroupID:     input.ProductGroupID,
+		ProductGroupID:     productGroupID,
 		ProductPreview:     input.ProductPreview,
 		ProductName:        input.ProductName,
 		ProductOrigin:      input.ProductOrigin,
@@ -241,7 +252,15 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	}
 
 	if input.ProductGroupID != nil {
-		product.ProductGroupID = input.ProductGroupID
+		cleanGroupID := strings.TrimSpace(*input.ProductGroupID)
+		if cleanGroupID != "" {
+			if !s.repo.CheckProductGroupExists(businessID, cleanGroupID) {
+				return fmt.Errorf("grup produk dengan ID '%s' tidak ditemukan pada bisnis ini", cleanGroupID)
+			}
+			product.ProductGroupID = &cleanGroupID
+		} else {
+			product.ProductGroupID = nil
+		}
 	}
 	if input.ProductPreview != nil {
 		product.ProductPreview = *input.ProductPreview

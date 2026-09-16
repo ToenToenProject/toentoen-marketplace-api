@@ -1,0 +1,6 @@
+-- Add TnC & Privacy Policy consent tracking to accounts table
+ALTER TABLE accounts
+ADD COLUMN IF NOT EXISTS accepted_terms_at TIMESTAMPTZ DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS terms_version VARCHAR(20) DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS accepted_privacy_at TIMESTAMPTZ DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS privacy_version VARCHAR(20) DEFAULT NULL;

@@ -213,6 +213,7 @@ type ProfileService interface {
 	GetMyProfile(accountID string) (*models.Account, error)
 	GetKYCStatus(accountID string) (*models.KYCStatusResponse, error)
 	SubmitKYC(accountID string, input models.SubmitKYCInput) error
+	UpdateConsent(accountID string, input models.ConsentInput) (*models.Account, error)
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
 	ForceDeleteAccount(identifier string) error
@@ -676,6 +677,12 @@ func (s *profileService) GetKYCStatus(accountID string) (*models.KYCStatusRespon
 	}
 
 	res.IsVerified = res.KycStatus == "verified"
+	res.AcceptedTermsAt = account.AcceptedTermsAt
+	res.TermsVersion = account.TermsVersion
+	res.AcceptedPrivacyAt = account.AcceptedPrivacyAt
+	res.PrivacyVersion = account.PrivacyVersion
+	res.HasAcceptedTerms = account.AcceptedTermsAt != nil
+	res.HasAcceptedPrivacy = account.AcceptedPrivacyAt != nil
 	return res, nil
 }
 
@@ -747,6 +754,23 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 
 	now := time.Now()
 	newStatus := "pending"
+
+	if input.AcceptedTerms != nil && *input.AcceptedTerms {
+		account.AcceptedTermsAt = &now
+		tVer := "v1.0"
+		if input.TermsVersion != nil && strings.TrimSpace(*input.TermsVersion) != "" {
+			tVer = strings.TrimSpace(*input.TermsVersion)
+		}
+		account.TermsVersion = &tVer
+	}
+	if input.AcceptedPrivacy != nil && *input.AcceptedPrivacy {
+		account.AcceptedPrivacyAt = &now
+		pVer := "v1.0"
+		if input.PrivacyVersion != nil && strings.TrimSpace(*input.PrivacyVersion) != "" {
+			pVer = strings.TrimSpace(*input.PrivacyVersion)
+		}
+		account.PrivacyVersion = &pVer
+	}
 
 	switch account.Role {
 	case "owner":
@@ -867,4 +891,45 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 	return nil
 }
 
+func (s *profileService) UpdateConsent(accountID string, input models.ConsentInput) (*models.Account, error) {
+	input.Normalize()
+
+	if input.AcceptedTerms == nil || !*input.AcceptedTerms {
+		return nil, errors.New("Anda wajib menyetujui Syarat & Ketentuan untuk melanjutkan")
+	}
+	if input.AcceptedPrivacy == nil || !*input.AcceptedPrivacy {
+		return nil, errors.New("Anda wajib menyetujui Kebijakan Privasi untuk melanjutkan")
+	}
+
+	account, err := s.repo.GetAccountByID(accountID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New("Akun tidak ditemukan")
+		}
+		return nil, err
+	}
+
+	now := time.Now()
+	tVer := "v1.0"
+	if input.TermsVersion != nil && strings.TrimSpace(*input.TermsVersion) != "" {
+		tVer = strings.TrimSpace(*input.TermsVersion)
+	}
+
+	pVer := "v1.0"
+	if input.PrivacyVersion != nil && strings.TrimSpace(*input.PrivacyVersion) != "" {
+		pVer = strings.TrimSpace(*input.PrivacyVersion)
+	}
+
+	if err := s.repo.UpdateConsent(accountID, &now, &tVer, &now, &pVer); err != nil {
+		return nil, errors.New("Gagal menyimpan persetujuan dokumen")
+	}
+
+	account.AcceptedTermsAt = &now
+	account.TermsVersion = &tVer
+	account.AcceptedPrivacyAt = &now
+	account.PrivacyVersion = &pVer
+	account.PasswordHash = nil
+
+	return account, nil
+}
 

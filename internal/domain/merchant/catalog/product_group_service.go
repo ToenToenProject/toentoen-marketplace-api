@@ -3,6 +3,7 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 )
@@ -30,6 +31,21 @@ func NewProductGroupService(repo ProductGroupRepository) ProductGroupService {
 
 // 1. CREATE GROUP (Cegah Duplikat)
 func (s *productGroupService) CreateGroup(businessID string, input models.CreateGroupInput) error {
+	businessID = strings.TrimSpace(businessID)
+	if businessID == "" {
+		return errors.New("business_id tidak boleh kosong")
+	}
+
+	if !s.repo.CheckBusinessExists(businessID) {
+		return fmt.Errorf("bisnis dengan ID '%s' tidak ditemukan", businessID)
+	}
+
+	cleanName := strings.TrimSpace(input.Name)
+	if cleanName == "" {
+		return errors.New("nama grup tidak boleh kosong")
+	}
+	input.Name = cleanName
+
 	if s.repo.CheckNameExists(businessID, input.Name) {
 		return errors.New("grup dengan nama ini sudah ada di toko Anda")
 	}

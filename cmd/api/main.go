@@ -354,6 +354,14 @@ func main() {
 	protected.Get("/kyc/status", profileHandler.GetKYCStatus)
 	protected.Post("/kyc/submit", middlewares.RequireEmailVerified, profileHandler.SubmitKYC)
 	protected.Put("/kyc/submit", middlewares.RequireEmailVerified, profileHandler.SubmitKYC)
+	protected.Post("/kyc/consent", middlewares.RequireEmailVerified, profileHandler.SubmitConsent)
+	protected.Put("/kyc/consent", middlewares.RequireEmailVerified, profileHandler.SubmitConsent)
+	protected.Post("/consent", middlewares.RequireEmailVerified, profileHandler.SubmitConsent)
+	protected.Put("/consent", middlewares.RequireEmailVerified, profileHandler.SubmitConsent)
+
+	// Direct alias for KYC consent
+	api.Post("/kyc/consent", middlewares.RequireAuth, middlewares.RequireEmailVerified, profileHandler.SubmitConsent)
+	api.Put("/kyc/consent", middlewares.RequireAuth, middlewares.RequireEmailVerified, profileHandler.SubmitConsent)
 	protected.Put("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Patch("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
 	protected.Post("/profile/customer", middlewares.AllowRoles("customer"), profileHandler.UpdateProfileCustomer)
@@ -526,7 +534,7 @@ func main() {
 
 	// Owner-only Business Management
 	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"))
-	ownerBusinessGroup.Post("/", businessHandler.CreateBusiness)
+	ownerBusinessGroup.Post("/", middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
 	ownerBusinessGroup.Get("/", businessHandler.GetMyBusinesses)
 	ownerBusinessGroup.Put("/:id", businessHandler.UpdateBusiness)
 	ownerBusinessGroup.Delete("/:id", businessHandler.DeleteBusiness)

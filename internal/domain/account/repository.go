@@ -28,6 +28,7 @@ type ProfileRepository interface {
 	CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error)
 	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
 	FindReferralCode(code string) (*models.ReferralUser, error)
+	UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error
 }
 
 type profileRepository struct {
@@ -606,3 +607,13 @@ func (r *profileRepository) FindReferralCode(code string) (*models.ReferralUser,
 	return &user, nil
 }
 
+func (r *profileRepository) UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error {
+	updates := map[string]interface{}{
+		"accepted_terms_at":   acceptedTermsAt,
+		"terms_version":      termsVersion,
+		"accepted_privacy_at": acceptedPrivacyAt,
+		"privacy_version":    privacyVersion,
+		"updated_at":         time.Now(),
+	}
+	return r.db.Model(&models.Account{}).Where("account_id = ?", accountID).Updates(updates).Error
+}

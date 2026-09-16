@@ -40,6 +40,10 @@ func (h *BusinessHandler) CreateBusiness(c *fiber.Ctx) error {
 
 	businessID, err := h.service.CreateBusiness(ownerID, input)
 	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "belum terverifikasi") || strings.Contains(errMsg, "KYC") || strings.Contains(errMsg, "identitas") || strings.Contains(errMsg, "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errMsg, fiber.Map{"error": errMsg})
+		}
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal membuat profil toko", fiber.Map{"error": err.Error()})
 	}
 
