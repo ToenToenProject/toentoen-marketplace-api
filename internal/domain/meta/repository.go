@@ -38,23 +38,12 @@ func (r *metaRepository) GetAllTags(categoryID *int64, scope string) ([]models.T
 	}
 
 	if categoryID != nil {
-		categoryIDs := []int64{*categoryID}
-		currID := *categoryID
-		for {
-			var cat models.Category
-			if err := r.db.Select("category_id, parent_id").Where("category_id = ?", currID).First(&cat).Error; err != nil || cat.ParentID == nil {
-				break
-			}
-			categoryIDs = append(categoryIDs, *cat.ParentID)
-			currID = *cat.ParentID
-		}
-
 		if scope == "global" {
 			query = r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").
 				Where("parent_id IS NULL").
-				Where("is_global = ? OR category_id IN ?", true, categoryIDs)
+				Where("is_global = ? OR category_id = ?", true, *categoryID)
 		} else {
-			query = query.Where("category_id IN ?", categoryIDs)
+			query = query.Where("category_id = ?", *categoryID)
 		}
 	}
 
