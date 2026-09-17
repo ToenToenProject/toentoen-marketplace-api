@@ -22,7 +22,12 @@ func NewMetaRepository(db *gorm.DB) MetaRepository {
 
 func (r *metaRepository) GetAllCategories() ([]models.Category, error) {
 	var categories []models.Category
-	err := r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").Where("parent_id IS NULL").Find(&categories).Error
+	err := r.db.Preload("Children").
+		Preload("Children.Children").
+		Preload("Children.Children.Children").
+		Preload("Children.Children.Children.Children").
+		Where("parent_id IS NULL").
+		Find(&categories).Error
 	return categories, err
 }
 

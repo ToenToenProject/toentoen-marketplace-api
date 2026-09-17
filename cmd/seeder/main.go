@@ -80,8 +80,13 @@ func main() {
 					Children: []models.Category{
 						{Name: "Clothing"}, {Name: "Boutique"}, {Name: "Footwear"}, {Name: "Bags & Luggage"},
 						{Name: "Watches"}, {Name: "Accessories"}, {Name: "Department Store"}, {Name: "Eyewear"},
-						{Name: "Tailor & Alterations"}, {Name: "Dressmaker"}, {Name: "Custom Suit"},
-						{Name: "Uniform"}, {Name: "Alteration Service"}, {Name: "Wedding Dress"},
+						{
+							Name: "Tailor & Alterations",
+							Children: []models.Category{
+								{Name: "Dressmaker"}, {Name: "Custom Suit"}, {Name: "Uniform"},
+								{Name: "Alteration Service"}, {Name: "Wedding Dress"},
+							},
+						},
 					},
 				},
 				{
@@ -180,13 +185,25 @@ func main() {
 					},
 				},
 				{Name: "Towing Services"},
-				{Name: "Insurance Service"},
+				{
+					Name: "Insurance Service",
+					Children: []models.Category{
+						{Name: "Health insurance"}, {Name: "Life insurance"}, {Name: "General insurance"},
+						{Name: "Vehicle insurance"}, {Name: "Sharia insurance"}, {Name: "Property insurance"},
+						{Name: "Employee & Group insurance"},
+					},
+				},
 			},
 		},
 		{
 			Name: "Health & Medical",
 			Children: []models.Category{
-				{Name: "Clinic"}, {Name: "General practices"}, {Name: "Dental"},
+				{
+					Name: "Clinic",
+					Children: []models.Category{
+						{Name: "General practices"}, {Name: "Dental"},
+					},
+				},
 				{Name: "Pharmacy"}, {Name: "Therapy"}, {Name: "Traditional medicine"}, {Name: "Hospital"},
 			},
 		},
@@ -315,10 +332,9 @@ func main() {
 	}
 
 	// Ambil ID kategori spesifik untuk relasi Tag
-	var retailCat, beautyCat, insuranceCat models.Category
+	var retailCat, beautyCat models.Category
 	db.Where("name = ? AND parent_id IS NULL", "Retail & shopping").First(&retailCat)
 	db.Where("name = ? AND parent_id IS NULL", "Beauty & Wellness").First(&beautyCat)
-	db.Where("name = ?", "Insurance Service").First(&insuranceCat)
 
 	// Specific Tags (terikat kategori, is_global = false)
 	specificTagGroups := []models.Tag{
@@ -339,16 +355,6 @@ func main() {
 				{Name: "Haircut"}, {Name: "Coloring"}, {Name: "Treatment"}, {Name: "Massage"},
 				{Name: "Facial"}, {Name: "Bridal"}, {Name: "Family Spa"}, {Name: "Couple Spa"},
 				{Name: "Home Service"}, {Name: "Men-only"}, {Name: "Women-only"},
-			},
-		},
-		{
-			Name:       "Insurance Service",
-			CategoryID: &insuranceCat.CategoryID,
-			IsGlobal:   false,
-			Children: []models.Tag{
-				{Name: "Health insurance"}, {Name: "Life insurance"}, {Name: "General insurance"},
-				{Name: "Vehicle insurance"}, {Name: "Sharia insurance"}, {Name: "Property insurance"},
-				{Name: "Employee & Group insurance"},
 			},
 		},
 	}
@@ -442,5 +448,5 @@ func main() {
 		}
 	}
 
-	log.Println("✅ SEEDING BERHASIL! Seluruh Kategori dan Tag telah masuk ke database dengan hierarki yang benar.")
+	log.Println("✅ SEEDING BERHASIL! Seluruh Kategori dan Tag telah diperbarui sesuai pemetaan terbaru.")
 }
