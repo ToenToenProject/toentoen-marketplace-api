@@ -78,6 +78,25 @@ services:
       - -database=postgres://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}?sslmode=disable
       - up
 
+  seeder:
+    image: golang:1.25.6-alpine
+    container_name: toentoen_seeder
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=postgres-db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - APP_ENV=${APP_ENV}
+      - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY}
+    depends_on:
+      - postgres-db
+    command: go run cmd/seeder/main.go
+
 volumes:
   pgdata:
   meili_data:
