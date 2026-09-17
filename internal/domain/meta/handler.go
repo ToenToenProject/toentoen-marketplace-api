@@ -33,7 +33,9 @@ func (h *MetaHandler) GetTags(c *fiber.Ctx) error {
 		}
 	}
 
-	tags, err := h.service.GetTags(categoryID)
+	scope := c.Query("scope") // "global", "specific", or "" (all)
+
+	tags, err := h.service.GetTags(categoryID, scope)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar tag", nil)
 	}

@@ -8,7 +8,7 @@ import (
 
 type MetaRepository interface {
 	GetAllCategories() ([]models.Category, error)
-	GetAllTags(categoryID *int64) ([]models.Tag, error)
+	GetAllTags(categoryID *int64, scope string) ([]models.Tag, error)
 	GetAllOccupations() ([]models.Occupation, error)
 }
 
@@ -26,12 +26,38 @@ func (r *metaRepository) GetAllCategories() ([]models.Category, error) {
 	return categories, err
 }
 
-func (r *metaRepository) GetAllTags(categoryID *int64) ([]models.Tag, error) {
+func (r *metaRepository) GetAllTags(categoryID *int64, scope string) ([]models.Tag, error) {
 	var tags []models.Tag
 	query := r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").Where("parent_id IS NULL")
-	if categoryID != nil {
-		query = query.Where("category_id = ?", *categoryID)
+
+	switch scope {
+	case "global":
+		query = query.Where("is_global = ?", true)
+	case "specific":
+		query = query.Where("is_global = ?", false)
 	}
+
+	if categoryID != nil {
+		categoryIDs := []int64{*categoryID}
+		currID := *categoryID
+		for {
+			var cat models.Category
+			if err := r.db.Select("category_id, parent_id").Where("category_id = ?", currID).First(&cat).Error; err != nil || cat.ParentID == nil {
+				break
+			}
+			categoryIDs = append(categoryIDs, *cat.ParentID)
+			currID = *cat.ParentID
+		}
+
+		if scope == "global" {
+			query = r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").
+				Where("parent_id IS NULL").
+				Where("is_global = ? OR category_id IN ?", true, categoryIDs)
+		} else {
+			query = query.Where("category_id IN ?", categoryIDs)
+		}
+	}
+
 	err := query.Find(&tags).Error
 	return tags, err
 }

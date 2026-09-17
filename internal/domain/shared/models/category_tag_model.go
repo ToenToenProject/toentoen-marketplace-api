@@ -19,6 +19,7 @@ type Tag struct {
 	Name       string  `gorm:"not null;column:name" json:"name"`
 	CategoryID *int64  `gorm:"column:category_id" json:"category_id"`
 	ParentID   *int64  `gorm:"column:parent_id" json:"parent_id"`
+	IsGlobal   bool    `gorm:"column:is_global;default:false" json:"is_global"`
 
 	Children []Tag `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }

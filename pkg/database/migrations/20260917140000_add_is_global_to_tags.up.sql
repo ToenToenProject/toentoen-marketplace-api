@@ -1,0 +1,1 @@
+ALTER TABLE business_tags ADD COLUMN IF NOT EXISTS is_global BOOLEAN DEFAULT false;

@@ -6,7 +6,7 @@ import (
 
 type MetaService interface {
 	GetCategories() ([]models.Category, error)
-	GetTags(categoryID *int64) ([]models.Tag, error)
+	GetTags(categoryID *int64, scope string) ([]models.Tag, error)
 	GetStoreTypes() []map[string]string
 	GetOccupations() ([]models.Occupation, error)
 }
@@ -23,8 +23,8 @@ func (s *metaService) GetCategories() ([]models.Category, error) {
 	return s.metaRepo.GetAllCategories()
 }
 
-func (s *metaService) GetTags(categoryID *int64) ([]models.Tag, error) {
-	return s.metaRepo.GetAllTags(categoryID)
+func (s *metaService) GetTags(categoryID *int64, scope string) ([]models.Tag, error) {
+	return s.metaRepo.GetAllTags(categoryID, scope)
 }
 
 func (s *metaService) GetStoreTypes() []map[string]string {
