@@ -67,6 +67,14 @@ func (s *reviewService) CreateReview(customerID string, input models.CreateRevie
 		return errors.New("Ulasan wajib memiliki minimal 10 kata")
 	}
 
+	// 🛡️ Cegah pemilik dan staf toko mereview toko sendiri
+	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(input.BusinessID)
+	for _, sid := range staffIDs {
+		if sid == customerID {
+			return errors.New("Pemilik dan staf toko tidak diperkenankan memberikan ulasan pada toko sendiri")
+		}
+	}
+
 	hasReviewed, err := s.reviewRepo.HasUserReviewedBusiness(input.BusinessID, customerID)
 	if err == nil && hasReviewed {
 		return errors.New("Anda sudah memberikan ulasan untuk toko ini. Silakan gunakan fitur edit jika ingin mengubah ulasan.")
@@ -148,20 +156,9 @@ func (s *reviewService) DeleteReview(requesterID, role, reviewID string) error {
 		return errors.New("ulasan tidak ditemukan")
 	}
 
-	isAuthorized := review.AccountID == requesterID
-	if !isAuthorized {
-		// Cek apakah requester pemilik/staff toko
-		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(review.BusinessID)
-		for _, sid := range staffIDs {
-			if sid == requesterID {
-				isAuthorized = true
-				break
-			}
-		}
-	}
-
-	if !isAuthorized {
-		return errors.New("Anda tidak memiliki izin untuk menghapus ulasan ini")
+	// 🛡️ Hanya pembuat ulasan yang dapat menghapus ulasan sendiri
+	if review.AccountID != requesterID {
+		return errors.New("Anda hanya memiliki izin untuk menghapus ulasan yang Anda buat sendiri")
 	}
 
 	businessID := review.BusinessID

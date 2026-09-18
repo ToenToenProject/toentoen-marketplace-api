@@ -357,7 +357,7 @@ func (r *businessRepository) GetBusinessStaffAccountIDs(businessID string) ([]st
 
 	// 2. Ambil admins (admin_id di tabel business_admin_assignments)
 	var assignments []models.BusinessAdminAssignment
-	if err := r.db.Select("admin_id").Where("business_id = ? AND status = 'accepted'", businessID).Find(&assignments).Error; err == nil {
+	if err := r.db.Select("admin_id").Where("business_id = ? AND status IN ('accepted', 'active', 'scheduled_for_deletion')", businessID).Find(&assignments).Error; err == nil {
 		for _, a := range assignments {
 			accountIDs = append(accountIDs, a.AdminID)
 		}

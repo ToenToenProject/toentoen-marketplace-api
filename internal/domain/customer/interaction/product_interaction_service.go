@@ -120,6 +120,14 @@ func (s *productInteractionService) AddProductReview(productID, accountID string
 		return errors.New("Produk tidak ditemukan atau tidak memiliki toko yang valid")
 	}
 
+	// 🛡️ Cegah pemilik dan staf toko mereview produk milik sendiri
+	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
+	for _, sid := range staffIDs {
+		if sid == accountID {
+			return errors.New("Pemilik dan staf toko tidak diperkenankan memberikan ulasan pada produk sendiri")
+		}
+	}
+
 	if countWords(input.Comment) < 10 {
 		return errors.New("Ulasan produk wajib memiliki minimal 10 kata")
 	}
@@ -200,19 +208,9 @@ func (s *productInteractionService) DeleteProductReview(reviewID, requesterID st
 		return errors.New("ulasan produk tidak ditemukan")
 	}
 
-	isAuthorized := review.AccountID == requesterID
-	if !isAuthorized {
-		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(review.BusinessID)
-		for _, sid := range staffIDs {
-			if sid == requesterID {
-				isAuthorized = true
-				break
-			}
-		}
-	}
-
-	if !isAuthorized {
-		return errors.New("Anda tidak memiliki izin untuk menghapus ulasan ini")
+	// 🛡️ Hanya pembuat ulasan yang dapat menghapus ulasannya sendiri
+	if review.AccountID != requesterID {
+		return errors.New("Anda hanya memiliki izin untuk menghapus ulasan yang Anda buat sendiri")
 	}
 
 	return s.repo.DeleteProductReview(reviewID)
