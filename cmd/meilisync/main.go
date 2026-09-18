@@ -88,9 +88,14 @@ func main() {
 			}
 		}
 
+		name := ""
+		if b.BusinessName != nil {
+			name = *b.BusinessName
+		}
+
 		doc := explore.MeiliBusinessDocument{
 			ID:            b.BusinessID,
-			Name:          *b.BusinessName,
+			Name:          name,
 			Products:      productNames,
 			Rating:        b.AverageRating,
 			ReviewCount:   b.ReviewCount,

@@ -93,8 +93,11 @@ services:
       - APP_ENV=${APP_ENV}
       - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}
       - BLIND_INDEX_KEY=${BLIND_INDEX_KEY}
+      - MEILI_HOST=http://meilisearch:7700
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     depends_on:
       - postgres-db
+      - meilisearch
     command: go run cmd/seeder/main.go
 
 volumes:
