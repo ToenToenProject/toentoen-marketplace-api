@@ -191,13 +191,21 @@ func (h *Hub) deliverToLocal(targetIDs []string, event WSEvent) {
 	for _, id := range targetIDs {
 		if conns, ok := h.clients[id]; ok {
 			for client := range conns {
-				select {
-				case client.Send <- data:
-				default:
-					// Buffer penuh, skip agar tidak blocking
-				}
+				safeSend(client.Send, data)
 			}
 		}
+	}
+}
+
+// safeSend mengirim data ke channel dengan pemulihan panic jika channel tertutup secara bersamaan saat disconnect
+func safeSend(ch chan []byte, data []byte) {
+	defer func() {
+		_ = recover()
+	}()
+	select {
+	case ch <- data:
+	default:
+		// Buffer penuh, skip agar tidak blocking
 	}
 }
 

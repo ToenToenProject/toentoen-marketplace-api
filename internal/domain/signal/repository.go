@@ -267,10 +267,21 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		WHERE s.status = 'active'
 		  AND s.expires_at > NOW()
 		  AND s.location IS NOT NULL
-		  -- Layer 1 (WAJIB): Kategori signal HARUS cocok dengan kategori bisnis merchant
-		  AND s.category_id IN (
-		      SELECT category_id FROM business_has_categories
-		      WHERE business_id = ?
+		  -- Layer 1 (WAJIB): Kategori signal HARUS cocok dengan kategori bisnis merchant (mendukung hierarki parent & child category)
+		  AND (
+		      s.category_id IN (
+		          SELECT category_id FROM business_has_categories WHERE business_id = ?
+		      )
+		      OR s.category_id IN (
+		          SELECT bc.category_id FROM business_categories bc
+		          JOIN business_has_categories bhc ON bc.parent_id = bhc.category_id
+		          WHERE bhc.business_id = ?
+		      )
+		      OR s.category_id IN (
+		          SELECT bc.parent_id FROM business_categories bc
+		          JOIN business_has_categories bhc ON bc.category_id = bhc.category_id
+		          WHERE bhc.business_id = ? AND bc.parent_id IS NOT NULL
+		      )
 		  )
 		  -- Layer 2 (WAJIB): Signal dalam radius jangkauan yang ditentukan customer
 		  AND ST_DWithin(s.location::geography, %s::geography, s.radius_km * 1000)
@@ -287,7 +298,14 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 			s.created_at DESC
 	`, merchantPoint, merchantPoint)
 
-	err := r.db.Raw(query, merchantBusinessID, merchantBusinessID, merchantBusinessID, merchantBusinessID).Scan(&results).Error
+	err := r.db.Raw(query,
+		merchantBusinessID, // Layer 3: EXISTS signal_conversations
+		merchantBusinessID, // Layer 3: COUNT signal_tags
+		merchantBusinessID, // Layer 1: exact category_id
+		merchantBusinessID, // Layer 1: child category
+		merchantBusinessID, // Layer 1: parent category
+		merchantBusinessID, // offer cap check
+	).Scan(&results).Error
 	if err != nil {
 		return nil, err
 	}
@@ -449,7 +467,7 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 		) unread ON true
 		WHERE sc.merchant_id = ?
 		   OR sc.business_id IN (SELECT business_id FROM businesses WHERE account_id = ?)
-		   OR sc.business_id IN (SELECT business_id FROM business_admin_assignments WHERE admin_id = ? AND status IN ('active', 'accepted'))
+		   OR sc.business_id IN (SELECT business_id FROM business_admin_assignments WHERE admin_id = ? AND status IN ('active', 'accepted', 'scheduled_for_deletion'))
 		ORDER BY last_message_at DESC
 	`
 
@@ -582,13 +600,32 @@ func (r *signalRepository) GetFCMTokensByAccountID(accountID string) ([]string, 
 	return tokens, err
 }
 
-// GetMerchantIDsBySignal mengambil semua merchant_id yang punya conversation aktif pada signal
+// GetMerchantIDsBySignal mengambil semua account_id pemilik dan staf toko yang punya conversation aktif pada signal
 func (r *signalRepository) GetMerchantIDsBySignal(signalID string) ([]string, error) {
-	var merchantIDs []string
-	err := r.db.Model(&models.SignalConversation{}).
-		Where("signal_id = ?", signalID).
-		Pluck("merchant_id", &merchantIDs).Error
-	return merchantIDs, err
+	var accountIDs []string
+	query := `
+		SELECT DISTINCT account_id FROM (
+			-- Akun merchant yang langsung membalas
+			SELECT sc.merchant_id AS account_id
+			FROM signal_conversations sc
+			WHERE sc.signal_id = ?
+			UNION
+			-- Pemilik toko (Owner)
+			SELECT b.account_id
+			FROM signal_conversations sc
+			JOIN businesses b ON sc.business_id = b.business_id
+			WHERE sc.signal_id = ?
+			UNION
+			-- Staf / Business Admin toko
+			SELECT baa.admin_id AS account_id
+			FROM signal_conversations sc
+			JOIN business_admin_assignments baa ON sc.business_id = baa.business_id
+			WHERE sc.signal_id = ?
+			  AND baa.status IN ('active', 'accepted', 'scheduled_for_deletion')
+		) combined
+	`
+	err := r.db.Raw(query, signalID, signalID, signalID).Scan(&accountIDs).Error
+	return accountIDs, err
 }
 
 // ================================================================

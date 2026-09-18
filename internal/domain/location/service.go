@@ -100,8 +100,13 @@ func (s *LocationService) GetMerchantPosition(businessID string) (*NearbyMerchan
 func (s *LocationService) ProcessCustomerLocation(state *realtime.LocationState, update LocationUpdate) ([]NearbyMerchant, bool) {
 	now := time.Now()
 
+	timeSinceLastUpdate := time.Duration(0)
+	if !state.LastUpdateAt.IsZero() {
+		timeSinceLastUpdate = now.Sub(state.LastUpdateAt)
+	}
+
 	// 1. Rate limiting: maksimal 1 update per detik
-	if now.Sub(state.LastUpdateAt) < 1*time.Second {
+	if !state.LastUpdateAt.IsZero() && timeSinceLastUpdate < 1*time.Second {
 		return nil, false
 	}
 	state.LastUpdateAt = now
@@ -114,7 +119,7 @@ func (s *LocationService) ProcessCustomerLocation(state *realtime.LocationState,
 
 	// 3. GPS jitter filter
 	if state.LastLat != 0 && state.LastLng != 0 {
-		if isGPSJitter(state.LastLat, state.LastLng, update.Lat, update.Lng, update.Speed) {
+		if isGPSJitter(state.LastLat, state.LastLng, update.Lat, update.Lng, update.Speed, timeSinceLastUpdate) {
 			return nil, false
 		}
 	}
@@ -251,17 +256,24 @@ func shouldSendUpdate(t *realtime.LocationState, lat, lng float64) bool {
 // ================================================================
 
 // isGPSJitter mendeteksi apakah perpindahan koordinat tidak masuk akal
-// berdasarkan kecepatan yang dilaporkan device
-func isGPSJitter(prevLat, prevLng, newLat, newLng, speedKmh float64) bool {
+// berdasarkan kecepatan yang dilaporkan device dan selang waktu update
+func isGPSJitter(prevLat, prevLng, newLat, newLng, speedKmh float64, elapsed time.Duration) bool {
 	dist := haversine(prevLat, prevLng, newLat, newLng) // dalam meter
+
+	// Jika jeda waktu > 30 detik (misal koneksi terputus lalu tersambung kembali),
+	// jangan anggap jitter karena perpindahan nyata bisa jauh
+	if elapsed > 30*time.Second {
+		return false
+	}
 
 	// Kecepatan default jika tidak tersedia (asumsi jalan kaki)
 	if speedKmh <= 0 {
 		speedKmh = 5
 	}
 
-	// Jarak maksimum yang masuk akal: speed (km/h) × 5 detik (interval + margin)
-	maxPossibleDist := speedKmh * 5 / 3.6 // konversi ke meter
+	// Jarak maksimum yang masuk akal: speed (km/h) × selang waktu nyata (minimal 3 detik)
+	intervalSec := math.Max(elapsed.Seconds(), 3.0)
+	maxPossibleDist := speedKmh * intervalSec / 3.6 // konversi ke meter
 
 	// Jika jarak > 3× jarak logis DAN > 100 meter, anggap jitter
 	return dist > math.Max(maxPossibleDist*3, 100)

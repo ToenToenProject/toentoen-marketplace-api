@@ -255,7 +255,7 @@ func (r *businessChatRepository) VerifyMerchantAccess(businessID string, account
 
 	// 2. Cek apakah assigned business admin yang aktif
 	if err := r.db.Model(&models.BusinessAdminAssignment{}).
-		Where("business_id = ? AND admin_id = ? AND status IN ('accepted', 'active')", businessID, accountID).
+		Where("business_id = ? AND admin_id = ? AND status IN ('accepted', 'active', 'scheduled_for_deletion')", businessID, accountID).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -274,7 +274,7 @@ func (r *businessChatRepository) GetMerchantStaffAccountIDs(businessID string) (
 	// 2. Active assigned business admins
 	var assignments []models.BusinessAdminAssignment
 	if err := r.db.Select("admin_id").
-		Where("business_id = ? AND status IN ('accepted', 'active')", businessID).
+		Where("business_id = ? AND status IN ('accepted', 'active', 'scheduled_for_deletion')", businessID).
 		Find(&assignments).Error; err == nil {
 		for _, a := range assignments {
 			ids = append(ids, a.AdminID)

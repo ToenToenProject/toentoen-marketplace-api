@@ -302,8 +302,8 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 
 		hasHoursUpdate := (input.Hours != nil && len(*input.Hours) > 0) || (input.EventSchedules != nil && len(*input.EventSchedules) > 0)
 		if assignment.Role == "staff" {
-			// Cegah staff mengubah identitas toko, NIB, legalitas, atau nomor kontak resmi toko
-			hasIdentityUpdate := input.BusinessName != nil || input.Name != nil || input.LegalName != nil ||
+			// Cegah staff mengubah identitas toko, NIB, sertifikat, atau nomor kontak resmi toko
+			hasIdentityUpdate := input.BusinessName != nil || input.Name != nil ||
 				input.NIB != nil || input.Handle != nil || input.PhoneContact != nil || input.WhatsappContact != nil ||
 				input.Email != nil || input.Certificates != nil
 			if hasIdentityUpdate {

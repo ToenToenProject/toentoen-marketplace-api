@@ -242,7 +242,7 @@ func main() {
 	// CORS Configuration
 	corsConfig := cors.Config{
 		AllowOrigins:     os.Getenv("FRONTEND_URL"),
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-Internal-Secret",
 		AllowMethods:     "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD",
 		AllowCredentials: true,
 	}

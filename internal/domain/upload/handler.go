@@ -14,6 +14,9 @@ var allowedFolders = map[string]bool{
 	"businesses/logos":    true,
 	"businesses/images":   true,
 	"accounts/avatars":    true,
+	"accounts/kyc":        true,
+	"kyc/documents":       true,
+	"chat/attachments":    true,
 	"products/images":     true,
 	"products/videos":     true,
 	"products/previews":   true,
@@ -68,7 +71,7 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 	}
 	if !allowedFolders[folder] {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation,
-			"Folder tidak valid. Pilihan: businesses/logos, businesses/images, accounts/avatars, products/images, products/videos, posts/images, posts/videos, reviews/images, reviews/videos, demands/attachments", nil)
+			"Folder tidak valid. Pilihan: businesses/logos, businesses/images, accounts/avatars, accounts/kyc, kyc/documents, chat/attachments, products/images, products/videos, posts/images, posts/videos, reviews/images, reviews/videos, demands/attachments, tickets/attachments", nil)
 	}
 
 	// Validasi filename

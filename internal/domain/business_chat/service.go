@@ -41,9 +41,12 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		return nil, nil, false, errors.New("Bisnis/Toko tidak ditemukan")
 	}
 
-	// Cegah chat dengan toko milik sendiri
+	// Cegah chat dengan toko milik sendiri atau toko yang dikelola
 	if business.AccountID == customerID {
 		return nil, nil, false, errors.New("Anda tidak dapat memulai chat dengan toko milik Anda sendiri")
+	}
+	if isStaff, _ := s.repo.VerifyMerchantAccess(businessID, customerID); isStaff {
+		return nil, nil, false, errors.New("Anda tidak dapat memulai chat dengan toko yang Anda kelola")
 	}
 
 	// 1. Cek apakah percakapan sudah ada
