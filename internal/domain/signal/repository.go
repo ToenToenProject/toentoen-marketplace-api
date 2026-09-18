@@ -449,7 +449,7 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 		) unread ON true
 		WHERE sc.merchant_id = ?
 		   OR sc.business_id IN (SELECT business_id FROM businesses WHERE account_id = ?)
-		   OR sc.business_id IN (SELECT business_id FROM business_admin_assignments WHERE admin_id = ? AND is_active = true)
+		   OR sc.business_id IN (SELECT business_id FROM business_admin_assignments WHERE admin_id = ? AND status IN ('active', 'accepted'))
 		ORDER BY last_message_at DESC
 	`
 
@@ -557,7 +557,7 @@ func (r *signalRepository) VerifyBusinessAccess(accountID, role, businessID stri
 	case "owner":
 		r.db.Model(&models.Business{}).Where("business_id = ? AND account_id = ?", businessID, accountID).Count(&count)
 	case "business_admin":
-		r.db.Model(&models.BusinessAdminAssignment{}).Where("business_id = ? AND admin_id = ? AND is_active = ?", businessID, accountID, true).Count(&count)
+		r.db.Model(&models.BusinessAdminAssignment{}).Where("business_id = ? AND admin_id = ? AND status IN ('active', 'accepted', 'scheduled_for_deletion')", businessID, accountID).Count(&count)
 	}
 	return count > 0
 }
@@ -637,7 +637,11 @@ func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryID int64
 			SELECT b.account_id
 			FROM businesses b
 			JOIN business_has_categories bhc ON b.business_id = bhc.business_id
-			WHERE bhc.category_id = ?
+			WHERE (
+				bhc.category_id = ?
+				OR bhc.category_id IN (SELECT parent_id FROM business_categories WHERE category_id = ? AND parent_id IS NOT NULL)
+				OR bhc.category_id IN (SELECT category_id FROM business_categories WHERE parent_id = ?)
+			)
 			  AND b.is_active = true
 			  AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
 			  AND ST_DWithin(ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography, %s::geography, ? * 1000)
@@ -649,16 +653,20 @@ func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryID int64
 			FROM businesses b
 			JOIN business_has_categories bhc ON b.business_id = bhc.business_id
 			JOIN business_admin_assignments baa ON b.business_id = baa.business_id
-			WHERE bhc.category_id = ?
+			WHERE (
+				bhc.category_id = ?
+				OR bhc.category_id IN (SELECT parent_id FROM business_categories WHERE category_id = ? AND parent_id IS NOT NULL)
+				OR bhc.category_id IN (SELECT category_id FROM business_categories WHERE parent_id = ?)
+			)
 			  AND b.is_active = true
-			  AND baa.is_active = true
+			  AND baa.status IN ('active', 'accepted')
 			  AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
 			  AND ST_DWithin(ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography, %s::geography, ? * 1000)
 		) combined
 	`, customerPoint, customerPoint)
 
 	var accountIDs []string
-	err := r.db.Raw(query, categoryID, radiusKm, categoryID, radiusKm).Scan(&accountIDs).Error
+	err := r.db.Raw(query, categoryID, categoryID, categoryID, radiusKm, categoryID, categoryID, categoryID, radiusKm).Scan(&accountIDs).Error
 	return accountIDs, err
 }
 

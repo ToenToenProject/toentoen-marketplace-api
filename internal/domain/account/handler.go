@@ -196,6 +196,13 @@ func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
 }
 
 func (h *ProfileHandler) ForceDeleteAccount(c *fiber.Ctx) error {
+	// 🛡️ Proteksi Keamanan: Cegah eksekusi di environment production tanpa kunci rahasia internal
+	secretHeader := c.Get("X-Internal-Secret")
+	isDev := config.Envs.AppEnv != "production"
+	if !isDev && secretHeader != config.Envs.JWTSecret {
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, "Akses ditolak: endpoint pengujian hanya tersedia di environment development atau dengan otorisasi internal", nil)
+	}
+
 	var input models.ForceDeleteAccountInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)

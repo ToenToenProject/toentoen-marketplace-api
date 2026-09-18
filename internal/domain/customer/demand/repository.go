@@ -34,7 +34,7 @@ func (r *demandRepository) VerifyBusinessAccess(accountID, role, businessID stri
 	if role == "owner" {
 		r.db.Model(&models.Business{}).Where("business_id = ? AND account_id = ?", businessID, accountID).Count(&count)
 	} else if role == "business_admin" {
-		r.db.Model(&models.BusinessAdminAssignment{}).Where("business_id = ? AND admin_id = ? AND is_active = ?", businessID, accountID, true).Count(&count)
+		r.db.Model(&models.BusinessAdminAssignment{}).Where("business_id = ? AND admin_id = ? AND status IN ('active', 'accepted', 'scheduled_for_deletion')", businessID, accountID).Count(&count)
 	}
 	return count > 0
 }

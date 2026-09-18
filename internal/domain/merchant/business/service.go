@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -299,8 +301,16 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		}
 
 		hasHoursUpdate := (input.Hours != nil && len(*input.Hours) > 0) || (input.EventSchedules != nil && len(*input.EventSchedules) > 0)
-		if assignment.Role == "staff" && hasHoursUpdate {
-			if !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
+		if assignment.Role == "staff" {
+			// Cegah staff mengubah identitas toko, NIB, legalitas, atau nomor kontak resmi toko
+			hasIdentityUpdate := input.BusinessName != nil || input.Name != nil || input.LegalName != nil ||
+				input.NIB != nil || input.Handle != nil || input.PhoneContact != nil || input.WhatsappContact != nil ||
+				input.Email != nil || input.Certificates != nil
+			if hasIdentityUpdate {
+				return errors.New("forbidden: hanya pemilik toko (owner) yang dapat mengubah identitas, legalitas, dan kontak resmi bisnis")
+			}
+
+			if hasHoursUpdate && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
 				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah jam operasional bisnis")
 			}
 		}
@@ -586,7 +596,30 @@ func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 		return errors.New("bisnis tidak ditemukan atau Anda tidak memiliki akses")
 	}
 
-	return s.repo.DeleteBusiness(business)
+	// 1. Kumpulkan ID produk toko untuk pembersihan Meilisearch
+	var productIDs []string
+	database.DB.Model(&models.Product{}).Where("business_id = ?", businessID).Pluck("product_id", &productIDs)
+
+	if err := s.repo.DeleteBusiness(business); err != nil {
+		return err
+	}
+
+	// 2. Bersihkan Meilisearch (bisnis & seluruh produk terkait)
+	if meilisearch.Client != nil {
+		go func() {
+			_, _ = meilisearch.Client.Index("businesses").DeleteDocument(businessID, nil)
+			for _, pid := range productIDs {
+				_, _ = meilisearch.Client.Index("products").DeleteDocument(pid, nil)
+			}
+		}()
+	}
+
+	// 3. Bersihkan Redis cache jika ada
+	if config.RDB != nil {
+		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
+	}
+
+	return nil
 }
 
 func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (bool, error) {

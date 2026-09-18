@@ -139,6 +139,12 @@ type InternalNotificationInput struct {
 // SendInternalNotification memproses pengiriman notifikasi dari internal service lain (misal: Operations Platform / KYC Review)
 // Endpoint ini langsung memicu penyimpanan DB, broadcast WebSocket, dan FCM Push Notification
 func (h *NotificationHandler) SendInternalNotification(c *fiber.Ctx) error {
+	// 🛡️ Proteksi Keamanan: Pastikan pemanggil berasal dari internal service dengan secret key valid
+	secretHeader := c.Get("X-Internal-Secret")
+	if config.Envs.AppEnv == "production" && secretHeader != config.Envs.JWTSecret {
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, "Akses ditolak: otorisasi internal diperlukan", nil)
+	}
+
 	var input InternalNotificationInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InvalidParam, "Format payload tidak valid", nil)
