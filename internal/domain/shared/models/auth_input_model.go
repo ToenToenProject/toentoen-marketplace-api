@@ -76,7 +76,7 @@ type ResetPasswordInput struct {
 }
 
 type RequestEmailChangeInput struct {
-	CurrentEmail string `json:"current_email" validate:"required,email"`
+	CurrentEmail string `json:"current_email" validate:"omitempty,email"`
 	NewEmail     string `json:"new_email" validate:"required,email"`
 }
 
@@ -86,7 +86,7 @@ type VerifyEmailChangeInput struct {
 }
 
 type RequestPhoneChangeInput struct {
-	CurrentPhone string `json:"current_phone" validate:"required"`
+	CurrentPhone string `json:"current_phone" validate:"omitempty"`
 	NewPhone     string `json:"new_phone" validate:"required"`
 }
 

@@ -615,14 +615,28 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 	currentEmailClean := strings.ToLower(strings.TrimSpace(input.CurrentEmail))
 	newEmailClean := strings.ToLower(strings.TrimSpace(input.NewEmail))
 
-	if account.Email != nil && strings.ToLower(strings.TrimSpace(*account.Email)) != currentEmailClean {
-		return errors.New("Email saat ini tidak cocok dengan data akun Anda")
+	if !isEmail(newEmailClean) {
+		return errors.New("Format alamat email baru tidak valid")
 	}
 
-	if currentEmailClean == newEmailClean {
-		return errors.New("Email baru tidak boleh sama dengan email saat ini")
+	// 1. Cek apakah user saat ini sudah memiliki email terdaftar
+	hasExistingEmail := account.Email != nil && strings.TrimSpace(*account.Email) != ""
+	if hasExistingEmail {
+		// Kasus: Mengganti Email (Change Email)
+		if currentEmailClean == "" {
+			return errors.New("Email saat ini wajib diisi untuk verifikasi keamanan")
+		}
+		if strings.ToLower(strings.TrimSpace(*account.Email)) != currentEmailClean {
+			return errors.New("Email saat ini tidak cocok dengan data akun Anda")
+		}
+		if currentEmailClean == newEmailClean {
+			return errors.New("Email baru tidak boleh sama dengan email saat ini")
+		}
 	}
+	// Catatan: Jika hasExistingEmail == false (kasus penautan pertama kali / Bind),
+	// current_email tidak perlu diperiksa dan tidak wajib diisi.
 
+	// 2. Cek apakah email baru sudah terdaftar pada akun lain
 	if exists, err := s.repo.FindByIdentifier(newEmailClean); err == nil && exists != nil && exists.AccountID != accountID {
 		return errors.New("Email baru sudah terdaftar pada akun lain")
 	}
@@ -634,7 +648,12 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 		return errors.New("Gagal memproses kode verifikasi")
 	}
 
-	if err := utils.SendEmailOTP(newEmailClean, otp, "Kode Verifikasi Perubahan Email ToenToen"); err != nil {
+	subject := "Kode Verifikasi Perubahan Email ToenToen"
+	if !hasExistingEmail {
+		subject = "Kode Verifikasi Penautan Email Akun ToenToen"
+	}
+
+	if err := utils.SendEmailOTP(newEmailClean, otp, subject); err != nil {
 		config.RDB.Del(config.Ctx, redisKey)
 		return fmt.Errorf("Gagal mengirim kode verifikasi ke email baru: %w", err)
 	}
@@ -686,7 +705,41 @@ func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEma
 }
 
 func (s *authService) RequestPhoneChange(accountID string, input models.RequestPhoneChangeInput) error {
-	return errors.New("Layanan verifikasi nomor telepon/WhatsApp sedang dalam tahap pengembangan. Fitur ubah nomor telepon belum dapat digunakan saat ini.")
+	account, err := s.repo.FindByID(accountID)
+	if err != nil {
+		return errors.New("Sesi pengguna tidak valid")
+	}
+
+	currentPhoneClean := strings.TrimSpace(input.CurrentPhone)
+	newPhoneClean := strings.TrimSpace(input.NewPhone)
+
+	if newPhoneClean == "" {
+		return errors.New("Nomor telepon baru wajib diisi")
+	}
+
+	// 1. Cek apakah user saat ini sudah memiliki nomor telepon terdaftar
+	hasExistingPhone := account.PhoneNumber != nil && strings.TrimSpace(*account.PhoneNumber) != ""
+	if hasExistingPhone {
+		// Kasus: Mengganti Nomor Telepon (Change Phone)
+		if currentPhoneClean == "" {
+			return errors.New("Nomor telepon saat ini wajib diisi untuk verifikasi keamanan")
+		}
+		if strings.TrimSpace(*account.PhoneNumber) != currentPhoneClean {
+			return errors.New("Nomor telepon saat ini tidak cocok dengan data akun Anda")
+		}
+		if currentPhoneClean == newPhoneClean {
+			return errors.New("Nomor telepon baru tidak boleh sama dengan nomor telepon saat ini")
+		}
+	}
+	// Catatan: Jika hasExistingPhone == false (kasus penautan pertama kali / Bind),
+	// current_phone tidak perlu diperiksa dan tidak wajib diisi.
+
+	// 2. Cek apakah nomor telepon baru sudah terdaftar pada akun lain
+	if exists, err := s.repo.FindByIdentifier(newPhoneClean); err == nil && exists != nil && exists.AccountID != accountID {
+		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
+	}
+
+	return errors.New("Layanan verifikasi nomor telepon/WhatsApp sedang dalam tahap pengembangan. Fitur nomor telepon belum dapat digunakan saat ini.")
 }
 
 func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPhoneChangeInput) error {
