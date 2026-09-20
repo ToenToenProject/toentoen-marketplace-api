@@ -100,24 +100,24 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		}
 	}
 
-	// Origin & Country handling
+	// Origin & Country handling (English: "domestic" | "imported")
 	origin := strings.TrimSpace(input.ProductOrigin)
 	var originCountry *string
-	if origin == "" || strings.EqualFold(origin, "dalam_negeri") || strings.EqualFold(origin, "domestic") || strings.EqualFold(origin, "indonesia") {
-		origin = "dalam_negeri"
+	if origin == "" || strings.EqualFold(origin, "domestic") || strings.EqualFold(origin, "local") || strings.EqualFold(origin, "dalam_negeri") || strings.EqualFold(origin, "indonesia") {
+		origin = "domestic"
 		indo := "Indonesia"
 		originCountry = &indo
-	} else if strings.EqualFold(origin, "luar_negeri") || strings.EqualFold(origin, "imported") {
-		origin = "luar_negeri"
+	} else if strings.EqualFold(origin, "imported") || strings.EqualFold(origin, "luar_negeri") {
+		origin = "imported"
 		if input.OriginCountry != nil && strings.TrimSpace(*input.OriginCountry) != "" {
 			country := strings.TrimSpace(*input.OriginCountry)
 			originCountry = &country
 		} else {
-			return errors.New("negara asal (origin_country) wajib diisi untuk produk luar negeri")
+			return errors.New("negara asal (origin_country) wajib diisi untuk produk luar negeri / impor")
 		}
 	} else {
 		// Jika FE langsung mengirim nama negara
-		origin = "luar_negeri"
+		origin = "imported"
 		if input.OriginCountry != nil && strings.TrimSpace(*input.OriginCountry) != "" {
 			country := strings.TrimSpace(*input.OriginCountry)
 			originCountry = &country
@@ -287,20 +287,20 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	}
 	if input.ProductOrigin != nil {
 		cleanOrigin := strings.TrimSpace(*input.ProductOrigin)
-		if strings.EqualFold(cleanOrigin, "dalam_negeri") || strings.EqualFold(cleanOrigin, "domestic") || strings.EqualFold(cleanOrigin, "indonesia") {
-			product.ProductOrigin = "dalam_negeri"
+		if strings.EqualFold(cleanOrigin, "domestic") || strings.EqualFold(cleanOrigin, "local") || strings.EqualFold(cleanOrigin, "dalam_negeri") || strings.EqualFold(cleanOrigin, "indonesia") {
+			product.ProductOrigin = "domestic"
 			indo := "Indonesia"
 			product.OriginCountry = &indo
-		} else if strings.EqualFold(cleanOrigin, "luar_negeri") || strings.EqualFold(cleanOrigin, "imported") {
-			product.ProductOrigin = "luar_negeri"
+		} else if strings.EqualFold(cleanOrigin, "imported") || strings.EqualFold(cleanOrigin, "luar_negeri") {
+			product.ProductOrigin = "imported"
 			if input.OriginCountry != nil && strings.TrimSpace(*input.OriginCountry) != "" {
 				country := strings.TrimSpace(*input.OriginCountry)
 				product.OriginCountry = &country
 			} else if product.OriginCountry == nil || *product.OriginCountry == "" || strings.EqualFold(*product.OriginCountry, "Indonesia") {
-				return errors.New("negara asal (origin_country) wajib diisi untuk produk luar negeri")
+				return errors.New("negara asal (origin_country) wajib diisi untuk produk luar negeri / impor")
 			}
 		} else if cleanOrigin != "" {
-			product.ProductOrigin = "luar_negeri"
+			product.ProductOrigin = "imported"
 			product.OriginCountry = &cleanOrigin
 		}
 	}
@@ -309,9 +309,9 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		if cleanCountry != "" {
 			product.OriginCountry = &cleanCountry
 			if strings.EqualFold(cleanCountry, "Indonesia") {
-				product.ProductOrigin = "dalam_negeri"
+				product.ProductOrigin = "domestic"
 			} else {
-				product.ProductOrigin = "luar_negeri"
+				product.ProductOrigin = "imported"
 			}
 		}
 	}
