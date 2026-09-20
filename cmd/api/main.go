@@ -28,6 +28,7 @@ import (
 	"toentoen-backend/internal/domain/meta"
 	"toentoen-backend/internal/domain/notification"
 	support_chat "toentoen-backend/internal/domain/support/chat"
+	support_feedback "toentoen-backend/internal/domain/support/feedback"
 	support_ticket "toentoen-backend/internal/domain/support/ticket"
 	"toentoen-backend/internal/domain/business_chat"
 	"toentoen-backend/internal/domain/merchant/transfer"
@@ -202,6 +203,10 @@ func main() {
 	supportTicketRepo := support_ticket.NewSupportTicketRepository(database.DB)
 	supportTicketService := support_ticket.NewSupportTicketService(supportTicketRepo)
 	supportTicketHandler := support_ticket.NewSupportTicketHandler(supportTicketService)
+
+	feedbackRepo := support_feedback.NewFeedbackRepository(database.DB)
+	feedbackService := support_feedback.NewFeedbackService(feedbackRepo)
+	feedbackHandler := support_feedback.NewFeedbackHandler(feedbackService)
 
 	businessChatRepo := business_chat.NewBusinessChatRepository(database.DB)
 	businessChatService := business_chat.NewBusinessChatService(businessChatRepo, wsHub)
@@ -669,16 +674,19 @@ func main() {
 	supportGroup.Post("/:room_id/end", supportChatHandler.EndChat)
 
 	// ==========================================
-	// ROUTES: SUPPORT TICKETS & FEEDBACK
+	// ROUTES: SUPPORT TICKETS (Tiket Bantuan)
 	// ==========================================
 	ticketGroup := api.Group("/support/tickets", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	ticketGroup.Post("/", supportTicketHandler.CreateTicket)
 	ticketGroup.Get("/", supportTicketHandler.GetMyTickets)
 	ticketGroup.Get("/:ticket_id", supportTicketHandler.GetTicketDetail)
 
-	// Feedback Pengguna via Email
-	api.Post("/support/feedback", middlewares.RequireAuth, supportTicketHandler.SendFeedback)
-	api.Post("/feedback", middlewares.RequireAuth, supportTicketHandler.SendFeedback)
+	// ==========================================
+	// ROUTES: USER FEEDBACK (Masukan via Email)
+	// ==========================================
+	feedbackGroup := api.Group("/support/feedback", middlewares.RequireAuth)
+	feedbackGroup.Post("/", feedbackHandler.SendFeedback)
+	api.Post("/feedback", middlewares.RequireAuth, feedbackHandler.SendFeedback)
 
 	// ==========================================
 	// ROUTES: DIRECT BUSINESS CHAT (Chat Toko)

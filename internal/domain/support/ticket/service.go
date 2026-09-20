@@ -30,7 +30,6 @@ type SupportTicketService interface {
 	CreateTicket(accountID string, userRole string, input models.CreateTicketInput) (*models.SupportTicketDetailResponse, error)
 	GetMyTickets(accountID string, limit int, cursor string) ([]models.SupportTicketDetailResponse, error)
 	GetTicketDetail(ticketID string, requesterID string, isCS bool) (*models.SupportTicketDetailResponse, error)
-	SendFeedback(accountID, userRole string, input models.CreateFeedbackInput) error
 }
 
 type supportTicketService struct {
@@ -149,40 +148,5 @@ func (s *supportTicketService) GetTicketDetail(ticketID string, requesterID stri
 	decryptTicket(ticket)
 	res := ticket.FormatDetailResponse()
 	return &res, nil
-}
-
-func (s *supportTicketService) SendFeedback(accountID, userRole string, input models.CreateFeedbackInput) error {
-	account, err := s.repo.GetAccountByID(accountID)
-	if err != nil || account == nil {
-		return errors.New("data akun pengguna tidak ditemukan")
-	}
-
-	userEmail := ""
-	if account.Email != nil {
-		userEmail = *account.Email
-	}
-	if userEmail == "" {
-		return errors.New("akun Anda belum memiliki alamat email yang terdaftar")
-	}
-
-	userName := strings.TrimSpace(fmt.Sprintf("%s %s", account.FirstName, account.LastName))
-	if userName == "" {
-		userName = account.Username
-	}
-	if userName == "" {
-		userName = "Pengguna ToenToen"
-	}
-
-	subject := strings.TrimSpace(input.Subject)
-	if subject == "" {
-		subject = "Feedback Pengguna ToenToen"
-	}
-
-	message := strings.TrimSpace(input.Message)
-	if message == "" {
-		return errors.New("pesan feedback tidak boleh kosong")
-	}
-
-	return utils.SendFeedbackEmail(userEmail, userName, userRole, subject, message)
 }
 

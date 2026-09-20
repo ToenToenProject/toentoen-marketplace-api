@@ -13,7 +13,6 @@ type SupportTicketRepository interface {
 	GetTicketByID(ticketID string) (*models.SupportTicket, error)
 	GetAdminTickets(status string, limit int, cursor string) ([]models.SupportTicket, error)
 	ResolveTicket(ticketID string, status string, suggestions string, resolvedBy string) error
-	GetAccountByID(accountID string) (*models.Account, error)
 }
 
 type supportTicketRepository struct {
@@ -103,13 +102,5 @@ func (r *supportTicketRepository) ResolveTicket(ticketID string, status string, 
 			"resolved_by":                   resolvedBy,
 			"updated_at":                    now,
 		}).Error
-}
-
-func (r *supportTicketRepository) GetAccountByID(accountID string) (*models.Account, error) {
-	var account models.Account
-	if err := r.db.Where("account_id = ?", accountID).First(&account).Error; err != nil {
-		return nil, err
-	}
-	return &account, nil
 }
 

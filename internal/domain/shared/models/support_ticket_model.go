@@ -103,9 +103,3 @@ func (t *SupportTicket) FormatDetailResponse() SupportTicketDetailResponse {
 	}
 }
 
-// CreateFeedbackInput payload untuk mengirimkan pesan feedback via email
-type CreateFeedbackInput struct {
-	Subject string `json:"subject" validate:"omitempty,max=150"`
-	Message string `json:"message" validate:"required,min=5,max=3000"`
-}
-
