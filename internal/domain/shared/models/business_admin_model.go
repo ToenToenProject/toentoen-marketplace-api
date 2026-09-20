@@ -165,10 +165,9 @@ func (BusinessAdminShift) TableName() string {
 // ================================================================
 
 type InviteAdminInput struct {
-	InvitationCode string                    `json:"invitation_code" validate:"required"`
-	BusinessID     string                    `json:"business_id"`
-	Role           string                    `json:"role" validate:"required,oneof=supervisor staff"`
-	Shifts         []BusinessAdminShiftInput `json:"shifts,omitempty"`
+	InvitationCode string `json:"invitation_code" validate:"required"`
+	BusinessID     string `json:"business_id"`
+	Role           string `json:"role" validate:"required,oneof=supervisor staff"`
 }
 
 type BusinessAdminShiftInput struct {

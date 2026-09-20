@@ -153,18 +153,6 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 			}
 		}
 
-		// Simpan shift jika ada
-		var shifts []models.BusinessAdminShift
-		for _, s := range input.Shifts {
-			shifts = append(shifts, models.BusinessAdminShift{
-				AssignmentID: assignmentID,
-				DayOfWeek:    s.DayOfWeek,
-				StartTime:    &s.StartTime,
-				EndTime:      &s.EndTime,
-			})
-		}
-		s.adminRepo.ReplaceShifts(assignmentID, shifts)
-
 		// Kirim Notifikasi & FCM ke Calon Admin
 		go s.notifService.SendNotification(
 			[]string{targetAccount.AccountID},
@@ -207,18 +195,6 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 				return errors.New("gagal mengajukan undangan")
 			}
 		}
-
-		// Simpan shift jika ada
-		var shifts []models.BusinessAdminShift
-		for _, s := range input.Shifts {
-			shifts = append(shifts, models.BusinessAdminShift{
-				AssignmentID: assignmentID,
-				DayOfWeek:    s.DayOfWeek,
-				StartTime:    &s.StartTime,
-				EndTime:      &s.EndTime,
-			})
-		}
-		s.adminRepo.ReplaceShifts(assignmentID, shifts)
 
 		// Kirim Notifikasi & FCM ke Owner untuk Approval
 		go s.notifService.SendNotification(
