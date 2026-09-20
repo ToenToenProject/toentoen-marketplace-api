@@ -34,9 +34,7 @@ type Product struct {
 	MinPrice    float64 `gorm:"->;column:min_price" json:"min_price"`
 	MaxPrice    float64 `gorm:"->;column:max_price" json:"max_price"`
 
-	StockType         string `gorm:"column:stock_type;default:'in_stock'" json:"stock_type"`
-	StockQuantity     int    `gorm:"column:stock_quantity;default:0" json:"stock_quantity"`
-	LowStockThreshold int    `gorm:"column:low_stock_threshold;default:5" json:"low_stock_threshold"`
+	StockType string `gorm:"column:stock_type;default:'in_stock'" json:"stock_type"`
 
 	Tags      []string `gorm:"column:tags;type:jsonb;serializer:json;default:'[]'" json:"hashtags"`
 	TagsAlias []string `gorm:"-" json:"tags,omitempty"`
@@ -65,30 +63,9 @@ type ProductVariant struct {
 	SKU             string    `gorm:"column:sku" json:"sku"`
 	VariantName     string    `gorm:"column:variant_name" json:"variant_name"`
 	AdditionalPrice float64   `gorm:"column:additional_price;default:0" json:"additional_price"`
-	StockQuantity   int       `gorm:"column:stock_quantity;default:0" json:"stock_quantity"`
 	IsActive        bool      `gorm:"column:is_active;default:true" json:"is_active"`
 	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updated_at"`
-}
-
-// ==========================================
-// DTO UNTUK PRODUCT VARIANTS
-// ==========================================
-
-type CreateVariantInput struct {
-	SKU             string  `json:"sku"`
-	VariantName     string  `json:"variant_name" validate:"required"`
-	AdditionalPrice float64 `json:"additional_price"`
-	StockQuantity   int     `json:"stock_quantity"`
-	IsActive        *bool   `json:"is_active"`
-}
-
-type UpdateVariantInput struct {
-	SKU             *string  `json:"sku"`
-	VariantName     *string  `json:"variant_name"`
-	AdditionalPrice *float64 `json:"additional_price"`
-	StockQuantity   *int     `json:"stock_quantity"`
-	IsActive        *bool    `json:"is_active"`
 }
 
 // ==========================================
@@ -222,9 +199,7 @@ type ProductDetailResponse struct {
 	FinalMaxPrice    float64 `json:"final_max_price"`    // Harga bayar termahal
 	IsDiscounted     bool    `json:"is_discounted"`
 
-	StockType         string `json:"stock_type"`
-	StockQuantity     int    `json:"stock_quantity"`
-	LowStockThreshold int    `json:"low_stock_threshold"`
+	StockType string `json:"stock_type"`
 
 	Hashtags     []string         `json:"hashtags"`
 	Tags         []string         `json:"tags,omitempty"`

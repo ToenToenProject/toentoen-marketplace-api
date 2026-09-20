@@ -11,10 +11,6 @@ import (
 
 type ProductService interface {
 	CreateProduct(requesterID, role, businessID string, input models.CreateProductInput) error
-	// Fitur Varian
-	AddVariant(requesterID, role, businessID, productID string, input models.CreateVariantInput) error
-	UpdateVariant(requesterID, role, businessID, productID, variantID string, input models.UpdateVariantInput) error
-	RemoveVariant(requesterID, role, businessID, productID, variantID string) error
 
 	UpdateProduct(requesterID, role, businessID, productID string, input models.UpdateProductInput) error
 	DeleteProduct(requesterID, role, businessID, productID string) error
@@ -85,9 +81,6 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		discountEndAt = nil
 		maxDiscount = nil
 	}
-
-	stockQuantity := 0
-	lowStockThreshold := 5
 
 	var productGroupID *string
 	if input.ProductGroupID != nil {
@@ -161,99 +154,12 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		DiscountStartAt:    discountStartAt,
 		DiscountEndAt:      discountEndAt,
 		StockType:          input.StockType,
-		StockQuantity:      stockQuantity,
-		LowStockThreshold:  lowStockThreshold,
 		Tags:               normalizedHashtags,
 		IsActive:           isActive,
 	}
 
 	if err := s.repo.CreateProduct(&product); err != nil {
 		return fmt.Errorf("gagal membuat produk: %w", err)
-	}
-	return nil
-}
-
-// ==========================================
-// IMPLEMENTASI PRODUCT VARIANTS
-// ==========================================
-
-func (s *productService) AddVariant(requesterID, role, businessID, productID string, input models.CreateVariantInput) error {
-	if _, err := s.GetProductDetail(requesterID, role, businessID, productID); err != nil {
-		return err
-	}
-
-	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
-		return errors.New("forbidden: Anda tidak memiliki izin untuk mengedit varian produk")
-	}
-
-	isActive := true
-	if input.IsActive != nil {
-		isActive = *input.IsActive
-	}
-
-	variant := models.ProductVariant{
-		VariantID:       utils.GenerateUUID("VAR"),
-		ProductID:       productID,
-		SKU:             input.SKU,
-		VariantName:     input.VariantName,
-		AdditionalPrice: input.AdditionalPrice,
-		StockQuantity:   input.StockQuantity,
-		IsActive:        isActive,
-	}
-
-	if err := s.repo.CreateVariant(&variant); err != nil {
-		return errors.New("gagal menambahkan varian")
-	}
-	return nil
-}
-
-func (s *productService) UpdateVariant(requesterID, role, businessID, productID, variantID string, input models.UpdateVariantInput) error {
-	if _, err := s.GetProductDetail(requesterID, role, businessID, productID); err != nil {
-		return err
-	}
-
-	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
-		return errors.New("forbidden: Anda tidak memiliki izin untuk mengedit varian produk")
-	}
-
-	variant, err := s.repo.GetVariantByID(variantID, productID)
-	if err != nil {
-		return errors.New("varian tidak ditemukan")
-	}
-
-	if input.SKU != nil {
-		variant.SKU = *input.SKU
-	}
-	if input.VariantName != nil {
-		variant.VariantName = *input.VariantName
-	}
-	if input.AdditionalPrice != nil {
-		variant.AdditionalPrice = *input.AdditionalPrice
-	}
-	if input.StockQuantity != nil {
-		variant.StockQuantity = *input.StockQuantity
-	}
-	if input.IsActive != nil {
-		variant.IsActive = *input.IsActive
-	}
-
-	if err := s.repo.UpdateVariant(variant); err != nil {
-		return errors.New("gagal memperbarui varian")
-	}
-	return nil
-}
-
-func (s *productService) RemoveVariant(requesterID, role, businessID, productID, variantID string) error {
-	if _, err := s.GetProductDetail(requesterID, role, businessID, productID); err != nil {
-		return err
-	}
-
-	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddDeleteProducts) {
-		return errors.New("forbidden: Anda tidak memiliki izin untuk menghapus varian produk")
-	}
-
-	if err := s.repo.DeleteVariant(variantID, productID); err != nil {
-		return errors.New("gagal menghapus varian")
 	}
 	return nil
 }
@@ -508,10 +414,8 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		FinalMaxPrice:    finalMaxPrice,
 		IsDiscounted:     isDiscounted,
 
-		StockType:         p.StockType,
-		StockQuantity:     p.StockQuantity,
-		LowStockThreshold: p.LowStockThreshold,
-		Hashtags:          p.Tags,
+		StockType: p.StockType,
+		Hashtags:  p.Tags,
 		Tags:              p.Tags,
 		IsActive:          p.IsActive,
 		Rating:            p.AverageRating,

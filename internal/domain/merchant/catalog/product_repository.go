@@ -14,12 +14,6 @@ type ProductRepository interface {
 	CheckProductGroupExists(businessID, productGroupID string) bool
 	CreateProduct(product *models.Product) error
 
-	// Fitur Varian
-	CreateVariant(variant *models.ProductVariant) error
-	GetVariantByID(variantID, productID string) (*models.ProductVariant, error)
-	UpdateVariant(variant *models.ProductVariant) error
-	DeleteVariant(variantID, productID string) error
-
 	GetProductByID(productID, businessID string) (*models.Product, error)
 
 	// FUNGSI DIPERBARUI: Menggunakan Cursor dan Preload
@@ -68,28 +62,6 @@ func (r *productRepository) CheckProductGroupExists(businessID, productGroupID s
 // 2. CREATE
 func (r *productRepository) CreateProduct(product *models.Product) error {
 	return r.db.Create(product).Error
-}
-
-// ==========================================
-// IMPLEMENTASI PRODUCT VARIANTS
-// ==========================================
-
-func (r *productRepository) CreateVariant(variant *models.ProductVariant) error {
-	return r.db.Create(variant).Error
-}
-
-func (r *productRepository) GetVariantByID(variantID, productID string) (*models.ProductVariant, error) {
-	var variant models.ProductVariant
-	err := r.db.Where("variant_id = ? AND product_id = ?", variantID, productID).First(&variant).Error
-	return &variant, err
-}
-
-func (r *productRepository) UpdateVariant(variant *models.ProductVariant) error {
-	return r.db.Save(variant).Error
-}
-
-func (r *productRepository) DeleteVariant(variantID, productID string) error {
-	return r.db.Where("variant_id = ? AND product_id = ?", variantID, productID).Delete(&models.ProductVariant{}).Error
 }
 
 // 3. READ (Single)
