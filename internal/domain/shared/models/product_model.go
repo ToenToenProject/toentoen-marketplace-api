@@ -38,7 +38,8 @@ type Product struct {
 	StockQuantity     int    `gorm:"column:stock_quantity;default:0" json:"stock_quantity"`
 	LowStockThreshold int    `gorm:"column:low_stock_threshold;default:5" json:"low_stock_threshold"`
 
-	Tags      []string `gorm:"column:tags;type:jsonb;serializer:json;default:'[]'" json:"tags"`
+	Tags      []string `gorm:"column:tags;type:jsonb;serializer:json;default:'[]'" json:"hashtags"`
+	TagsAlias []string `gorm:"-" json:"tags,omitempty"`
 	IsActive  bool     `gorm:"column:is_active;default:true" json:"is_active"`
 	SortOrder int      `gorm:"column:sort_order;default:0" json:"sort_order"`
 
@@ -108,10 +109,10 @@ type CreateProductInput struct {
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
 	DiscountEndAt      *time.Time `json:"discount_end_at"`
 
-	StockType string `json:"stock_type" validate:"required"` // in_stock, out_of_stock, limited, pre_order
-
-	Tags     []string `json:"tags" validate:"required,min=1"`
-	IsActive *bool    `json:"is_active"`
+	StockType string   `json:"stock_type" validate:"required"` // in_stock, out_of_stock, limited, pre_order
+	Hashtags  []string `json:"hashtags"`
+	Tags      []string `json:"tags"`
+	IsActive  *bool    `json:"is_active"`
 }
 
 type UpdateProductInput struct {
@@ -128,7 +129,8 @@ type UpdateProductInput struct {
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
 	DiscountEndAt      *time.Time `json:"discount_end_at"`
 	StockType          *string    `json:"stock_type"`
-	Tags               *[]string  `json:"tags" validate:"omitempty,min=1"`
+	Hashtags           *[]string  `json:"hashtags"`
+	Tags               *[]string  `json:"tags"`
 	IsActive           *bool      `json:"is_active"`
 }
 
@@ -224,7 +226,8 @@ type ProductDetailResponse struct {
 	StockQuantity     int    `json:"stock_quantity"`
 	LowStockThreshold int    `json:"low_stock_threshold"`
 
-	Tags         []string         `json:"tags"`
+	Hashtags     []string         `json:"hashtags"`
+	Tags         []string         `json:"tags,omitempty"`
 	IsActive     bool             `json:"is_active"`
 	Rating       float64          `json:"rating"`
 	LikeCount    int              `json:"like_count"`

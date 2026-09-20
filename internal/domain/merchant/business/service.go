@@ -166,6 +166,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		BusinessImages:   input.BusinessImages,
 		Certificates:     input.Certificates,
 		SocialWebsites:   input.SocialWebsites,
+		Hashtags:         utils.NormalizeHashtags(input.Hashtags),
 		
 		IsActive:         true,
 	}
@@ -554,6 +555,13 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 			business.SocialWebsites = []string{}
 		} else {
 			business.SocialWebsites = *input.SocialWebsites
+		}
+	}
+	if input.Hashtags != nil {
+		if *input.Hashtags == nil {
+			business.Hashtags = []string{}
+		} else {
+			business.Hashtags = utils.NormalizeHashtags(*input.Hashtags)
 		}
 	}
 

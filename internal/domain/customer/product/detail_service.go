@@ -22,6 +22,7 @@ type ProductDetailResponse struct {
 	DiscountAmount     float64  `json:"discount_amount"` // Potongan harga (Rupiah)
 	DiscountPct        float64  `json:"discount_pct"`    // Besaran diskon (%)
 	Tags               []string `json:"tags"`
+	Hashtags           []string `json:"hashtags"`
 	BusinessID         string   `json:"business_id"`
 	BusinessName       string   `json:"business_name"`
 	BusinessAvatar     *string  `json:"business_avatar,omitempty"`
@@ -94,6 +95,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		DiscountAmount:     discountAmount,
 		DiscountPct:        discountPct,
 		Tags:               prod.Tags,
+		Hashtags:           prod.Tags,
 		BusinessID:         bus.BusinessID,
 		BusinessName:       bName,
 		BusinessAvatar:     bus.LogoURL,

@@ -126,6 +126,22 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		}
 	}
 
+	var rawHashtags []string
+	if len(input.Hashtags) > 0 {
+		rawHashtags = input.Hashtags
+	} else if len(input.Tags) > 0 {
+		rawHashtags = input.Tags
+	}
+
+	if len(rawHashtags) == 0 {
+		return errors.New("hashtags produk wajib diisi minimal 1 hashtag")
+	}
+
+	normalizedHashtags := utils.NormalizeHashtags(rawHashtags)
+	if len(normalizedHashtags) == 0 {
+		return errors.New("hashtags produk tidak boleh kosong setelah dinormalisasi")
+	}
+
 	product := models.Product{
 		ProductID:          utils.GenerateUUID("PRD"),
 		BusinessID:         businessID,
@@ -144,7 +160,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		StockType:          input.StockType,
 		StockQuantity:      stockQuantity,
 		LowStockThreshold:  lowStockThreshold,
-		Tags:               input.Tags,
+		Tags:               normalizedHashtags,
 		IsActive:           isActive,
 	}
 
@@ -252,7 +268,7 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 
 		hasOtherDetails := input.ProductGroupID != nil || input.ProductName != nil || input.ProductOrigin != nil ||
 			input.OriginCountry != nil || input.ProductDescription != nil || input.Price != nil || input.Discount != nil ||
-			input.DiscountType != nil || input.MaxDiscount != nil || input.StockType != nil || input.Tags != nil || input.IsActive != nil ||
+			input.DiscountType != nil || input.MaxDiscount != nil || input.StockType != nil || input.Hashtags != nil || input.Tags != nil || input.IsActive != nil ||
 			input.DiscountStartAt != nil || input.DiscountEndAt != nil
 		if hasOtherDetails && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
 			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah detail produk")
@@ -371,8 +387,10 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		}
 		product.StockType = cleanStock
 	}
-	if input.Tags != nil {
-		product.Tags = *input.Tags
+	if input.Hashtags != nil {
+		product.Tags = utils.NormalizeHashtags(*input.Hashtags)
+	} else if input.Tags != nil {
+		product.Tags = utils.NormalizeHashtags(*input.Tags)
 	}
 	if input.IsActive != nil {
 		product.IsActive = *input.IsActive
@@ -482,6 +500,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		StockType:         p.StockType,
 		StockQuantity:     p.StockQuantity,
 		LowStockThreshold: p.LowStockThreshold,
+		Hashtags:          p.Tags,
 		Tags:              p.Tags,
 		IsActive:          p.IsActive,
 		Rating:            p.AverageRating,

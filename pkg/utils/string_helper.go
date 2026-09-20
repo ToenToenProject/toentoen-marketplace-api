@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"regexp"
 	"strings"
 )
 
@@ -35,4 +36,38 @@ func MaskPhoneNumber(phone string) string {
 	prefix := phone[:4]
 	suffix := phone[len(phone)-3:]
 	return prefix + "****" + suffix
+}
+
+var nonAlphanumericRegex = regexp.MustCompile(`[^a-z0-9_]`)
+
+// NormalizeHashtag membersihkan string hashtag (menghapus #, menghapus spasi, lowercase, dan membuang simbol non-alfanumerik)
+func NormalizeHashtag(tag string) string {
+	clean := strings.TrimSpace(tag)
+	for strings.HasPrefix(clean, "#") {
+		clean = strings.TrimPrefix(clean, "#")
+	}
+	clean = strings.ToLower(clean)
+	clean = strings.ReplaceAll(clean, " ", "")
+	clean = nonAlphanumericRegex.ReplaceAllString(clean, "")
+	return clean
+}
+
+// NormalizeHashtags memproses slice of hashtags, membuang string kosong, dan mendeduplikasi hasilnya
+func NormalizeHashtags(tags []string) []string {
+	if len(tags) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]bool)
+	var result []string
+	for _, t := range tags {
+		clean := NormalizeHashtag(t)
+		if clean != "" && !seen[clean] {
+			seen[clean] = true
+			result = append(result, clean)
+		}
+	}
+	if result == nil {
+		return []string{}
+	}
+	return result
 }
