@@ -67,3 +67,36 @@ func TestValidateHashtags(t *testing.T) {
 	}
 }
 
+func TestCleanCustomTags(t *testing.T) {
+	input := []string{"  Pet Friendly  ", "Live Music", "pet friendly", "   ", "Musholla"}
+	expected := []string{"Pet Friendly", "Live Music", "Musholla"}
+	got := CleanCustomTags(input)
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("CleanCustomTags(%v) = %v, expected %v", input, got, expected)
+	}
+
+	empty := CleanCustomTags([]string{})
+	if len(empty) != 0 {
+		t.Errorf("expected empty slice, got %v", empty)
+	}
+}
+
+func TestValidateCustomTags(t *testing.T) {
+	valid := []string{"Pet Friendly", "Live Music"}
+	if err := ValidateCustomTags(valid, 5, 20); err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+
+	// Exceed count
+	if err := ValidateCustomTags(valid, 1, 20); err == nil {
+		t.Errorf("expected error for exceed count, got nil")
+	}
+
+	// Exceed length
+	long := []string{"Nama Tag Sangat Amat Panjang Melebihi Batas Karakter"}
+	if err := ValidateCustomTags(long, 5, 15); err == nil {
+		t.Errorf("expected error for exceed length, got nil")
+	}
+}
+
+

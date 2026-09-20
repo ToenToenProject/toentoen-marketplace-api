@@ -31,6 +31,7 @@ type BusinessProfileResponse struct {
 	LogoURL         *string  `json:"logo_url"`
 	Category        string   `json:"category"`
 	CustomCategory  *string  `json:"custom_category,omitempty"`
+	CustomTags      []string `json:"custom_tags,omitempty"`
 	Hashtags        []string `json:"hashtags,omitempty"`
 	IsOpenNow       bool     `json:"is_open_now"`
 	IsBookmarked    bool     `json:"is_bookmarked"`
@@ -188,6 +189,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		LogoURL:         business.LogoURL,
 		Category:        category,
 		CustomCategory:  business.CustomCategory,
+		CustomTags:      business.CustomTags,
 		Hashtags:        business.Hashtags,
 		IsOpenNow:       isOpenNow,
 		IsBookmarked:    isBookmarked,
@@ -285,6 +287,7 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			LogoURL:         business.LogoURL,
 			Category:        category,
 			CustomCategory:  business.CustomCategory,
+			CustomTags:      business.CustomTags,
 			Hashtags:        business.Hashtags,
 			IsOpenNow:       isOpenNow,
 			IsBookmarked:    true, // always true if fetched from bookmarks

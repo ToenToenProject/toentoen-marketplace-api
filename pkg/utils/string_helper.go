@@ -86,3 +86,38 @@ func ValidateHashtags(hashtags []string, maxCount, maxLen int) error {
 	return nil
 }
 
+// CleanCustomTags merapikan slice custom tags (trim spasi, buang string kosong, dan deduplikasi case-insensitive)
+func CleanCustomTags(tags []string) []string {
+	if len(tags) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]bool)
+	var result []string
+	for _, t := range tags {
+		clean := strings.TrimSpace(t)
+		lower := strings.ToLower(clean)
+		if clean != "" && !seen[lower] {
+			seen[lower] = true
+			result = append(result, clean)
+		}
+	}
+	if result == nil {
+		return []string{}
+	}
+	return result
+}
+
+// ValidateCustomTags memvalidasi jumlah dan panjang maksimal tiap kata pada custom tags
+func ValidateCustomTags(tags []string, maxCount, maxLen int) error {
+	if len(tags) > maxCount {
+		return fmt.Errorf("jumlah custom tag maksimal %d (diberikan: %d)", maxCount, len(tags))
+	}
+	for _, t := range tags {
+		if len([]rune(t)) > maxLen {
+			return fmt.Errorf("panjang tiap custom tag maksimal %d karakter (tag '%s' memiliki %d karakter)", maxLen, t, len([]rune(t)))
+		}
+	}
+	return nil
+}
+
+

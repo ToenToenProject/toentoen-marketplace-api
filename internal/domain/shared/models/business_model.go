@@ -72,7 +72,8 @@ type Business struct {
 
 	Hours      []BusinessHour `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"hours"`
 	Categories []Category     `gorm:"many2many:business_has_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
-	Tags       []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"tags"` // mapped to old tags table
+	Tags           []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"tags"` // mapped to old tags table
+	CustomTags     []string       `gorm:"type:jsonb;serializer:json;column:custom_tags;default:'[]'" json:"custom_tags"`
 	Hashtags       []string       `gorm:"type:jsonb;serializer:json;column:hashtags;default:'[]'" json:"hashtags"`
 	CustomCategory *string        `gorm:"column:custom_category" json:"custom_category,omitempty"`
 }
@@ -99,6 +100,7 @@ type CreateBusinessInput struct {
 	CategoryIDs     []int64  `json:"category_ids"`
 	CustomCategory  *string  `json:"custom_category" validate:"omitempty,max=100"`
 	Tags            []int64  `json:"tags"`
+	CustomTags      []string `json:"custom_tags"`
 	Hashtags        []string `json:"hashtags"`
 	BusinessDetails string   `json:"business_details" validate:"max=2000"`
 
@@ -146,6 +148,7 @@ type UpdateBusinessInput struct {
 	CategoryIDs     *[]int64  `json:"category_ids"`
 	CustomCategory  *string   `json:"custom_category" validate:"omitempty,max=100"`
 	Tags            *[]int64  `json:"tags"`
+	CustomTags      *[]string `json:"custom_tags"`
 	Hashtags        *[]string `json:"hashtags"`
 	BusinessDetails *string  `json:"business_details" validate:"omitempty,max=2000"`
 

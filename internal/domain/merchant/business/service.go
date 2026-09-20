@@ -143,6 +143,11 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		}
 	}
 
+	cleanedCustomTags := utils.CleanCustomTags(input.CustomTags)
+	if err := utils.ValidateCustomTags(cleanedCustomTags, 10, 50); err != nil {
+		return "", err
+	}
+
 	normalizedHashtags := utils.NormalizeHashtags(input.Hashtags)
 	if err := utils.ValidateHashtags(normalizedHashtags, 10, 30); err != nil {
 		return "", err
@@ -183,6 +188,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		BusinessImages:   input.BusinessImages,
 		Certificates:     input.Certificates,
 		SocialWebsites:   input.SocialWebsites,
+		CustomTags:       cleanedCustomTags,
 		Hashtags:         normalizedHashtags,
 		
 		IsActive:         true,
@@ -584,6 +590,17 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 			business.SocialWebsites = []string{}
 		} else {
 			business.SocialWebsites = *input.SocialWebsites
+		}
+	}
+	if input.CustomTags != nil {
+		if *input.CustomTags == nil {
+			business.CustomTags = []string{}
+		} else {
+			cleaned := utils.CleanCustomTags(*input.CustomTags)
+			if err := utils.ValidateCustomTags(cleaned, 10, 50); err != nil {
+				return err
+			}
+			business.CustomTags = cleaned
 		}
 	}
 	if input.Hashtags != nil {
