@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/gomail.v2"
 )
@@ -112,3 +113,122 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 func SendWAOTP(phoneNumber string, otp string) error {
 	return errors.New("layanan OTP via nomor telepon/WhatsApp sedang dalam tahap pengembangan")
 }
+
+// SendFeedbackEmail mengirimkan email masukan/feedback dari pengguna ke email resmi ToenToen
+func SendFeedbackEmail(fromUserEmail, userName, role, subject, message string) error {
+	fromUserEmail = strings.TrimSpace(fromUserEmail)
+	if fromUserEmail == "" {
+		fromUserEmail = "no-reply@toentoen.com"
+	}
+	userName = strings.TrimSpace(userName)
+	if userName == "" {
+		userName = "Pengguna ToenToen"
+	}
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		subject = "Feedback Pengguna"
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return errors.New("isi pesan feedback tidak boleh kosong")
+	}
+
+	smtpHost := os.Getenv("SMTP_HOST")
+	if smtpHost == "" {
+		smtpHost = "smtp.gmail.com"
+	}
+
+	smtpPort := 587
+	if p := os.Getenv("SMTP_PORT"); p != "" {
+		if pInt, err := strconv.Atoi(p); err == nil && pInt > 0 {
+			smtpPort = pInt
+		}
+	}
+
+	smtpEmail := os.Getenv("SMTP_EMAIL")
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+
+	if smtpEmail == "" || smtpPassword == "" {
+		log.Printf("[FEEDBACK-EMAIL-ERROR] SMTP credentials (SMTP_EMAIL / SMTP_PASSWORD) belum diatur di environment variable")
+		return errors.New("konfigurasi server email belum lengkap")
+	}
+
+	receiverEmail := os.Getenv("FEEDBACK_RECEIVER_EMAIL")
+	if receiverEmail == "" {
+		receiverEmail = smtpEmail // default ke SMTP_EMAIL (email resmi toentoen)
+	}
+
+	mailer := gomail.NewMessage()
+	mailer.SetAddressHeader("From", smtpEmail, fmt.Sprintf("%s via ToenToen Feedback", userName))
+	mailer.SetHeader("Reply-To", fromUserEmail)
+	mailer.SetHeader("To", receiverEmail)
+	mailer.SetHeader("Subject", fmt.Sprintf("[Feedback ToenToen] %s - %s (%s)", subject, userName, role))
+
+	plainBody := fmt.Sprintf("Feedback Baru dari Pengguna ToenToen:\n\nNama: %s\nEmail: %s\nPeran Akun: %s\nSubjek: %s\nWaktu: %s\n\nPesan:\n%s\n",
+		userName, fromUserEmail, role, subject, time.Now().Format("02 Jan 2006 15:04 WIB"), message)
+	mailer.SetBody("text/plain", plainBody)
+
+	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<style>
+		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 20px; color: #333; }
+		.container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+		.header { font-size: 20px; font-weight: 700; color: #0077b6; border-bottom: 2px solid #0077b6; padding-bottom: 12px; margin-bottom: 20px; }
+		.message-box { background: #f8fafc; border-left: 4px solid #0077b6; border-radius: 4px; padding: 16px; margin-top: 20px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; color: #222; }
+		.footer { margin-top: 32px; border-top: 1px solid #eee; padding-top: 16px; font-size: 11px; color: #aaa; text-align: center; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="header">ToenToen Feedback</div>
+		<p style="font-size: 14px; color: #666; margin-bottom: 16px;">Ada pesan masukan/saran baru dari pengguna aplikasi ToenToen:</p>
+		<table style="width: 100%%; font-size: 14px; border-collapse: collapse;">
+			<tr>
+				<td style="padding: 6px 0; font-weight: 600; color: #555; width: 120px;">Pengirim:</td>
+				<td style="padding: 6px 0; color: #111;">%s</td>
+			</tr>
+			<tr>
+				<td style="padding: 6px 0; font-weight: 600; color: #555;">Email:</td>
+				<td style="padding: 6px 0; color: #111;"><a href="mailto:%s">%s</a></td>
+			</tr>
+			<tr>
+				<td style="padding: 6px 0; font-weight: 600; color: #555;">Peran Akun:</td>
+				<td style="padding: 6px 0; color: #111;"><span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">%s</span></td>
+			</tr>
+			<tr>
+				<td style="padding: 6px 0; font-weight: 600; color: #555;">Subjek:</td>
+				<td style="padding: 6px 0; color: #111; font-weight: 600;">%s</td>
+			</tr>
+			<tr>
+				<td style="padding: 6px 0; font-weight: 600; color: #555;">Waktu:</td>
+				<td style="padding: 6px 0; color: #888; font-size: 12px;">%s</td>
+			</tr>
+		</table>
+		<div class="message-box">%s</div>
+		<div class="footer">
+			Anda dapat membalas pesan ini langsung untuk merespons pengguna melalui alamat email pengirim (<a href="mailto:%s">%s</a>).
+		</div>
+	</div>
+</body>
+</html>`, userName, fromUserEmail, fromUserEmail, role, subject, time.Now().Format("02 Jan 2006 15:04 WIB"), message, fromUserEmail, fromUserEmail)
+	mailer.AddAlternative("text/html", htmlBody)
+
+	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)
+
+	skipVerify := os.Getenv("SMTP_SKIP_VERIFY") == "true"
+	dialer.TLSConfig = &tls.Config{
+		ServerName:         smtpHost,
+		InsecureSkipVerify: skipVerify,
+	}
+
+	if err := dialer.DialAndSend(mailer); err != nil {
+		log.Printf("[FEEDBACK-EMAIL-ERROR] Gagal mengirim feedback ke %s: %v", receiverEmail, err)
+		return fmt.Errorf("gagal mengirim email feedback: %w", err)
+	}
+
+	log.Printf("[FEEDBACK-EMAIL-SUCCESS] Email feedback dari %s (%s) berhasil dikirim ke %s", userName, fromUserEmail, receiverEmail)
+	return nil
+}
+

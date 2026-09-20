@@ -18,6 +18,7 @@ type NotificationRepository interface {
 	DeleteNotification(accountID, notifID string) error
 	DeleteAllNotifications(accountID string) error
 	GetFCMTokensByAccountID(accountID string) ([]string, error)
+	HasNotificationOfType(recipientID, notifType string) (bool, error)
 }
 
 type notificationRepository struct {
@@ -115,5 +116,13 @@ func (r *notificationRepository) GetFCMTokensByAccountID(accountID string) ([]st
 		Where("account_id = ?", accountID).
 		Pluck("fcm_token", &tokens).Error
 	return tokens, err
+}
+
+func (r *notificationRepository) HasNotificationOfType(recipientID, notifType string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.UserNotification{}).
+		Where("recipient_account_id = ? AND type = ?", recipientID, notifType).
+		Count(&count).Error
+	return count > 0, err
 }
 

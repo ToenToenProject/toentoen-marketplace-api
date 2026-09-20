@@ -268,6 +268,9 @@ func main() {
 		},
 	}))
 
+	// Static Assets (Logos, public media)
+	app.Static("/assets", "./assets")
+
 	api := app.Group("/api/v1")
 
 	// ==========================================
@@ -666,12 +669,16 @@ func main() {
 	supportGroup.Post("/:room_id/end", supportChatHandler.EndChat)
 
 	// ==========================================
-	// ROUTES: SUPPORT TICKETS (Tiket Bantuan)
+	// ROUTES: SUPPORT TICKETS & FEEDBACK
 	// ==========================================
 	ticketGroup := api.Group("/support/tickets", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	ticketGroup.Post("/", supportTicketHandler.CreateTicket)
 	ticketGroup.Get("/", supportTicketHandler.GetMyTickets)
 	ticketGroup.Get("/:ticket_id", supportTicketHandler.GetTicketDetail)
+
+	// Feedback Pengguna via Email
+	api.Post("/support/feedback", middlewares.RequireAuth, supportTicketHandler.SendFeedback)
+	api.Post("/feedback", middlewares.RequireAuth, supportTicketHandler.SendFeedback)
 
 	// ==========================================
 	// ROUTES: DIRECT BUSINESS CHAT (Chat Toko)

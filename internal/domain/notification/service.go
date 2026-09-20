@@ -14,6 +14,7 @@ import (
 
 type NotificationService interface {
 	SendNotification(recipientIDs []string, triggerActorID string, notifType, referenceID, defaultTitle, defaultBody string, data map[string]interface{}, fcmTokensMap map[string][]string)
+	SendWelcomeMerchantNotification(accountID string)
 	GetMyNotifications(accountID string, page, limit int) ([]models.NotificationResponse, int64, error)
 	GetUnreadCount(accountID string) (int64, error)
 	MarkAsRead(accountID, notifID string) error
@@ -219,3 +220,66 @@ func (s *notificationService) DeleteNotification(accountID, notifID string) erro
 func (s *notificationService) DeleteAllNotifications(accountID string) error {
 	return s.repo.DeleteAllNotifications(accountID)
 }
+
+func (s *notificationService) SendWelcomeMerchantNotification(accountID string) {
+	if accountID == "" {
+		return
+	}
+
+	// 1. Cek idempotensi: pastikan belum pernah menerima notifikasi welcome
+	hasSent, err := s.repo.HasNotificationOfType(accountID, "welcome_merchant")
+	if err != nil || hasSent {
+		return
+	}
+
+	title := "Selamat datang di Toentoen!"
+	body := "Kembangkan bisnis kamu dengan Toentoen!\n\nSebagai tanda terimakasih karena sudah menjadi pengguna awal kami, kamu dapat menikmati Fitur Premium Toentoen Plus dalam paket Growth selama 3 bulan kedepan. (Detilnya dapat dilihat di Toentoen Plus)\n\nKami harap kamu dapat menikmati dan merasakan manfaat dari aplikasi kami.\n\nKami sangat terbuka untuk segala masukkan, sangat diharapkan kamu dapat memberikan saran - saran pada kami di fitur Feedback dalam aplikasi atau melalui saluran bantuan kami.\n\nTerima kasih!"
+
+	data := map[string]interface{}{
+		"type":     "welcome_merchant",
+		"logo_url": "/assets/logo/toentoen-logo.png",
+		"action":   "open_welcome_screen",
+	}
+	dataBytes, _ := json.Marshal(data)
+	actorsBytes, _ := json.Marshal([]string{"SYSTEM"})
+
+	newNotif := &models.UserNotification{
+		ID:                 utils.GenerateUUID("NOTIF"),
+		RecipientAccountID: accountID,
+		ActorIDs:           actorsBytes,
+		Type:               "welcome_merchant",
+		Title:              title,
+		Body:               body,
+		Data:               dataBytes,
+		IsRead:             false,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+
+	if err := s.repo.CreateNotification(newNotif); err != nil {
+		log.Printf("❌ Failed to create welcome notification for %s: %v", accountID, err)
+		return
+	}
+
+	// WebSocket broadcast jika merchant sedang online
+	if s.hub.IsOnline(accountID) {
+		event := realtime.WSEvent{
+			Type: "new_notification",
+			Data: newNotif,
+		}
+		s.hub.SendToUser(accountID, event)
+	}
+
+	// Push notification via FCM
+	tokens, _ := s.repo.GetFCMTokensByAccountID(accountID)
+	if len(tokens) > 0 {
+		stringData := map[string]string{
+			"notification_id": newNotif.ID,
+			"type":            "welcome_merchant",
+			"logo_url":        "/assets/logo/toentoen-logo.png",
+			"action":          "open_welcome_screen",
+		}
+		_ = config.SendPushNotification(tokens, newNotif.Title, newNotif.Body, stringData)
+	}
+}
+
