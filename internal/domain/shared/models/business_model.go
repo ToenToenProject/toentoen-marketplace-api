@@ -50,7 +50,7 @@ type Business struct {
 
 	StoreType *string `gorm:"default:'regular';column:store_type" json:"store_type"`
 
-	IsManuallyClosed bool     `gorm:"default:false;column:is_manually_closed" json:"is_manually_closed"`
+	IsManuallyClosed bool     `gorm:"default:true;column:is_manually_closed" json:"is_manually_closed"`
 	IsOpenNow        bool `gorm:"-" json:"is_open_now"`
 	IsLive           bool     `gorm:"default:false;column:is_live" json:"is_live"`
 	LivePlatform     *string  `gorm:"column:live_platform" json:"live_platform,omitempty"`

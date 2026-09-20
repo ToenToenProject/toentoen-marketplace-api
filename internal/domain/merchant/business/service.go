@@ -191,6 +191,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		CustomTags:       cleanedCustomTags,
 		Hashtags:         normalizedHashtags,
 		
+		IsManuallyClosed: true, // Default toko baru adalah Tutup sampai merchant membukanya
 		IsActive:         true,
 	}
 
