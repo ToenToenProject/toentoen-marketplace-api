@@ -122,6 +122,16 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		return "", errors.New("Anda belum dapat membuat bisnis karena pengajuan verifikasi identitas (KYC) Anda belum dikirimkan. Silakan lengkapi dan ajukan KYC terlebih dahulu.")
 	}
 
+	// Validasi Tag NIB: Tag NIB hanya dapat dipilih jika bisnis memiliki NIB yang terisi
+	cleanNIB := strings.TrimSpace(input.NIB)
+	hasNIB := cleanNIB != ""
+	if len(input.Tags) > 0 {
+		hasNIBTag, err := s.repo.HasNIBTag(input.Tags)
+		if err == nil && hasNIBTag && !hasNIB {
+			return "", errors.New("tag 'Verified merchant (NIB)' hanya dapat dipilih jika bisnis memiliki NIB yang terdaftar")
+		}
+	}
+
 	business := models.Business{
 		BusinessID:       utils.GenerateUUID("BUS"),
 		AccountID:        ownerID,
@@ -268,6 +278,19 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 
 	// 🪄 MAGIC: Hitung is_open_now secara live sebelum dikembalikan ke Frontend
 	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
+
+	// Filter: Jika bisnis belum memiliki NIB, pastikan tag NIB tidak ikut dimunculkan
+	hasNIBDetail := business.NIB != nil && strings.TrimSpace(*business.NIB) != ""
+	if !hasNIBDetail && len(business.Tags) > 0 {
+		var filteredTags []models.Tag
+		for _, t := range business.Tags {
+			lowerName := strings.ToLower(t.Name)
+			if !strings.Contains(lowerName, "(nib)") && !strings.Contains(lowerName, "terverifikasi (nib)") {
+				filteredTags = append(filteredTags, t)
+			}
+		}
+		business.Tags = filteredTags
+	}
 
 	return business, nil
 }
@@ -567,10 +590,22 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		catIDs = &uniqueCats
 	}
 
+	hasNIBUpdate := business.NIB != nil && strings.TrimSpace(*business.NIB) != ""
+
 	var tagIDs *[]int64
 	if input.Tags != nil {
 		uniqueTags := deduplicateInt64(*input.Tags)
+		if len(uniqueTags) > 0 {
+			hasNIBTag, err := s.repo.HasNIBTag(uniqueTags)
+			if err == nil && hasNIBTag && !hasNIBUpdate {
+				return errors.New("tag 'Verified merchant (NIB)' hanya dapat dipilih jika bisnis memiliki NIB yang terdaftar")
+			}
+		}
 		tagIDs = &uniqueTags
+	} else if !hasNIBUpdate {
+		// Jika NIB dikosongkan/dihapus tetapi array tags tidak dikirim pada request update,
+		// pastikan tag NIB dicabut dari pivot table agar status terverifikasi tidak tertinggal
+		_ = s.repo.RemoveNIBTagFromBusiness(business.BusinessID)
 	}
 
 	// Enkripsi dokumen sensitif sebelum disimpan ke basis data

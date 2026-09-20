@@ -32,6 +32,8 @@ type BusinessRepository interface {
 	GetBookmarkAccountIDs(businessID string) ([]string, error)
 	ResetLiveStatus() error
 	GetOwnerKYCStatus(ownerID string) (emailVerified bool, kycStatus string, err error)
+	HasNIBTag(tagIDs []int64) (bool, error)
+	RemoveNIBTagFromBusiness(businessID string) error
 }
 
 type businessRepository struct {
@@ -413,4 +415,27 @@ func (r *businessRepository) GetOwnerKYCStatus(ownerID string) (bool, string, er
 	}
 
 	return emailVerified, kycStatus, nil
+}
+
+func (r *businessRepository) HasNIBTag(tagIDs []int64) (bool, error) {
+	if len(tagIDs) == 0 {
+		return false, nil
+	}
+	var count int64
+	err := r.db.Model(&models.Tag{}).
+		Where("tag_id IN ? AND (LOWER(name) LIKE ? OR LOWER(name) LIKE ?)", tagIDs, "%(nib)%", "%terverifikasi%nib%").
+		Count(&count).Error
+	return count > 0, err
+}
+
+func (r *businessRepository) RemoveNIBTagFromBusiness(businessID string) error {
+	var nibTagIDs []int64
+	if err := r.db.Model(&models.Tag{}).
+		Where("LOWER(name) LIKE ? OR LOWER(name) LIKE ?", "%(nib)%", "%terverifikasi%nib%").
+		Pluck("tag_id", &nibTagIDs).Error; err != nil || len(nibTagIDs) == 0 {
+		return err
+	}
+	return r.db.Table("business_has_tags").
+		Where("business_id = ? AND tag_id IN ?", businessID, nibTagIDs).
+		Delete(nil).Error
 }

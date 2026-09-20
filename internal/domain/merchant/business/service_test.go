@@ -27,6 +27,14 @@ func (m *mockBusinessRepo) CreateBusinessWithRelations(business *models.Business
 	return nil
 }
 
+func (m *mockBusinessRepo) HasNIBTag(tagIDs []int64) (bool, error) {
+	return false, nil
+}
+
+func (m *mockBusinessRepo) RemoveNIBTagFromBusiness(businessID string) error {
+	return nil
+}
+
 func TestCreateBusiness_OwnerRestrictions(t *testing.T) {
 	input := models.CreateBusinessInput{
 		BusinessName: "Toko Berkah",
