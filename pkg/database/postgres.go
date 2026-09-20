@@ -52,6 +52,7 @@ func ConnectDB() {
 		&models.SignalImage{},
 		&models.SignalConversation{},
 		&models.SignalMessage{},
+		&models.Product{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {

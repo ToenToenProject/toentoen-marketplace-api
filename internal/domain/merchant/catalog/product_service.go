@@ -113,13 +113,40 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		}
 	}
 
+	// Origin & Country handling
+	origin := strings.TrimSpace(input.ProductOrigin)
+	var originCountry *string
+	if origin == "" || strings.EqualFold(origin, "dalam_negeri") || strings.EqualFold(origin, "domestic") || strings.EqualFold(origin, "indonesia") {
+		origin = "dalam_negeri"
+		indo := "Indonesia"
+		originCountry = &indo
+	} else if strings.EqualFold(origin, "luar_negeri") || strings.EqualFold(origin, "imported") {
+		origin = "luar_negeri"
+		if input.OriginCountry != nil && strings.TrimSpace(*input.OriginCountry) != "" {
+			country := strings.TrimSpace(*input.OriginCountry)
+			originCountry = &country
+		} else {
+			return errors.New("negara asal (origin_country) wajib diisi untuk produk luar negeri")
+		}
+	} else {
+		// Jika FE langsung mengirim nama negara
+		origin = "luar_negeri"
+		if input.OriginCountry != nil && strings.TrimSpace(*input.OriginCountry) != "" {
+			country := strings.TrimSpace(*input.OriginCountry)
+			originCountry = &country
+		} else {
+			originCountry = &origin
+		}
+	}
+
 	product := models.Product{
 		ProductID:          utils.GenerateUUID("PRD"),
 		BusinessID:         businessID,
 		ProductGroupID:     productGroupID,
 		ProductPreview:     input.ProductPreview,
 		ProductName:        input.ProductName,
-		ProductOrigin:      input.ProductOrigin,
+		ProductOrigin:      origin,
+		OriginCountry:      originCountry,
 		ProductDescription: input.ProductDescription,
 		Price:              input.Price,
 		DiscountType:       discountType,
@@ -274,10 +301,32 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	}
 	if input.ProductOrigin != nil {
 		cleanOrigin := strings.TrimSpace(*input.ProductOrigin)
-		if cleanOrigin == "" {
-			product.ProductOrigin = "domestic"
-		} else {
-			product.ProductOrigin = cleanOrigin
+		if strings.EqualFold(cleanOrigin, "dalam_negeri") || strings.EqualFold(cleanOrigin, "domestic") || strings.EqualFold(cleanOrigin, "indonesia") {
+			product.ProductOrigin = "dalam_negeri"
+			indo := "Indonesia"
+			product.OriginCountry = &indo
+		} else if strings.EqualFold(cleanOrigin, "luar_negeri") || strings.EqualFold(cleanOrigin, "imported") {
+			product.ProductOrigin = "luar_negeri"
+			if input.OriginCountry != nil && strings.TrimSpace(*input.OriginCountry) != "" {
+				country := strings.TrimSpace(*input.OriginCountry)
+				product.OriginCountry = &country
+			} else if product.OriginCountry == nil || *product.OriginCountry == "" || strings.EqualFold(*product.OriginCountry, "Indonesia") {
+				return errors.New("negara asal (origin_country) wajib diisi untuk produk luar negeri")
+			}
+		} else if cleanOrigin != "" {
+			product.ProductOrigin = "luar_negeri"
+			product.OriginCountry = &cleanOrigin
+		}
+	}
+	if input.OriginCountry != nil {
+		cleanCountry := strings.TrimSpace(*input.OriginCountry)
+		if cleanCountry != "" {
+			product.OriginCountry = &cleanCountry
+			if strings.EqualFold(cleanCountry, "Indonesia") {
+				product.ProductOrigin = "dalam_negeri"
+			} else {
+				product.ProductOrigin = "luar_negeri"
+			}
 		}
 	}
 	if input.ProductDescription != nil {
@@ -435,6 +484,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 		ProductPreview:     p.ProductPreview,
 		ProductName:        p.ProductName,
 		ProductOrigin:      p.ProductOrigin,
+		OriginCountry:      p.OriginCountry,
 		ProductDescription: p.ProductDescription,
 		Price:              p.Price,
 		DiscountType:       p.DiscountType,
@@ -560,10 +610,12 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 			DiscountStartAt: p.DiscountStartAt,
 			DiscountEndAt:   p.DiscountEndAt,
 
-			StockType:   p.StockType,
-			Rating:      p.AverageRating,
-			LikeCount:   p.LikeCount,
-			ReviewCount: p.ReviewCount,
+			StockType:     p.StockType,
+			ProductOrigin: p.ProductOrigin,
+			OriginCountry: p.OriginCountry,
+			Rating:        p.AverageRating,
+			LikeCount:     p.LikeCount,
+			ReviewCount:   p.ReviewCount,
 		})
 	}
 

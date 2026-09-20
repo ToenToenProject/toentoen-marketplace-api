@@ -19,6 +19,7 @@ type Product struct {
 	ProductPreview     []string `gorm:"column:product_preview;type:jsonb;serializer:json;default:'[]'" json:"product_preview"`
 	ProductName        string   `gorm:"column:product_name" json:"product_name"`
 	ProductOrigin      string   `gorm:"column:product_origin;default:'domestic'" json:"product_origin"`
+	OriginCountry      *string  `gorm:"column:origin_country" json:"origin_country,omitempty"`
 	ProductDescription string   `gorm:"column:product_description" json:"product_description"`
 
 	Price           float64    `gorm:"column:price" json:"price"`
@@ -98,6 +99,7 @@ type CreateProductInput struct {
 	ProductPreview     []string   `json:"product_preview" validate:"max=10"`
 	ProductName        string     `json:"product_name" validate:"required"`
 	ProductOrigin      string     `json:"product_origin"`
+	OriginCountry      *string    `json:"origin_country"`
 	ProductDescription string     `json:"product_description" validate:"max=300"`
 	Price              float64    `json:"price" validate:"required,min=0"`
 	DiscountType       *string    `json:"discount_type"` // "nominal" atau "percentage"
@@ -119,6 +121,7 @@ type UpdateProductInput struct {
 	ProductPreview     *[]string  `json:"product_preview" validate:"omitempty,max=10"`
 	ProductName        *string    `json:"product_name"`
 	ProductOrigin      *string    `json:"product_origin"`
+	OriginCountry      *string    `json:"origin_country"`
 	ProductDescription *string    `json:"product_description" validate:"omitempty,max=300"`
 	Price              *float64   `json:"price"`
 	DiscountType       *string    `json:"discount_type"`
@@ -175,10 +178,12 @@ type ProductListItem struct {
 	DiscountStartAt *time.Time `json:"discount_start_at"`      // null jika tidak ada batas waktu mulai
 	DiscountEndAt   *time.Time `json:"discount_end_at"`        // null jika tidak ada batas waktu akhir
 
-	StockType   string  `json:"stock_type"`
-	Rating      float64 `json:"rating"`
-	LikeCount   int     `json:"like_count"`
-	ReviewCount int     `json:"review_count"`
+	StockType     string   `json:"stock_type"`
+	ProductOrigin string   `json:"product_origin,omitempty"`
+	OriginCountry *string  `json:"origin_country,omitempty"`
+	Rating        float64  `json:"rating"`
+	LikeCount     int      `json:"like_count"`
+	ReviewCount   int      `json:"review_count"`
 
 	// Digunakan jika detail varian ingin disertakan pada response tertentu
 	Variants []ProductVariant `json:"variants,omitempty"`
@@ -198,6 +203,7 @@ type ProductDetailResponse struct {
 	ProductPreview     []string `json:"product_preview"`
 	ProductName        string   `json:"product_name"`
 	ProductOrigin      string   `json:"product_origin"`
+	OriginCountry      *string  `json:"origin_country,omitempty"`
 	ProductDescription string   `json:"product_description"`
 
 	Price           float64    `json:"price"` // Harga dasar di DB (opsional untuk referensi)
