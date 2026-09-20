@@ -96,29 +96,27 @@ type UpdateVariantInput struct {
 
 type CreateProductInput struct {
 	ProductGroupID     *string    `json:"product_group_id"`
-	ProductPreview     []string   `json:"product_preview" validate:"max=10"`
-	ProductName        string     `json:"product_name" validate:"required"`
-	ProductOrigin      string     `json:"product_origin"`
+	ProductPreview     []string   `json:"product_preview" validate:"required,min=1,max=10"`
+	ProductName        string     `json:"product_name" validate:"required,min=3,max=100"`
+	ProductOrigin      string     `json:"product_origin" validate:"required"`
 	OriginCountry      *string    `json:"origin_country"`
-	ProductDescription string     `json:"product_description" validate:"max=300"`
-	Price              float64    `json:"price" validate:"required,min=0"`
+	ProductDescription string     `json:"product_description" validate:"required,max=300"`
+	Price              float64    `json:"price" validate:"required,gt=0"`
 	DiscountType       *string    `json:"discount_type"` // "nominal" atau "percentage"
 	Discount           float64    `json:"discount"`
 	MaxDiscount        *float64   `json:"max_discount"`  // Maksimal potongan dalam Rupiah (opsional)
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
 	DiscountEndAt      *time.Time `json:"discount_end_at"`
 
-	StockType         string `json:"stock_type"` // in_stock, out_of_stock, limited
-	StockQuantity     *int   `json:"stock_quantity"`
-	LowStockThreshold *int   `json:"low_stock_threshold"`
+	StockType string `json:"stock_type" validate:"required"` // in_stock, out_of_stock, limited, pre_order
 
-	Tags     []string `json:"tags"`
+	Tags     []string `json:"tags" validate:"required,min=1"`
 	IsActive *bool    `json:"is_active"`
 }
 
 type UpdateProductInput struct {
 	ProductGroupID     *string    `json:"product_group_id"`
-	ProductPreview     *[]string  `json:"product_preview" validate:"omitempty,max=10"`
+	ProductPreview     *[]string  `json:"product_preview" validate:"omitempty,min=1,max=10"`
 	ProductName        *string    `json:"product_name"`
 	ProductOrigin      *string    `json:"product_origin"`
 	OriginCountry      *string    `json:"origin_country"`
@@ -130,8 +128,7 @@ type UpdateProductInput struct {
 	DiscountStartAt    *time.Time `json:"discount_start_at"`
 	DiscountEndAt      *time.Time `json:"discount_end_at"`
 	StockType          *string    `json:"stock_type"`
-	StockQuantity      *int       `json:"stock_quantity"`
-	LowStockThreshold  *int       `json:"low_stock_threshold"`
+	Tags               *[]string  `json:"tags" validate:"omitempty,min=1"`
 	IsActive           *bool      `json:"is_active"`
 }
 

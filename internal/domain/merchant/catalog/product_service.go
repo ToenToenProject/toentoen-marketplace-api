@@ -87,20 +87,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 	}
 
 	stockQuantity := 0
-	if input.StockQuantity != nil {
-		if *input.StockQuantity < 0 {
-			return errors.New("jumlah stok tidak boleh bernilai negatif")
-		}
-		stockQuantity = *input.StockQuantity
-	}
-
 	lowStockThreshold := 5
-	if input.LowStockThreshold != nil {
-		if *input.LowStockThreshold < 0 {
-			return errors.New("ambang batas stok menipis tidak boleh bernilai negatif")
-		}
-		lowStockThreshold = *input.LowStockThreshold
-	}
 
 	var productGroupID *string
 	if input.ProductGroupID != nil {
@@ -264,9 +251,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		}
 
 		hasOtherDetails := input.ProductGroupID != nil || input.ProductName != nil || input.ProductOrigin != nil ||
-			input.ProductDescription != nil || input.Price != nil || input.Discount != nil ||
-			input.DiscountType != nil || input.MaxDiscount != nil ||
-			input.StockType != nil || input.StockQuantity != nil || input.LowStockThreshold != nil || input.IsActive != nil ||
+			input.OriginCountry != nil || input.ProductDescription != nil || input.Price != nil || input.Discount != nil ||
+			input.DiscountType != nil || input.MaxDiscount != nil || input.StockType != nil || input.Tags != nil || input.IsActive != nil ||
 			input.DiscountStartAt != nil || input.DiscountEndAt != nil
 		if hasOtherDetails && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
 			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah detail produk")
@@ -385,17 +371,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		}
 		product.StockType = cleanStock
 	}
-	if input.StockQuantity != nil {
-		if *input.StockQuantity < 0 {
-			return errors.New("jumlah stok tidak boleh bernilai negatif")
-		}
-		product.StockQuantity = *input.StockQuantity
-	}
-	if input.LowStockThreshold != nil {
-		if *input.LowStockThreshold < 0 {
-			return errors.New("ambang batas stok menipis tidak boleh bernilai negatif")
-		}
-		product.LowStockThreshold = *input.LowStockThreshold
+	if input.Tags != nil {
+		product.Tags = *input.Tags
 	}
 	if input.IsActive != nil {
 		product.IsActive = *input.IsActive
