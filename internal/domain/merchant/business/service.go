@@ -302,6 +302,11 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	// Dekripsi dokumen sensitif untuk owner/admin
 	decryptBusinessLegal(business)
 
+	// Trigger notifikasi selamat datang jika merchant baru pertama kali membuka dashboard
+	if s.notifService != nil && business.AccountID != "" {
+		go s.notifService.SendWelcomeMerchantNotification(business.AccountID)
+	}
+
 	// Set alias field agar backward-compatible dan konsisten
 	business.BusinessNameAlias = business.BusinessName
 	business.SocialWebsitesAlias = business.SocialWebsites
