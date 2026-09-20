@@ -132,6 +132,22 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		}
 	}
 
+	var customCategory *string
+	if input.CustomCategory != nil {
+		cleanCustom := strings.TrimSpace(*input.CustomCategory)
+		if len(cleanCustom) > 100 {
+			return "", errors.New("kategori custom maksimal 100 karakter")
+		}
+		if cleanCustom != "" {
+			customCategory = &cleanCustom
+		}
+	}
+
+	normalizedHashtags := utils.NormalizeHashtags(input.Hashtags)
+	if err := utils.ValidateHashtags(normalizedHashtags, 10, 30); err != nil {
+		return "", err
+	}
+
 	business := models.Business{
 		BusinessID:       utils.GenerateUUID("BUS"),
 		AccountID:        ownerID,
@@ -141,6 +157,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		Status:           "draft",
 		SubscriptionTier: "free",
 		BusinessDetails:  toPointerOrNil(input.BusinessDetails),
+		CustomCategory:   customCategory,
 		NIB:              toPointerOrNil(input.NIB),
 		Country:          toPointerOrNil(input.Country),
 		Province:         toPointerOrNil(input.Province),
@@ -166,7 +183,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		BusinessImages:   input.BusinessImages,
 		Certificates:     input.Certificates,
 		SocialWebsites:   input.SocialWebsites,
-		Hashtags:         utils.NormalizeHashtags(input.Hashtags),
+		Hashtags:         normalizedHashtags,
 		
 		IsActive:         true,
 	}
@@ -400,6 +417,18 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		}
 	}
 
+	if input.CustomCategory != nil {
+		cleanCustom := strings.TrimSpace(*input.CustomCategory)
+		if len(cleanCustom) > 100 {
+			return errors.New("kategori custom maksimal 100 karakter")
+		}
+		if cleanCustom == "" {
+			business.CustomCategory = nil
+		} else {
+			business.CustomCategory = &cleanCustom
+		}
+	}
+
 	if input.NIB != nil {
 		cleanNIB := strings.TrimSpace(*input.NIB)
 		if cleanNIB == "" {
@@ -561,7 +590,11 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		if *input.Hashtags == nil {
 			business.Hashtags = []string{}
 		} else {
-			business.Hashtags = utils.NormalizeHashtags(*input.Hashtags)
+			normalized := utils.NormalizeHashtags(*input.Hashtags)
+			if err := utils.ValidateHashtags(normalized, 10, 30); err != nil {
+				return err
+			}
+			business.Hashtags = normalized
 		}
 	}
 

@@ -141,6 +141,9 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 	if len(normalizedHashtags) == 0 {
 		return errors.New("hashtags produk tidak boleh kosong setelah dinormalisasi")
 	}
+	if err := utils.ValidateHashtags(normalizedHashtags, 10, 30); err != nil {
+		return err
+	}
 
 	product := models.Product{
 		ProductID:          utils.GenerateUUID("PRD"),
@@ -388,9 +391,17 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		product.StockType = cleanStock
 	}
 	if input.Hashtags != nil {
-		product.Tags = utils.NormalizeHashtags(*input.Hashtags)
+		normalized := utils.NormalizeHashtags(*input.Hashtags)
+		if err := utils.ValidateHashtags(normalized, 10, 30); err != nil {
+			return err
+		}
+		product.Tags = normalized
 	} else if input.Tags != nil {
-		product.Tags = utils.NormalizeHashtags(*input.Tags)
+		normalized := utils.NormalizeHashtags(*input.Tags)
+		if err := utils.ValidateHashtags(normalized, 10, 30); err != nil {
+			return err
+		}
+		product.Tags = normalized
 	}
 	if input.IsActive != nil {
 		product.IsActive = *input.IsActive

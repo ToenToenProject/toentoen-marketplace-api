@@ -73,7 +73,8 @@ type Business struct {
 	Hours      []BusinessHour `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"hours"`
 	Categories []Category     `gorm:"many2many:business_has_categories;foreignKey:BusinessID;joinForeignKey:BusinessID;References:CategoryID;joinReferences:CategoryID" json:"categories"`
 	Tags       []Tag          `gorm:"many2many:business_has_tags;foreignKey:BusinessID;joinForeignKey:BusinessID;References:TagID;joinReferences:TagID" json:"tags"` // mapped to old tags table
-	Hashtags   []string       `gorm:"type:jsonb;serializer:json;column:hashtags;default:'[]'" json:"hashtags"`
+	Hashtags       []string       `gorm:"type:jsonb;serializer:json;column:hashtags;default:'[]'" json:"hashtags"`
+	CustomCategory *string        `gorm:"column:custom_category" json:"custom_category,omitempty"`
 }
 
 type BusinessHour struct {
@@ -96,6 +97,7 @@ type CreateBusinessInput struct {
 	Certificates   []BusinessCertificate `json:"certificates" validate:"max=5"`
 
 	CategoryIDs     []int64  `json:"category_ids"`
+	CustomCategory  *string  `json:"custom_category" validate:"omitempty,max=100"`
 	Tags            []int64  `json:"tags"`
 	Hashtags        []string `json:"hashtags"`
 	BusinessDetails string   `json:"business_details" validate:"max=2000"`
@@ -141,8 +143,9 @@ type UpdateBusinessInput struct {
 	BusinessImages *[]string              `json:"business_images" validate:"omitempty,max=5"`
 	Certificates   *[]BusinessCertificate `json:"certificates" validate:"omitempty,max=5"`
 
-	CategoryIDs     *[]int64 `json:"category_ids"`
-	Tags            *[]int64 `json:"tags"`
+	CategoryIDs     *[]int64  `json:"category_ids"`
+	CustomCategory  *string   `json:"custom_category" validate:"omitempty,max=100"`
+	Tags            *[]int64  `json:"tags"`
 	Hashtags        *[]string `json:"hashtags"`
 	BusinessDetails *string  `json:"business_details" validate:"omitempty,max=2000"`
 

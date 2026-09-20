@@ -2,6 +2,7 @@ package business_profile
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"toentoen-backend/internal/domain/merchant/analytics"
@@ -29,6 +30,8 @@ type BusinessProfileResponse struct {
 	BusinessName    string   `json:"business_name"`
 	LogoURL         *string  `json:"logo_url"`
 	Category        string   `json:"category"`
+	CustomCategory  *string  `json:"custom_category,omitempty"`
+	Hashtags        []string `json:"hashtags,omitempty"`
 	IsOpenNow       bool     `json:"is_open_now"`
 	IsBookmarked    bool     `json:"is_bookmarked"`
 	IsLive          bool     `json:"is_live"`
@@ -104,6 +107,8 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 	category := "General"
 	if len(business.Categories) > 0 {
 		category = business.Categories[0].Name
+	} else if business.CustomCategory != nil && strings.TrimSpace(*business.CustomCategory) != "" {
+		category = *business.CustomCategory
 	}
 
 	// Hitung IsOpenNow
@@ -182,6 +187,8 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		BusinessName:    bName,
 		LogoURL:         business.LogoURL,
 		Category:        category,
+		CustomCategory:  business.CustomCategory,
+		Hashtags:        business.Hashtags,
 		IsOpenNow:       isOpenNow,
 		IsBookmarked:    isBookmarked,
 		IsLive:          isLive,
@@ -228,6 +235,8 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 		category := "General"
 		if len(business.Categories) > 0 {
 			category = business.Categories[0].Name
+		} else if business.CustomCategory != nil && strings.TrimSpace(*business.CustomCategory) != "" {
+			category = *business.CustomCategory
 		}
 
 		// Hitung IsOpenNow
@@ -275,6 +284,8 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			BusinessName:    bName,
 			LogoURL:         business.LogoURL,
 			Category:        category,
+			CustomCategory:  business.CustomCategory,
+			Hashtags:        business.Hashtags,
 			IsOpenNow:       isOpenNow,
 			IsBookmarked:    true, // always true if fetched from bookmarks
 			IsLive:          isLive,

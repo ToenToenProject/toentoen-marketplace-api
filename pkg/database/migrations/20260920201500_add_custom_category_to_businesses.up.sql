@@ -1,0 +1,1 @@
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS custom_category VARCHAR(100);

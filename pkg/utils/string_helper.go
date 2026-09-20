@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -71,3 +72,17 @@ func NormalizeHashtags(tags []string) []string {
 	}
 	return result
 }
+
+// ValidateHashtags memvalidasi jumlah dan panjang maksimal tiap kata pada hashtags
+func ValidateHashtags(hashtags []string, maxCount, maxLen int) error {
+	if len(hashtags) > maxCount {
+		return fmt.Errorf("jumlah hashtag maksimal %d kata (diberikan: %d)", maxCount, len(hashtags))
+	}
+	for _, h := range hashtags {
+		if len(h) > maxLen {
+			return fmt.Errorf("panjang tiap hashtag maksimal %d karakter (hashtag '%s' memiliki %d karakter)", maxLen, h, len(h))
+		}
+	}
+	return nil
+}
+

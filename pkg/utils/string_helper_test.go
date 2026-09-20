@@ -47,3 +47,23 @@ func TestNormalizeHashtags(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateHashtags(t *testing.T) {
+	// Valid count and length
+	valid := []string{"kopi", "teh", "jus"}
+	if err := ValidateHashtags(valid, 5, 10); err != nil {
+		t.Errorf("expected nil error for valid tags, got %v", err)
+	}
+
+	// Exceeded count
+	if err := ValidateHashtags(valid, 2, 10); err == nil {
+		t.Errorf("expected error for exceeded count, got nil")
+	}
+
+	// Exceeded length
+	longTag := []string{"kopisusupalingenaksekali"}
+	if err := ValidateHashtags(longTag, 5, 10); err == nil {
+		t.Errorf("expected error for exceeded length, got nil")
+	}
+}
+
