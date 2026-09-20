@@ -13,26 +13,78 @@ import (
 
 // Kunci-kunci izin yang tersedia. Tambahkan di sini saat ada permission baru.
 const (
-	PermChangeProductImage  = "change_product_image"
-	PermChangeBizHours      = "change_business_hours"
-	PermEditProductDetails  = "edit_product_details"
-	PermCreatePromotion     = "create_promotion"
-	PermAddPremiumFeature   = "add_premium_feature"
-	PermCreatePost          = "create_post"
-	PermAddDeleteProducts   = "add_delete_products"
-	PermCreateSupportTicket = "create_support_ticket"
+	// --- Manajemen Produk & Etalase ---
+	PermAddProduct         = "add_product"          // Tambah produk baru
+	PermDeleteProduct      = "delete_product"        // Hapus produk (satuan & bulk)
+	PermEditProductDetails = "edit_product_details"  // Ubah info produk (nama, harga, deskripsi, diskon, tag)
+	PermChangeProductImage = "change_product_image"  // Ubah foto/media produk
+	PermManageProductGroups = "manage_product_groups" // Kelola grup & kategori produk
+
+	// --- Operasional Toko ---
+	PermEditBusinessProfile = "edit_business_profile"  // Edit profil toko (deskripsi, banner, medsos)
+	PermChangeBizHours      = "change_business_hours"  // Atur jadwal jam buka/tutup mingguan
+	PermToggleStoreStatus   = "toggle_store_status"    // Buka/tutup toko sementara
+	PermManageLiveStreaming  = "manage_live_streaming"  // Aktifkan/nonaktifkan live shopping
+
+	// --- Komunikasi & Layanan Pelanggan ---
+	PermManageBusinessChat  = "manage_business_chat"   // Chat langsung dengan pelanggan
+	PermReplyReviews        = "reply_reviews"          // Balas ulasan toko
+	PermManageDemandSignals = "manage_demand_signals"  // Respon permintaan pasar (Demand Signals)
+
+	// --- Pemasaran & Konten ---
+	PermCreatePost = "create_post" // Buat & kelola postingan feed toko
+
+	// --- Laporan & Analitik ---
+	PermViewAnalytics = "view_analytics" // Lihat dashboard analitik toko
+
+	// --- Pusat Bantuan ---
+	PermCreateSupportTicket = "create_support_ticket" // Buat tiket bantuan ke ToenToen
 )
 
 // AllPermissions adalah daftar semua kunci permission yang valid.
+// Urutan ini menentukan urutan tampil di UI/response API.
 var AllPermissions = []string{
-	PermChangeProductImage,
-	PermChangeBizHours,
+	// Produk
+	PermAddProduct,
+	PermDeleteProduct,
 	PermEditProductDetails,
-	PermCreatePromotion,
-	PermAddPremiumFeature,
+	PermChangeProductImage,
+	PermManageProductGroups,
+	// Operasional
+	PermEditBusinessProfile,
+	PermChangeBizHours,
+	PermToggleStoreStatus,
+	PermManageLiveStreaming,
+	// Komunikasi
+	PermManageBusinessChat,
+	PermReplyReviews,
+	PermManageDemandSignals,
+	// Pemasaran
 	PermCreatePost,
-	PermAddDeleteProducts,
+	// Analitik
+	PermViewAnalytics,
+	// Bantuan
 	PermCreateSupportTicket,
+}
+
+// PermissionLabels memetakan kunci izin ke nama yang mudah dibaca manusia (Bahasa Indonesia).
+// Digunakan untuk membangun pesan notifikasi perubahan izin.
+var PermissionLabels = map[string]string{
+	PermAddProduct:          "Tambah Produk Baru",
+	PermDeleteProduct:       "Hapus Produk",
+	PermEditProductDetails:  "Ubah Informasi Produk",
+	PermChangeProductImage:  "Kelola Foto & Media Produk",
+	PermManageProductGroups: "Atur Kategori & Grup Produk",
+	PermEditBusinessProfile: "Ubah Profil Toko",
+	PermChangeBizHours:      "Atur Jadwal Buka/Tutup",
+	PermToggleStoreStatus:   "Buka/Tutup Toko Sementara",
+	PermManageLiveStreaming:  "Aktivasi Live Shopping",
+	PermManageBusinessChat:  "Chat Langsung Pelanggan",
+	PermReplyReviews:        "Balas Ulasan Toko",
+	PermManageDemandSignals: "Respon Permintaan Pasar",
+	PermCreatePost:          "Kelola Postingan Feed Toko",
+	PermViewAnalytics:       "Lihat Dashboard Analitik",
+	PermCreateSupportTicket: "Buat Tiket Bantuan ke ToenToen",
 }
 
 // AdminPermissions adalah alias untuk map permission (key → bool).
@@ -190,9 +242,9 @@ type UpdateAssignmentInput struct {
 	Shifts       []BusinessAdminShiftInput `json:"shifts,omitempty"`
 }
 
-// UpdatePermissionsInput adalah payload untuk mengubah izin granular admin.
 type UpdatePermissionsInput struct {
 	Permissions AdminPermissions `json:"permissions" validate:"required"`
+	Replace     bool             `json:"replace,omitempty"` // Jika true, reset semua izin lalu set sesuai permissions yang dikirim
 }
 
 // PermissionResponse adalah response untuk GET/PUT permissions.

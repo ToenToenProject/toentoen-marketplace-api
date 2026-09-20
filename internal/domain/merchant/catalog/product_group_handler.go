@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"strings"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -18,7 +19,7 @@ func NewProductGroupHandler(s ProductGroupService) *ProductGroupHandler {
 
 func (h *ProductGroupHandler) GetGroups(c *fiber.Ctx) error {
 	// Tangkap :business_id dari URL
-	businessID := c.Params("business_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
 	}
@@ -33,7 +34,12 @@ func (h *ProductGroupHandler) GetGroups(c *fiber.Ctx) error {
 }
 
 func (h *ProductGroupHandler) CreateGroup(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
 	var input models.CreateGroupInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
@@ -43,15 +49,23 @@ func (h *ProductGroupHandler) CreateGroup(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.CreateGroup(businessID, input); err != nil {
+	if err := h.service.CreateGroup(requesterID, requesterRole, businessID, input); err != nil {
+		if strings.Contains(err.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Grup berhasil dibuat", nil)
 }
 
 func (h *ProductGroupHandler) UpdateGroup(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
-	productGroupID := c.Params("product_group_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productGroupID := strings.TrimSpace(c.Params("product_group_id"))
+	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
 	var input models.UpdateGroupInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
@@ -61,15 +75,22 @@ func (h *ProductGroupHandler) UpdateGroup(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.UpdateGroup(businessID, productGroupID, input); err != nil {
+	if err := h.service.UpdateGroup(requesterID, requesterRole, businessID, productGroupID, input); err != nil {
+		if strings.Contains(err.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Grup berhasil diperbarui", nil)
 }
 
 func (h *ProductGroupHandler) ReorderGroups(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
-	
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
 	var input models.ReorderGroupsInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
@@ -79,7 +100,10 @@ func (h *ProductGroupHandler) ReorderGroups(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.ReorderGroups(businessID, input); err != nil {
+	if err := h.service.ReorderGroups(requesterID, requesterRole, businessID, input); err != nil {
+		if strings.Contains(err.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
@@ -87,8 +111,13 @@ func (h *ProductGroupHandler) ReorderGroups(c *fiber.Ctx) error {
 }
 
 func (h *ProductGroupHandler) UpdateContents(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
-	productGroupID := c.Params("product_group_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productGroupID := strings.TrimSpace(c.Params("product_group_id"))
+	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
 	var input models.UpdateGroupContentsInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
@@ -98,17 +127,27 @@ func (h *ProductGroupHandler) UpdateContents(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.UpdateGroupContents(businessID, productGroupID, input); err != nil {
+	if err := h.service.UpdateGroupContents(requesterID, requesterRole, businessID, productGroupID, input); err != nil {
+		if strings.Contains(err.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Isi grup berhasil diperbarui", nil)
 }
 
 func (h *ProductGroupHandler) DeleteGroup(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
-	productGroupID := c.Params("product_group_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	productGroupID := strings.TrimSpace(c.Params("product_group_id"))
+	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
 
-	if err := h.service.DeleteGroup(businessID, productGroupID); err != nil {
+	if err := h.service.DeleteGroup(requesterID, requesterRole, businessID, productGroupID); err != nil {
+		if strings.Contains(err.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Grup berhasil dihapus", nil)

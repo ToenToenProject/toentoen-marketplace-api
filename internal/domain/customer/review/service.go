@@ -9,6 +9,8 @@ import (
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/shared/permissions"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -175,6 +177,10 @@ func (s *reviewService) ReplyReview(accountID, role, reviewID string, input mode
 	review, err := s.reviewRepo.GetReviewByID(reviewID)
 	if err != nil {
 		return errors.New("ulasan yang ingin dibalas tidak ditemukan")
+	}
+
+	if role == "business_admin" && !permissions.HasPermission(database.DB, accountID, review.BusinessID, models.PermReplyReviews) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk membalas ulasan toko")
 	}
 
 	replyTarget := input.ReplyToReviewID

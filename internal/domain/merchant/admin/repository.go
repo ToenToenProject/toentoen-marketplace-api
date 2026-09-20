@@ -36,7 +36,7 @@ type BusinessAdminRepository interface {
 	BatchRevokeAssignments(assignmentIDs []string) error
 
 	// Permissions
-	GetPermissions(assignmentID string) (*models.BusinessAdminAssignment, error)
+	GetPermissions(businessID, identifier string) (*models.BusinessAdminAssignment, error)
 	UpdatePermissions(assignmentID string, permissions models.AdminPermissions) error
 }
 
@@ -200,12 +200,16 @@ func (r *businessAdminRepository) BatchRevokeAssignments(assignmentIDs []string)
 }
 
 // GetPermissions mengambil assignment beserta nama admin untuk ditampilkan di response.
-func (r *businessAdminRepository) GetPermissions(assignmentID string) (*models.BusinessAdminAssignment, error) {
+// Mendukung pencarian berdasarkan assignment_id ataupun admin_id (dengan atau tanpa business_id).
+func (r *businessAdminRepository) GetPermissions(businessID, identifier string) (*models.BusinessAdminAssignment, error) {
 	var assignment models.BusinessAdminAssignment
-	err := r.db.
-		Preload("Admin.Account").
-		Where("assignment_id = ?", assignmentID).
-		First(&assignment).Error
+	query := r.db.Preload("Admin.Account")
+	if businessID != "" {
+		query = query.Where("business_id = ? AND (assignment_id = ? OR admin_id = ?)", businessID, identifier, identifier)
+	} else {
+		query = query.Where("assignment_id = ? OR admin_id = ?", identifier, identifier)
+	}
+	err := query.First(&assignment).Error
 	if err != nil {
 		return nil, err
 	}

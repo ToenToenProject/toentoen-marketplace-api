@@ -3,11 +3,13 @@ package catalog
 import (
 	"errors"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/shared/permissions"
 
 	"gorm.io/gorm"
 )
 
 type ProductGroupRepository interface {
+	HasPermission(accountID, businessID, permKey string) bool
 	CheckBusinessExists(businessID string) bool
 	CheckNameExists(businessID, name string) bool
 	GetGroups(businessID string) ([]models.ProductGroup, error)
@@ -30,6 +32,10 @@ type productGroupRepository struct {
 
 func NewProductGroupRepository(db *gorm.DB) ProductGroupRepository {
 	return &productGroupRepository{db}
+}
+
+func (r *productGroupRepository) HasPermission(accountID, businessID, permKey string) bool {
+	return permissions.HasPermission(r.db, accountID, businessID, permKey)
 }
 
 func (r *productGroupRepository) CheckBusinessExists(businessID string) bool {

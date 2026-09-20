@@ -296,12 +296,15 @@ func (h *BusinessAdminHandler) GetPermissions(c *fiber.Ctx) error {
 	}
 
 	businessID := strings.TrimSpace(c.Params("business_id"))
-	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
-	if assignmentID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
+	identifier := strings.TrimSpace(c.Params("admin_id"))
+	if identifier == "" {
+		identifier = strings.TrimSpace(c.Params("assignment_id"))
+	}
+	if identifier == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Admin ID atau Assignment ID wajib diisi", nil)
 	}
 
-	result, err := h.service.GetPermissions(requesterID, businessID, assignmentID)
+	result, err := h.service.GetPermissions(requesterID, businessID, identifier)
 	if err != nil {
 		status := fiber.StatusBadRequest
 		if strings.Contains(err.Error(), "forbidden") {
@@ -324,9 +327,12 @@ func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 	}
 
 	businessID := strings.TrimSpace(c.Params("business_id"))
-	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
-	if assignmentID == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Assignment ID wajib diisi", nil)
+	identifier := strings.TrimSpace(c.Params("admin_id"))
+	if identifier == "" {
+		identifier = strings.TrimSpace(c.Params("assignment_id"))
+	}
+	if identifier == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Admin ID atau Assignment ID wajib diisi", nil)
 	}
 
 	var input models.UpdatePermissionsInput
@@ -344,7 +350,7 @@ func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 		}
 	}
 
-	result, err := h.service.UpdatePermissions(requesterID, businessID, assignmentID, input)
+	result, err := h.service.UpdatePermissions(requesterID, businessID, identifier, input)
 	if err != nil {
 		status := fiber.StatusBadRequest
 		if strings.Contains(err.Error(), "forbidden") {

@@ -38,6 +38,9 @@ func (s *analyticsService) GetDailyAnalytics(requesterID, role, businessID strin
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
 	}
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalytics) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik toko")
+	}
 
 	limit := 6
 	loc, _ := time.LoadLocation("Asia/Jakarta")
@@ -59,6 +62,9 @@ func (s *analyticsService) GetDailyAnalytics(requesterID, role, businessID strin
 func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, startDate, endDate string) (*models.HistoryAnalyticsResponse, error) {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
+	}
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalytics) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik toko")
 	}
 
 	// Validasi format tanggal dan urutan
@@ -130,6 +136,9 @@ func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, st
 func (s *analyticsService) GetExploreAnalytics(requesterID, role, businessID, keyword string) (*models.ExploreAnalyticsResponse, error) {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
+	}
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalytics) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik toko")
 	}
 
 	limit := 5

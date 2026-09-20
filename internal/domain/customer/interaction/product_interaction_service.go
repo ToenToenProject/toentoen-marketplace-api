@@ -8,6 +8,7 @@ import (
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 
@@ -826,6 +827,13 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 
 	review, err := s.repo.GetProductReviewByID(reviewID)
 	if err == nil {
+		var assignment models.BusinessAdminAssignment
+		if database.DB.Where("admin_id = ? AND business_id = ? AND status = 'active'", accountID, review.BusinessID).First(&assignment).Error == nil {
+			if assignment.Role == "staff" && !permissions.HasPermission(database.DB, accountID, review.BusinessID, models.PermReplyReviews) {
+				return errors.New("forbidden: Anda tidak memiliki izin untuk membalas ulasan toko ini")
+			}
+		}
+
 		replyTarget := input.ReplyToReviewID
 		if replyTarget == nil {
 			replyTarget = input.ReplyToCommentID
@@ -897,6 +905,13 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 	// 2. Cek apakah ini ulasan bisnis / toko di reviews
 	var bReview models.Review
 	if errB := database.DB.Where("review_id = ?", reviewID).First(&bReview).Error; errB == nil {
+		var assignment models.BusinessAdminAssignment
+		if database.DB.Where("admin_id = ? AND business_id = ? AND status = 'active'", accountID, bReview.BusinessID).First(&assignment).Error == nil {
+			if assignment.Role == "staff" && !permissions.HasPermission(database.DB, accountID, bReview.BusinessID, models.PermReplyReviews) {
+				return errors.New("forbidden: Anda tidak memiliki izin untuk membalas ulasan toko ini")
+			}
+		}
+
 		replyTarget := input.ReplyToReviewID
 		if replyTarget == nil {
 			replyTarget = input.ReplyToCommentID

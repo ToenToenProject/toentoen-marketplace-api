@@ -37,7 +37,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
 
-	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddDeleteProducts) {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddProduct) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk menambah produk")
 	}
 
@@ -325,7 +325,7 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
 
-	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddDeleteProducts) {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermDeleteProduct) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk menghapus produk")
 	}
 
@@ -551,6 +551,9 @@ func (s *productService) BulkUpdateStatus(requesterID, role, businessID string, 
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah status produk")
+	}
 	return s.repo.BulkUpdateStatus(businessID, productIDs, isActive)
 }
 
@@ -559,7 +562,7 @@ func (s *productService) BulkDelete(requesterID, role, businessID string, produc
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
-	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermAddDeleteProducts) {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermDeleteProduct) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk menghapus produk")
 	}
 	return s.repo.BulkDelete(businessID, productIDs)

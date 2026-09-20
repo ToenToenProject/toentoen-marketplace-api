@@ -556,6 +556,11 @@ func main() {
 	sharedBusinessScope.Patch("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 	sharedBusinessScope.Post("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 
+	// -> Admin Permissions (Scoped ke Bisnis)
+	sharedBusinessScope.Get("/admins/:admin_id/permissions", businessAdminHandler.GetPermissions)
+	sharedBusinessScope.Put("/admins/:admin_id/permissions", businessAdminHandler.UpdatePermissions)
+	sharedBusinessScope.Patch("/admins/:admin_id/permissions", businessAdminHandler.UpdatePermissions)
+
 	// -> Products
 	productRoutes := sharedBusinessScope.Group("/products")
 	productRoutes.Post("/", productHandler.CreateProduct)

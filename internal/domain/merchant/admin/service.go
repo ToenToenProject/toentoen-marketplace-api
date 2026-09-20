@@ -3,6 +3,7 @@ package admin
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
@@ -893,9 +894,9 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 
 // 11. GET PERMISSIONS (Owner atau Supervisor melihat izin admin tertentu)
 func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAssignmentID string) (*models.PermissionResponse, error) {
-	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
+	target, err := s.adminRepo.GetPermissions(businessID, targetAssignmentID)
 	if err != nil {
-		return nil, errors.New("assignment tidak ditemukan")
+		return nil, errors.New("admin atau penugasan tidak ditemukan di toko ini")
 	}
 
 	if businessID == "" {
@@ -927,8 +928,17 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 	perms := target.Permissions
 	if target.Role == "supervisor" {
 		perms = models.AdminPermissions{}.AllTrue()
-	} else if perms == nil {
-		perms = models.AdminPermissions{}
+	} else {
+		// Normalisasi: selalu kembalikan seluruh key dari AllPermissions (jika belum diset/false, tampilkan false)
+		normalized := make(models.AdminPermissions, len(models.AllPermissions))
+		for _, k := range models.AllPermissions {
+			if perms != nil && perms[k] {
+				normalized[k] = true
+			} else {
+				normalized[k] = false
+			}
+		}
+		perms = normalized
 	}
 
 	return &models.PermissionResponse{
@@ -942,9 +952,9 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 
 // 12. UPDATE PERMISSIONS (Owner atau Supervisor mengatur izin admin)
 func (s *businessAdminService) UpdatePermissions(requesterID, businessID, targetAssignmentID string, input models.UpdatePermissionsInput) (*models.PermissionResponse, error) {
-	target, err := s.adminRepo.GetPermissions(targetAssignmentID)
+	target, err := s.adminRepo.GetPermissions(businessID, targetAssignmentID)
 	if err != nil {
-		return nil, errors.New("assignment tidak ditemukan")
+		return nil, errors.New("admin atau penugasan tidak ditemukan di toko ini")
 	}
 
 	if businessID == "" {
@@ -996,18 +1006,85 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		}
 	}
 
-	// Simpan permission yang dikirim (partial update: key tidak dikirim tidak berubah)
-	// Merge ke permissions existing
-	existing := target.Permissions
-	if existing == nil {
-		existing = models.AdminPermissions{}
-	}
-	for key, val := range input.Permissions {
-		existing[key] = val
+	// Persiapkan map permissions baru
+	var updated models.AdminPermissions
+	if input.Replace {
+		// Reset semua wewenang: hanya key yang bernilai true di input yang menjadi true
+		updated = models.AdminPermissions{}
+		for _, k := range models.AllPermissions {
+			if input.Permissions[k] {
+				updated[k] = true
+			}
+		}
+	} else {
+		// Merge ke permissions existing
+		updated = models.AdminPermissions{}
+		if target.Permissions != nil {
+			for k, v := range target.Permissions {
+				updated[k] = v
+			}
+		}
+		for key, val := range input.Permissions {
+			updated[key] = val
+		}
 	}
 
-	if err := s.adminRepo.UpdatePermissions(targetAssignmentID, existing); err != nil {
+	// Hitung diff perubahan izin (granted vs revoked) untuk notifikasi
+	var granted []string
+	var revoked []string
+	for _, k := range models.AllPermissions {
+		oldVal := false
+		if target.Permissions != nil {
+			oldVal = target.Permissions[k]
+		}
+		newVal := updated[k]
+
+		label := models.PermissionLabels[k]
+		if label == "" {
+			label = k
+		}
+
+		if !oldVal && newVal {
+			granted = append(granted, label)
+		} else if oldVal && !newVal {
+			revoked = append(revoked, label)
+		}
+	}
+
+	if err := s.adminRepo.UpdatePermissions(targetAssignmentID, updated); err != nil {
 		return nil, errors.New("gagal memperbarui izin admin")
+	}
+
+	// Kirim notifikasi diff jika ada perubahan wewenang
+	if (len(granted) > 0 || len(revoked) > 0) && s.notifService != nil {
+		bizName := "Toko"
+		if biz.BusinessName != nil && *biz.BusinessName != "" {
+			bizName = *biz.BusinessName
+		}
+
+		bodyText := fmt.Sprintf("Wewenang Anda di %s telah diperbarui oleh pemilik:", bizName)
+		if len(granted) > 0 {
+			bodyText += "\n✅ Diberikan: " + strings.Join(granted, ", ")
+		}
+		if len(revoked) > 0 {
+			bodyText += "\n❌ Dicabut: " + strings.Join(revoked, ", ")
+		}
+
+		go s.notifService.SendNotification(
+			[]string{target.AdminID},
+			requesterID,
+			"admin_permissions_updated",
+			targetAssignmentID,
+			"📋 Pembaruan Hak Akses Toko",
+			bodyText,
+			map[string]interface{}{
+				"assignment_id": targetAssignmentID,
+				"business_id":   businessID,
+				"granted":       granted,
+				"revoked":       revoked,
+			},
+			nil,
+		)
 	}
 
 	adminName := ""
@@ -1015,11 +1092,17 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		adminName = target.Admin.Account.FirstName + " " + target.Admin.Account.LastName
 	}
 
+	// Normalisasi permissions response agar FE selalu menerima seluruh key
+	responsePerms := make(models.AdminPermissions, len(models.AllPermissions))
+	for _, k := range models.AllPermissions {
+		responsePerms[k] = updated[k]
+	}
+
 	return &models.PermissionResponse{
 		AssignmentID: target.AssignmentID,
 		AdminID:      target.AdminID,
 		AdminName:    adminName,
 		Role:         target.Role,
-		Permissions:  existing,
+		Permissions:  responsePerms,
 	}, nil
 }

@@ -10,11 +10,11 @@ import (
 
 type ProductGroupService interface {
 	GetGroups(businessID string) ([]models.ProductGroup, error)
-	CreateGroup(businessID string, input models.CreateGroupInput) error
-	UpdateGroup(businessID, productGroupID string, input models.UpdateGroupInput) error
-	ReorderGroups(businessID string, input models.ReorderGroupsInput) error
-	DeleteGroup(businessID, productGroupID string) error
-	UpdateGroupContents(businessID, productGroupID string, input models.UpdateGroupContentsInput) error
+	CreateGroup(requesterID, role, businessID string, input models.CreateGroupInput) error
+	UpdateGroup(requesterID, role, businessID, productGroupID string, input models.UpdateGroupInput) error
+	ReorderGroups(requesterID, role, businessID string, input models.ReorderGroupsInput) error
+	DeleteGroup(requesterID, role, businessID, productGroupID string) error
+	UpdateGroupContents(requesterID, role, businessID, productGroupID string, input models.UpdateGroupContentsInput) error
 }
 
 type productGroupService struct {
@@ -30,7 +30,11 @@ func NewProductGroupService(repo ProductGroupRepository) ProductGroupService {
 }
 
 // 1. CREATE GROUP (Cegah Duplikat)
-func (s *productGroupService) CreateGroup(businessID string, input models.CreateGroupInput) error {
+func (s *productGroupService) CreateGroup(requesterID, role, businessID string, input models.CreateGroupInput) error {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermManageProductGroups) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk mengelola grup produk")
+	}
+
 	businessID = strings.TrimSpace(businessID)
 	if businessID == "" {
 		return errors.New("business_id tidak boleh kosong")
@@ -69,7 +73,11 @@ func (s *productGroupService) CreateGroup(businessID string, input models.Create
 }
 
 // 2. UPDATE GROUP METADATA
-func (s *productGroupService) UpdateGroup(businessID, productGroupID string, input models.UpdateGroupInput) error {
+func (s *productGroupService) UpdateGroup(requesterID, role, businessID, productGroupID string, input models.UpdateGroupInput) error {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermManageProductGroups) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk mengelola grup produk")
+	}
+
 	group, err := s.repo.GetGroupByID(businessID, productGroupID)
 	if err != nil {
 		return errors.New("grup produk tidak ditemukan")
@@ -93,7 +101,11 @@ func (s *productGroupService) UpdateGroup(businessID, productGroupID string, inp
 	return s.repo.UpdateGroup(group)
 }
 
-func (s *productGroupService) ReorderGroups(businessID string, input models.ReorderGroupsInput) error {
+func (s *productGroupService) ReorderGroups(requesterID, role, businessID string, input models.ReorderGroupsInput) error {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermManageProductGroups) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk mengelola grup produk")
+	}
+
 	// Lakukan perulangan untuk setiap grup yang urutannya berubah
 	for _, item := range input.Orders {
 		err := s.repo.UpdateDisplayOrder(businessID, item.ProductGroupID, item.DisplayOrder)
@@ -106,7 +118,11 @@ func (s *productGroupService) ReorderGroups(businessID string, input models.Reor
 }
 
 // 3. MENGUBAH ISI GRUP (Add / Remove Product)
-func (s *productGroupService) UpdateGroupContents(businessID, productGroupID string, input models.UpdateGroupContentsInput) error {
+func (s *productGroupService) UpdateGroupContents(requesterID, role, businessID, productGroupID string, input models.UpdateGroupContentsInput) error {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermManageProductGroups) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk mengelola grup produk")
+	}
+
 	// Pastikan grupnya valid
 	_, err := s.repo.GetGroupByID(businessID, productGroupID)
 	if err != nil {
@@ -132,7 +148,11 @@ func (s *productGroupService) UpdateGroupContents(businessID, productGroupID str
 }
 
 // 4. DELETE GRUP (Validasi harus kosong)
-func (s *productGroupService) DeleteGroup(businessID, productGroupID string) error {
+func (s *productGroupService) DeleteGroup(requesterID, role, businessID, productGroupID string) error {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermManageProductGroups) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk mengelola grup produk")
+	}
+
 	count, err := s.repo.CountProductsInGroup(businessID, productGroupID)
 	if err != nil {
 		return errors.New("gagal memverifikasi isi grup produk")

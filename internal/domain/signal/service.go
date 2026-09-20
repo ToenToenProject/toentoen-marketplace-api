@@ -9,7 +9,9 @@ import (
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/crypto"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -584,6 +586,10 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 		return nil, errors.New("anda tidak memiliki akses ke bisnis ini")
 	}
 
+	if role == "business_admin" && !permissions.HasPermission(database.DB, accountID, input.BusinessID, models.PermManageDemandSignals) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk merespon demand signal")
+	}
+
 	signal, err := s.signalRepo.GetSignalByID(signalID)
 	if err != nil {
 		return nil, errors.New("signal tidak ditemukan")
@@ -783,6 +789,9 @@ func (s *signalService) SendMessage(accountID, role, conversationID string, inpu
 	if signal.CustomerID == accountID {
 		senderType = "customer"
 	} else if conv.MerchantID == accountID || s.signalRepo.VerifyBusinessAccess(accountID, role, conv.BusinessID) {
+		if role == "business_admin" && !permissions.HasPermission(database.DB, accountID, conv.BusinessID, models.PermManageDemandSignals) {
+			return nil, errors.New("forbidden: Anda tidak memiliki izin untuk merespon demand signal")
+		}
 		senderType = "merchant"
 	} else {
 		return nil, errors.New("anda tidak memiliki akses ke percakapan ini")

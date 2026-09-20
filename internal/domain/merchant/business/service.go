@@ -371,6 +371,20 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 			if hasHoursUpdate && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
 				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah jam operasional bisnis")
 			}
+
+			hasProfileUpdate := input.LogoURL != nil || input.BusinessImages != nil ||
+				input.CategoryIDs != nil || input.CustomCategory != nil ||
+				input.Tags != nil || input.CustomTags != nil || input.Hashtags != nil ||
+				input.BusinessDetails != nil || input.StoreType != nil ||
+				input.Country != nil || input.Province != nil || input.City != nil ||
+				input.AddressDetail != nil || input.Address != nil || input.GoogleMapsLink != nil ||
+				input.Latitude != nil || input.Longitude != nil || input.IsLocationShared != nil ||
+				input.VenueName != nil || input.SocialInstagram != nil || input.SocialTiktok != nil ||
+				input.SocialWebsites != nil || input.Websites != nil
+
+			if hasProfileUpdate && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermEditBusinessProfile) {
+				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah profil bisnis")
+			}
 		}
 	}
 
@@ -739,7 +753,7 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 			return false, errors.New("forbidden: Anda tidak memiliki akses untuk mengubah status toko")
 		}
 
-		if assignment.Role == "staff" && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
+		if assignment.Role == "staff" && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermToggleStoreStatus) {
 			return false, errors.New("forbidden: Anda tidak memiliki izin untuk mengubah status operasional toko")
 		}
 	}
@@ -791,6 +805,10 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 		var assignment models.BusinessAdminAssignment
 		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
 			return nil, errors.New("forbidden: Anda tidak memiliki akses untuk mengelola siaran live toko ini")
+		}
+
+		if assignment.Role == "staff" && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermManageLiveStreaming) {
+			return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengelola siaran live toko ini")
 		}
 	}
 

@@ -6,7 +6,9 @@ import (
 	"time"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/crypto"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -186,7 +188,10 @@ func (s *businessChatService) GetMerchantConversations(businessID string, reques
 
 	hasAccess, err := s.repo.VerifyMerchantAccess(businessID, requesterID)
 	if err != nil || !hasAccess {
-		return nil, errors.New("Anda tidak memiliki hak akses untuk mengelola chat toko ini")
+		return nil, errors.New("forbidden: Anda tidak memiliki hak akses untuk mengelola chat toko ini")
+	}
+	if !permissions.HasPermission(database.DB, requesterID, businessID, models.PermManageBusinessChat) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengelola chat pelanggan")
 	}
 
 	if limit <= 0 || limit > 100 {
@@ -214,6 +219,9 @@ func (s *businessChatService) GetMessages(conversationID string, requesterID str
 	if !isCustomer {
 		hasAccess, _ := s.repo.VerifyMerchantAccess(conv.BusinessID, requesterID)
 		if hasAccess {
+			if !permissions.HasPermission(database.DB, requesterID, conv.BusinessID, models.PermManageBusinessChat) {
+				return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengelola chat pelanggan")
+			}
 			isMerchant = true
 		}
 	}
@@ -256,6 +264,9 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 	if !isCustomer {
 		hasAccess, _ := s.repo.VerifyMerchantAccess(conv.BusinessID, requesterID)
 		if hasAccess {
+			if !permissions.HasPermission(database.DB, requesterID, conv.BusinessID, models.PermManageBusinessChat) {
+				return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengelola chat pelanggan")
+			}
 			isMerchant = true
 		}
 	}
