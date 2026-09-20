@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -28,6 +29,8 @@ func ValidateStruct(structData interface{}) []*ErrorResponse {
 			element.Tag = err.Tag()
 			element.Value = err.Param()
 
+			isCollection := err.Kind() == reflect.Slice || err.Kind() == reflect.Array
+
 			// Create custom messages based on the tag
 			switch err.Tag() {
 			case "required":
@@ -35,9 +38,17 @@ func ValidateStruct(structData interface{}) []*ErrorResponse {
 			case "email":
 				element.Message = fmt.Sprintf("%s tidak valid (harus berupa email)", err.Field())
 			case "min":
-				element.Message = fmt.Sprintf("%s minimal %s karakter", err.Field(), err.Param())
+				if isCollection {
+					element.Message = fmt.Sprintf("%s minimal %s item", err.Field(), err.Param())
+				} else {
+					element.Message = fmt.Sprintf("%s minimal %s karakter", err.Field(), err.Param())
+				}
 			case "max":
-				element.Message = fmt.Sprintf("%s maksimal %s karakter", err.Field(), err.Param())
+				if isCollection {
+					element.Message = fmt.Sprintf("%s maksimal %s item/foto", err.Field(), err.Param())
+				} else {
+					element.Message = fmt.Sprintf("%s maksimal %s karakter", err.Field(), err.Param())
+				}
 			default:
 				element.Message = fmt.Sprintf("%s tidak valid", err.Field())
 			}

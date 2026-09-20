@@ -116,10 +116,10 @@ type CreateProductInput struct {
 
 type UpdateProductInput struct {
 	ProductGroupID     *string    `json:"product_group_id"`
-	ProductPreview     *[]string  `json:"product_preview" validate:"max=10"`
+	ProductPreview     *[]string  `json:"product_preview" validate:"omitempty,max=10"`
 	ProductName        *string    `json:"product_name"`
 	ProductOrigin      *string    `json:"product_origin"`
-	ProductDescription *string    `json:"product_description" validate:"max=300"`
+	ProductDescription *string    `json:"product_description" validate:"omitempty,max=300"`
 	Price              *float64   `json:"price"`
 	DiscountType       *string    `json:"discount_type"`
 	Discount           *float64   `json:"discount"`
