@@ -57,9 +57,4 @@ func (h *MetaHandler) GetOccupations(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar pekerjaan", occupations)
 }
 
-func (h *MetaHandler) GetCountries(c *fiber.Ctx) error {
-	countries := h.service.GetCountries()
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar negara", countries)
-}
-
 
