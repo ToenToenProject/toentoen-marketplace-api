@@ -35,9 +35,10 @@ type BusinessAdminRepository interface {
 	GetExpiredScheduledDeletions() ([]models.BusinessAdminAssignment, error)
 	BatchRevokeAssignments(assignmentIDs []string) error
 
-	// Permissions
+	// Permissions & Notifications
 	GetPermissions(businessID, identifier string) (*models.BusinessAdminAssignment, error)
 	UpdatePermissions(assignmentID string, permissions models.AdminPermissions) error
+	ToggleNotification(assignmentID string, isEnabled bool) error
 }
 
 type businessAdminRepository struct {
@@ -221,4 +222,11 @@ func (r *businessAdminRepository) UpdatePermissions(assignmentID string, permiss
 	return r.db.Model(&models.BusinessAdminAssignment{}).
 		Where("assignment_id = ?", assignmentID).
 		Update("permissions", permissions).Error
+}
+
+// ToggleNotification mengubah status pengiriman notifikasi aktivitas staf ke Owner.
+func (r *businessAdminRepository) ToggleNotification(assignmentID string, isEnabled bool) error {
+	return r.db.Model(&models.BusinessAdminAssignment{}).
+		Where("assignment_id = ?", assignmentID).
+		Update("is_notify_owner_enabled", isEnabled).Error
 }

@@ -40,5 +40,27 @@ func GetAdminPermissions(db *gorm.DB, accountID, businessID string) models.Admin
 // Untuk staff, cek key permission dari JSONB.
 func HasPermission(db *gorm.DB, accountID, businessID, permKey string) bool {
 	perms := GetAdminPermissions(db, accountID, businessID)
-	return perms[permKey]
+	if perms[permKey] {
+		return true
+	}
+
+	// Fallback untuk backward compatibility / merged permissions:
+	switch permKey {
+	case models.PermEditProduct:
+		return perms[models.PermEditProductDetails] || perms[models.PermChangeProductImage]
+	case models.PermEditStoreProfileAndHours:
+		return perms[models.PermEditBusinessProfile] || perms[models.PermChangeBizHours]
+	case models.PermManageStoreStatus:
+		return perms[models.PermToggleStoreStatus]
+	case models.PermManageBusinessPosts:
+		return perms[models.PermCreatePost]
+	case models.PermReplyBusinessReviews, models.PermReplyProductReviews, models.PermReplyFeedComments:
+		return perms[models.PermReplyReviews]
+	case models.PermViewAnalyticsDaily, models.PermViewAnalyticsHistory, models.PermViewAnalyticsExplore:
+		return perms[models.PermViewAnalytics]
+	case models.PermCreateProductGroup, models.PermDeleteProductGroup, models.PermReorderProductGroups:
+		return perms[models.PermManageProductGroups]
+	}
+
+	return false
 }

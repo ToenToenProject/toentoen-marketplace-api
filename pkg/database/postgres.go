@@ -105,6 +105,7 @@ func ConnectDB() {
 		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS kyc_rejection_reason TEXT`,
 		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS kyc_submitted_at TIMESTAMP`,
 		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS kyc_verified_at TIMESTAMP`,
+		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS is_notify_owner_enabled BOOLEAN DEFAULT true`,
 		`DO $$
 		BEGIN
 			IF EXISTS (

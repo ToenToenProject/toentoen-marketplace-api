@@ -126,11 +126,11 @@ func main() {
 	businessHandler := business.NewBusinessHandler(businessService)
 
 	productRepo := catalog.NewProductRepository(database.DB)
-	productService := catalog.NewProductService(productRepo)
+	productService := catalog.NewProductService(productRepo, notifService)
 	productHandler := catalog.NewProductHandler(productService)
 
 	productGroupRepo := catalog.NewProductGroupRepository(database.DB)
-	productGroupService := catalog.NewProductGroupService(productGroupRepo)
+	productGroupService := catalog.NewProductGroupService(productGroupRepo, notifService)
 	productGroupHandler := catalog.NewProductGroupHandler(productGroupService)
 
 	// 🪄 INIT BUSINESS ADMIN (BARU)
@@ -560,6 +560,7 @@ func main() {
 	sharedBusinessScope.Get("/admins/:admin_id/permissions", businessAdminHandler.GetPermissions)
 	sharedBusinessScope.Put("/admins/:admin_id/permissions", businessAdminHandler.UpdatePermissions)
 	sharedBusinessScope.Patch("/admins/:admin_id/permissions", businessAdminHandler.UpdatePermissions)
+	sharedBusinessScope.Patch("/admins/:admin_id/notification-toggle", businessAdminHandler.ToggleNotification)
 
 	// -> Products
 	productRoutes := sharedBusinessScope.Group("/products")

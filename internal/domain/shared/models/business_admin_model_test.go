@@ -5,8 +5,8 @@ import (
 )
 
 func TestAllPermissions_Completeness(t *testing.T) {
-	if len(AllPermissions) != 15 {
-		t.Fatalf("expected 15 permissions in AllPermissions, got %d", len(AllPermissions))
+	if len(AllPermissions) != 17 {
+		t.Fatalf("expected 17 permissions in AllPermissions, got %d", len(AllPermissions))
 	}
 
 	for _, perm := range AllPermissions {

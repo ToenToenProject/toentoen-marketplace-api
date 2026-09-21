@@ -6,9 +6,7 @@ import (
 	"strings"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
-	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/crypto"
-	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -73,10 +71,6 @@ func (s *supportTicketService) CreateTicket(accountID string, userRole string, i
 	if input.BusinessID != nil && strings.TrimSpace(*input.BusinessID) != "" {
 		bID := strings.TrimSpace(*input.BusinessID)
 		businessID = &bID
-
-		if userRole == "business_admin" && !permissions.HasPermission(database.DB, accountID, bID, models.PermCreateSupportTicket) {
-			return nil, errors.New("forbidden: Anda tidak memiliki izin untuk membuat tiket bantuan untuk toko ini")
-		}
 	}
 
 	ticket := &models.SupportTicket{

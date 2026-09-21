@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -24,11 +26,12 @@ type ProductService interface {
 }
 
 type productService struct {
-	repo ProductRepository
+	repo         ProductRepository
+	notifService notification.NotificationService
 }
 
-func NewProductService(repo ProductRepository) ProductService {
-	return &productService{repo}
+func NewProductService(repo ProductRepository, notifService notification.NotificationService) ProductService {
+	return &productService{repo, notifService}
 }
 
 // 1. CREATE PRODUCT
@@ -171,16 +174,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	}
 
 	if role == "business_admin" {
-		if input.ProductPreview != nil && !s.repo.HasPermission(requesterID, businessID, models.PermChangeProductImage) {
-			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah gambar/media produk")
-		}
-
-		hasOtherDetails := input.ProductGroupID != nil || input.ProductName != nil || input.ProductOrigin != nil ||
-			input.OriginCountry != nil || input.ProductDescription != nil || input.Price != nil || input.Discount != nil ||
-			input.DiscountType != nil || input.MaxDiscount != nil || input.StockType != nil || input.Hashtags != nil || input.Tags != nil || input.IsActive != nil ||
-			input.DiscountStartAt != nil || input.DiscountEndAt != nil
-		if hasOtherDetails && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
-			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah detail produk")
+		if !s.repo.HasPermission(requesterID, businessID, models.PermEditProduct) {
+			return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah produk ini")
 		}
 	}
 
@@ -332,6 +327,23 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 	if err := s.repo.DeleteProduct(productID, businessID); err != nil {
 		return errors.New("gagal menghapus produk")
 	}
+
+	// 🔔 Notifikasi ke Owner jika staf menghapus produk
+	if role == "business_admin" {
+		notification.NotifyOwnerStaffActivity(
+			database.DB,
+			s.notifService,
+			businessID,
+			requesterID,
+			"delete_product",
+			"⚠️ Staf Menghapus Produk",
+			"Staf toko Anda baru saja menghapus sebuah produk dari katalog toko.",
+			map[string]interface{}{
+				"product_id": productID,
+			},
+		)
+	}
+
 	return nil
 }
 
@@ -551,7 +563,7 @@ func (s *productService) BulkUpdateStatus(requesterID, role, businessID string, 
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
 	}
-	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermEditProductDetails) {
+	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermEditProduct) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah status produk")
 	}
 	return s.repo.BulkUpdateStatus(businessID, productIDs, isActive)
@@ -565,5 +577,25 @@ func (s *productService) BulkDelete(requesterID, role, businessID string, produc
 	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermDeleteProduct) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk menghapus produk")
 	}
-	return s.repo.BulkDelete(businessID, productIDs)
+	if err := s.repo.BulkDelete(businessID, productIDs); err != nil {
+		return err
+	}
+
+	// 🔔 Notifikasi ke Owner jika staf menghapus produk massal
+	if role == "business_admin" {
+		notification.NotifyOwnerStaffActivity(
+			database.DB,
+			s.notifService,
+			businessID,
+			requesterID,
+			"bulk_delete_product",
+			"⚠️ Staf Menghapus Produk Massal",
+			fmt.Sprintf("Staf toko Anda baru saja menghapus %d produk sekaligus dari katalog toko.", len(productIDs)),
+			map[string]interface{}{
+				"product_ids": productIDs,
+			},
+		)
+	}
+
+	return nil
 }

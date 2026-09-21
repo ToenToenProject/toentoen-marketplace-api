@@ -179,7 +179,7 @@ func (s *reviewService) ReplyReview(accountID, role, reviewID string, input mode
 		return errors.New("ulasan yang ingin dibalas tidak ditemukan")
 	}
 
-	if role == "business_admin" && !permissions.HasPermission(database.DB, accountID, review.BusinessID, models.PermReplyReviews) {
+	if role == "business_admin" && !permissions.HasPermission(database.DB, accountID, review.BusinessID, models.PermReplyBusinessReviews) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk membalas ulasan toko")
 	}
 

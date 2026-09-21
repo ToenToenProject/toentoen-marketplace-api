@@ -350,6 +350,17 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		input.AddressDetail = input.Address
 	}
 
+	hasHoursUpdate := (input.Hours != nil && len(*input.Hours) > 0) || (input.EventSchedules != nil && len(*input.EventSchedules) > 0)
+	hasProfileUpdate := input.LogoURL != nil || input.BusinessImages != nil ||
+		input.CategoryIDs != nil || input.CustomCategory != nil ||
+		input.Tags != nil || input.CustomTags != nil || input.Hashtags != nil ||
+		input.BusinessDetails != nil || input.StoreType != nil ||
+		input.Country != nil || input.Province != nil || input.City != nil ||
+		input.AddressDetail != nil || input.Address != nil || input.GoogleMapsLink != nil ||
+		input.Latitude != nil || input.Longitude != nil || input.IsLocationShared != nil ||
+		input.VenueName != nil || input.SocialInstagram != nil || input.SocialTiktok != nil ||
+		input.SocialWebsites != nil || input.Websites != nil
+
 	// Verifikasi apakah requester adalah owner atau admin aktif di toko ini
 	isOwner := business.AccountID == requesterID
 	if !isOwner {
@@ -358,7 +369,6 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 			return errors.New("forbidden: Anda tidak memiliki akses untuk memperbarui bisnis ini")
 		}
 
-		hasHoursUpdate := (input.Hours != nil && len(*input.Hours) > 0) || (input.EventSchedules != nil && len(*input.EventSchedules) > 0)
 		if assignment.Role == "staff" {
 			// Cegah staff mengubah identitas toko, NIB, sertifikat, atau nomor kontak resmi toko
 			hasIdentityUpdate := input.BusinessName != nil || input.Name != nil ||
@@ -368,22 +378,8 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 				return errors.New("forbidden: hanya pemilik toko (owner) yang dapat mengubah identitas, legalitas, dan kontak resmi bisnis")
 			}
 
-			if hasHoursUpdate && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermChangeBizHours) {
-				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah jam operasional bisnis")
-			}
-
-			hasProfileUpdate := input.LogoURL != nil || input.BusinessImages != nil ||
-				input.CategoryIDs != nil || input.CustomCategory != nil ||
-				input.Tags != nil || input.CustomTags != nil || input.Hashtags != nil ||
-				input.BusinessDetails != nil || input.StoreType != nil ||
-				input.Country != nil || input.Province != nil || input.City != nil ||
-				input.AddressDetail != nil || input.Address != nil || input.GoogleMapsLink != nil ||
-				input.Latitude != nil || input.Longitude != nil || input.IsLocationShared != nil ||
-				input.VenueName != nil || input.SocialInstagram != nil || input.SocialTiktok != nil ||
-				input.SocialWebsites != nil || input.Websites != nil
-
-			if hasProfileUpdate && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermEditBusinessProfile) {
-				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah profil bisnis")
+			if (hasHoursUpdate || hasProfileUpdate) && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermEditStoreProfileAndHours) {
+				return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah profil atau jam operasional bisnis")
 			}
 		}
 	}
@@ -705,6 +701,22 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		return fmt.Errorf("gagal memperbarui data bisnis di database: %w", err)
 	}
 
+	// 🔔 Notifikasi ke Owner jika staf memperbarui profil atau jam buka toko
+	if !isOwner && (hasHoursUpdate || hasProfileUpdate) {
+		notification.NotifyOwnerStaffActivity(
+			database.DB,
+			s.notifService,
+			businessID,
+			requesterID,
+			"update_store_profile_and_hours",
+			"ℹ️ Staf Memperbarui Profil/Jam Toko",
+			"Staf toko Anda baru saja memperbarui profil atau jadwal jam operasional toko.",
+			map[string]interface{}{
+				"business_id": businessID,
+			},
+		)
+	}
+
 	return nil
 }
 
@@ -753,7 +765,7 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 			return false, errors.New("forbidden: Anda tidak memiliki akses untuk mengubah status toko")
 		}
 
-		if assignment.Role == "staff" && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermToggleStoreStatus) {
+		if assignment.Role == "staff" && !permissions.HasPermission(database.DB, requesterID, businessID, models.PermManageStoreStatus) {
 			return false, errors.New("forbidden: Anda tidak memiliki izin untuk mengubah status operasional toko")
 		}
 	}
@@ -765,6 +777,26 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	business.IsManuallyClosed = newStatus
 	if err := s.repo.ToggleStoreStatus(business); err != nil {
 		return false, errors.New("gagal memperbarui status toko")
+	}
+
+	// 🔔 Notifikasi ke Owner jika dilakukan oleh staf admin
+	if !isOwner {
+		statusStr := "Buka"
+		if newStatus {
+			statusStr = "Tutup Sementara"
+		}
+		notification.NotifyOwnerStaffActivity(
+			database.DB,
+			s.notifService,
+			businessID,
+			requesterID,
+			"toggle_store_status",
+			"⚠️ Staf Mengubah Status Operasional Toko",
+			fmt.Sprintf("Staf toko Anda baru saja mengubah status operasional toko menjadi: %s", statusStr),
+			map[string]interface{}{
+				"is_manually_closed": newStatus,
+			},
+		)
 	}
 
 	return business.IsManuallyClosed, nil

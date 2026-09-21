@@ -363,3 +363,44 @@ func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Izin admin berhasil diperbarui", result)
 }
+
+// 13. SAKLAR NOTIFIKASI AKTIVITAS STAF KE OWNER (Poin 9b: Menu Titik Tiga)
+// PATCH /business/:business_id/admins/:admin_id/notification-toggle
+func (h *BusinessAdminHandler) ToggleNotification(c *fiber.Ctx) error {
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	identifier := strings.TrimSpace(c.Params("admin_id"))
+	if identifier == "" {
+		identifier = strings.TrimSpace(c.Params("assignment_id"))
+	}
+	if identifier == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Admin ID atau Assignment ID wajib diisi", nil)
+	}
+
+	var input models.ToggleAdminNotificationInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	result, err := h.service.ToggleNotification(requesterID, businessID, identifier, input.IsNotifyOwnerEnabled)
+	if err != nil {
+		status := fiber.StatusBadRequest
+		if strings.Contains(err.Error(), "forbidden") {
+			status = fiber.StatusForbidden
+		} else if strings.Contains(err.Error(), "tidak ditemukan") {
+			status = fiber.StatusNotFound
+		}
+		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+	}
+
+	msg := "Notifikasi aktivitas staf berhasil dinyalakan"
+	if !input.IsNotifyOwnerEnabled {
+		msg = "Notifikasi aktivitas staf berhasil dimatikan"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, result)
+}

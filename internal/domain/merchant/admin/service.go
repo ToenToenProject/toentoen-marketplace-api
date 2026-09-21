@@ -29,9 +29,10 @@ type BusinessAdminService interface {
 	GetMyAssignments(adminID string) ([]models.AdminAssignmentListItem, error)
 	GetAdminTree(requesterID, businessID string) (*models.AdminTreeResponse, error)
 
-	// Permission Management
+	// Permission Management & Notifications
 	GetPermissions(requesterID, businessID, targetAssignmentID string) (*models.PermissionResponse, error)
 	UpdatePermissions(requesterID, businessID, targetAssignmentID string, input models.UpdatePermissionsInput) (*models.PermissionResponse, error)
+	ToggleNotification(requesterID, businessID, targetAssignmentID string, isEnabled bool) (*models.ToggleAdminNotificationResponse, error)
 }
 
 type businessAdminService struct {
@@ -745,10 +746,11 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			Name:         a.Admin.Account.FirstName + " " + a.Admin.Account.LastName,
 			Username:     a.Admin.Account.Username,
 			AvatarURL:    a.Admin.Account.ProfilePictureUrl,
-			Role:         a.Role,
-			Status:       a.Status,
-			Shifts:       a.Shifts,
-			Subordinates: []models.AdminTreeNode{},
+			Role:                 a.Role,
+			Status:               a.Status,
+			Shifts:               a.Shifts,
+			IsNotifyOwnerEnabled: a.IsNotifyOwnerEnabled,
+			Subordinates:         []models.AdminTreeNode{},
 			// Supervisor default semua true, staff ambil dari DB
 			Permissions: func() models.AdminPermissions {
 				if a.Role == "supervisor" {
@@ -781,10 +783,11 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			Name:         a.Admin.Account.FirstName + " " + a.Admin.Account.LastName,
 			Username:     a.Admin.Account.Username,
 			AvatarURL:    a.Admin.Account.ProfilePictureUrl,
-			Role:         a.Role,
-			Status:       a.Status,
-			Shifts:       a.Shifts,
-			Permissions:  perms,
+			Role:                 a.Role,
+			Status:               a.Status,
+			Shifts:               a.Shifts,
+			IsNotifyOwnerEnabled: a.IsNotifyOwnerEnabled,
+			Permissions:          perms,
 		}
 
 		if a.SupervisorID != nil && spvMap[*a.SupervisorID] != nil {
@@ -932,8 +935,27 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 		// Normalisasi: selalu kembalikan seluruh key dari AllPermissions (jika belum diset/false, tampilkan false)
 		normalized := make(models.AdminPermissions, len(models.AllPermissions))
 		for _, k := range models.AllPermissions {
-			if perms != nil && perms[k] {
-				normalized[k] = true
+			if perms != nil {
+				val := perms[k]
+				if !val {
+					switch k {
+					case models.PermEditProduct:
+						val = perms[models.PermEditProductDetails] || perms[models.PermChangeProductImage]
+					case models.PermEditStoreProfileAndHours:
+						val = perms[models.PermEditBusinessProfile] || perms[models.PermChangeBizHours]
+					case models.PermManageStoreStatus:
+						val = perms[models.PermToggleStoreStatus]
+					case models.PermManageBusinessPosts:
+						val = perms[models.PermCreatePost]
+					case models.PermReplyBusinessReviews, models.PermReplyProductReviews, models.PermReplyFeedComments:
+						val = perms[models.PermReplyReviews]
+					case models.PermViewAnalyticsDaily, models.PermViewAnalyticsHistory, models.PermViewAnalyticsExplore:
+						val = perms[models.PermViewAnalytics]
+					case models.PermCreateProductGroup, models.PermDeleteProductGroup, models.PermReorderProductGroups:
+						val = perms[models.PermManageProductGroups]
+					}
+				}
+				normalized[k] = val
 			} else {
 				normalized[k] = false
 			}
@@ -942,11 +964,12 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 	}
 
 	return &models.PermissionResponse{
-		AssignmentID: target.AssignmentID,
-		AdminID:      target.AdminID,
-		AdminName:    adminName,
-		Role:         target.Role,
-		Permissions:  perms,
+		AssignmentID:         target.AssignmentID,
+		AdminID:              target.AdminID,
+		AdminName:            adminName,
+		Role:                 target.Role,
+		Permissions:          perms,
+		IsNotifyOwnerEnabled: target.IsNotifyOwnerEnabled,
 	}, nil
 }
 
@@ -1029,6 +1052,19 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		}
 	}
 
+	// Delegasi Terbatas: Supervisor tidak boleh mendelegasikan wewenang yang tidak dimilikinya
+	if !isOwner && requesterAssignment != nil && requesterAssignment.Permissions != nil && len(requesterAssignment.Permissions) > 0 {
+		for _, k := range models.AllPermissions {
+			if updated[k] && !requesterAssignment.Permissions[k] {
+				label := models.PermissionLabels[k]
+				if label == "" {
+					label = k
+				}
+				return nil, fmt.Errorf("forbidden: SuperAdmin tidak memiliki wewenang '%s' sehingga tidak dapat mendelegasikannya ke staf", label)
+			}
+		}
+	}
+
 	// Hitung diff perubahan izin (granted vs revoked) untuk notifikasi
 	var granted []string
 	var revoked []string
@@ -1099,10 +1135,59 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 	}
 
 	return &models.PermissionResponse{
-		AssignmentID: target.AssignmentID,
-		AdminID:      target.AdminID,
-		AdminName:    adminName,
-		Role:         target.Role,
-		Permissions:  responsePerms,
+		AssignmentID:         target.AssignmentID,
+		AdminID:              target.AdminID,
+		AdminName:            adminName,
+		Role:                 target.Role,
+		Permissions:          responsePerms,
+		IsNotifyOwnerEnabled: target.IsNotifyOwnerEnabled,
+	}, nil
+}
+
+// 13. TOGGLE NOTIFICATION (Owner atau Supervisor mengatur saklar notifikasi aktivitas staf ke Owner)
+func (s *businessAdminService) ToggleNotification(requesterID, businessID, targetIdentifier string, isEnabled bool) (*models.ToggleAdminNotificationResponse, error) {
+	target, err := s.adminRepo.GetPermissions(businessID, targetIdentifier)
+	if err != nil {
+		return nil, errors.New("admin atau penugasan tidak ditemukan di toko ini")
+	}
+
+	if businessID == "" {
+		businessID = target.BusinessID
+	}
+
+	biz, err := s.bizRepo.FindBusinessByID(businessID)
+	if err != nil {
+		return nil, errors.New("toko tidak ditemukan")
+	}
+
+	isOwner := biz.AccountID == requesterID
+	var requesterAssignment *models.BusinessAdminAssignment
+	if !isOwner {
+		a, errA := s.adminRepo.GetActiveAssignment(requesterID, businessID)
+		if errA != nil || a == nil || a.Role != "supervisor" {
+			return nil, errors.New("forbidden: hanya Owner atau Supervisor aktif yang dapat mengubah pengaturan notifikasi staf")
+		}
+		requesterAssignment = a
+	}
+
+	if target.BusinessID != businessID {
+		return nil, errors.New("forbidden: assignment tidak termasuk dalam toko ini")
+	}
+
+	// Supervisor hanya boleh mengubah pengaturan bawahannya langsung
+	if !isOwner && requesterAssignment != nil {
+		if target.SupervisorID == nil || *target.SupervisorID != requesterID {
+			return nil, errors.New("forbidden: Anda hanya dapat mengubah pengaturan notifikasi staf yang langsung berada di bawah Anda")
+		}
+	}
+
+	if err := s.adminRepo.ToggleNotification(target.AssignmentID, isEnabled); err != nil {
+		return nil, errors.New("gagal memperbarui status notifikasi staf")
+	}
+
+	return &models.ToggleAdminNotificationResponse{
+		AssignmentID:         target.AssignmentID,
+		AdminID:              target.AdminID,
+		IsNotifyOwnerEnabled: isEnabled,
 	}, nil
 }

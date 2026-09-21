@@ -14,77 +14,97 @@ import (
 // Kunci-kunci izin yang tersedia. Tambahkan di sini saat ada permission baru.
 const (
 	// --- Manajemen Produk & Etalase ---
-	PermAddProduct         = "add_product"          // Tambah produk baru
-	PermDeleteProduct      = "delete_product"        // Hapus produk (satuan & bulk)
-	PermEditProductDetails = "edit_product_details"  // Ubah info produk (nama, harga, deskripsi, diskon, tag)
-	PermChangeProductImage = "change_product_image"  // Ubah foto/media produk
-	PermManageProductGroups = "manage_product_groups" // Kelola grup & kategori produk
+	PermAddProduct           = "add_product"             // 1A. Tambah produk baru
+	PermEditProduct          = "edit_product"            // 1B. Ubah informasi produk & kelola foto/media
+	PermDeleteProduct        = "delete_product"          // 1C. Hapus produk
+	PermCreateProductGroup   = "create_product_group"    // 1E. Membuat grup baru
+	PermDeleteProductGroup   = "delete_product_group"    // 1F. Menghapus grup baru
+	PermReorderProductGroups = "reorder_product_groups"  // 1G. Mengatur urutan grup produk etalase
 
 	// --- Operasional Toko ---
-	PermEditBusinessProfile = "edit_business_profile"  // Edit profil toko (deskripsi, banner, medsos)
-	PermChangeBizHours      = "change_business_hours"  // Atur jadwal jam buka/tutup mingguan
-	PermToggleStoreStatus   = "toggle_store_status"    // Buka/tutup toko sementara
-	PermManageLiveStreaming  = "manage_live_streaming"  // Aktifkan/nonaktifkan live shopping
+	PermManageStoreStatus        = "manage_store_status"         // 2A. Mengatur status aktif toko (buka/tutup)
+	PermEditStoreProfileAndHours = "edit_store_profile_and_hours" // 2B. Ubah profil toko & atur jadwal buka/tutup toko
 
 	// --- Komunikasi & Layanan Pelanggan ---
-	PermManageBusinessChat  = "manage_business_chat"   // Chat langsung dengan pelanggan
-	PermReplyReviews        = "reply_reviews"          // Balas ulasan toko
-	PermManageDemandSignals = "manage_demand_signals"  // Respon permintaan pasar (Demand Signals)
+	PermManageBusinessChat   = "manage_business_chat"   // 3A. Chat langsung pelanggan
+	PermManageDemandSignals  = "manage_demand_signals"  // 3B. Akses fitur cari pelanggan (Demand Signal)
+	PermReplyBusinessReviews = "reply_business_reviews" // 3Ca. Balas ulasan toko & beri like
+	PermReplyFeedComments    = "reply_feed_comments"    // 3Cb. Balas komentar feed & beri like
+	PermReplyProductReviews  = "reply_product_reviews"  // 3Cc. Balas ulasan produk & beri like
 
-	// --- Pemasaran & Konten ---
-	PermCreatePost = "create_post" // Buat & kelola postingan feed toko
+	// --- Pemasaran & Konten Feed Toko ---
+	PermManageBusinessPosts = "manage_business_posts" // 4A. Kelola postingan feed toko
 
-	// --- Laporan & Analitik ---
-	PermViewAnalytics = "view_analytics" // Lihat dashboard analitik toko
+	// --- Laporan & Analitik Toko ---
+	PermViewAnalyticsDaily   = "view_analytics_daily"   // 5Aa. Melihat analitik harian
+	PermViewAnalyticsHistory = "view_analytics_history" // 5Ab. Melihat analitik riwayat
+	PermViewAnalyticsExplore = "view_analytics_explore" // 5Ac. Melihat analitik jelajahi tren pasar
 
-	// --- Pusat Bantuan ---
-	PermCreateSupportTicket = "create_support_ticket" // Buat tiket bantuan ke ToenToen
+	// --- Legacy Aliases (Backward Compatibility) ---
+	PermEditProductDetails  = "edit_product_details"  // Deprecated: gunakan PermEditProduct
+	PermChangeProductImage  = "change_product_image"  // Deprecated: gunakan PermEditProduct
+	PermManageProductGroups = "manage_product_groups" // Deprecated: gunakan PermCreateProductGroup / PermDeleteProductGroup
+	PermEditBusinessProfile = "edit_business_profile" // Deprecated: gunakan PermEditStoreProfileAndHours
+	PermChangeBizHours      = "change_business_hours" // Deprecated: gunakan PermEditStoreProfileAndHours
+	PermToggleStoreStatus   = "toggle_store_status"   // Deprecated: gunakan PermManageStoreStatus
+	PermCreatePost          = "create_post"           // Deprecated: gunakan PermManageBusinessPosts
+	PermReplyReviews        = "reply_reviews"         // Deprecated: gunakan PermReplyBusinessReviews
+	PermViewAnalytics       = "view_analytics"        // Deprecated: gunakan PermViewAnalyticsDaily
+	PermManageLiveStreaming = "manage_live_streaming" // Ditunda ke fase berikutnya
+	PermCreateSupportTicket = "create_support_ticket" // Sekarang open/general access untuk semua staf
 )
 
 // AllPermissions adalah daftar semua kunci permission yang valid.
 // Urutan ini menentukan urutan tampil di UI/response API.
 var AllPermissions = []string{
-	// Produk
+	// 1. Produk & Etalase
 	PermAddProduct,
+	PermEditProduct,
 	PermDeleteProduct,
-	PermEditProductDetails,
-	PermChangeProductImage,
-	PermManageProductGroups,
-	// Operasional
-	PermEditBusinessProfile,
-	PermChangeBizHours,
-	PermToggleStoreStatus,
-	PermManageLiveStreaming,
-	// Komunikasi
+	PermCreateProductGroup,
+	PermDeleteProductGroup,
+	PermReorderProductGroups,
+
+	// 2. Operasional Toko
+	PermManageStoreStatus,
+	PermEditStoreProfileAndHours,
+
+	// 3. Komunikasi & Layanan Pelanggan
 	PermManageBusinessChat,
-	PermReplyReviews,
 	PermManageDemandSignals,
-	// Pemasaran
-	PermCreatePost,
-	// Analitik
-	PermViewAnalytics,
-	// Bantuan
-	PermCreateSupportTicket,
+	PermReplyBusinessReviews,
+	PermReplyFeedComments,
+	PermReplyProductReviews,
+
+	// 4. Pemasaran & Konten
+	PermManageBusinessPosts,
+
+	// 5. Laporan & Analitik
+	PermViewAnalyticsDaily,
+	PermViewAnalyticsHistory,
+	PermViewAnalyticsExplore,
 }
 
 // PermissionLabels memetakan kunci izin ke nama yang mudah dibaca manusia (Bahasa Indonesia).
 // Digunakan untuk membangun pesan notifikasi perubahan izin.
 var PermissionLabels = map[string]string{
-	PermAddProduct:          "Tambah Produk Baru",
-	PermDeleteProduct:       "Hapus Produk",
-	PermEditProductDetails:  "Ubah Informasi Produk",
-	PermChangeProductImage:  "Kelola Foto & Media Produk",
-	PermManageProductGroups: "Atur Kategori & Grup Produk",
-	PermEditBusinessProfile: "Ubah Profil Toko",
-	PermChangeBizHours:      "Atur Jadwal Buka/Tutup",
-	PermToggleStoreStatus:   "Buka/Tutup Toko Sementara",
-	PermManageLiveStreaming:  "Aktivasi Live Shopping",
-	PermManageBusinessChat:  "Chat Langsung Pelanggan",
-	PermReplyReviews:        "Balas Ulasan Toko",
-	PermManageDemandSignals: "Respon Permintaan Pasar",
-	PermCreatePost:          "Kelola Postingan Feed Toko",
-	PermViewAnalytics:       "Lihat Dashboard Analitik",
-	PermCreateSupportTicket: "Buat Tiket Bantuan ke ToenToen",
+	PermAddProduct:               "Tambah Produk Baru",
+	PermEditProduct:              "Ubah Informasi & Media Produk",
+	PermDeleteProduct:            "Hapus Produk",
+	PermCreateProductGroup:        "Membuat Grup Baru",
+	PermDeleteProductGroup:        "Menghapus Grup Baru",
+	PermReorderProductGroups:      "Mengatur Urutan Grup Produk",
+	PermManageStoreStatus:         "Mengatur Status Buka/Tutup Toko",
+	PermEditStoreProfileAndHours:  "Ubah Profil & Jadwal Operasional Toko",
+	PermManageBusinessChat:       "Chat Langsung Pelanggan",
+	PermManageDemandSignals:      "Akses Fitur Cari Pelanggan",
+	PermReplyBusinessReviews:     "Balas Ulasan Toko & Beri Like",
+	PermReplyFeedComments:        "Balas Komentar Feed & Beri Like",
+	PermReplyProductReviews:      "Balas Ulasan Produk & Beri Like",
+	PermManageBusinessPosts:      "Kelola Postingan Feed Toko",
+	PermViewAnalyticsDaily:       "Melihat Analitik Harian",
+	PermViewAnalyticsHistory:     "Melihat Analitik Riwayat",
+	PermViewAnalyticsExplore:     "Melihat Analitik Jelajahi",
 }
 
 // AdminPermissions adalah alias untuk map permission (key → bool).
@@ -186,6 +206,9 @@ type BusinessAdminAssignment struct {
 	RejectionCount int        `gorm:"default:0;column:rejection_count" json:"rejection_count"`
 	LastRejectedAt *time.Time `gorm:"column:last_rejected_at" json:"last_rejected_at"`
 
+	// Saklar Notifikasi Aktivitas Staf ke Owner (Poin 9b: Menu Titik Tiga)
+	IsNotifyOwnerEnabled bool `gorm:"default:true;column:is_notify_owner_enabled" json:"is_notify_owner_enabled"`
+
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 
@@ -249,11 +272,12 @@ type UpdatePermissionsInput struct {
 
 // PermissionResponse adalah response untuk GET/PUT permissions.
 type PermissionResponse struct {
-	AssignmentID string           `json:"assignment_id"`
-	AdminID      string           `json:"admin_id"`
-	AdminName    string           `json:"admin_name"`
-	Role         string           `json:"role"`
-	Permissions  AdminPermissions `json:"permissions"`
+	AssignmentID         string           `json:"assignment_id"`
+	AdminID              string           `json:"admin_id"`
+	AdminName            string           `json:"admin_name"`
+	Role                 string           `json:"role"`
+	Permissions          AdminPermissions `json:"permissions"`
+	IsNotifyOwnerEnabled bool             `json:"is_notify_owner_enabled"`
 }
 
 type UpdateBusinessAdminProfileInput struct {
@@ -274,11 +298,12 @@ type AdminTreeNode struct {
 	Name         string           `json:"name"`
 	Username     string           `json:"username"`
 	AvatarURL    *string          `json:"avatar_url"`
-	Role         string           `json:"role"`
-	Status       string           `json:"status,omitempty"`
-	Permissions  AdminPermissions `json:"permissions,omitempty"`
-	Shifts       []BusinessAdminShift `json:"shifts,omitempty"`
-	Subordinates []AdminTreeNode  `json:"subordinates,omitempty"`
+	Role                 string               `json:"role"`
+	Status               string               `json:"status,omitempty"`
+	Permissions          AdminPermissions     `json:"permissions,omitempty"`
+	IsNotifyOwnerEnabled bool                 `json:"is_notify_owner_enabled,omitempty"`
+	Shifts               []BusinessAdminShift `json:"shifts,omitempty"`
+	Subordinates         []AdminTreeNode      `json:"subordinates,omitempty"`
 }
 
 type AdminTreeResponse struct {
@@ -295,6 +320,16 @@ type AdminAssignmentListItem struct {
 	Status       string           `json:"status"`
 	Permissions  AdminPermissions `json:"permissions"`
 	Business     BusinessListItem `json:"business"`
+}
+
+type ToggleAdminNotificationInput struct {
+	IsNotifyOwnerEnabled bool `json:"is_notify_owner_enabled"`
+}
+
+type ToggleAdminNotificationResponse struct {
+	AssignmentID         string `json:"assignment_id"`
+	AdminID              string `json:"admin_id"`
+	IsNotifyOwnerEnabled bool   `json:"is_notify_owner_enabled"`
 }
 
 

@@ -650,6 +650,24 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 	// 🔔 REAL-TIME: Beritahu customer bahwa merchant telah membalas
 	go s.notifyNewConversation(signal.CustomerID, accountID, &conv, firstMsg)
 
+	// 🔔 Notifikasi ke Owner jika yang merespons sinyal adalah staf admin
+	if role == "business_admin" {
+		notification.NotifyOwnerStaffActivity(
+			database.DB,
+			s.notifService,
+			input.BusinessID,
+			accountID,
+			"respond_demand_signal",
+			"🎯 Staf Merespons Kebutuhan Pasar",
+			fmt.Sprintf("Staf toko Anda telah menanggapi permintaan kebutuhan pembeli: %s", utils.TruncateString(signal.Description, 50)),
+			map[string]interface{}{
+				"conversation_id": conv.ConversationID,
+				"signal_id":       signalID,
+				"action":          "monitor_negotiation",
+			},
+		)
+	}
+
 	return &conv, nil
 }
 

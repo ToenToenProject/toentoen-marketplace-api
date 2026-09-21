@@ -32,7 +32,7 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
 	}
 
-	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermCreatePost) {
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermManageBusinessPosts) {
 		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk membuat postingan")
 	}
 
@@ -73,7 +73,7 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
 	}
 
-	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermCreatePost) {
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermManageBusinessPosts) {
 		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengedit postingan")
 	}
 
@@ -109,6 +109,9 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 func (s *businessPostService) DeletePost(requesterID, role, businessID, postID string) error {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
+	}
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermManageBusinessPosts) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk menghapus postingan")
 	}
 	return s.postRepo.DeletePost(postID, businessID)
 }

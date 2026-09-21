@@ -38,8 +38,8 @@ func (s *analyticsService) GetDailyAnalytics(requesterID, role, businessID strin
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
 	}
-	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalytics) {
-		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik toko")
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalyticsDaily) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik harian toko")
 	}
 
 	limit := 6
@@ -63,8 +63,8 @@ func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, st
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
 	}
-	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalytics) {
-		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik toko")
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalyticsHistory) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat riwayat analitik toko")
 	}
 
 	// Validasi format tanggal dan urutan
@@ -137,8 +137,8 @@ func (s *analyticsService) GetExploreAnalytics(requesterID, role, businessID, ke
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke analitik toko ini")
 	}
-	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalytics) {
-		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik toko")
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermViewAnalyticsExplore) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat analitik jelajah pasar")
 	}
 
 	limit := 5
