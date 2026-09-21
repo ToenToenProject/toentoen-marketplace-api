@@ -164,6 +164,12 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 	if err := s.repo.CreateProduct(&product); err != nil {
 		return fmt.Errorf("gagal membuat produk: %w", err)
 	}
+
+	// 🎉 Jika produk baru langsung memiliki diskon/promo, picu notifikasi promo
+	if product.Discount > 0 && s.notifService != nil {
+		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
+	}
+
 	return nil
 }
 
@@ -311,6 +317,12 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	if err := s.repo.UpdateProduct(product); err != nil {
 		return errors.New("gagal memperbarui produk")
 	}
+
+	// 🎉 Jika produk diperbarui dengan diskon/promo aktif, picu notifikasi promo
+	if product.Discount > 0 && input.Discount != nil && *input.Discount > 0 && s.notifService != nil {
+		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
+	}
+
 	return nil
 }
 

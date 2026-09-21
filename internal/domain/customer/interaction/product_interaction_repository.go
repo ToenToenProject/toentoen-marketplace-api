@@ -9,9 +9,8 @@ import (
 )
 
 type ProductInteractionRepository interface {
-	// 1. General & Like Produk
+	// 1. General
 	GetBusinessIDByProductID(productID string) (string, error)
-	ToggleProductLike(productID, accountID string) (bool, error)
 
 	// 2. Review Produk (Ulasan Berbintang)
 	CreateProductReview(review *models.ProductReview) error
@@ -77,56 +76,6 @@ func (r *productInteractionRepository) GetBusinessIDByProductID(productID string
 	return product.BusinessID, nil
 }
 
-func (r *productInteractionRepository) ToggleProductLike(productID, accountID string) (bool, error) {
-	productID = strings.TrimSpace(productID)
-	accountID = strings.TrimSpace(accountID)
-
-	var product models.Product
-	if err := r.db.Select("product_id").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", productID).First(&product).Error; err != nil {
-		return false, errors.New("produk tidak ditemukan")
-	}
-	productID = product.ProductID
-
-	var like models.ProductLike
-	var isLiked bool
-
-	err := r.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("product_id = ? AND account_id = ?", productID, accountID).First(&like)
-
-		if result.Error == nil {
-			if err := tx.Delete(&like).Error; err != nil {
-				return err
-			}
-			if err := tx.Model(&models.Product{}).Where("product_id = ?", productID).
-				Updates(map[string]interface{}{
-					"like_count": gorm.Expr("GREATEST(like_count - 1, 0)"),
-				}).Error; err != nil {
-				return err
-			}
-			isLiked = false
-		} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			newLike := models.ProductLike{
-				ProductID: productID,
-				AccountID: accountID,
-			}
-			if err := tx.Create(&newLike).Error; err != nil {
-				return err
-			}
-			if err := tx.Model(&models.Product{}).Where("product_id = ?", productID).
-				Updates(map[string]interface{}{
-					"like_count": gorm.Expr("like_count + 1"),
-				}).Error; err != nil {
-				return err
-			}
-			isLiked = true
-		} else {
-			return result.Error
-		}
-		return nil
-	})
-
-	return isLiked, err
-}
 
 // ----------------------------------------------------
 // 2. REVIEW PRODUK (ULASAN BERBINTANG)

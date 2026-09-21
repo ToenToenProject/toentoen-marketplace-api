@@ -1,11 +1,13 @@
 package post
 
 import (
-	"toentoen-backend/internal/domain/merchant/catalog"
 	"errors"
-	"toentoen-backend/internal/domain/shared/models"
-	"toentoen-backend/pkg/utils"
 	"strings"
+	"toentoen-backend/internal/domain/merchant/catalog"
+	"toentoen-backend/internal/domain/notification"
+	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/utils"
 )
 
 type BusinessPostService interface {
@@ -18,12 +20,13 @@ type BusinessPostService interface {
 }
 
 type businessPostService struct {
-	postRepo    BusinessPostRepository
-	productRepo catalog.ProductRepository // Pinjam untuk cek otoritas bisnis
+	postRepo     BusinessPostRepository
+	productRepo  catalog.ProductRepository // Pinjam untuk cek otoritas bisnis
+	notifService notification.NotificationService
 }
 
-func NewBusinessPostService(postRepo BusinessPostRepository, productRepo catalog.ProductRepository) BusinessPostService {
-	return &businessPostService{postRepo, productRepo}
+func NewBusinessPostService(postRepo BusinessPostRepository, productRepo catalog.ProductRepository, notifService notification.NotificationService) BusinessPostService {
+	return &businessPostService{postRepo, productRepo, notifService}
 }
 
 func (s *businessPostService) CreatePost(requesterID, role, businessID string, input models.CreatePostInput) (*models.BusinessPost, error) {
@@ -60,6 +63,12 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 	if err := s.postRepo.CreatePost(&post); err != nil {
 		return nil, errors.New("gagal membuat postingan")
 	}
+
+	// 📢 Notifikasi ke seluruh customer yang mem-bookmark toko ini
+	if s.notifService != nil {
+		notification.NotifyBusinessPostCreated(database.DB, s.notifService, businessID, post.PostID, post.Content, requesterID)
+	}
+
 	return &post, nil
 }
 

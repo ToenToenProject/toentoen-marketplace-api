@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"toentoen-backend/internal/config"
+	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/meilisearch"
@@ -217,14 +218,20 @@ type ProfileService interface {
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
 	ForceDeleteAccount(identifier string) error
+	SetNotificationService(notif notification.NotificationService)
 }
 
 type profileService struct {
-	repo ProfileRepository
+	repo         ProfileRepository
+	notifService notification.NotificationService
+}
+
+func (s *profileService) SetNotificationService(notif notification.NotificationService) {
+	s.notifService = notif
 }
 
 func NewProfileService(repo ProfileRepository) ProfileService {
-	return &profileService{repo}
+	return &profileService{repo: repo}
 }
 
 func isAccountDataComplete(account *models.Account) string {
@@ -828,6 +835,11 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 
 		if err := s.repo.SaveOwnerProfile(account, &ownerToSave); err != nil {
 			return errors.New("Gagal menyimpan pengajuan verifikasi KYC")
+		}
+
+		// 🎁 Poin 8-1: Program Sambutan Mitra Baru saat Pemilik Toko selesai registrasi data diri / KYC
+		if s.notifService != nil {
+			go s.notifService.SendWelcomeMerchantNotification(accountID)
 		}
 
 	case "business_admin":

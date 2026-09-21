@@ -307,55 +307,7 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 }
 
 func (s *signalService) DeleteSignal(customerID, signalID string) error {
-	signal, err := s.signalRepo.GetSignalByID(signalID)
-	if err != nil {
-		return errors.New("signal tidak ditemukan")
-	}
-
-	if signal.CustomerID != customerID {
-		return errors.New("anda bukan pemilik signal ini")
-	}
-
-	// Beritahu merchant terkait jika ada percakapan
-	go s.notifySignalCancelled(signalID, customerID)
-
-	return s.signalRepo.DeleteSignal(signalID)
-}
-
-// notifySignalCancelled mengirimkan event signal_cancelled ke semua merchant terkait
-func (s *signalService) notifySignalCancelled(signalID, customerID string) {
-	merchantIDs, err := s.signalRepo.GetMerchantIDsBySignal(signalID)
-	if err != nil || len(merchantIDs) == 0 {
-		return
-	}
-
-	event := realtime.WSEvent{
-		Type: "signal_cancelled",
-		Data: map[string]string{
-			"signal_id": signalID,
-			"message":   "Signal telah dibatalkan/dihapus oleh customer.",
-		},
-	}
-
-	// Kirim via WebSocket (live roomchat event)
-	s.hub.BroadcastToUsers(merchantIDs, event)
-
-	// Simpan ke in-app notification & push FCM
-	if s.notifService != nil {
-		s.notifService.SendNotification(
-			merchantIDs,
-			customerID,
-			"signal_cancelled",
-			signalID,
-			"❌ Sinyal Kebutuhan Dibatalkan",
-			"Customer telah membatalkan sinyal kebutuhan.",
-			map[string]interface{}{
-				"type":      "signal_cancelled",
-				"signal_id": signalID,
-			},
-			nil,
-		)
-	}
+	return errors.New("fitur pembatalan sinyal telah dinonaktifkan. Silakan gunakan konfirmasi selesai jika kebutuhan Anda telah terpenuhi")
 }
 
 func (s *signalService) GetMySignals(customerID string) ([]models.Signal, error) {

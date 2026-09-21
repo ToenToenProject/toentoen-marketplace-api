@@ -220,11 +220,6 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 }
 
 func (s *businessService) GetMyBusinesses(ownerID, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error) {
-	// Trigger notifikasi selamat datang jika merchant baru pertama kali mengakses homepage
-	if s.notifService != nil && ownerID != "" {
-		go s.notifService.SendWelcomeMerchantNotification(ownerID)
-	}
-
 	// Teruskan parameter pencarian dan filter ke repository
 	businessesWithPreview, err := s.repo.GetBusinessListWithPreviews(ownerID, search, categoryID, tagIDs, cursor, limit+1)
 	if err != nil {
@@ -301,11 +296,6 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 
 	// Dekripsi dokumen sensitif untuk owner/admin
 	decryptBusinessLegal(business)
-
-	// Trigger notifikasi selamat datang jika merchant baru pertama kali membuka dashboard
-	if s.notifService != nil && business.AccountID != "" {
-		go s.notifService.SendWelcomeMerchantNotification(business.AccountID)
-	}
 
 	// Set alias field agar backward-compatible dan konsisten
 	business.BusinessNameAlias = business.BusinessName
@@ -935,6 +925,33 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 
 	if err := s.repo.UpdateLiveStatus(business); err != nil {
 		return nil, errors.New("gagal menonaktifkan status live toko")
+	}
+
+	// 🏁 Poin 5-2: Notifikasi sesi siaran langsung selesai
+	if s.notifService != nil {
+		bName := "Toko"
+		if business.BusinessName != nil && strings.TrimSpace(*business.BusinessName) != "" {
+			bName = strings.TrimSpace(*business.BusinessName)
+		}
+		bizID := business.BusinessID
+		reqID := requesterID
+
+		go func() {
+			customerIDs, err := s.repo.GetBookmarkAccountIDs(bizID)
+			if err != nil || len(customerIDs) == 0 {
+				return
+			}
+
+			title := fmt.Sprintf("🏁 Sesi Live Streaming %s Telah Berakhir", bName)
+			body := fmt.Sprintf("Siaran langsung toko %s telah selesai. Terima kasih atas partisipasi Anda!", bName)
+			data := map[string]interface{}{
+				"business_id":   bizID,
+				"business_name": bName,
+				"action":        "live_ended",
+			}
+
+			s.notifService.SendNotification(customerIDs, reqID, "merchant_live_ended", bizID, title, body, data, nil)
+		}()
 	}
 
 	return &models.LiveStatusResponse{

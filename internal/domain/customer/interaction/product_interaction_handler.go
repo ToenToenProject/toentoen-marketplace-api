@@ -17,30 +17,6 @@ func NewProductInteractionHandler(service ProductInteractionService) *ProductInt
 	return &ProductInteractionHandler{service}
 }
 
-// ----------------------------------------------------
-// 1. LIKE PRODUK
-// ----------------------------------------------------
-
-func (h *ProductInteractionHandler) ToggleLike(c *fiber.Ctx) error {
-	productID := strings.TrimSpace(c.Params("product_id"))
-
-	accountID, ok := c.Locals("account_id").(string)
-	if !ok || accountID == "" {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
-	}
-
-	isLiked, err := h.service.ToggleProductLike(productID, accountID)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-	}
-
-	message := "Batal menyukai produk"
-	if isLiked {
-		message = "Produk berhasil disukai"
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{"is_liked": isLiked})
-}
 
 // ----------------------------------------------------
 // 2. REVIEW PRODUK (ULASAN BERBINTANG)

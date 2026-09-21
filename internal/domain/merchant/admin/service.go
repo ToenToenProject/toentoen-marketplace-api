@@ -8,6 +8,7 @@ import (
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -453,21 +454,29 @@ func (s *businessAdminService) UpdateAdminAssignment(ownerID, businessID, assign
 		businessName = *biz.BusinessName
 	}
 
-	// Notifikasi ke Admin: Perubahan Izin & Peran
-	go s.notifService.SendNotification(
-		[]string{assignment.AdminID},
-		ownerID,
-		"admin_role_changed",
-		assignmentID,
-		"Perubahan Peran Toko",
-		fmt.Sprintf("Peran atau jadwal kerja Anda di toko %s telah diperbarui menjadi %s.", businessName, assignment.Role),
-		map[string]interface{}{
-			"assignment_id": assignmentID,
-			"business_id":   businessID,
-			"new_role":      assignment.Role,
-		},
-		nil,
-	)
+	// Notifikasi ke Seluruh Tim Toko selain pelaku (Poin 6-5: Transparansi Penuh)
+	recipients := s.getBusinessTeamRecipients(businessID, ownerID)
+	if len(recipients) > 0 {
+		targetAdminName := "Staf"
+		if assignment.Admin != nil && assignment.Admin.Account.FirstName != "" {
+			targetAdminName = strings.TrimSpace(assignment.Admin.Account.FirstName + " " + assignment.Admin.Account.LastName)
+		}
+		go s.notifService.SendNotification(
+			recipients,
+			ownerID,
+			"admin_role_changed",
+			assignmentID,
+			"Pembaruan Peran Tim Toko",
+			fmt.Sprintf("Peran atau jadwal kerja %s di toko %s telah diperbarui menjadi %s.", targetAdminName, businessName, assignment.Role),
+			map[string]interface{}{
+				"assignment_id": assignmentID,
+				"business_id":   businessID,
+				"target_admin":  targetAdminName,
+				"new_role":      assignment.Role,
+			},
+			nil,
+		)
+	}
 
 	return nil
 }
@@ -1098,7 +1107,12 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 			bizName = *biz.BusinessName
 		}
 
-		bodyText := fmt.Sprintf("Wewenang Anda di %s telah diperbarui oleh pemilik:", bizName)
+		targetAdminName := "Staf"
+		if target.Admin != nil && target.Admin.Account != nil {
+			targetAdminName = strings.TrimSpace(target.Admin.Account.FirstName + " " + target.Admin.Account.LastName)
+		}
+
+		bodyText := fmt.Sprintf("Wewenang kerja %s di toko %s telah diperbarui:", targetAdminName, bizName)
 		if len(granted) > 0 {
 			bodyText += "\n✅ Diberikan: " + strings.Join(granted, ", ")
 		}
@@ -1106,21 +1120,26 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 			bodyText += "\n❌ Dicabut: " + strings.Join(revoked, ", ")
 		}
 
-		go s.notifService.SendNotification(
-			[]string{target.AdminID},
-			requesterID,
-			"admin_permissions_updated",
-			targetAssignmentID,
-			"📋 Pembaruan Hak Akses Toko",
-			bodyText,
-			map[string]interface{}{
-				"assignment_id": targetAssignmentID,
-				"business_id":   businessID,
-				"granted":       granted,
-				"revoked":       revoked,
-			},
-			nil,
-		)
+		// Poin 6-5: Broadcast ke seluruh tim toko selain pelaku
+		teamRecipients := s.getBusinessTeamRecipients(businessID, requesterID)
+		if len(teamRecipients) > 0 {
+			go s.notifService.SendNotification(
+				teamRecipients,
+				requesterID,
+				"admin_permissions_updated",
+				targetAssignmentID,
+				"📋 Pembaruan Wewenang Tim Toko",
+				bodyText,
+				map[string]interface{}{
+					"assignment_id": targetAssignmentID,
+					"business_id":   businessID,
+					"target_admin":  targetAdminName,
+					"granted":       granted,
+					"revoked":       revoked,
+				},
+				nil,
+			)
+		}
 	}
 
 	adminName := ""
@@ -1191,3 +1210,35 @@ func (s *businessAdminService) ToggleNotification(requesterID, businessID, targe
 		IsNotifyOwnerEnabled: isEnabled,
 	}, nil
 }
+
+// getBusinessTeamRecipients mengembalikan daftar account_id seluruh tim toko (Owner + seluruh admin aktif),
+// dengan mengecualikan aktor yang melakukan perubahan (actorID).
+func (s *businessAdminService) getBusinessTeamRecipients(businessID, actorID string) []string {
+	var recipients []string
+	seen := make(map[string]bool)
+
+	// 1. Ambil Owner ID
+	biz, err := s.bizRepo.FindBusinessByID(businessID)
+	if err == nil && biz != nil && biz.AccountID != "" {
+		if biz.AccountID != actorID {
+			recipients = append(recipients, biz.AccountID)
+			seen[biz.AccountID] = true
+		}
+	}
+
+	// 2. Ambil seluruh admin aktif toko
+	var adminIDs []string
+	_ = database.DB.Model(&models.BusinessAdminAssignment{}).
+		Where("business_id = ? AND status IN ('active', 'scheduled_for_deletion')", businessID).
+		Pluck("admin_id", &adminIDs).Error
+
+	for _, id := range adminIDs {
+		if id != actorID && !seen[id] {
+			recipients = append(recipients, id)
+			seen[id] = true
+		}
+	}
+
+	return recipients
+}
+

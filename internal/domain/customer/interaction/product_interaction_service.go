@@ -16,8 +16,6 @@ import (
 )
 
 type ProductInteractionService interface {
-	// 1. General & Like Produk
-	ToggleProductLike(productID, accountID string) (bool, error)
 
 	// 2. Review Produk (Ulasan Berbintang)
 	AddProductReview(productID, accountID string, input models.CreateProductReviewInput) error
@@ -80,36 +78,6 @@ func getOwnerInteractionLabel(isOwnerLiked, isOwnerReplied, isByOwner bool) stri
 	return ""
 }
 
-// ----------------------------------------------------
-// 1. GENERAL & LIKE PRODUK
-// ----------------------------------------------------
-
-func (s *productInteractionService) ToggleProductLike(productID, accountID string) (bool, error) {
-	isLiked, err := s.repo.ToggleProductLike(productID, accountID)
-	if err == nil && isLiked && s.notifService != nil {
-		go func() {
-			businessID, errBus := s.repo.GetBusinessIDByProductID(productID)
-			if errBus == nil {
-				staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
-				data := map[string]interface{}{
-					"product_id":  productID,
-					"business_id": businessID,
-				}
-				s.notifService.SendNotification(
-					staffIDs,
-					accountID,
-					"product_like",
-					productID,
-					"Produk Disukai",
-					"Seseorang menyukai produk Anda",
-					data,
-					nil,
-				)
-			}
-		}()
-	}
-	return isLiked, err
-}
 
 // ----------------------------------------------------
 // 2. REVIEW PRODUK (ULASAN BERBINTANG)

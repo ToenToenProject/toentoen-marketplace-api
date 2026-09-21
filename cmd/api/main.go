@@ -119,6 +119,7 @@ func main() {
 	notifRepo := notification.NewNotificationRepository(database.DB)
 	notifService := notification.NewNotificationService(notifRepo, wsHub)
 	notifHandler := notification.NewNotificationHandler(notifService)
+	profileService.SetNotificationService(notifService)
 
 	businessRepo := business.NewBusinessRepository(database.DB)
 	startMidnightResetWorker(businessRepo) // Jalankan cron job
@@ -148,7 +149,7 @@ func main() {
 	postInteractionHandler := interaction.NewPostInteractionHandler(postInteractionService)
 
 	businessPostRepo := post.NewBusinessPostRepository(database.DB)
-	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo)
+	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo, notifService)
 	businessPostHandler := post.NewBusinessPostHandler(businessPostService)
 
 	// Signal V2 (menggantikan demand lama) — dengan Real-Time Hub & Notification Service
@@ -421,6 +422,9 @@ func main() {
 	myActivityGroup.Get("/wishlist", myActivityHandler.GetMyWishlists)
 
 	api.Post("/customer/wishlist/:product_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.ToggleWishlist)
+	api.Post("/customer/products/:product_id/wishlist", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.ToggleWishlist)
+	api.Get("/customer/wishlist", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.GetMyWishlists)
+	api.Get("/customer/bookmarks", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.GetBookmarks)
 
 	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - CUSTOMER
@@ -430,7 +434,6 @@ func main() {
 	customerSignalGroup.Get("/me", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
 	customerSignalGroup.Put("/:signal_id", customerSignalHandler.UpdateSignal)
-	customerSignalGroup.Delete("/:signal_id", customerSignalHandler.DeleteSignal)
 	customerSignalGroup.Put("/:signal_id/complete", customerSignalHandler.CompleteSignal)
 
 	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth, middlewares.RequireEmailVerified)
@@ -464,9 +467,8 @@ func main() {
 	businessReviewGroup.Post("/:review_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	publicProductRoutes := api.Group("/products")
-	// 1. Detail & Like Produk
+	// 1. Detail Produk
 	publicProductRoutes.Get("/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
-	publicProductRoutes.Post("/:product_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleLike)
 
 	// 2. Review Produk (Ulasan Berbintang 1-5 + Min 10 Kata)
 	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddProductReview)
