@@ -1,6 +1,8 @@
 package account
 
 import (
+	"fmt"
+	"log"
 	"strings"
 	"time"
 	"toentoen-backend/internal/config"
@@ -196,11 +198,20 @@ func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
 }
 
 func (h *ProfileHandler) ForceDeleteAccount(c *fiber.Ctx) error {
-	// 🛡️ Proteksi Keamanan: Cegah eksekusi di environment production tanpa kunci rahasia internal
+	// 🛡️ Otorisasi Keamanan: Khusus role CTO, Admin, CS pada skema operations atau secret internal
+	authHeader := c.Get("Authorization")
+	cookieToken := c.Cookies("auth_token")
+	workerID := c.Get("X-Worker-ID")
+	opsUserID := c.Get("X-Operations-User-ID")
 	secretHeader := c.Get("X-Internal-Secret")
-	isDev := config.Envs.AppEnv != "production"
-	if !isDev && secretHeader != config.Envs.JWTSecret {
-		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, "Akses ditolak: endpoint pengujian hanya tersedia di environment development atau dengan otorisasi internal", nil)
+
+	opsUser, authorized, err := h.service.VerifyOperationsAuthorization(authHeader, cookieToken, workerID, opsUserID, secretHeader)
+	if !authorized || err != nil {
+		errMsg := "Akses ditolak: endpoint force delete hanya dapat diakses oleh role CTO, Admin, atau CS pada skema operations"
+		if err != nil {
+			errMsg = err.Error()
+		}
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, errMsg, nil)
 	}
 
 	var input models.ForceDeleteAccountInput
@@ -215,7 +226,24 @@ func (h *ProfileHandler) ForceDeleteAccount(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun " + input.Identifier + " telah dihapus secara permanen.", nil)
+	actorDesc := "System/Internal Secret"
+	if opsUser != nil {
+		if opsUser.Name != "" {
+			actorDesc = fmt.Sprintf("%s (%s - %s)", opsUser.Name, opsUser.WorkerID, opsUser.Role)
+		} else if opsUser.WorkerID != "" {
+			actorDesc = fmt.Sprintf("%s (%s)", opsUser.WorkerID, opsUser.Role)
+		} else {
+			actorDesc = opsUser.Role
+		}
+	}
+	log.Printf("🗑️ [FORCE DELETE] Akun '%s' berhasil dihapus oleh Operations: %s", input.Identifier, actorDesc)
+
+	responseData := fiber.Map{
+		"deleted_identifier": input.Identifier,
+		"executed_by":        actorDesc,
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun "+input.Identifier+" telah dihapus secara permanen.", responseData)
 }
 
 func (h *ProfileHandler) GetKYCStatus(c *fiber.Ctx) error {

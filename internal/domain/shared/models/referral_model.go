@@ -16,3 +16,6 @@ type ReferralUser struct {
 func (ReferralUser) TableName() string {
 	return "operations.users"
 }
+
+// OperationsUser adalah representasi pengguna internal dari skema operations (CTO, Admin, CS, dsb)
+type OperationsUser = ReferralUser

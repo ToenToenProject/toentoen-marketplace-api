@@ -13,6 +13,7 @@ import (
 	"toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/utils"
 
+	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 )
 
@@ -218,6 +219,7 @@ type ProfileService interface {
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
 	ForceDeleteAccount(identifier string) error
+	VerifyOperationsAuthorization(authHeader string, cookieToken string, workerID string, opsUserID string, internalSecret string) (*models.OperationsUser, bool, error)
 	SetNotificationService(notif notification.NotificationService)
 }
 
@@ -472,6 +474,124 @@ func (s *profileService) ForceDeleteAccount(identifier string) error {
 	}
 
 	return nil
+}
+
+// IsAllowedOperationsRole memeriksa apakah role dari skema operations berhak melakukan tindakan administratif tinggi seperti Force Delete
+func IsAllowedOperationsRole(role string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(role))
+	switch normalized {
+	case "cto", "admin", "cs", "admin/cs", "cs/admin", "customer_service", "customer service", "customer_support", "support", "operations_admin", "super_admin", "superadmin":
+		return true
+	default:
+		return false
+	}
+}
+
+// VerifyOperationsAuthorization memvalidasi kredensial pemanggil dari skema operations (CTO, Admin, CS)
+func (s *profileService) VerifyOperationsAuthorization(authHeader string, cookieToken string, workerID string, opsUserID string, internalSecret string) (*models.OperationsUser, bool, error) {
+	// 1. Otorisasi via Internal Secret (service-to-service)
+	if internalSecret != "" && internalSecret == config.Envs.JWTSecret {
+		return &models.OperationsUser{
+			WorkerID: "INTERNAL_SERVICE",
+			Name:     "Internal Service",
+			Role:     "cto",
+			IsActive: true,
+		}, true, nil
+	}
+
+	// 2. Otorisasi via JWT Bearer Token / Cookie
+	tokenString := ""
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	} else if authHeader != "" {
+		tokenString = strings.TrimSpace(authHeader)
+	}
+	if tokenString == "" && cookieToken != "" {
+		tokenString = cookieToken
+	}
+
+	if tokenString != "" {
+		token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("metode enkripsi token tidak valid")
+			}
+			return []byte(config.Envs.JWTSecret), nil
+		})
+
+		if err == nil && token.Valid {
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				roleFromClaim, _ := claims["role"].(string)
+				accountID, _ := claims["account_id"].(string)
+				if accountID == "" {
+					accountID, _ = claims["sub"].(string)
+				}
+				if accountID == "" {
+					accountID, _ = claims["id"].(string)
+				}
+				claimWorkerID, _ := claims["worker_id"].(string)
+
+				idToCheck := claimWorkerID
+				if idToCheck == "" {
+					idToCheck = accountID
+				}
+
+				// Jika ada identifier pengguna di claim, verifikasi ke database operations.users
+				if idToCheck != "" {
+					if opsUser, err := s.repo.FindOperationsUser(idToCheck); err == nil && opsUser != nil {
+						if IsAllowedOperationsRole(opsUser.Role) {
+							return opsUser, true, nil
+						}
+						return nil, false, fmt.Errorf("role Anda (%s) pada operations tidak memiliki izin force delete", opsUser.Role)
+					}
+				}
+
+				// Jika tidak ditemukan di database atau idToCheck kosong, tapi role pada token valid
+				if IsAllowedOperationsRole(roleFromClaim) {
+					return &models.OperationsUser{
+						ID:       accountID,
+						WorkerID: claimWorkerID,
+						Name:     "Operations User",
+						Role:     roleFromClaim,
+						IsActive: true,
+					}, true, nil
+				}
+			}
+		}
+	}
+
+	// 3. Otorisasi via Header X-Worker-ID
+	if workerID != "" {
+		opsUser, err := s.repo.FindOperationsUser(workerID)
+		if err == nil && opsUser != nil {
+			if IsAllowedOperationsRole(opsUser.Role) {
+				return opsUser, true, nil
+			}
+			return nil, false, fmt.Errorf("role Anda (%s) tidak memiliki izin force delete", opsUser.Role)
+		}
+	}
+
+	// 4. Otorisasi via Header X-Operations-User-ID
+	if opsUserID != "" {
+		opsUser, err := s.repo.FindOperationsUser(opsUserID)
+		if err == nil && opsUser != nil {
+			if IsAllowedOperationsRole(opsUser.Role) {
+				return opsUser, true, nil
+			}
+			return nil, false, fmt.Errorf("role Anda (%s) tidak memiliki izin force delete", opsUser.Role)
+		}
+	}
+
+	// 5. Bypass untuk environment non-produksi (development / local testing)
+	if config.Envs.AppEnv != "production" {
+		return &models.OperationsUser{
+			WorkerID: "DEV_ENV",
+			Name:     "Development Tester",
+			Role:     "cto",
+			IsActive: true,
+		}, true, nil
+	}
+
+	return nil, false, errors.New("akses ditolak: endpoint force delete hanya dapat diakses oleh role CTO, Admin, atau CS pada skema operations")
 }
 
 func (s *profileService) UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error) {
