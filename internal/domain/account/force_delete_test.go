@@ -27,6 +27,7 @@ func generateTestOpsToken(role string, workerID string, accountID string) string
 func TestIsAllowedOperationsRole(t *testing.T) {
 	allowed := []string{
 		"cto", "CTO", " cto ",
+		"c_level", "C_LEVEL", "c-level", "managerial", "admin_spv",
 		"admin", "ADMIN", "operations_admin", "super_admin", "superadmin",
 		"cs", "CS", "admin/cs", "cs/admin", "customer_service", "customer service", "customer_support", "support",
 	}
@@ -102,6 +103,25 @@ func TestVerifyOperationsAuthorization(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, user)
 		assert.Equal(t, "cto", user.Role)
+	})
+
+	t.Run("C_LEVEL via Bearer Token with operations secret and workerId should succeed", func(t *testing.T) {
+		claims := jwt.MapClaims{
+			"id":       "a452ae94-435c-4372-bc4b-5030476008eb",
+			"workerId": "CTO-001",
+			"name":     "Alexander Hartanto (CTO)",
+			"role":     "C_LEVEL",
+			"iat":      time.Now().Unix(),
+			"exp":      time.Now().Add(1 * time.Hour).Unix(),
+		}
+		tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenStr, _ := tok.SignedString([]byte("9cc90577eeb04dedcbadf38bb6abc6d98bb953129c59d42518c46cd073eecef5"))
+
+		user, ok, err := service.VerifyOperationsAuthorization("Bearer "+tokenStr, "", "", "", "")
+		assert.True(t, ok)
+		assert.NoError(t, err)
+		assert.NotNil(t, user)
+		assert.Equal(t, "C_LEVEL", user.Role)
 	})
 
 	t.Run("Admin via Bearer Token should succeed", func(t *testing.T) {
