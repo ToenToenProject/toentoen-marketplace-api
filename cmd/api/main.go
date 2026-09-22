@@ -298,6 +298,7 @@ func main() {
 	// ==========================================
 	uploadGroup := api.Group("/upload", middlewares.RequireAuth)
 	uploadGroup.Post("/presign", uploadHandler.GeneratePresignURL)
+	uploadGroup.Get("/limits", uploadHandler.GetUploadLimits)
 
 	// ==========================================
 	// ROUTES: AUTHENTICATION

@@ -47,7 +47,8 @@ type PresignUploadResult struct {
 // folder: folder di dalam bucket, misal "products/images"
 // filename: nama file asli, misal "foto-produk.jpg"
 // contentType: MIME type, misal "image/jpeg"
-func GeneratePresignedUploadURL(folder, filename, contentType string) (*PresignUploadResult, error) {
+// contentLength: ukuran file dalam bytes (opsional, jika diisi akan mengunci batas ukuran di S3)
+func GeneratePresignedUploadURL(folder, filename, contentType string, contentLength *int64) (*PresignUploadResult, error) {
 	// Bersihkan folder dari slash berlebih
 	folder = strings.Trim(folder, "/")
 
@@ -60,13 +61,18 @@ func GeneratePresignedUploadURL(folder, filename, contentType string) (*PresignU
 	bucket := config.Envs.AWSRegion
 	bucketName := config.Envs.AWSS3Bucket
 
+	putInput := &s3.PutObjectInput{
+		Bucket:      aws.String(bucketName),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+	}
+	if contentLength != nil && *contentLength > 0 {
+		putInput.ContentLength = contentLength
+	}
+
 	// Buat presigned URL yang berlaku selama 15 menit
 	presignResult, err := S3PresignClient.PresignPutObject(context.TODO(),
-		&s3.PutObjectInput{
-			Bucket:      aws.String(bucketName),
-			Key:         aws.String(key),
-			ContentType: aws.String(contentType),
-		},
+		putInput,
 		s3.WithPresignExpires(15*time.Minute),
 	)
 	if err != nil {
