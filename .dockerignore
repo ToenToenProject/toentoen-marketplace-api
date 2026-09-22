@@ -6,16 +6,28 @@
 *.exe
 server
 api.exe
+seeder
+seeder_linux
+*.test
+*.out
+
+# Documentation and scripts
+docs/
+scripts/
+*.md
 
 # Temporary files & logs
 tmp/
 *.log
 .air.toml
+.git
+.gitignore
 
 # Keys and credentials
 *.pem
 *.key
 *.pub
 
-# Local scripts
+# Local scripts & scratch
 *.py
+scratch/

@@ -11,11 +11,13 @@ import (
 type AppConfig struct {
 	AppPort string
 
-	DBHost string
-	DBUser string
-	DBPass string
-	DBName string
-	DBPort string
+	DBHost            string
+	DBUser            string
+	DBPass            string
+	DBName            string
+	DBPort            string
+	DBSSLMode         string
+	EnableAutoMigrate bool
 
 	RedisHost string
 
@@ -55,11 +57,13 @@ func InitConfig() {
 		AppEnv:    getEnv("APP_ENV", "development"),
 		RedisHost: getEnv("REDIS_HOST", "127.0.0.1:6379"),
 
-		DBHost: getEnvMust("DB_HOST"),
-		DBUser: getEnvMust("DB_USER"),
-		DBPass: getEnvMust("DB_PASSWORD"),
-		DBName: getEnvMust("DB_NAME"),
-		DBPort: getEnv("DB_PORT", "5432"),
+		DBHost:            getEnvMust("DB_HOST"),
+		DBUser:            getEnvMust("DB_USER"),
+		DBPass:            getEnvMust("DB_PASSWORD"),
+		DBName:            getEnvMust("DB_NAME"),
+		DBPort:            getEnv("DB_PORT", "5432"),
+		DBSSLMode:         getEnv("DB_SSLMODE", "disable"),
+		EnableAutoMigrate: getEnvAsBool("ENABLE_AUTO_MIGRATE", true),
 
 		JWTSecret:          getEnvMust("JWT_SECRET"),
 		GoogleClientID:     getEnvMust("GOOGLE_CLIENT_ID"),
@@ -107,4 +111,16 @@ func getEnvAsInt(key string, fallback int) int {
 		return value
 	}
 	return fallback
+}
+
+func getEnvAsBool(key string, fallback bool) bool {
+	valStr := getEnv(key, "")
+	if valStr == "" {
+		return fallback
+	}
+	val, err := strconv.ParseBool(valStr)
+	if err != nil {
+		return fallback
+	}
+	return val
 }

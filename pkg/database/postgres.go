@@ -15,13 +15,19 @@ import (
 var DB *gorm.DB
 
 func ConnectDB() {
+	sslMode := config.Envs.DBSSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
 	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Jakarta",
 		config.Envs.DBHost,
 		config.Envs.DBUser,
 		config.Envs.DBPass,
 		config.Envs.DBName,
 		config.Envs.DBPort,
+		sslMode,
 	)
 
 	var err error
@@ -33,6 +39,11 @@ func ConnectDB() {
 	}
 
 	log.Println("🚀 Connected to Database successfully")
+
+	if !config.Envs.EnableAutoMigrate {
+		log.Println("ℹ️ AutoMigrate dinonaktifkan (ENABLE_AUTO_MIGRATE=false) — menjalankan aplikasi dengan izin least privilege")
+		return
+	}
 
 	// Auto-migrate models individually so one model issue does not block others
 	modelsToMigrate := []interface{}{
