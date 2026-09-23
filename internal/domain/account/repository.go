@@ -28,7 +28,6 @@ type ProfileRepository interface {
 	CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error)
 	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
 	FindReferralCode(code string) (*models.ReferralUser, error)
-	FindOperationsUser(identifier string) (*models.OperationsUser, error)
 	UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error
 }
 
@@ -608,20 +607,6 @@ func (r *profileRepository) FindReferralCode(code string) (*models.ReferralUser,
 	return &user, nil
 }
 
-func (r *profileRepository) FindOperationsUser(identifier string) (*models.OperationsUser, error) {
-	var user models.OperationsUser
-	clean := strings.TrimSpace(identifier)
-	if clean == "" {
-		return nil, gorm.ErrRecordNotFound
-	}
-	err := r.db.Table("operations.users").
-		Where("(id = ? OR worker_id = ?) AND is_active = true", clean, clean).
-		First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
 
 func (r *profileRepository) UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error {
 	updates := map[string]interface{}{

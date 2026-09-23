@@ -408,8 +408,6 @@ func main() {
 	notifGroup.Delete("/:id", notifHandler.DeleteNotification)
 	notifGroup.Delete("/", notifHandler.DeleteAllNotifications)
 
-	// Khusus untuk pengujian / backdoor menghapus berdasarkan identifier:
-	api.Post("/account/force-delete", profileHandler.ForceDeleteAccount)
 
 	// Endpoint Internal untuk Service toentoen-internal-operations (Trigger WebSocket & Push Notification)
 	api.Post("/internal/notifications", notifHandler.SendInternalNotification)

@@ -59,14 +59,6 @@ func (m *mockProfileRepo) FindReferralCode(code string) (*models.ReferralUser, e
 	}
 	return ref, nil
 }
-func (m *mockProfileRepo) FindOperationsUser(identifier string) (*models.OperationsUser, error) {
-	for _, user := range m.referralCodes {
-		if user != nil && (user.ID == identifier || user.WorkerID == identifier) {
-			return user, nil
-		}
-	}
-	return nil, errors.New("record not found")
-}
 func (m *mockProfileRepo) UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error {
 	if m.account != nil && m.account.AccountID == accountID {
 		m.account.AcceptedTermsAt = acceptedTermsAt

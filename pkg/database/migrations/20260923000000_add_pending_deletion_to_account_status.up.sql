@@ -1,0 +1,5 @@
+ALTER TYPE enum_account_status ADD VALUE IF NOT EXISTS 'pending_deletion';
+ALTER TABLE IF EXISTS accounts ADD COLUMN IF NOT EXISTS scheduled_deletion_at TIMESTAMPTZ;
+ALTER TABLE IF EXISTS accounts ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
+ALTER TABLE IF EXISTS accounts ADD COLUMN IF NOT EXISTS suspension_reason TEXT;
+ALTER TABLE IF EXISTS accounts ADD COLUMN IF NOT EXISTS status_updated_by VARCHAR(50);
