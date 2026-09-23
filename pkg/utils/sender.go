@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -37,6 +40,10 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
 
 	if smtpEmail == "" || smtpPassword == "" {
+		if os.Getenv("APP_ENV") != "production" {
+			log.Printf("[OTP-EMAIL-DEV] SMTP credentials belum diatur, OTP untuk %s adalah: %s", toEmail, otp)
+			return nil
+		}
 		log.Printf("[OTP-EMAIL-ERROR] SMTP credentials (SMTP_EMAIL / SMTP_PASSWORD) belum diatur di environment variable")
 		return errors.New("konfigurasi server email belum lengkap")
 	}
@@ -109,9 +116,55 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 	return nil
 }
 
-// SendWAOTP dinonaktifkan sementara karena layanan OTP via WhatsApp/nomor telepon masih dalam tahap pengembangan.
+// SendWAOTP mengirimkan kode OTP ke nomor WhatsApp tujuan.
+// Jika FONNTE_TOKEN disetel di environment, mengirim via API Fonnte.
+// Jika FONNTE_TOKEN kosong (development/testing), kode dicatat ke log console dan mengembalikan nil.
 func SendWAOTP(phoneNumber string, otp string) error {
-	return errors.New("layanan OTP via nomor telepon/WhatsApp sedang dalam tahap pengembangan")
+	phoneNumber = strings.TrimSpace(phoneNumber)
+	if phoneNumber == "" {
+		return errors.New("nomor telepon tujuan tidak boleh kosong")
+	}
+
+	fonnteToken := strings.TrimSpace(os.Getenv("FONNTE_TOKEN"))
+	if fonnteToken != "" {
+		message := fmt.Sprintf("Halo sobat ToenToen!\n\nKode verifikasi (OTP) Anda adalah: *%s*\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
+		payload := map[string]interface{}{
+			"target":  phoneNumber,
+			"message": message,
+			"delay":   "1",
+		}
+		jsonPayload, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("gagal memproses payload WhatsApp: %w", err)
+		}
+
+		req, err := http.NewRequest("POST", "https://api.fonnte.com/send", bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			return fmt.Errorf("gagal membuat request WhatsApp: %w", err)
+		}
+		req.Header.Set("Authorization", fonnteToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("[OTP-WA-ERROR] Gagal mengirim WA OTP ke %s: %v", phoneNumber, err)
+			return fmt.Errorf("gagal mengirim WA OTP: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("[OTP-WA-ERROR] Fonnte gateway mengembalikan status: %d", resp.StatusCode)
+			return fmt.Errorf("gagal mengirim OTP via WhatsApp, status gateway: %d", resp.StatusCode)
+		}
+
+		log.Printf("[OTP-WA-SUCCESS] WA OTP berhasil dikirim ke %s", phoneNumber)
+		return nil
+	}
+
+	// Mode development / fallback jika belum ada token gateway WhatsApp
+	log.Printf("[OTP-WA-DEV] Kode OTP verifikasi untuk nomor %s adalah: %s", phoneNumber, otp)
+	return nil
 }
 
 // SendFeedbackEmail mengirimkan email masukan/feedback dari pengguna ke email resmi ToenToen

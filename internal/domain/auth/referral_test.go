@@ -2,10 +2,12 @@ package auth
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -118,15 +120,15 @@ func TestRegisterWithReferralCode(t *testing.T) {
 	}
 	service := NewAuthService(mockRepo)
 
-	t.Run("registration with phone number not available yet", func(t *testing.T) {
+	t.Run("registration with phone number is supported", func(t *testing.T) {
 		input := models.RegisterUnifiedInput{
 			Identifier: "081234567890",
 			Password:   "secret123",
 			Role:       "customer",
 		}
 		err := service.Register(input)
-		if err == nil {
-			t.Fatal("expected error for phone number registration, got nil")
+		if err != nil {
+			t.Fatalf("expected nil error for phone number registration, got: %v", err)
 		}
 	})
 
@@ -161,6 +163,99 @@ func TestRegisterWithReferralCode(t *testing.T) {
 		}
 		if token != "" {
 			t.Errorf("expected empty token on error, got: %s", token)
+		}
+	})
+}
+
+func TestLogin(t *testing.T) {
+	password := "secret123"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashStr := string(hash)
+
+	phone := "081234567890"
+	email := "unverified@example.com"
+
+	mockRepo := &mockAuthRepo{
+		accounts: map[string]*models.Account{
+			"081234567890": {
+				AccountID:     "ACC-1",
+				PhoneNumber:   &phone,
+				PasswordHash:  &hashStr,
+				Role:          "customer",
+				AccountStatus: "inactive", // Status belum verified
+			},
+			"unverified@example.com": {
+				AccountID:     "ACC-2",
+				Email:         &email,
+				PasswordHash:  &hashStr,
+				Role:          "owner",
+				AccountStatus: "inactive", // Status belum verified
+			},
+			"suspended@example.com": {
+				AccountID:     "ACC-3",
+				Email:         &email,
+				PasswordHash:  &hashStr,
+				Role:          "customer",
+				AccountStatus: "suspended",
+			},
+			"banned@example.com": {
+				AccountID:     "ACC-4",
+				Email:         &email,
+				PasswordHash:  &hashStr,
+				Role:          "customer",
+				AccountStatus: "banned",
+			},
+		},
+	}
+	service := NewAuthService(mockRepo)
+
+	t.Run("inactive account with phone number (belum verified) is allowed to login", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier: "081234567890",
+			Password:   "secret123",
+		})
+		if err != nil {
+			t.Fatalf("expected login to succeed for unverified phone account, got: %v", err)
+		}
+	})
+
+	t.Run("inactive account with email (belum verified) is allowed to login", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier: "unverified@example.com",
+			Password:   "secret123",
+		})
+		if err != nil {
+			t.Fatalf("expected login to succeed for unverified email account, got: %v", err)
+		}
+	})
+
+	t.Run("suspended account is rejected from login", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier: "suspended@example.com",
+			Password:   "secret123",
+		})
+		if err == nil || !strings.Contains(err.Error(), "ditangguhkan") {
+			t.Fatalf("expected suspended error, got: %v", err)
+		}
+	})
+
+	t.Run("banned account is rejected from login", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier: "banned@example.com",
+			Password:   "secret123",
+		})
+		if err == nil || !strings.Contains(err.Error(), "diblokir") {
+			t.Fatalf("expected banned error, got: %v", err)
+		}
+	})
+
+	t.Run("wrong password returns error", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier: "081234567890",
+			Password:   "wrongpassword",
+		})
+		if err == nil || err.Error() != "Email atau password salah" {
+			t.Fatalf("expected invalid credentials error, got: %v", err)
 		}
 	})
 }
