@@ -362,99 +362,100 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 		// Legacy demand_signals v1 (account_id ON DELETE CASCADE, but table may not exist)
 		delRaw("DELETE FROM demand_signals WHERE account_id = ?", accountID)
 
-		// 2. Delete Role-Specific Entities
-		if role == "customer" {
+		// 2. Delete Customer & Demand Signal Entities (if any)
+		if err := del("sender_id = ?", accountID, &models.SignalMessage{}); err != nil {
+			return err
+		}
+		if err := del("merchant_id = ?", accountID, &models.SignalConversation{}); err != nil {
+			return err
+		}
 
-			// Chat / Signals
-			if err := del("sender_id = ?", accountID, &models.SignalMessage{}); err != nil {
-				return err
-			}
-
-			var signalIDs []string
-			if err := tx.Model(&models.Signal{}).Where("customer_id = ?", accountID).Pluck("signal_id", &signalIDs).Error; err != nil {
-				return err
-			}
-
-			if len(signalIDs) > 0 {
-				var convIDs []string
-				if err := tx.Model(&models.SignalConversation{}).Where("signal_id IN ?", signalIDs).Pluck("conversation_id", &convIDs).Error; err != nil {
-					return err
-				}
-
+		var signalIDs []string
+		if err := tx.Model(&models.Signal{}).Where("customer_id = ?", accountID).Pluck("signal_id", &signalIDs).Error; err == nil && len(signalIDs) > 0 {
+			var convIDs []string
+			if err := tx.Model(&models.SignalConversation{}).Where("signal_id IN ?", signalIDs).Pluck("conversation_id", &convIDs).Error; err == nil && len(convIDs) > 0 {
 				if err := delIn("conversation_id IN ?", convIDs, &models.SignalMessage{}); err != nil {
 					return err
 				}
-				if err := delIn("signal_id IN ?", signalIDs, &models.SignalConversation{}); err != nil {
-					return err
-				}
-				if err := delIn("signal_id IN ?", signalIDs, &models.SignalImage{}); err != nil {
-					return err
-				}
-				if err := delIn("signal_id IN ?", signalIDs, &models.DemandResponse{}); err != nil {
-					return err
-				}
-				if err := delIn("signal_id IN ?", signalIDs, &models.Signal{}); err != nil {
-					return err
-				}
 			}
-
-			if err := del("account_id = ?", accountID, &models.Customer{}); err != nil {
+			if err := delIn("signal_id IN ?", signalIDs, &models.SignalConversation{}); err != nil {
 				return err
 			}
-
-		} else if role == "owner" {
-			// Find all businesses
-			var businesses []models.Business
-			if err := tx.Where("account_id = ?", accountID).Find(&businesses).Error; err != nil {
+			if err := delIn("signal_id IN ?", signalIDs, &models.SignalImage{}); err != nil {
 				return err
 			}
+			if err := delIn("signal_id IN ?", signalIDs, &models.DemandResponse{}); err != nil {
+				return err
+			}
+			if err := delIn("signal_id IN ?", signalIDs, &models.Signal{}); err != nil {
+				return err
+			}
+		}
 
+		if err := del("account_id = ?", accountID, &models.Customer{}); err != nil {
+			return err
+		}
+
+		// 3. Delete Business & Owner Entities (if any businesses are owned by this account)
+		var businesses []models.Business
+		if err := tx.Where("account_id = ?", accountID).Find(&businesses).Error; err == nil && len(businesses) > 0 {
 			for _, b := range businesses {
 				deletedBusinessIDs = append(deletedBusinessIDs, b.BusinessID)
 
 				// Find products
 				var products []models.Product
-				if err := tx.Where("business_id = ?", b.BusinessID).Find(&products).Error; err != nil {
-					return err
-				}
-				for _, p := range products {
-					deletedProductIDs = append(deletedProductIDs, p.ProductID)
-					if err := del("product_id = ?", p.ProductID, &models.ProductVariant{}); err != nil {
-						return err
-					}
-					if err := del("product_id = ?", p.ProductID, &models.ProductLike{}); err != nil {
-						return err
-					}
-					if err := del("product_id = ?", p.ProductID, &models.ProductWishlist{}); err != nil {
-						return err
-					}
-
-					// Comments on this product
-					var commentIDs []string
-					_ = tx.Model(&models.ProductComment{}).Where("product_id = ?", p.ProductID).Pluck("comment_id", &commentIDs).Error
-					if len(commentIDs) > 0 {
-						if err := delIn("comment_id IN ?", commentIDs, &models.ProductCommentLike{}); err != nil { return err }
-						if err := delIn("comment_id IN ?", commentIDs, &models.ProductCommentReport{}); err != nil { return err }
-					}
-					if err := del("product_id = ?", p.ProductID, &models.ProductComment{}); err != nil {
-						return err
-					}
-
-					// Reviews on this product
-					var reviewIDs []string
-					_ = tx.Model(&models.ProductReview{}).Where("product_id = ?", p.ProductID).Pluck("review_id", &reviewIDs).Error
-					if len(reviewIDs) > 0 {
-						var revCommentIDs []string
-						_ = tx.Model(&models.ProductReviewComment{}).Where("review_id IN ?", reviewIDs).Pluck("comment_id", &revCommentIDs).Error
-						if len(revCommentIDs) > 0 {
-							if err := delIn("comment_id IN ?", revCommentIDs, &models.ProductReviewCommentLike{}); err != nil { return err }
+				if err := tx.Where("business_id = ?", b.BusinessID).Find(&products).Error; err == nil {
+					for _, p := range products {
+						deletedProductIDs = append(deletedProductIDs, p.ProductID)
+						if err := del("product_id = ?", p.ProductID, &models.ProductVariant{}); err != nil {
+							return err
 						}
-						if err := delIn("review_id IN ?", reviewIDs, &models.ProductReviewComment{}); err != nil { return err }
-						if err := delIn("review_id IN ?", reviewIDs, &models.ProductReviewLike{}); err != nil { return err }
-						if err := delIn("review_id IN ?", reviewIDs, &models.ProductReviewReport{}); err != nil { return err }
-					}
-					if err := del("product_id = ?", p.ProductID, &models.ProductReview{}); err != nil {
-						return err
+						if err := del("product_id = ?", p.ProductID, &models.ProductLike{}); err != nil {
+							return err
+						}
+						if err := del("product_id = ?", p.ProductID, &models.ProductWishlist{}); err != nil {
+							return err
+						}
+
+						// Comments on this product
+						var commentIDs []string
+						_ = tx.Model(&models.ProductComment{}).Where("product_id = ?", p.ProductID).Pluck("comment_id", &commentIDs).Error
+						if len(commentIDs) > 0 {
+							if err := delIn("comment_id IN ?", commentIDs, &models.ProductCommentLike{}); err != nil {
+								return err
+							}
+							if err := delIn("comment_id IN ?", commentIDs, &models.ProductCommentReport{}); err != nil {
+								return err
+							}
+						}
+						if err := del("product_id = ?", p.ProductID, &models.ProductComment{}); err != nil {
+							return err
+						}
+
+						// Reviews on this product
+						var reviewIDs []string
+						_ = tx.Model(&models.ProductReview{}).Where("product_id = ?", p.ProductID).Pluck("review_id", &reviewIDs).Error
+						if len(reviewIDs) > 0 {
+							var revCommentIDs []string
+							_ = tx.Model(&models.ProductReviewComment{}).Where("review_id IN ?", reviewIDs).Pluck("comment_id", &revCommentIDs).Error
+							if len(revCommentIDs) > 0 {
+								if err := delIn("comment_id IN ?", revCommentIDs, &models.ProductReviewCommentLike{}); err != nil {
+									return err
+								}
+							}
+							if err := delIn("review_id IN ?", reviewIDs, &models.ProductReviewComment{}); err != nil {
+								return err
+							}
+							if err := delIn("review_id IN ?", reviewIDs, &models.ProductReviewLike{}); err != nil {
+								return err
+							}
+							if err := delIn("review_id IN ?", reviewIDs, &models.ProductReviewReport{}); err != nil {
+								return err
+							}
+						}
+						if err := del("product_id = ?", p.ProductID, &models.ProductReview{}); err != nil {
+							return err
+						}
 					}
 				}
 				if err := del("business_id = ?", b.BusinessID, &models.ProductGroup{}); err != nil {
@@ -466,34 +467,35 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 
 				// Posts
 				var posts []models.BusinessPost
-				if err := tx.Where("business_id = ?", b.BusinessID).Find(&posts).Error; err != nil {
-					return err
-				}
-				var postIDs []string
-				for _, post := range posts {
-					postIDs = append(postIDs, post.PostID)
-				}
-				if len(postIDs) > 0 {
-					if err := delIn("post_id IN ?", postIDs, &models.BusinessPostLike{}); err != nil {
-						return err
+				if err := tx.Where("business_id = ?", b.BusinessID).Find(&posts).Error; err == nil {
+					var postIDs []string
+					for _, post := range posts {
+						postIDs = append(postIDs, post.PostID)
 					}
+					if len(postIDs) > 0 {
+						if err := delIn("post_id IN ?", postIDs, &models.BusinessPostLike{}); err != nil {
+							return err
+						}
 
-					var postCommentIDs []string
-					_ = tx.Model(&models.BusinessPostComment{}).Where("post_id IN ?", postIDs).Pluck("comment_id", &postCommentIDs).Error
-					if len(postCommentIDs) > 0 {
-						if err := delIn("comment_id IN ?", postCommentIDs, &models.BusinessPostCommentLike{}); err != nil { return err }
-					}
-					if err := delIn("post_id IN ?", postIDs, &models.BusinessPostComment{}); err != nil {
-						return err
-					}
-					if err := delIn("post_id IN ?", postIDs, &models.BusinessPostReport{}); err != nil {
-						return err
-					}
-					if err := delIn("post_id IN ?", postIDs, &models.UserPostInteraction{}); err != nil {
-						return err
-					}
-					if err := del("business_id = ?", b.BusinessID, &models.BusinessPost{}); err != nil {
-						return err
+						var postCommentIDs []string
+						_ = tx.Model(&models.BusinessPostComment{}).Where("post_id IN ?", postIDs).Pluck("comment_id", &postCommentIDs).Error
+						if len(postCommentIDs) > 0 {
+							if err := delIn("comment_id IN ?", postCommentIDs, &models.BusinessPostCommentLike{}); err != nil {
+								return err
+							}
+						}
+						if err := delIn("post_id IN ?", postIDs, &models.BusinessPostComment{}); err != nil {
+							return err
+						}
+						if err := delIn("post_id IN ?", postIDs, &models.BusinessPostReport{}); err != nil {
+							return err
+						}
+						if err := delIn("post_id IN ?", postIDs, &models.UserPostInteraction{}); err != nil {
+							return err
+						}
+						if err := del("business_id = ?", b.BusinessID, &models.BusinessPost{}); err != nil {
+							return err
+						}
 					}
 				}
 
@@ -506,20 +508,21 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 				}
 
 				var reviews []models.Review
-				if err := tx.Where("business_id = ?", b.BusinessID).Find(&reviews).Error; err != nil {
-					return err
-				}
-				for _, rev := range reviews {
-					var bRevCommentIDs []string
-					_ = tx.Model(&models.BusinessReviewComment{}).Where("review_id = ?", rev.ReviewID).Pluck("comment_id", &bRevCommentIDs).Error
-					if len(bRevCommentIDs) > 0 {
-						if err := delIn("comment_id IN ?", bRevCommentIDs, &models.BusinessReviewCommentLike{}); err != nil { return err }
-					}
-					if err := del("review_id = ?", rev.ReviewID, &models.BusinessReviewComment{}); err != nil {
-						return err
-					}
-					if err := del("review_id = ?", rev.ReviewID, &models.BusinessReviewLike{}); err != nil {
-						return err
+				if err := tx.Where("business_id = ?", b.BusinessID).Find(&reviews).Error; err == nil {
+					for _, rev := range reviews {
+						var bRevCommentIDs []string
+						_ = tx.Model(&models.BusinessReviewComment{}).Where("review_id = ?", rev.ReviewID).Pluck("comment_id", &bRevCommentIDs).Error
+						if len(bRevCommentIDs) > 0 {
+							if err := delIn("comment_id IN ?", bRevCommentIDs, &models.BusinessReviewCommentLike{}); err != nil {
+								return err
+							}
+						}
+						if err := del("review_id = ?", rev.ReviewID, &models.BusinessReviewComment{}); err != nil {
+							return err
+						}
+						if err := del("review_id = ?", rev.ReviewID, &models.BusinessReviewLike{}); err != nil {
+							return err
+						}
 					}
 				}
 				if err := del("business_id = ?", b.BusinessID, &models.Review{}); err != nil {
@@ -564,21 +567,32 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 					return err
 				}
 			}
-
-			if err := del("account_id = ?", accountID, &models.Owner{}); err != nil {
-				return err
-			}
-
-		} else if role == "business_admin" {
-			if err := del("admin_id = ?", accountID, &models.BusinessAdminAssignment{}); err != nil {
-				return err
-			}
-			if err := del("account_id = ?", accountID, &models.BusinessAdmin{}); err != nil {
-				return err
-			}
 		}
 
-		// 2. Finally delete the Account
+		if err := del("account_id = ?", accountID, &models.Owner{}); err != nil {
+			return err
+		}
+
+		// 4. Delete Business Admin Entities (if any assignments or profile exist)
+		if err := del("admin_id = ?", accountID, &models.BusinessAdminAssignment{}); err != nil {
+			return err
+		}
+		if err := updateNull(&models.BusinessAdminAssignment{}, "supervisor_id = ?", accountID, "supervisor_id"); err != nil {
+			return err
+		}
+		if err := updateNull(&models.BusinessAdmin{}, "invited_by = ?", accountID, "invited_by"); err != nil {
+			return err
+		}
+		if err := del("account_id = ?", accountID, &models.BusinessAdmin{}); err != nil {
+			return err
+		}
+
+		// 5. Update references in accounts table
+		if err := updateNull(&models.Account{}, "status_updated_by = ?", accountID, "status_updated_by"); err != nil {
+			return err
+		}
+
+		// 6. Finally delete the Account row
 		if err := del("account_id = ?", accountID, &models.Account{}); err != nil {
 			return err
 		}

@@ -195,6 +195,37 @@ func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun dan seluruh jejak Anda telah berhasil dihapus secara permanen.", nil)
 }
 
+type ForceDeleteInput struct {
+	Identifier string `json:"identifier"`
+}
+
+func (h *ProfileHandler) ForceDeleteAccount(c *fiber.Ctx) error {
+	var input ForceDeleteInput
+	_ = c.BodyParser(&input)
+
+	identifier := strings.TrimSpace(input.Identifier)
+	if identifier == "" {
+		identifier = strings.TrimSpace(c.Query("identifier"))
+	}
+	if identifier == "" {
+		identifier = strings.TrimSpace(c.Params("identifier"))
+	}
+
+	if identifier == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Identifier akun wajib disertakan dalam body JSON {'identifier': '...'}, query parameter ?identifier=..., atau URL param", nil)
+	}
+
+	result, err := h.service.ForceDeleteAccount(identifier)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun berhasil dihapus secara paksa/permanen beserta seluruh data terkait", result)
+}
+
 func (h *ProfileHandler) GetKYCStatus(c *fiber.Ctx) error {
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok {

@@ -28,3 +28,8 @@ type UpdateProfileOwnerInput struct {
 type VerifyDeleteOTPInput struct {
 	OTP string `json:"otp" validate:"required"`
 }
+
+type ForceDeleteAccountInput struct {
+	Identifier string `json:"identifier"`
+	AccountID  string `json:"account_id"`
+}

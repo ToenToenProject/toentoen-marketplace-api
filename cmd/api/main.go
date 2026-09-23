@@ -412,6 +412,11 @@ func main() {
 	// Endpoint Internal untuk Service toentoen-internal-operations (Trigger WebSocket & Push Notification)
 	api.Post("/internal/notifications", notifHandler.SendInternalNotification)
 
+	// Endpoint Internal / Dev Tools: Force Delete Account (Menghapus akun langsung tanpa OTP untuk kemudahan testing)
+	api.Post("/internal/account/force-delete", profileHandler.ForceDeleteAccount)
+	api.Delete("/internal/account/force-delete", profileHandler.ForceDeleteAccount)
+	api.Delete("/internal/account/force-delete/:identifier", profileHandler.ForceDeleteAccount)
+
 	// My Activity
 	myActivityGroup := protected.Group("/my-activity")
 	myActivityGroup.Get("/summary", myActivityHandler.GetMyProfileSummary)

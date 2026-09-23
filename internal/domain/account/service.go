@@ -207,6 +207,15 @@ func decryptBusinessAdminKTP(admin *models.BusinessAdmin) {
 	admin.KtpCitizenship, _ = crypto.DecryptPointer(admin.KtpCitizenship)
 }
 
+type ForceDeleteResult struct {
+	AccountID          string   `json:"account_id"`
+	Identifier         string   `json:"identifier"`
+	Role               string   `json:"role"`
+	Email              string   `json:"email,omitempty"`
+	DeletedBusinessIDs []string `json:"deleted_business_ids"`
+	DeletedProductIDs  []string `json:"deleted_product_ids"`
+}
+
 type ProfileService interface {
 	UpdateCustomerProfile(accountID string, input models.UpdateProfileCustomerInput) (*models.Account, error)
 	UpdateOwnerProfile(accountID string, input models.UpdateProfileOwnerInput) (*models.Account, error)
@@ -217,6 +226,7 @@ type ProfileService interface {
 	UpdateConsent(accountID string, input models.ConsentInput) (*models.Account, error)
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
+	ForceDeleteAccount(identifier string) (*ForceDeleteResult, error)
 	SetNotificationService(notif notification.NotificationService)
 }
 
@@ -435,6 +445,60 @@ func (s *profileService) VerifyDeleteOTPAndExecute(accountID string, otp string)
 	}
 
 	return nil
+}
+
+func (s *profileService) ForceDeleteAccount(identifier string) (*ForceDeleteResult, error) {
+	cleanIdentifier := strings.TrimSpace(identifier)
+	if cleanIdentifier == "" {
+		return nil, errors.New("Identifier wajib diisi (bisa berupa account_id, email, username, nomor telepon, atau NIK)")
+	}
+
+	// Cari akun berdasarkan identifier (email/username/phone/nik)
+	account, err := s.repo.GetAccountByIdentifier(cleanIdentifier)
+	if err != nil {
+		// Fallback: coba langsung cari berdasarkan AccountID
+		account, err = s.repo.GetAccountByID(cleanIdentifier)
+		if err != nil {
+			return nil, errors.New("Akun dengan identifier '" + cleanIdentifier + "' tidak ditemukan")
+		}
+	}
+
+	accountID := account.AccountID
+
+	// Eksekusi penghapusan tuntas dalam transaksi database
+	deletedBusinessIDs, deletedProductIDs, err := s.repo.DeleteAccountTx(accountID, account.Role)
+	if err != nil {
+		return nil, errors.New("Gagal menghapus akun secara permanen: " + err.Error())
+	}
+
+	// Hapus OTP delete di Redis jika ada
+	redisKey := "delete_account_otp:" + accountID
+	config.RDB.Del(config.Ctx, redisKey)
+
+	// Clean up Meilisearch
+	if len(deletedBusinessIDs) > 0 || len(deletedProductIDs) > 0 {
+		go func(bIDs, pIDs []string) {
+			for _, bID := range bIDs {
+				meilisearch.Client.Index("businesses").DeleteDocument(bID, nil)
+			}
+			for _, pID := range pIDs {
+				meilisearch.Client.Index("products").DeleteDocument(pID, nil)
+			}
+		}(deletedBusinessIDs, deletedProductIDs)
+	}
+
+	result := &ForceDeleteResult{
+		AccountID:          accountID,
+		Identifier:         cleanIdentifier,
+		Role:               account.Role,
+		DeletedBusinessIDs: deletedBusinessIDs,
+		DeletedProductIDs:  deletedProductIDs,
+	}
+	if account.Email != nil {
+		result.Email = *account.Email
+	}
+
+	return result, nil
 }
 
 
