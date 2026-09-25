@@ -31,6 +31,7 @@ services:
       - meili_data:/meili_data
 
   api-server:
+    image: ${API_IMAGE:-ghcr.io/toentoenproject/toentoen-marketplace-api:latest}
     build: .
     container_name: toentoen_api
     restart: always
