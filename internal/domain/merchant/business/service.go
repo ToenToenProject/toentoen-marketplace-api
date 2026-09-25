@@ -47,7 +47,7 @@ func decryptBusinessLegal(b *models.Business) {
 
 type BusinessService interface {
 	CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error)
-	GetMyBusinesses(ownerID, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error)
+	GetMyBusinesses(accountID, userRole, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error)
 	GetBusinessDetail(businessID string) (*models.Business, error)
 	UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (error)
 	DeleteBusiness(ownerID, businessID string) error
@@ -219,9 +219,9 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 	return business.BusinessID, nil
 }
 
-func (s *businessService) GetMyBusinesses(ownerID, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error) {
+func (s *businessService) GetMyBusinesses(accountID, userRole, search string, categoryID int64, tagIDs []int64, cursor string, limit int) (*models.GetBusinessListResponse, error) {
 	// Teruskan parameter pencarian dan filter ke repository
-	businessesWithPreview, err := s.repo.GetBusinessListWithPreviews(ownerID, search, categoryID, tagIDs, cursor, limit+1)
+	businessesWithPreview, err := s.repo.GetBusinessListWithPreviews(accountID, userRole, search, categoryID, tagIDs, cursor, limit+1)
 	if err != nil {
 		return nil, errors.New("gagal mengambil daftar bisnis")
 	}

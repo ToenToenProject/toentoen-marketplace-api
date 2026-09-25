@@ -26,7 +26,7 @@ type BusinessRepository interface {
 	ToggleStoreStatus(business *models.Business) error
 	ResetManualCloseStatus() error
 	UpdateBusinessRating(businessID string, avgRating float64, totalReviews int) error
-	GetBusinessListWithPreviews(ownerID string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error)
+	GetBusinessListWithPreviews(accountID string, role string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error)
 	GetBusinessStaffAccountIDs(businessID string) ([]string, error)
 	UpdateLiveStatus(business *models.Business) error
 	GetBookmarkAccountIDs(businessID string) ([]string, error)
@@ -260,11 +260,16 @@ func (r *businessRepository) UpdateBusinessRating(businessID string, avgRating f
 }
 
 // FUNGSI BARU UNTUK MENDUKUNG UI LIST
-func (r *businessRepository) GetBusinessListWithPreviews(ownerID string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error) {
+func (r *businessRepository) GetBusinessListWithPreviews(accountID string, role string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error) {
 	var businesses []models.Business
 	
 	// Memulai query dasar
-	query := r.db.Model(&models.Business{}).Where("account_id = ?", ownerID)
+	query := r.db.Model(&models.Business{})
+	if role == "business_admin" {
+		query = query.Where("business_id IN (SELECT business_id FROM business_admin_assignments WHERE admin_id = ? AND status IN ('active', 'scheduled_for_deletion'))", accountID)
+	} else {
+		query = query.Where("account_id = ?", accountID)
+	}
 	
 	// --- 1. LOGIKA PENCARIAN (Search) ---
 	if search != "" {
@@ -307,7 +312,7 @@ func (r *businessRepository) GetBusinessListWithPreviews(ownerID string, search 
 	}
 
 	var accountName string
-	r.db.Table("accounts").Select("full_name").Where("id = ?", ownerID).Scan(&accountName) 
+	r.db.Table("accounts").Select("full_name").Where("account_id = ?", accountID).Scan(&accountName) 
 
 	// Ambil Rating Rata-rata dari Seluruh Review Produk Toko
 	type ProductRatingAgg struct {

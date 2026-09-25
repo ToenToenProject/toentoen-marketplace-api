@@ -546,12 +546,15 @@ func main() {
 	// Admin / Owner Shared Access (Products, Posts, Analytics, Business Detail) dengan BusinessAccessGuard
 	sharedAccess := middlewares.AllowRoles("owner", "business_admin")
 
-	// Owner-only Business Management
+	// Owner-only Business Creation & Deletion
 	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"))
 	ownerBusinessGroup.Post("/", middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
-	ownerBusinessGroup.Get("", businessHandler.GetMyBusinesses)
-	ownerBusinessGroup.Get("/", businessHandler.GetMyBusinesses)
 	ownerBusinessGroup.Delete("/:id", businessHandler.DeleteBusiness)
+
+	// Business List (Owner & Business Admin)
+	businessListGroup := api.Group("/business", middlewares.RequireAuth, sharedAccess)
+	businessListGroup.Get("", businessHandler.GetMyBusinesses)
+	businessListGroup.Get("/", businessHandler.GetMyBusinesses)
 
 	// Shared Business Scope (Owner & Business Admin dengan BusinessAccessGuard)
 	sharedBusinessScope := api.Group("/business/:business_id", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())

@@ -816,7 +816,7 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 // 9. LIST ADMIN BERDASARKAN OWNER (ALL BUSINESSES)
 func (s *businessAdminService) GetAdminsByOwner(ownerID string) ([]models.AdminTreeResponse, error) {
 	// 1. Ambil semua bisnis milik owner
-	businesses, err := s.bizRepo.GetBusinessListWithPreviews(ownerID, "", 0, nil, "", 1000) // Ambil cukup banyak
+	businesses, err := s.bizRepo.GetBusinessListWithPreviews(ownerID, "owner", "", 0, nil, "", 1000) // Ambil cukup banyak
 	if err != nil {
 		return nil, errors.New("gagal mengambil daftar toko")
 	}

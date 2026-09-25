@@ -58,10 +58,13 @@ func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	var ownerID, ok = accountIDValue.(string)
+	var accountID, ok = accountIDValue.(string)
 	if !ok {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memproses ID pengguna", nil)
 	}
+
+	roleValue := c.Locals("role")
+	userRole, _ := roleValue.(string)
 
 	// 1. Tangkap Parameter Pencarian dan Kursor
 	search := strings.TrimSpace(c.Query("search", ""))
@@ -94,7 +97,7 @@ func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 	}
 
 	// 4. Lempar Semuanya ke Service
-	businessesResponse, err := h.service.GetMyBusinesses(ownerID, search, categoryID, tagIDs, cursor, limit)
+	businessesResponse, err := h.service.GetMyBusinesses(accountID, userRole, search, categoryID, tagIDs, cursor, limit)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil data toko", nil)
 	}
