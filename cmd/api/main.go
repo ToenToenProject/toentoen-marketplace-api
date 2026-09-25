@@ -549,14 +549,17 @@ func main() {
 	// Owner-only Business Management
 	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"))
 	ownerBusinessGroup.Post("/", middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
+	ownerBusinessGroup.Get("", businessHandler.GetMyBusinesses)
 	ownerBusinessGroup.Get("/", businessHandler.GetMyBusinesses)
-	ownerBusinessGroup.Put("/:id", businessHandler.UpdateBusiness)
 	ownerBusinessGroup.Delete("/:id", businessHandler.DeleteBusiness)
 
 	// Shared Business Scope (Owner & Business Admin dengan BusinessAccessGuard)
 	sharedBusinessScope := api.Group("/business/:business_id", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
+	sharedBusinessScope.Get("", businessHandler.GetBusinessDetail)
 	sharedBusinessScope.Get("/", businessHandler.GetBusinessDetail)
+	sharedBusinessScope.Put("", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Put("/", businessHandler.UpdateBusiness)
+	sharedBusinessScope.Patch("", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/toggle-status", middlewares.RequireKYC, businessHandler.ToggleStoreStatus)
 	sharedBusinessScope.Patch("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)

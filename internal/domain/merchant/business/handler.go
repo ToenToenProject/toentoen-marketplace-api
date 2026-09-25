@@ -160,7 +160,10 @@ func (h *BusinessHandler) DeleteBusiness(c *fiber.Ctx) error {
 }
 
 func (h *BusinessHandler) GetBusinessDetail(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
 
 	business, err := h.service.GetBusinessDetail(businessID)
 	if err != nil {
