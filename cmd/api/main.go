@@ -546,18 +546,20 @@ func main() {
 	// Admin / Owner Shared Access (Products, Posts, Analytics, Business Detail) dengan BusinessAccessGuard
 	sharedAccess := middlewares.AllowRoles("owner", "business_admin")
 
-	// Owner-only Business Creation & Deletion
-	ownerBusinessGroup := api.Group("/business", middlewares.RequireAuth, middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"))
-	ownerBusinessGroup.Post("/", middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
-	ownerBusinessGroup.Delete("/:id", businessHandler.DeleteBusiness)
+	// Business Root Group (RequireAuth)
+	businessGroup := api.Group("/business", middlewares.RequireAuth)
 
 	// Business List (Owner & Business Admin)
-	businessListGroup := api.Group("/business", middlewares.RequireAuth, sharedAccess)
-	businessListGroup.Get("", businessHandler.GetMyBusinesses)
-	businessListGroup.Get("/", businessHandler.GetMyBusinesses)
+	businessGroup.Get("", sharedAccess, businessHandler.GetMyBusinesses)
+	businessGroup.Get("/", sharedAccess, businessHandler.GetMyBusinesses)
+
+	// Owner-only Business Creation & Deletion
+	businessGroup.Post("", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
+	businessGroup.Post("/", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
+	businessGroup.Delete("/:id", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), businessHandler.DeleteBusiness)
 
 	// Shared Business Scope (Owner & Business Admin dengan BusinessAccessGuard)
-	sharedBusinessScope := api.Group("/business/:business_id", middlewares.RequireAuth, sharedAccess, middlewares.BusinessAccessGuard())
+	sharedBusinessScope := businessGroup.Group("/:business_id", sharedAccess, middlewares.BusinessAccessGuard())
 	sharedBusinessScope.Get("", businessHandler.GetBusinessDetail)
 	sharedBusinessScope.Get("/", businessHandler.GetBusinessDetail)
 	sharedBusinessScope.Put("", businessHandler.UpdateBusiness)
