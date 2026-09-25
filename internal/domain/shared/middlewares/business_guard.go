@@ -24,15 +24,6 @@ func BusinessAccessGuard() fiber.Handler {
 		userRole, _ := roleValue.(string)
 		accountID, _ := accountIDValue.(string)
 
-		// Jika Owner, izinkan lanjut (kepemilikan akan divalidasi oleh handler/service)
-		if userRole == "owner" {
-			return c.Next()
-		}
-
-		if userRole != "business_admin" {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, "Role Anda tidak memiliki akses ke fitur toko ini", nil)
-		}
-
 		businessID := strings.TrimSpace(c.Params("business_id"))
 		if businessID == "" {
 			businessID = strings.TrimSpace(c.Params("id"))
@@ -41,6 +32,19 @@ func BusinessAccessGuard() fiber.Handler {
 		// Jika tidak ada parameter business_id di rute, lanjutkan
 		if businessID == "" {
 			return c.Next()
+		}
+
+		// Jika Owner, validasi bahwa toko benar-benar dimiliki oleh owner tersebut
+		if userRole == "owner" {
+			var count int64
+			if err := database.DB.Model(&models.Business{}).Where("business_id = ? AND account_id = ?", businessID, accountID).Count(&count).Error; err != nil || count == 0 {
+				return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, "Anda tidak memiliki akses ke toko ini", nil)
+			}
+			return c.Next()
+		}
+
+		if userRole != "business_admin" {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, "Role Anda tidak memiliki akses ke fitur toko ini", nil)
 		}
 
 		var assignment models.BusinessAdminAssignment
