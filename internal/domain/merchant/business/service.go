@@ -3,6 +3,7 @@ package business
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 	"toentoen-backend/internal/config"
@@ -871,6 +872,7 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 		}
 
 		if err := s.repo.UpdateLiveStatus(business); err != nil {
+			log.Printf("❌ [ToggleLiveStatus] Error updating live status for business %s: %v", business.BusinessID, err)
 			return nil, errors.New("gagal memperbarui status live toko")
 		}
 
@@ -922,6 +924,7 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 	business.LiveStartedAt = nil
 
 	if err := s.repo.UpdateLiveStatus(business); err != nil {
+		log.Printf("❌ [ToggleLiveStatus] Error turning off live status for business %s: %v", business.BusinessID, err)
 		return nil, errors.New("gagal menonaktifkan status live toko")
 	}
 

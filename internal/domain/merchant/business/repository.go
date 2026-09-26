@@ -374,13 +374,21 @@ func (r *businessRepository) GetBusinessStaffAccountIDs(businessID string) ([]st
 }
 
 func (r *businessRepository) UpdateLiveStatus(business *models.Business) error {
-	return r.db.Model(business).Updates(map[string]interface{}{
-		"is_live":               business.IsLive,
-		"live_platform":         business.LivePlatform,
-		"live_started_at":       business.LiveStartedAt,
-		"last_live_notified_at": business.LastLiveNotifiedAt,
-		"updated_at":            time.Now(),
-	}).Error
+	return r.db.Exec(`
+		UPDATE businesses 
+		SET is_live = ?, 
+		    live_platform = ?, 
+		    live_started_at = ?, 
+		    last_live_notified_at = ?, 
+		    updated_at = ? 
+		WHERE business_id = ?`,
+		business.IsLive,
+		business.LivePlatform,
+		business.LiveStartedAt,
+		business.LastLiveNotifiedAt,
+		time.Now(),
+		business.BusinessID,
+	).Error
 }
 
 func (r *businessRepository) GetBookmarkAccountIDs(businessID string) ([]string, error) {
