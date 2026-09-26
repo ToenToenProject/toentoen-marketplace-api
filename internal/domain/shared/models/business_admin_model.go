@@ -247,12 +247,6 @@ type InviteAdminInput struct {
 	Role           string `json:"role" validate:"required,oneof=supervisor staff"`
 }
 
-type BusinessAdminShiftInput struct {
-	DayOfWeek int    `json:"day_of_week"`
-	StartTime string `json:"start_time"`
-	EndTime   string `json:"end_time"`
-}
-
 type RespondOwnerApprovalInput struct {
 	Action string `json:"action" validate:"required,oneof=approve reject"` // "approve" atau "reject"
 }
@@ -262,9 +256,8 @@ type RespondInvitationInput struct {
 }
 
 type UpdateAssignmentInput struct {
-	Role         *string                   `json:"role" validate:"omitempty,oneof=supervisor staff"`
-	SupervisorID *string                   `json:"supervisor_id"`
-	Shifts       []BusinessAdminShiftInput `json:"shifts,omitempty"`
+	Role         *string `json:"role" validate:"omitempty,oneof=supervisor staff"`
+	SupervisorID *string `json:"supervisor_id"`
 }
 
 type UpdatePermissionsInput struct {
@@ -302,10 +295,9 @@ type AdminTreeNode struct {
 	AvatarURL    *string          `json:"avatar_url"`
 	Role                 string               `json:"role"`
 	Status               string               `json:"status,omitempty"`
-	Permissions          AdminPermissions     `json:"permissions,omitempty"`
-	IsNotifyOwnerEnabled bool                 `json:"is_notify_owner_enabled,omitempty"`
-	Shifts               []BusinessAdminShift `json:"shifts,omitempty"`
-	Subordinates         []AdminTreeNode      `json:"subordinates,omitempty"`
+	Permissions          AdminPermissions `json:"permissions,omitempty"`
+	IsNotifyOwnerEnabled bool             `json:"is_notify_owner_enabled,omitempty"`
+	Subordinates         []AdminTreeNode  `json:"subordinates,omitempty"`
 }
 
 type AdminTreeResponse struct {

@@ -401,7 +401,7 @@ func (s *businessAdminService) RespondToInvitation(adminID, assignmentID string,
 	return nil
 }
 
-// 4. OWNER MEMPERBARUI PERAN / SHIFT / SUPERVISOR ADMIN
+// 4. OWNER MEMPERBARUI PERAN / SUPERVISOR ADMIN
 func (s *businessAdminService) UpdateAdminAssignment(ownerID, businessID, assignmentID string, input models.UpdateAssignmentInput) error {
 	biz, err := s.bizRepo.FindBusinessByIDAndOwner(businessID, ownerID)
 	if err != nil {
@@ -434,19 +434,6 @@ func (s *businessAdminService) UpdateAdminAssignment(ownerID, businessID, assign
 	}
 	if err := s.adminRepo.UpdateAssignment(assignment); err != nil {
 		return errors.New("gagal memperbarui penugasan admin")
-	}
-
-	if len(input.Shifts) > 0 {
-		var shifts []models.BusinessAdminShift
-		for _, s := range input.Shifts {
-			shifts = append(shifts, models.BusinessAdminShift{
-				AssignmentID: assignmentID,
-				DayOfWeek:    s.DayOfWeek,
-				StartTime:    &s.StartTime,
-				EndTime:      &s.EndTime,
-			})
-		}
-		s.adminRepo.ReplaceShifts(assignmentID, shifts)
 	}
 
 	businessName := "Toko"
@@ -757,7 +744,6 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			AvatarURL:    a.Admin.Account.ProfilePictureUrl,
 			Role:                 a.Role,
 			Status:               a.Status,
-			Shifts:               a.Shifts,
 			IsNotifyOwnerEnabled: a.IsNotifyOwnerEnabled,
 			Subordinates:         []models.AdminTreeNode{},
 			// Jika ada permissions khusus di DB, gunakan itu.
@@ -799,7 +785,6 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			AvatarURL:    a.Admin.Account.ProfilePictureUrl,
 			Role:                 a.Role,
 			Status:               a.Status,
-			Shifts:               a.Shifts,
 			IsNotifyOwnerEnabled: a.IsNotifyOwnerEnabled,
 			Permissions:          perms,
 		}
