@@ -19,7 +19,7 @@ type BusinessAdminService interface {
 	RespondToInvitation(adminID, assignmentID string, input models.RespondInvitationInput) error
 
 	// Update Penugasan & Demosi
-	UpdateAdminAssignment(ownerID, businessID, assignmentID string, input models.UpdateAssignmentInput) error
+	UpdateAdminAssignment(requesterID, businessID, assignmentID string, input models.UpdateAssignmentInput) error
 
 	// Grace Period 3 Hari (Pemecatan & Resign)
 	TerminateAdmin(requesterID, businessID, assignmentID string) error
@@ -401,20 +401,54 @@ func (s *businessAdminService) RespondToInvitation(adminID, assignmentID string,
 	return nil
 }
 
-// 4. OWNER MEMPERBARUI PERAN / SUPERVISOR ADMIN
-func (s *businessAdminService) UpdateAdminAssignment(ownerID, businessID, assignmentID string, input models.UpdateAssignmentInput) error {
-	biz, err := s.bizRepo.FindBusinessByIDAndOwner(businessID, ownerID)
+// 4. OWNER ATAU SUPERVISOR MEMPERBARUI PERAN / SUPERVISOR ADMIN
+func (s *businessAdminService) UpdateAdminAssignment(requesterID, businessID, assignmentID string, input models.UpdateAssignmentInput) error {
+	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err != nil {
-		return errors.New("forbidden: Anda bukan pemilik toko ini")
+		return errors.New("toko tidak ditemukan")
+	}
+
+	isOwner := biz.AccountID == requesterID
+	isSupervisor := false
+
+	if !isOwner {
+		requesterAssignment, errA := s.adminRepo.GetActiveAssignment(requesterID, businessID)
+		if errA == nil && requesterAssignment != nil && requesterAssignment.Role == "supervisor" {
+			isSupervisor = true
+		}
+	}
+
+	if !isOwner && !isSupervisor {
+		return errors.New("forbidden: hanya Owner atau Supervisor aktif yang dapat memperbarui penugasan admin")
 	}
 
 	assignment, err := s.adminRepo.GetAssignmentByID(assignmentID)
 	if err != nil {
-		return errors.New("penugasan admin tidak ditemukan")
+		// Fallback: cari berdasarkan admin_id dan business_id
+		assignment, err = s.adminRepo.GetAssignmentByAdminAndBusiness(assignmentID, businessID)
+		if err != nil {
+			return errors.New("penugasan admin tidak ditemukan")
+		}
 	}
 
 	if assignment.BusinessID != businessID {
 		return errors.New("admin ini tidak bekerja di toko yang ditentukan")
+	}
+
+	// Aturan wewenang Supervisor:
+	if isSupervisor {
+		// Supervisor tidak boleh mengubah sesama Supervisor
+		if assignment.Role == "supervisor" {
+			return errors.New("forbidden: Supervisor tidak dapat mengubah sesama Supervisor")
+		}
+		// Supervisor hanya boleh mengelola staf yang langsung berada di bawahnya
+		if assignment.SupervisorID == nil || *assignment.SupervisorID != requesterID {
+			return errors.New("forbidden: Anda hanya dapat memperbarui staf yang langsung berada di bawah Anda")
+		}
+		// Supervisor tidak boleh mengangkat staf menjadi supervisor (hanya Owner)
+		if input.Role != nil && *input.Role == "supervisor" {
+			return errors.New("forbidden: hanya pemilik toko (owner) yang dapat mengangkat staf menjadi supervisor")
+		}
 	}
 
 	// 🚨 ATURAN DEMOSI SUPERVISOR -> STAFF: Seluruh bawahan otomatis dialihkan ke Owner
@@ -442,7 +476,7 @@ func (s *businessAdminService) UpdateAdminAssignment(ownerID, businessID, assign
 	}
 
 	// Notifikasi ke Seluruh Tim Toko selain pelaku (Poin 6-5: Transparansi Penuh)
-	recipients := s.getBusinessTeamRecipients(businessID, ownerID)
+	recipients := s.getBusinessTeamRecipients(businessID, requesterID)
 	if len(recipients) > 0 {
 		targetAdminName := "Staf"
 		if assignment.Admin != nil && assignment.Admin.Account.FirstName != "" {
@@ -450,13 +484,13 @@ func (s *businessAdminService) UpdateAdminAssignment(ownerID, businessID, assign
 		}
 		go s.notifService.SendNotification(
 			recipients,
-			ownerID,
+			requesterID,
 			"admin_role_changed",
-			assignmentID,
+			assignment.AssignmentID,
 			"Pembaruan Peran Tim Toko",
-			fmt.Sprintf("Peran atau jadwal kerja %s di toko %s telah diperbarui menjadi %s.", targetAdminName, businessName, assignment.Role),
+			fmt.Sprintf("Peran %s di toko %s telah diperbarui menjadi %s.", targetAdminName, businessName, assignment.Role),
 			map[string]interface{}{
-				"assignment_id": assignmentID,
+				"assignment_id": assignment.AssignmentID,
 				"business_id":   businessID,
 				"target_admin":  targetAdminName,
 				"new_role":      assignment.Role,

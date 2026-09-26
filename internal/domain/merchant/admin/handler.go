@@ -129,9 +129,9 @@ func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, nil)
 }
 
-// 4. OWNER MEMPERBARUI PERAN / SHIFT / SUPERVISOR ADMIN
+// 4. OWNER ATAU SUPERVISOR MEMPERBARUI PERAN / SUPERVISOR ADMIN
 func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
-	ownerID, _, err := utils.GetRequesterInfo(c)
+	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
@@ -151,10 +151,12 @@ func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.UpdateAdminAssignment(ownerID, businessID, assignmentID, input); err != nil {
+	if err := h.service.UpdateAdminAssignment(requesterID, businessID, assignmentID, input); err != nil {
 		status := fiber.StatusBadRequest
 		if strings.Contains(err.Error(), "forbidden") {
 			status = fiber.StatusForbidden
+		} else if strings.Contains(err.Error(), "tidak ditemukan") {
+			status = fiber.StatusNotFound
 		}
 		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
 	}
