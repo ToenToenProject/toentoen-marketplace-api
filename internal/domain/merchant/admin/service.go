@@ -760,15 +760,20 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			Shifts:               a.Shifts,
 			IsNotifyOwnerEnabled: a.IsNotifyOwnerEnabled,
 			Subordinates:         []models.AdminTreeNode{},
-			// Supervisor default semua true, staff ambil dari DB
+			// Jika ada permissions khusus di DB, gunakan itu.
+			// Jika belum diset: Supervisor default AllTrue, staff default AllFalse.
 			Permissions: func() models.AdminPermissions {
+				if a.Permissions != nil && len(a.Permissions) > 0 {
+					normalized := make(models.AdminPermissions, len(models.AllPermissions))
+					for _, k := range models.AllPermissions {
+						normalized[k] = a.Permissions[k]
+					}
+					return normalized
+				}
 				if a.Role == "supervisor" {
 					return models.AdminPermissions{}.AllTrue()
 				}
-				if a.Permissions == nil {
-					return models.AdminPermissions{}
-				}
-				return a.Permissions
+				return models.AdminPermissions{}
 			}(),
 		}
 
@@ -874,11 +879,17 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 
 			ownerName := "" // Biarkan kosong atau jika diperlukan bisa diambil dari repo
 
-			// Permissions: supervisor default semua true, staff dari DB
+			// Permissions: jika ada permissions di DB gunakan itu, jika belum: supervisor default AllTrue, staff default AllFalse
 			perms := assignment.Permissions
-			if assignment.Role == "supervisor" {
+			if perms != nil && len(perms) > 0 {
+				normalized := make(models.AdminPermissions, len(models.AllPermissions))
+				for _, k := range models.AllPermissions {
+					normalized[k] = perms[k]
+				}
+				perms = normalized
+			} else if assignment.Role == "supervisor" {
 				perms = models.AdminPermissions{}.AllTrue()
-			} else if perms == nil {
+			} else {
 				perms = models.AdminPermissions{}
 			}
 
@@ -938,39 +949,39 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 	}
 
 	perms := target.Permissions
-	if target.Role == "supervisor" {
-		perms = models.AdminPermissions{}.AllTrue()
-	} else {
-		// Normalisasi: selalu kembalikan seluruh key dari AllPermissions (jika belum diset/false, tampilkan false)
-		normalized := make(models.AdminPermissions, len(models.AllPermissions))
-		for _, k := range models.AllPermissions {
-			if perms != nil {
-				val := perms[k]
-				if !val {
-					switch k {
-					case models.PermEditProduct:
-						val = perms[models.PermEditProductDetails] || perms[models.PermChangeProductImage]
-					case models.PermEditStoreProfileAndHours:
-						val = perms[models.PermEditBusinessProfile] || perms[models.PermChangeBizHours]
-					case models.PermManageStoreStatus:
-						val = perms[models.PermToggleStoreStatus]
-					case models.PermManageBusinessPosts:
-						val = perms[models.PermCreatePost]
-					case models.PermReplyBusinessReviews, models.PermReplyProductReviews, models.PermReplyFeedComments:
-						val = perms[models.PermReplyReviews]
-					case models.PermViewAnalyticsDaily, models.PermViewAnalyticsHistory, models.PermViewAnalyticsExplore:
-						val = perms[models.PermViewAnalytics]
-					case models.PermCreateProductGroup, models.PermDeleteProductGroup, models.PermReorderProductGroups:
-						val = perms[models.PermManageProductGroups]
-					}
-				}
-				normalized[k] = val
-			} else {
-				normalized[k] = false
+	if perms == nil || len(perms) == 0 {
+		if target.Role == "supervisor" {
+			perms = models.AdminPermissions{}.AllTrue()
+		} else {
+			perms = models.AdminPermissions{}
+		}
+	}
+
+	// Normalisasi: selalu kembalikan seluruh key dari AllPermissions (jika belum diset/false, tampilkan false)
+	normalized := make(models.AdminPermissions, len(models.AllPermissions))
+	for _, k := range models.AllPermissions {
+		val := perms[k]
+		if !val {
+			switch k {
+			case models.PermEditProduct:
+				val = perms[models.PermEditProductDetails] || perms[models.PermChangeProductImage]
+			case models.PermEditStoreProfileAndHours:
+				val = perms[models.PermEditBusinessProfile] || perms[models.PermChangeBizHours]
+			case models.PermManageStoreStatus:
+				val = perms[models.PermToggleStoreStatus]
+			case models.PermManageBusinessPosts:
+				val = perms[models.PermCreatePost]
+			case models.PermReplyBusinessReviews, models.PermReplyProductReviews, models.PermReplyFeedComments:
+				val = perms[models.PermReplyReviews]
+			case models.PermViewAnalyticsDaily, models.PermViewAnalyticsHistory, models.PermViewAnalyticsExplore:
+				val = perms[models.PermViewAnalytics]
+			case models.PermCreateProductGroup, models.PermDeleteProductGroup, models.PermReorderProductGroups:
+				val = perms[models.PermManageProductGroups]
 			}
 		}
-		perms = normalized
+		normalized[k] = val
 	}
+	perms = normalized
 
 	return &models.PermissionResponse{
 		AssignmentID:         target.AssignmentID,
@@ -1051,9 +1062,14 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 	} else {
 		// Merge ke permissions existing
 		updated = models.AdminPermissions{}
-		if target.Permissions != nil {
+		if target.Permissions != nil && len(target.Permissions) > 0 {
 			for k, v := range target.Permissions {
 				updated[k] = v
+			}
+		} else if target.Role == "supervisor" {
+			// Supervisor yang belum pernah diset permission-nya memiliki baseline AllTrue
+			for _, k := range models.AllPermissions {
+				updated[k] = true
 			}
 		}
 		for key, val := range input.Permissions {
@@ -1079,8 +1095,10 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 	var revoked []string
 	for _, k := range models.AllPermissions {
 		oldVal := false
-		if target.Permissions != nil {
+		if target.Permissions != nil && len(target.Permissions) > 0 {
 			oldVal = target.Permissions[k]
+		} else if target.Role == "supervisor" {
+			oldVal = true
 		}
 		newVal := updated[k]
 
@@ -1096,7 +1114,8 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		}
 	}
 
-	if err := s.adminRepo.UpdatePermissions(targetAssignmentID, updated); err != nil {
+	// Gunakan target.AssignmentID agar selalu valid meskipun targetAssignmentID dari URL adalah admin_id
+	if err := s.adminRepo.UpdatePermissions(target.AssignmentID, updated); err != nil {
 		return nil, errors.New("gagal memperbarui izin admin")
 	}
 

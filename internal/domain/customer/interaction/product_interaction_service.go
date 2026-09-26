@@ -797,7 +797,7 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 	if err == nil {
 		var assignment models.BusinessAdminAssignment
 		if database.DB.Where("admin_id = ? AND business_id = ? AND status = 'active'", accountID, review.BusinessID).First(&assignment).Error == nil {
-			if assignment.Role == "staff" && !permissions.HasPermission(database.DB, accountID, review.BusinessID, models.PermReplyProductReviews) {
+			if !permissions.HasPermission(database.DB, accountID, review.BusinessID, models.PermReplyProductReviews) {
 				return errors.New("forbidden: Anda tidak memiliki izin untuk membalas ulasan produk ini")
 			}
 		}
@@ -875,7 +875,7 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 	if errB := database.DB.Where("review_id = ?", reviewID).First(&bReview).Error; errB == nil {
 		var assignment models.BusinessAdminAssignment
 		if database.DB.Where("admin_id = ? AND business_id = ? AND status = 'active'", accountID, bReview.BusinessID).First(&assignment).Error == nil {
-			if assignment.Role == "staff" && !permissions.HasPermission(database.DB, accountID, bReview.BusinessID, models.PermReplyBusinessReviews) {
+			if !permissions.HasPermission(database.DB, accountID, bReview.BusinessID, models.PermReplyBusinessReviews) {
 				return errors.New("forbidden: Anda tidak memiliki izin untuk membalas ulasan toko ini")
 			}
 		}

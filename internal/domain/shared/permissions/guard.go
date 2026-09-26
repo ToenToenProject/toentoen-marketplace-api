@@ -22,6 +22,9 @@ func GetAdminPermissions(db *gorm.DB, accountID, businessID string) models.Admin
 		// Tidak ditemukan sebagai admin → mungkin owner, izinkan penuh
 		return models.AdminPermissions{}.AllTrue()
 	}
+	if assignment.Permissions != nil && len(assignment.Permissions) > 0 {
+		return assignment.Permissions
+	}
 	if assignment.Role == "supervisor" {
 		return models.AdminPermissions{}.AllTrue()
 	}
