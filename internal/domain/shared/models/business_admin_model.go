@@ -24,6 +24,7 @@ const (
 	// --- Operasional Toko ---
 	PermManageStoreStatus        = "manage_store_status"         // 2A. Mengatur status aktif toko (buka/tutup)
 	PermEditStoreProfileAndHours = "edit_store_profile_and_hours" // 2B. Ubah profil toko & atur jadwal buka/tutup toko
+	PermManageLiveStreaming      = "manage_live_streaming"       // 2C. Mengelola siaran langsung (live toko)
 
 	// --- Komunikasi & Layanan Pelanggan ---
 	PermManageBusinessChat   = "manage_business_chat"   // 3A. Chat langsung pelanggan
@@ -50,7 +51,6 @@ const (
 	PermCreatePost          = "create_post"           // Deprecated: gunakan PermManageBusinessPosts
 	PermReplyReviews        = "reply_reviews"         // Deprecated: gunakan PermReplyBusinessReviews
 	PermViewAnalytics       = "view_analytics"        // Deprecated: gunakan PermViewAnalyticsDaily
-	PermManageLiveStreaming = "manage_live_streaming" // Ditunda ke fase berikutnya
 	PermCreateSupportTicket = "create_support_ticket" // Sekarang open/general access untuk semua staf
 )
 
@@ -68,6 +68,7 @@ var AllPermissions = []string{
 	// 2. Operasional Toko
 	PermManageStoreStatus,
 	PermEditStoreProfileAndHours,
+	PermManageLiveStreaming,
 
 	// 3. Komunikasi & Layanan Pelanggan
 	PermManageBusinessChat,
@@ -96,6 +97,7 @@ var PermissionLabels = map[string]string{
 	PermReorderProductGroups:      "Mengatur Urutan Grup Produk",
 	PermManageStoreStatus:         "Mengatur Status Buka/Tutup Toko",
 	PermEditStoreProfileAndHours:  "Ubah Profil & Jadwal Operasional Toko",
+	PermManageLiveStreaming:       "Mengelola Siaran Live Toko",
 	PermManageBusinessChat:       "Chat Langsung Pelanggan",
 	PermManageDemandSignals:      "Akses Fitur Cari Pelanggan",
 	PermReplyBusinessReviews:     "Balas Ulasan Toko & Beri Like",
