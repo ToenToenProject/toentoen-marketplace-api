@@ -53,13 +53,21 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 		subject = strings.TrimSpace(customSubject[0])
 	}
 
+	var customDesc []string
+	if len(customSubject) > 1 && strings.TrimSpace(customSubject[1]) != "" {
+		customDesc = append(customDesc, customSubject[1])
+	}
+
+	content := getOTPEmailContent(subject, customDesc...)
+
 	mailer := gomail.NewMessage()
 	mailer.SetAddressHeader("From", smtpEmail, "ToenToen Support")
 	mailer.SetHeader("To", toEmail)
-	mailer.SetHeader("Subject", subject)
+	mailer.SetHeader("Subject", content.Subject)
 
 	// Plain text fallback
-	plainBody := fmt.Sprintf("Halo!\n\nKode verifikasi (OTP) Anda adalah: %s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.\n\nSalam,\nTim ToenToen", otp)
+	plainBody := fmt.Sprintf("%s\n\n%s\n\nKode verifikasi (OTP) Anda adalah: %s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.\n\nSalam,\nTim ToenToen",
+		content.Greeting, stripBasicHTML(content.Description), otp)
 	mailer.SetBody("text/plain", plainBody)
 
 	// HTML body
@@ -67,36 +75,41 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 <html>
 <head>
 	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<style>
-		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 20px; color: #333; }
-		.container { max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-		.logo { font-size: 24px; font-weight: 700; color: #0077b6; margin-bottom: 24px; text-align: center; }
-		.greeting { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
-		.desc { font-size: 14px; line-height: 1.6; color: #555; margin-bottom: 24px; }
-		.otp-box { background: #f0f7ff; border: 2px dashed #0077b6; border-radius: 8px; padding: 18px; text-align: center; margin-bottom: 24px; }
-		.otp-code { font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0077b6; }
-		.warning { font-size: 12px; color: #888; text-align: center; line-height: 1.5; }
-		.footer { margin-top: 32px; border-top: 1px solid #eee; padding-top: 16px; font-size: 11px; color: #aaa; text-align: center; }
+		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 24px; color: #2d3748; }
+		.container { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 36px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+		.logo-row { text-align: center; margin-bottom: 24px; }
+		.logo { font-size: 26px; font-weight: 800; color: #0077b6; letter-spacing: -0.5px; }
+		.badge { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; }
+		.greeting { font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #1a202c; }
+		.desc { font-size: 14px; line-height: 1.6; color: #4a5568; margin-bottom: 24px; }
+		.otp-box { background: #f0f7ff; border: 2px dashed #0077b6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px; }
+		.otp-code { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0077b6; font-family: 'Courier New', monospace; }
+		.warning { font-size: 12px; color: #718096; text-align: center; line-height: 1.6; background: #f7fafc; padding: 12px; border-radius: 8px; }
+		.footer { margin-top: 32px; border-top: 1px solid #edf2f7; padding-top: 18px; font-size: 11px; color: #a0aec0; text-align: center; line-height: 1.5; }
 	</style>
 </head>
 <body>
 	<div class="container">
-		<div class="logo">ToenToen</div>
-		<div class="greeting">Halo!</div>
-		<div class="desc">Gunakan kode verifikasi berikut untuk melanjutkan proses verifikasi di ToenToen:</div>
+		<div class="logo-row">
+			<div class="logo">ToenToen</div>
+			<div><span class="badge">%s</span></div>
+		</div>
+		<div class="greeting">%s</div>
+		<div class="desc">%s</div>
 		<div class="otp-box">
 			<div class="otp-code">%s</div>
 		</div>
 		<div class="warning">
-			Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>
-			Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun termasuk pihak ToenToen.
+			%s
 		</div>
 		<div class="footer">
-			Email ini dikirim otomatis oleh sistem ToenToen. Jika Anda tidak merasa meminta kode ini, silakan abaikan pesan ini.
+			Email ini dikirim otomatis oleh sistem ToenToen. Jika Anda tidak merasa melakukan permintaan ini, silakan abaikan pesan ini.
 		</div>
 	</div>
 </body>
-</html>`, otp)
+</html>`, content.Badge, content.Greeting, content.Description, otp, content.Warning)
 	mailer.AddAlternative("text/html", htmlBody)
 
 	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)
@@ -116,10 +129,156 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 	return nil
 }
 
+type otpEmailContent struct {
+	Subject     string
+	Badge       string
+	Greeting    string
+	Description string
+	Warning     string
+}
+
+func stripBasicHTML(s string) string {
+	s = strings.ReplaceAll(s, "<strong>", "")
+	s = strings.ReplaceAll(s, "</strong>", "")
+	s = strings.ReplaceAll(s, "<br>", "\n")
+	s = strings.ReplaceAll(s, "<br/>", "\n")
+	s = strings.ReplaceAll(s, "<br />", "\n")
+	return s
+}
+
+func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
+	if len(customDesc) > 0 && strings.TrimSpace(customDesc[0]) != "" {
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Verifikasi Keamanan",
+			Greeting:    "Halo Sobat ToenToen!",
+			Description: strings.TrimSpace(customDesc[0]),
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun termasuk pihak ToenToen.",
+		}
+	}
+
+	subjLower := strings.ToLower(subject)
+
+	switch {
+	case strings.Contains(subjLower, "aktivasi") && strings.Contains(subjLower, "admin"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Aktivasi Admin Toko",
+			Greeting:    "Halo Rekan Admin!",
+			Description: "Anda telah didaftarkan sebagai <strong>Admin Toko</strong> di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru dan mengaktifkan akun admin Anda:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jangan pernah membagikan kode ini kepada siapapun demi keamanan akses toko Anda.",
+		}
+	case strings.Contains(subjLower, "admin") && strings.Contains(subjLower, "registrasi"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Registrasi Admin Toko",
+			Greeting:    "Halo Rekan Admin!",
+			Description: "Terima kasih telah mendaftar sebagai <strong>Admin Toko</strong> di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk menyelesaikan proses pendaftaran akun Anda:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun.",
+		}
+	case strings.Contains(subjLower, "admin") && (strings.Contains(subjLower, "reset") || strings.Contains(subjLower, "kata sandi")):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Reset Password Admin Toko",
+			Greeting:    "Halo Rekan Admin!",
+			Description: "Kami menerima permintaan untuk mengatur ulang kata sandi akun Admin Toko Anda di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun toko Anda, jangan pernah membagikan kode ini kepada siapapun.",
+		}
+	case strings.Contains(subjLower, "admin") && (strings.Contains(subjLower, "login") || strings.Contains(subjLower, "masuk")):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Login Admin Toko",
+			Greeting:    "Halo Rekan Admin!",
+			Description: "Kami mendeteksi aktivitas login ke akun Admin Toko Anda di ToenToen. Masukkan kode verifikasi (OTP) berikut untuk melanjutkan:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jika Anda tidak merasa mencoba login, segera hubungi Owner toko Anda.",
+		}
+	case strings.Contains(subjLower, "admin") && strings.Contains(subjLower, "email"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Verifikasi Email Admin",
+			Greeting:    "Halo Rekan Admin!",
+			Description: "Gunakan kode verifikasi (OTP) berikut untuk memverifikasi alamat email akun Admin Toko Anda di platform ToenToen:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun toko Anda, jangan pernah membagikan kode ini kepada siapapun.",
+		}
+	case strings.Contains(subjLower, "registrasi"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Pendaftaran Akun Baru",
+			Greeting:    "Selamat Datang di ToenToen!",
+			Description: "Terima kasih telah bergabung di platform ToenToen. Gunakan kode verifikasi (OTP) berikut untuk menyelesaikan proses pendaftaran dan verifikasi akun Anda:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun.",
+		}
+	case strings.Contains(subjLower, "login") || strings.Contains(subjLower, "masuk"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Verifikasi Masuk (Login)",
+			Greeting:    "Halo Sobat ToenToen!",
+			Description: "Kami mendeteksi aktivitas login ke akun ToenToen Anda. Masukkan kode verifikasi (OTP) berikut untuk melanjutkan proses masuk:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jika Anda tidak merasa mencoba login, segera amankan akun Anda.",
+		}
+	case strings.Contains(subjLower, "reset password") || strings.Contains(subjLower, "lupa password") || strings.Contains(subjLower, "kata sandi"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Atur Ulang Kata Sandi",
+			Greeting:    "Halo Sobat ToenToen!",
+			Description: "Kami menerima permintaan untuk mengatur ulang kata sandi akun ToenToen Anda. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jika Anda tidak meminta perubahan kata sandi, abaikan pesan ini dan akun Anda tetap aman.",
+		}
+	case strings.Contains(subjLower, "penautan email") || strings.Contains(subjLower, "tautkan email"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Penautan Email",
+			Greeting:    "Halo Sobat ToenToen!",
+			Description: "Anda sedang menautkan alamat email ini ke akun ToenToen Anda. Masukkan kode verifikasi (OTP) berikut untuk mengonfirmasi penautan email:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jangan berikan kode ini kepada orang lain.",
+		}
+	case strings.Contains(subjLower, "perubahan email") || strings.Contains(subjLower, "ganti email"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Perubahan Alamat Email",
+			Greeting:    "Halo Sobat ToenToen!",
+			Description: "Anda mengajukan permohonan perubahan alamat email akun ToenToen. Masukkan kode verifikasi (OTP) berikut untuk mengonfirmasi bahwa email baru ini milik Anda:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jangan berikan kode ini kepada orang lain.",
+		}
+	case strings.Contains(subjLower, "penghapusan akun") || strings.Contains(subjLower, "delete"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "⚠️ Konfirmasi Hapus Akun",
+			Greeting:    "Pemberitahuan Keamanan Penting,",
+			Description: "Kami menerima permintaan untuk menghapus akun ToenToen Anda secara permanen. Jika ini benar Anda, masukkan kode verifikasi (OTP) berikut untuk mengonfirmasi:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br><strong>PERHATIAN:</strong> Tindakan penghapusan akun bersifat permanen dan data Anda tidak dapat dipulihkan.",
+		}
+	case strings.Contains(subjLower, "pengalihan bisnis") || strings.Contains(subjLower, "transfer"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Otorisasi Pengalihan Toko",
+			Greeting:    "Halo Pemilik Toko!",
+			Description: "Anda sedang mengajukan otorisasi pengalihan kepemilikan bisnis di ToenToen. Masukkan kode verifikasi (OTP) berikut untuk mengotorisasi permohonan transfer toko Anda:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Pastikan Anda hanya memberikan otorisasi transfer kepada pihak yang sah.",
+		}
+	case strings.Contains(subjLower, "email"):
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Verifikasi Alamat Email",
+			Greeting:    "Halo Sobat ToenToen!",
+			Description: "Gunakan kode verifikasi (OTP) berikut untuk memverifikasi alamat email Anda di platform ToenToen:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun.",
+		}
+	default:
+		return otpEmailContent{
+			Subject:     subject,
+			Badge:       "Verifikasi Keamanan",
+			Greeting:    "Halo Sobat ToenToen!",
+			Description: "Gunakan kode verifikasi berikut untuk melanjutkan proses verifikasi di ToenToen:",
+			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun termasuk pihak ToenToen.",
+		}
+	}
+}
+
 // SendWAOTP mengirimkan kode OTP ke nomor WhatsApp tujuan.
 // Jika FONNTE_TOKEN disetel di environment, mengirim via API Fonnte.
 // Jika FONNTE_TOKEN kosong (development/testing), kode dicatat ke log console dan mengembalikan nil.
-func SendWAOTP(phoneNumber string, otp string) error {
+func SendWAOTP(phoneNumber string, otp string, customMessage ...string) error {
 	phoneNumber = strings.TrimSpace(phoneNumber)
 	if phoneNumber == "" {
 		return errors.New("nomor telepon tujuan tidak boleh kosong")
@@ -128,6 +287,9 @@ func SendWAOTP(phoneNumber string, otp string) error {
 	fonnteToken := strings.TrimSpace(os.Getenv("FONNTE_TOKEN"))
 	if fonnteToken != "" {
 		message := fmt.Sprintf("Halo sobat ToenToen!\n\nKode verifikasi (OTP) Anda adalah: *%s*\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
+		if len(customMessage) > 0 && strings.TrimSpace(customMessage[0]) != "" {
+			message = strings.TrimSpace(customMessage[0])
+		}
 		payload := map[string]interface{}{
 			"target":  phoneNumber,
 			"message": message,

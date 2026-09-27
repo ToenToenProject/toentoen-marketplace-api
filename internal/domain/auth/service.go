@@ -67,7 +67,7 @@ func isEmail(identifier string) bool {
 	return len(parts) == 2 && strings.Contains(parts[1], ".")
 }
 
-func (s *authService) sendOTP(identifier string, email *string, phoneNumber *string, redisPrefix string) error {
+func (s *authService) sendOTP(identifier string, email *string, phoneNumber *string, redisPrefix string, customSubject ...string) error {
 	var cleanEmail string
 	if email != nil {
 		cleanEmail = strings.ToLower(strings.TrimSpace(*email))
@@ -107,6 +107,32 @@ func (s *authService) sendOTP(identifier string, email *string, phoneNumber *str
 		subject = "Kode Verifikasi Reset Password ToenToen"
 	}
 
+	if len(customSubject) > 0 && strings.TrimSpace(customSubject[0]) != "" {
+		subject = strings.TrimSpace(customSubject[0])
+	}
+
+	var waMessage string
+	subjLower := strings.ToLower(subject)
+	if strings.Contains(subjLower, "aktivasi") && strings.Contains(subjLower, "admin") {
+		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nAnda telah didaftarkan sebagai Admin Toko di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru dan mengaktifkan akun Anda:\n\n%s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun demi keamanan toko.", otp)
+	} else if strings.Contains(subjLower, "admin") && strings.Contains(subjLower, "registrasi") {
+		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi registrasi Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
+	} else if strings.Contains(subjLower, "admin") && (strings.Contains(subjLower, "reset") || strings.Contains(subjLower, "kata sandi")) {
+		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi reset kata sandi Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
+	} else if strings.Contains(subjLower, "admin") && (strings.Contains(subjLower, "login") || strings.Contains(subjLower, "masuk")) {
+		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi login Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
+	} else if strings.Contains(subjLower, "admin") && strings.Contains(subjLower, "email") {
+		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi email Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
+	} else if strings.Contains(subjLower, "registrasi") {
+		waMessage = fmt.Sprintf("Selamat Datang di ToenToen!\n\nKode verifikasi registrasi akun Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
+	} else if strings.Contains(subjLower, "login") || strings.Contains(subjLower, "masuk") {
+		waMessage = fmt.Sprintf("Kode verifikasi login akun ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
+	} else if strings.Contains(subjLower, "reset") || strings.Contains(subjLower, "kata sandi") {
+		waMessage = fmt.Sprintf("Kode verifikasi reset kata sandi akun ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
+	} else {
+		waMessage = fmt.Sprintf("Kode verifikasi (OTP) ToenToen Anda adalah: %s\n\nKode ini berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
+	}
+
 	var sent bool
 	var lastErr error
 
@@ -119,7 +145,7 @@ func (s *authService) sendOTP(identifier string, email *string, phoneNumber *str
 	}
 
 	if hasPhone {
-		if err := utils.SendWAOTP(cleanPhone, otp); err != nil {
+		if err := utils.SendWAOTP(cleanPhone, otp, waMessage); err != nil {
 			if !sent {
 				lastErr = err
 			}
@@ -163,7 +189,11 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 			}
 			return errors.New("Akun dengan nomor ini sudah terdaftar dan aktif. Silakan langsung login.")
 		case "inactive":
-			if err := s.sendOTP(input.Identifier, existingAccount.Email, existingAccount.PhoneNumber, "register_otp"); err != nil {
+			customSubj := "Kode Verifikasi Registrasi Akun ToenToen"
+			if existingAccount.Role == "business_admin" {
+				customSubj = "Kode Verifikasi Aktivasi Akun Admin Toko ToenToen"
+			}
+			if err := s.sendOTP(input.Identifier, existingAccount.Email, existingAccount.PhoneNumber, "register_otp", customSubj); err != nil {
 				return err
 			}
 			if isEmail(input.Identifier) {
@@ -212,6 +242,9 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	if isEmail(input.Identifier) {
 		// Kirim kode verifikasi ke email
 		subject := "Kode Verifikasi Registrasi Akun ToenToen"
+		if input.Role == "business_admin" {
+			subject = "Kode Verifikasi Registrasi Admin Toko ToenToen"
+		}
 		if err := utils.SendEmailOTP(input.Identifier, otp, subject); err != nil {
 			if config.RDB != nil {
 				config.RDB.Del(config.Ctx, pendingKey)
@@ -221,7 +254,11 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		}
 	} else {
 		// Kirim kode verifikasi ke WhatsApp
-		if err := utils.SendWAOTP(input.Identifier, otp); err != nil {
+		waMsg := fmt.Sprintf("Selamat Datang di ToenToen!\n\nKode verifikasi registrasi akun Anda adalah:\n\n%s\n\nKode ini berlaku selama 5 menit.", otp)
+		if input.Role == "business_admin" {
+			waMsg = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi registrasi Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini berlaku selama 5 menit.", otp)
+		}
+		if err := utils.SendWAOTP(input.Identifier, otp, waMsg); err != nil {
 			if config.RDB != nil {
 				config.RDB.Del(config.Ctx, pendingKey)
 				config.RDB.Del(config.Ctx, otpKey)
@@ -403,7 +440,15 @@ func (s *authService) SendEmailOTP(email string) error {
 		if account.AccountStatus == "suspended" {
 			return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 		}
-		return s.sendOTP(cleanEmail, account.Email, account.PhoneNumber, "email_verify_otp")
+		customSubj := "Kode Verifikasi Email ToenToen"
+		if account.Role == "business_admin" {
+			if account.LastLoginAt == nil || account.PasswordHash == nil || account.AccountStatus == "inactive" {
+				customSubj = "Kode Verifikasi Aktivasi Akun Admin Toko ToenToen"
+			} else {
+				customSubj = "Kode Verifikasi Email Admin Toko ToenToen"
+			}
+		}
+		return s.sendOTP(cleanEmail, account.Email, account.PhoneNumber, "email_verify_otp", customSubj)
 	} else if err != gorm.ErrRecordNotFound {
 		return errors.New("Terjadi kesalahan sistem saat mencari data akun")
 	}
@@ -420,7 +465,11 @@ func (s *authService) SendEmailOTP(email string) error {
 				updatedJSON, _ := json.Marshal(pending)
 				_ = config.RDB.Set(config.Ctx, pendingKey, string(updatedJSON), 5*time.Minute).Err()
 				_ = config.RDB.Set(config.Ctx, fmt.Sprintf("register_otp:%s", cleanEmail), newOTP, 5*time.Minute).Err()
-				return utils.SendEmailOTP(cleanEmail, newOTP, "Kode Verifikasi Registrasi Akun ToenToen")
+				subject := "Kode Verifikasi Registrasi Akun ToenToen"
+				if pending.Role == "business_admin" {
+					subject = "Kode Verifikasi Registrasi Admin Toko ToenToen"
+				}
+				return utils.SendEmailOTP(cleanEmail, newOTP, subject)
 			}
 		}
 	}
@@ -505,7 +554,11 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 		return errors.New("Email atau password salah")
 	}
 
-	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "login_otp")
+	loginSubj := "Kode Verifikasi Login ToenToen"
+	if account.Role == "business_admin" {
+		loginSubj = "Kode Verifikasi Login Admin Toko ToenToen"
+	}
+	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "login_otp", loginSubj)
 }
 
 func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error) {
@@ -548,7 +601,15 @@ func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 	}
 
 	// Kirim OTP verifikasi (berlaku untuk semua akun lokal maupun akun OAuth yang ingin membuat kata sandi baru)
-	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "forgot_otp")
+	subject := "Kode Verifikasi Reset Password ToenToen"
+	if account.Role == "business_admin" {
+		if account.LastLoginAt == nil || account.PasswordHash == nil || account.AccountStatus == "inactive" {
+			subject = "Kode Verifikasi Aktivasi Akun Admin Toko ToenToen"
+		} else {
+			subject = "Kode Verifikasi Reset Password Admin Toko ToenToen"
+		}
+	}
+	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "forgot_otp", subject)
 }
 
 func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error) {
