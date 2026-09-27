@@ -323,6 +323,10 @@ func (s *businessAdminService) RespondToInvitation(adminID, assignmentID string,
 		return errors.New("forbidden: undangan ini bukan milik Anda")
 	}
 
+	if assignment.Status == "pending_owner_approval" {
+		return errors.New("undangan ini masih menunggu persetujuan Owner toko")
+	}
+
 	if assignment.Status != "pending" {
 		return errors.New("undangan ini sudah diproses atau tidak lagi valid")
 	}

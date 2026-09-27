@@ -139,7 +139,7 @@ func (r *businessAdminRepository) GetAssignmentsByAdminID(adminID string) ([]mod
 		Preload("Supervisor").
 		Preload("Inviter").
 		Preload("Shifts").
-		Where("admin_id = ?", adminID).
+		Where("admin_id = ? AND status IN ('pending', 'active', 'scheduled_for_deletion')", adminID).
 		Order("created_at DESC").
 		Find(&assignments).Error
 	return assignments, err

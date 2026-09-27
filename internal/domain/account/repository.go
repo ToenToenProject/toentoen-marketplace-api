@@ -344,7 +344,9 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 		if err := del("current_owner_id = ?", accountID, &models.BusinessTransferRequest{}); err != nil { return err }
 		if err := del("target_account_id = ?", accountID, &models.BusinessTransferRequest{}); err != nil { return err }
 
-		// Reports
+		// Reports & Evidences
+		delRaw("DELETE FROM business_report_evidences WHERE report_id IN (SELECT report_id FROM business_reports WHERE account_id = ?)", accountID)
+		delRaw("DELETE FROM business_post_report_evidences WHERE report_id IN (SELECT report_id FROM business_post_reports WHERE account_id = ?)", accountID)
 		if err := del("account_id = ?", accountID, &models.Report{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.BusinessReport{}); err != nil { return err }
 		if err := del("account_id = ?", accountID, &models.BusinessPostReport{}); err != nil { return err }
@@ -487,6 +489,7 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 						if err := delIn("post_id IN ?", postIDs, &models.BusinessPostComment{}); err != nil {
 							return err
 						}
+						delRaw("DELETE FROM business_post_report_evidences WHERE report_id IN (SELECT report_id FROM business_post_reports WHERE post_id IN ?)", postIDs)
 						if err := delIn("post_id IN ?", postIDs, &models.BusinessPostReport{}); err != nil {
 							return err
 						}
@@ -532,6 +535,7 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 				if err := del("business_id = ?", b.BusinessID, &models.BusinessBookmark{}); err != nil {
 					return err
 				}
+				delRaw("DELETE FROM business_report_evidences WHERE report_id IN (SELECT report_id FROM business_reports WHERE business_id = ?)", b.BusinessID)
 				if err := del("business_id = ?", b.BusinessID, &models.BusinessReport{}); err != nil {
 					return err
 				}

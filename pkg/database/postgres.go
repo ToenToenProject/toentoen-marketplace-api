@@ -145,6 +145,50 @@ func ConnectDB() {
 					FOREIGN KEY (replied_to_account_id) REFERENCES accounts(account_id) ON DELETE SET NULL;
 			END IF;
 		END $$;`,
+		`DO $$
+		DECLARE
+			r RECORD;
+		BEGIN
+			-- Cascade delete untuk bukti laporan bisnis (business_report_evidences -> business_reports)
+			FOR r IN (
+				SELECT tc.constraint_name 
+				FROM information_schema.table_constraints tc 
+				JOIN information_schema.key_column_usage kcu 
+				  ON tc.constraint_name = kcu.constraint_name 
+				 AND tc.table_schema = kcu.table_schema
+				WHERE tc.constraint_type = 'FOREIGN KEY' 
+				  AND tc.table_name = 'business_report_evidences' 
+				  AND kcu.column_name = 'report_id'
+			) LOOP
+				EXECUTE 'ALTER TABLE business_report_evidences DROP CONSTRAINT ' || quote_ident(r.constraint_name);
+			END LOOP;
+
+			IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'business_report_evidences') THEN
+				ALTER TABLE business_report_evidences 
+					ADD CONSTRAINT fk_business_reports_evidence 
+					FOREIGN KEY (report_id) REFERENCES business_reports(report_id) ON DELETE CASCADE;
+			END IF;
+
+			-- Cascade delete untuk bukti laporan post (business_post_report_evidences -> business_post_reports)
+			FOR r IN (
+				SELECT tc.constraint_name 
+				FROM information_schema.table_constraints tc 
+				JOIN information_schema.key_column_usage kcu 
+				  ON tc.constraint_name = kcu.constraint_name 
+				 AND tc.table_schema = kcu.table_schema
+				WHERE tc.constraint_type = 'FOREIGN KEY' 
+				  AND tc.table_name = 'business_post_report_evidences' 
+				  AND kcu.column_name = 'report_id'
+			) LOOP
+				EXECUTE 'ALTER TABLE business_post_report_evidences DROP CONSTRAINT ' || quote_ident(r.constraint_name);
+			END LOOP;
+
+			IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'business_post_report_evidences') THEN
+				ALTER TABLE business_post_report_evidences 
+					ADD CONSTRAINT fk_business_post_reports_evidence 
+					FOREIGN KEY (report_id) REFERENCES business_post_reports(report_id) ON DELETE CASCADE;
+			END IF;
+		END $$;`,
 	}
 
 	for _, q := range alterQueries {
