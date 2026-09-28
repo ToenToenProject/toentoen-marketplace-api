@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"toentoen-backend/internal/config"
@@ -12,20 +13,31 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// extractToken mengekstrak token dari header Authorization (Bearer token) atau cookie auth_token.
+// Menangani format toleran seperti duplikasi 'Bearer', kutipan (" atau '), serta mengabaikan string literal 'undefined' atau 'null'.
+func extractToken(c *fiber.Ctx) string {
+	authHeader := strings.TrimSpace(c.Get("Authorization"))
+	if authHeader != "" {
+		for strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			authHeader = strings.TrimSpace(authHeader[7:])
+		}
+		authHeader = strings.Trim(authHeader, "\"'`")
+		if authHeader != "" && authHeader != "undefined" && authHeader != "null" {
+			return authHeader
+		}
+	}
+
+	cookieToken := strings.TrimSpace(c.Cookies("auth_token"))
+	cookieToken = strings.Trim(cookieToken, "\"'`")
+	if cookieToken != "" && cookieToken != "undefined" && cookieToken != "null" {
+		return cookieToken
+	}
+
+	return ""
+}
+
 func RequireAuth(c *fiber.Ctx) error {
-	var tokenString string
-
-	authHeader := c.Get("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-	} else if authHeader != "" {
-		tokenString = strings.TrimSpace(authHeader)
-	}
-
-	if tokenString == "" {
-		tokenString = c.Cookies("auth_token")
-	}
-
+	tokenString := extractToken(c)
 	if tokenString == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Token pengguna tidak ditemukan, silakan login kembali"})
 	}
@@ -38,6 +50,7 @@ func RequireAuth(c *fiber.Ctx) error {
 	})
 
 	if err != nil || !token.Valid {
+		log.Printf("[AUTH-ERROR] Validasi JWT token gagal (IP: %s): %v", c.IP(), err)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Sesi tidak valid atau telah kedaluwarsa"})
 	}
 
@@ -68,19 +81,7 @@ func RequireAuth(c *fiber.Ctx) error {
 }
 
 func OptionalAuth(c *fiber.Ctx) error {
-	var tokenString string
-
-	authHeader := c.Get("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-	} else if authHeader != "" {
-		tokenString = strings.TrimSpace(authHeader)
-	}
-
-	if tokenString == "" {
-		tokenString = c.Cookies("auth_token")
-	}
-
+	tokenString := extractToken(c)
 	if tokenString == "" {
 		return c.Next()
 	}
