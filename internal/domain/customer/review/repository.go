@@ -14,6 +14,7 @@ type ReviewRepository interface {
 	UpdateReview(review *models.Review) error
 	DeleteReview(reviewID string) error
 	HasUserReviewedBusiness(businessID, accountID string) (bool, error)
+	GetLastDeletedReview(businessID, accountID string) (*models.Review, error)
 	GetReviewByBusinessAndAccount(businessID, accountID string) (*models.Review, error)
 	GetReviewsPaginated(businessID string, ratingFilter int, sort string, page, limit int) ([]models.Review, int64, error)
 	GetAllReviews(businessID string) ([]models.Review, error)
@@ -70,6 +71,18 @@ func (r *reviewRepository) HasUserReviewedBusiness(businessID, accountID string)
 	var count int64
 	err := r.db.Model(&models.Review{}).Where("business_id = ? AND account_id = ?", businessID, accountID).Count(&count).Error
 	return count > 0, err
+}
+
+func (r *reviewRepository) GetLastDeletedReview(businessID, accountID string) (*models.Review, error) {
+	var review models.Review
+	err := r.db.Unscoped().
+		Where("business_id = ? AND account_id = ? AND deleted_at IS NOT NULL", businessID, accountID).
+		Order("deleted_at DESC").
+		First(&review).Error
+	if err != nil {
+		return nil, err
+	}
+	return &review, nil
 }
 
 func (r *reviewRepository) GetReviewByBusinessAndAccount(businessID, accountID string) (*models.Review, error) {

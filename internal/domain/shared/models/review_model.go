@@ -18,8 +18,9 @@ type Review struct {
 	RepliedAt    *time.Time `gorm:"column:replied_at" json:"replied_at,omitempty"`
 	LikeCount    int        `gorm:"default:0;column:like_count" json:"like_count"`
 	CommentCount int        `gorm:"default:0;column:comment_count" json:"comment_count"`
-	CreatedAt    time.Time  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt    time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	CreatedAt    time.Time      `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt    time.Time      `gorm:"column:updated_at" json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
 
 	Account  *Account                `gorm:"foreignKey:AccountID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
 	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`

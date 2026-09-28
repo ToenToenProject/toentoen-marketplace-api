@@ -82,6 +82,21 @@ func (s *reviewService) CreateReview(customerID string, input models.CreateRevie
 		return errors.New("Anda sudah memberikan ulasan untuk toko ini. Silakan gunakan fitur edit jika ingin mengubah ulasan.")
 	}
 
+	// 🛡️ Cek masa jeda (Cooldown) jika user baru saja menghapus ulasan di toko ini
+	lastDeleted, errDel := s.reviewRepo.GetLastDeletedReview(input.BusinessID, customerID)
+	if errDel == nil && lastDeleted != nil && !lastDeleted.DeletedAt.Time.IsZero() {
+		timeSinceDelete := time.Since(lastDeleted.DeletedAt.Time)
+		if timeSinceDelete < 24*time.Hour {
+			remaining := 24*time.Hour - timeSinceDelete
+			hours := int(remaining.Hours())
+			minutes := int(remaining.Minutes()) % 60
+			if hours > 0 {
+				return fmt.Errorf("Anda baru saja menghapus ulasan untuk toko ini. Anda dapat mengirimkan ulasan baru setelah masa jeda keamanan 24 jam (tersisa %d jam %d menit)", hours, minutes)
+			}
+			return fmt.Errorf("Anda baru saja menghapus ulasan untuk toko ini. Anda dapat mengirimkan ulasan baru setelah masa jeda keamanan 24 jam (tersisa %d menit)", minutes)
+		}
+	}
+
 	review := models.Review{
 		ReviewID:     utils.GenerateUUID("REV"),
 		BusinessID:   input.BusinessID,
