@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
@@ -39,6 +40,37 @@ func ConnectDB() {
 	}
 
 	log.Println("🚀 Connected to Database successfully")
+
+	// Konfigurasi Connection Pool Skala Industri (Optimal untuk AWS RDS & Auto-scaling)
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Fatalf("Failed to retrieve generic database object from GORM: %v", err)
+	}
+
+	maxOpen := config.Envs.DBMaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 50
+	}
+	maxIdle := config.Envs.DBMaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = 15
+	}
+	connMaxLifetime := time.Duration(config.Envs.DBConnMaxLifetimeMinutes) * time.Minute
+	if connMaxLifetime <= 0 {
+		connMaxLifetime = 30 * time.Minute
+	}
+	connMaxIdleTime := time.Duration(config.Envs.DBConnMaxIdleTimeMinutes) * time.Minute
+	if connMaxIdleTime <= 0 {
+		connMaxIdleTime = 5 * time.Minute
+	}
+
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetConnMaxLifetime(connMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(connMaxIdleTime)
+
+	log.Printf("🔌 Database connection pool initialized: max_open=%d, max_idle=%d, lifetime=%v, idle_time=%v",
+		maxOpen, maxIdle, connMaxLifetime, connMaxIdleTime)
 
 	if !config.Envs.EnableAutoMigrate {
 		log.Println("ℹ️ AutoMigrate dinonaktifkan (ENABLE_AUTO_MIGRATE=false) — menjalankan aplikasi dengan izin least privilege")

@@ -19,6 +19,11 @@ type AppConfig struct {
 	DBSSLMode         string
 	EnableAutoMigrate bool
 
+	DBMaxOpenConns           int
+	DBMaxIdleConns           int
+	DBConnMaxLifetimeMinutes int
+	DBConnMaxIdleTimeMinutes int
+
 	RedisHost string
 
 	JWTSecret          string
@@ -64,6 +69,11 @@ func InitConfig() {
 		DBPort:            getEnv("DB_PORT", "5432"),
 		DBSSLMode:         getEnv("DB_SSLMODE", "disable"),
 		EnableAutoMigrate: getEnvAsBool("ENABLE_AUTO_MIGRATE", true),
+
+		DBMaxOpenConns:           getEnvAsInt("DB_MAX_OPEN_CONNS", 50),
+		DBMaxIdleConns:           getEnvAsInt("DB_MAX_IDLE_CONNS", 15),
+		DBConnMaxLifetimeMinutes: getEnvAsInt("DB_CONN_MAX_LIFETIME_MINUTES", 30),
+		DBConnMaxIdleTimeMinutes: getEnvAsInt("DB_CONN_MAX_IDLE_TIME_MINUTES", 5),
 
 		JWTSecret:          getEnvMust("JWT_SECRET"),
 		GoogleClientID:     getEnvMust("GOOGLE_CLIENT_ID"),

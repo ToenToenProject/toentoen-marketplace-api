@@ -1,0 +1,96 @@
+services:
+  redis-cache:
+    image: redis:7-alpine
+    container_name: toentoen_redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.7
+    container_name: toentoen_meilisearch
+    restart: always
+    ports:
+      - "127.0.0.1:7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    volumes:
+      - meili_data:/meili_data
+
+  api-server:
+    image: ${API_IMAGE:-ghcr.io/toentoenproject/toentoen-marketplace-api:latest}
+    build: .
+    container_name: toentoen_api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # Koneksi Database mengarah langsung ke AWS RDS (via .env)
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_SSLMODE=${DB_SSLMODE:-require}
+      - ENABLE_AUTO_MIGRATE=${ENABLE_AUTO_MIGRATE:-false}
+      - DB_MAX_OPEN_CONNS=${DB_MAX_OPEN_CONNS:-50}
+      - DB_MAX_IDLE_CONNS=${DB_MAX_IDLE_CONNS:-15}
+      - DB_CONN_MAX_LIFETIME_MINUTES=${DB_CONN_MAX_LIFETIME_MINUTES:-30}
+      - DB_CONN_MAX_IDLE_TIME_MINUTES=${DB_CONN_MAX_IDLE_TIME_MINUTES:-5}
+      - PORT=${PORT:-3000}
+      - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_EMAIL=${SMTP_EMAIL}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - REDIS_HOST=redis-cache
+      - REDIS_PORT=6379
+      - MEILI_HOST=http://meilisearch:7700
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - APP_ENV=${APP_ENV:-production}
+      - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY}
+    depends_on:
+      - redis-cache
+      - meilisearch
+
+  migrator:
+    image: migrate/migrate
+    container_name: toentoen_migrator
+    volumes:
+      - ./pkg/database/migrations:/migrations
+    command:
+      - -path=/migrations
+      - -database=postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT:-5432}/${DB_NAME}?sslmode=${DB_SSLMODE:-require}
+      - up
+
+  seeder:
+    image: golang:1.25.6-alpine
+    container_name: toentoen_seeder
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_SSLMODE=${DB_SSLMODE:-require}
+      - APP_ENV=${APP_ENV:-production}
+      - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY}
+      - MEILI_HOST=http://meilisearch:7700
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    depends_on:
+      - meilisearch
+    command: go run cmd/seeder/main.go
+
+volumes:
+  meili_data:
