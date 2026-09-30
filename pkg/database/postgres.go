@@ -106,6 +106,8 @@ func ConnectDB() {
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS live_platform VARCHAR(50)`,
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS live_started_at TIMESTAMPTZ`,
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS last_live_notified_at TIMESTAMPTZ`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS certificates jsonb DEFAULT '[]'::jsonb`,
+		`UPDATE businesses SET certificates = '[]'::jsonb WHERE certificates IS NULL`,
 		`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`,
 		`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMP`,
 		`ALTER TABLE owners ADD COLUMN IF NOT EXISTS kyc_status VARCHAR(20) NOT NULL DEFAULT 'unverified'`,

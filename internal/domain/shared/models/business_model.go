@@ -1,13 +1,62 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"time"
 )
 
 type BusinessCertificate struct {
-	Type     string `json:"type"`
-	Number   string `json:"number"`
-	ImageURL string `json:"image_url"`
+	Type                string `json:"type"`
+	Name                string `json:"name,omitempty"`
+	CertificateName     string `json:"certificate_name,omitempty"`
+	CertificateType     string `json:"certificate_type,omitempty"`
+	Number              string `json:"number"`
+	CertificateNumber   string `json:"certificate_number,omitempty"`
+	ImageURL            string `json:"image_url"`
+	URL                 string `json:"url,omitempty"`
+	CertificateImageURL string `json:"certificate_image_url,omitempty"`
+}
+
+func (b *BusinessCertificate) UnmarshalJSON(data []byte) error {
+	// 1. Tangani jika payload berupa plain string URL (misal: "https://storage...")
+	var strVal string
+	if err := json.Unmarshal(data, &strVal); err == nil {
+		b.ImageURL = strVal
+		b.URL = strVal
+		return nil
+	}
+
+	// 2. Tangani jika payload berupa object dengan berbagai kemungkinan alias key dari FE
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	getString := func(keys ...string) string {
+		for _, k := range keys {
+			if v, ok := raw[k]; ok && v != nil {
+				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+					return strings.TrimSpace(s)
+				}
+			}
+		}
+		return ""
+	}
+
+	b.Type = getString("type", "name", "certificate_name", "certificate_type", "title", "jenis_sertifikat", "nama_sertifikat", "nama")
+	b.Number = getString("number", "certificate_number", "cert_number", "nomor", "nomor_sertifikat", "no")
+	b.ImageURL = getString("image_url", "imageUrl", "url", "image", "file_url", "certificate_image_url", "photo_url", "foto")
+
+	// Set aliases agar konsisten
+	b.Name = b.Type
+	b.CertificateName = b.Type
+	b.CertificateType = b.Type
+	b.CertificateNumber = b.Number
+	b.URL = b.ImageURL
+	b.CertificateImageURL = b.ImageURL
+
+	return nil
 }
 
 type EventSchedule struct {
@@ -29,9 +78,11 @@ type Business struct {
 	Status           string `gorm:"default:'draft';column:status" json:"status"`
 	SubscriptionTier string `gorm:"default:'free';column:subscription_tier" json:"subscription_tier"`
 
-	BusinessImages          []string              `gorm:"type:jsonb;serializer:json;column:business_images" json:"business_images"`
-	Certificates            []BusinessCertificate `gorm:"type:jsonb;serializer:json;column:certificates;default:'[]'" json:"certificates"`
-	BusinessDetails         *string               `gorm:"column:business_details" json:"business_details"`
+	BusinessImages            []string              `gorm:"type:jsonb;serializer:json;column:business_images" json:"business_images"`
+	Certificates              []BusinessCertificate `gorm:"type:jsonb;serializer:json;column:certificates;default:'[]'" json:"certificates"`
+	CertificatesAlias         []BusinessCertificate `gorm:"-" json:"certificate,omitempty"`
+	BusinessCertificatesAlias []BusinessCertificate `gorm:"-" json:"business_certificates,omitempty"`
+	BusinessDetails           *string               `gorm:"column:business_details" json:"business_details"`
 
 	NIB           *string  `gorm:"column:nib" json:"nib"`
 	Country       *string  `gorm:"column:country;default:'Indonesia'" json:"country"`
@@ -94,8 +145,11 @@ type CreateBusinessInput struct {
 	BusinessName string `json:"business_name"`
 	Email        string `json:"email"`
 
-	BusinessImages []string `json:"business_images" validate:"max=5"`
-	Certificates   []BusinessCertificate `json:"certificates" validate:"max=5"`
+	BusinessImages          []string              `json:"business_images" validate:"max=5"`
+	Certificates            []BusinessCertificate `json:"certificates" validate:"max=5"`
+	CertificatesAlias       []BusinessCertificate `json:"certificate" validate:"max=5"`
+	BusinessCertificates    []BusinessCertificate `json:"business_certificates" validate:"max=5"`
+	BusinessCertificateSing []BusinessCertificate `json:"business_certificate" validate:"max=5"`
 
 	CategoryIDs     []int64  `json:"category_ids"`
 	CustomCategory  *string  `json:"custom_category" validate:"omitempty,max=100"`
@@ -142,8 +196,11 @@ type UpdateBusinessInput struct {
 	Handle       *string `json:"handle"`
 	Email        *string `json:"email"`
 
-	BusinessImages *[]string              `json:"business_images" validate:"omitempty,max=5"`
-	Certificates   *[]BusinessCertificate `json:"certificates" validate:"omitempty,max=5"`
+	BusinessImages          *[]string              `json:"business_images" validate:"omitempty,max=5"`
+	Certificates            *[]BusinessCertificate `json:"certificates" validate:"omitempty,max=5"`
+	CertificatesAlias       *[]BusinessCertificate `json:"certificate" validate:"omitempty,max=5"`
+	BusinessCertificates    *[]BusinessCertificate `json:"business_certificates" validate:"omitempty,max=5"`
+	BusinessCertificateSing *[]BusinessCertificate `json:"business_certificate" validate:"omitempty,max=5"`
 
 	CategoryIDs     *[]int64  `json:"category_ids"`
 	CustomCategory  *string   `json:"custom_category" validate:"omitempty,max=100"`

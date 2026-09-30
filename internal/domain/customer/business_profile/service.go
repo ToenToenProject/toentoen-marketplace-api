@@ -7,6 +7,7 @@ import (
 
 	"toentoen-backend/internal/domain/merchant/analytics"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -52,6 +53,7 @@ type BusinessProfileResponse struct {
 	SocialWebsites  []string `json:"social_websites"`
 
 	BusinessImages  []string `json:"business_images"`
+	Certificates    []models.BusinessCertificate `json:"certificates"`
 
 	Hours []models.BusinessHour `json:"hours"`
 
@@ -207,6 +209,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		SocialTiktok:    business.SocialTiktok,
 		SocialWebsites:  business.SocialWebsites,
 		BusinessImages:  business.BusinessImages,
+		Certificates:    decryptBusinessCertificates(business.Certificates),
 		Hours:           business.Hours,
 
 		RecentProducts:    mappedRecentProducts,
@@ -214,6 +217,29 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		SimilarBusinesses: similarBusinesses,
 		RecentReviews:     recentReviews,
 	}, nil
+}
+
+func decryptBusinessCertificates(certs []models.BusinessCertificate) []models.BusinessCertificate {
+	if certs == nil {
+		return []models.BusinessCertificate{}
+	}
+	decrypted := make([]models.BusinessCertificate, len(certs))
+	copy(decrypted, certs)
+	for i := range decrypted {
+		if decrypted[i].Number != "" {
+			decrypted[i].Number, _ = crypto.Decrypt(decrypted[i].Number)
+		}
+		if decrypted[i].ImageURL != "" {
+			decrypted[i].ImageURL, _ = crypto.Decrypt(decrypted[i].ImageURL)
+		}
+		decrypted[i].Name = decrypted[i].Type
+		decrypted[i].CertificateName = decrypted[i].Type
+		decrypted[i].CertificateType = decrypted[i].Type
+		decrypted[i].CertificateNumber = decrypted[i].Number
+		decrypted[i].URL = decrypted[i].ImageURL
+		decrypted[i].CertificateImageURL = decrypted[i].ImageURL
+	}
+	return decrypted
 }
 
 func (s *service) ToggleBookmark(accountID, businessID string) (bool, error) {
@@ -305,6 +331,7 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			SocialTiktok:    business.SocialTiktok,
 			SocialWebsites:  business.SocialWebsites,
 			BusinessImages:  business.BusinessImages,
+			Certificates:    decryptBusinessCertificates(business.Certificates),
 			Hours:           business.Hours,
 		})
 	}

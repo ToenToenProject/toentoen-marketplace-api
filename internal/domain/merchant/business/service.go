@@ -22,12 +22,33 @@ func encryptBusinessLegal(b *models.Business) {
 	}
 	b.NIB, _ = crypto.EncryptPointer(b.NIB)
 	for i := range b.Certificates {
+		// Normalisasi field utama dari alias jika kosong
+		if b.Certificates[i].Type == "" && b.Certificates[i].Name != "" {
+			b.Certificates[i].Type = b.Certificates[i].Name
+		}
+		if b.Certificates[i].Number == "" && b.Certificates[i].CertificateNumber != "" {
+			b.Certificates[i].Number = b.Certificates[i].CertificateNumber
+		}
+		if b.Certificates[i].ImageURL == "" && b.Certificates[i].URL != "" {
+			b.Certificates[i].ImageURL = b.Certificates[i].URL
+		} else if b.Certificates[i].ImageURL == "" && b.Certificates[i].CertificateImageURL != "" {
+			b.Certificates[i].ImageURL = b.Certificates[i].CertificateImageURL
+		}
+
 		if b.Certificates[i].Number != "" {
 			b.Certificates[i].Number, _ = crypto.Encrypt(b.Certificates[i].Number)
 		}
 		if b.Certificates[i].ImageURL != "" {
 			b.Certificates[i].ImageURL, _ = crypto.Encrypt(b.Certificates[i].ImageURL)
 		}
+
+		// Sinkronkan alias agar tidak menyimpan teks mentah (plaintext) dalam JSONB database
+		b.Certificates[i].Name = b.Certificates[i].Type
+		b.Certificates[i].CertificateName = b.Certificates[i].Type
+		b.Certificates[i].CertificateType = b.Certificates[i].Type
+		b.Certificates[i].CertificateNumber = b.Certificates[i].Number
+		b.Certificates[i].URL = b.Certificates[i].ImageURL
+		b.Certificates[i].CertificateImageURL = b.Certificates[i].ImageURL
 	}
 }
 
@@ -37,12 +58,33 @@ func decryptBusinessLegal(b *models.Business) {
 	}
 	b.NIB, _ = crypto.DecryptPointer(b.NIB)
 	for i := range b.Certificates {
+		// Fallback pemulihan nilai jika tersimpan di field alias
+		if b.Certificates[i].Type == "" && b.Certificates[i].Name != "" {
+			b.Certificates[i].Type = b.Certificates[i].Name
+		}
+		if b.Certificates[i].Number == "" && b.Certificates[i].CertificateNumber != "" {
+			b.Certificates[i].Number = b.Certificates[i].CertificateNumber
+		}
+		if b.Certificates[i].ImageURL == "" && b.Certificates[i].URL != "" {
+			b.Certificates[i].ImageURL = b.Certificates[i].URL
+		} else if b.Certificates[i].ImageURL == "" && b.Certificates[i].CertificateImageURL != "" {
+			b.Certificates[i].ImageURL = b.Certificates[i].CertificateImageURL
+		}
+
 		if b.Certificates[i].Number != "" {
 			b.Certificates[i].Number, _ = crypto.Decrypt(b.Certificates[i].Number)
 		}
 		if b.Certificates[i].ImageURL != "" {
 			b.Certificates[i].ImageURL, _ = crypto.Decrypt(b.Certificates[i].ImageURL)
 		}
+
+		// Set alias agar response FE lengkap terlepas key mana yang dibaca oleh Frontend
+		b.Certificates[i].Name = b.Certificates[i].Type
+		b.Certificates[i].CertificateName = b.Certificates[i].Type
+		b.Certificates[i].CertificateType = b.Certificates[i].Type
+		b.Certificates[i].CertificateNumber = b.Certificates[i].Number
+		b.Certificates[i].URL = b.Certificates[i].ImageURL
+		b.Certificates[i].CertificateImageURL = b.Certificates[i].ImageURL
 	}
 }
 
@@ -152,6 +194,20 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 	normalizedHashtags := utils.NormalizeHashtags(input.Hashtags)
 	if err := utils.ValidateHashtags(normalizedHashtags, 10, 30); err != nil {
 		return "", err
+	}
+
+	// Resolusi alias sertifikat jika field utama kosong
+	if len(input.Certificates) == 0 {
+		if len(input.CertificatesAlias) > 0 {
+			input.Certificates = input.CertificatesAlias
+		} else if len(input.BusinessCertificates) > 0 {
+			input.Certificates = input.BusinessCertificates
+		} else if len(input.BusinessCertificateSing) > 0 {
+			input.Certificates = input.BusinessCertificateSing
+		}
+	}
+	if input.Certificates == nil {
+		input.Certificates = []models.BusinessCertificate{}
 	}
 
 	business := models.Business{
@@ -302,6 +358,13 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	business.BusinessNameAlias = business.BusinessName
 	business.SocialWebsitesAlias = business.SocialWebsites
 
+	// Inisialisasi slice sertifikat agar tidak mengembalikan null ke FE dan set alias
+	if business.Certificates == nil {
+		business.Certificates = []models.BusinessCertificate{}
+	}
+	business.CertificatesAlias = business.Certificates
+	business.BusinessCertificatesAlias = business.Certificates
+
 	// 🪄 MAGIC: Hitung is_open_now secara live sebelum dikembalikan ke Frontend
 	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
 
@@ -339,6 +402,15 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 	if input.AddressDetail == nil && input.Address != nil {
 		input.AddressDetail = input.Address
+	}
+	if input.Certificates == nil {
+		if input.CertificatesAlias != nil {
+			input.Certificates = input.CertificatesAlias
+		} else if input.BusinessCertificates != nil {
+			input.Certificates = input.BusinessCertificates
+		} else if input.BusinessCertificateSing != nil {
+			input.Certificates = input.BusinessCertificateSing
+		}
 	}
 
 	hasHoursUpdate := (input.Hours != nil && len(*input.Hours) > 0) || (input.EventSchedules != nil && len(*input.EventSchedules) > 0)
