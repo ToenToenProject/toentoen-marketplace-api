@@ -7,7 +7,7 @@ import (
 type MyActivityService interface {
 	GetMyProfileSummary(accountID string) (MyProfileSummaryResponse, error)
 	GetMyComments(accountID string, page, limit int) ([]models.BusinessPostComment, error)
-	GetMyBusinessReviews(accountID string, page, limit int) ([]models.Review, error)
+	GetMyBusinessReviews(accountID string, page, limit int, reviewType ...string) ([]models.MyActivityReviewResponse, error)
 	GetMyBookmarks(accountID string, page, limit int) ([]models.BusinessBookmark, error)
 	GetMyWishlists(accountID string, page, limit int) ([]models.ProductWishlist, error)
 	ToggleWishlist(accountID, productID string) (bool, error)
@@ -70,7 +70,7 @@ func (s *myActivityService) GetMyComments(accountID string, page, limit int) ([]
 	return comments, err
 }
 
-func (s *myActivityService) GetMyBusinessReviews(accountID string, page, limit int) ([]models.Review, error) {
+func (s *myActivityService) GetMyBusinessReviews(accountID string, page, limit int, reviewType ...string) ([]models.MyActivityReviewResponse, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -78,9 +78,13 @@ func (s *myActivityService) GetMyBusinessReviews(accountID string, page, limit i
 		limit = 10
 	}
 	offset := (page - 1) * limit
-	reviews, err := s.repo.GetMyBusinessReviews(accountID, limit, offset)
+	rType := "all"
+	if len(reviewType) > 0 && reviewType[0] != "" {
+		rType = reviewType[0]
+	}
+	reviews, err := s.repo.GetMyBusinessReviews(accountID, limit, offset, rType)
 	if reviews == nil {
-		reviews = []models.Review{}
+		reviews = []models.MyActivityReviewResponse{}
 	}
 	return reviews, err
 }

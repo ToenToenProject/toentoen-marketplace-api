@@ -205,6 +205,13 @@ func TestLogin(t *testing.T) {
 				Role:          "customer",
 				AccountStatus: "banned",
 			},
+			"admin@example.com": {
+				AccountID:     "ACC-5",
+				Email:         &email,
+				PasswordHash:  &hashStr,
+				Role:          "business_admin",
+				AccountStatus: "active",
+			},
 		},
 	}
 	service := NewAuthService(mockRepo)
@@ -256,6 +263,94 @@ func TestLogin(t *testing.T) {
 		})
 		if err == nil || err.Error() != "Email atau password salah" {
 			t.Fatalf("expected invalid credentials error, got: %v", err)
+		}
+	})
+
+	t.Run("owner logging in on owner portal succeeds", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier:   "unverified@example.com",
+			Password:     "secret123",
+			ExpectedRole: "owner",
+		})
+		if err != nil {
+			t.Fatalf("expected owner login on owner portal to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("owner logging in on admin portal is rejected with RoleMismatchError", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier:   "unverified@example.com",
+			Password:     "secret123",
+			ExpectedRole: "business_admin",
+		})
+		if err == nil {
+			t.Fatal("expected error for owner logging in on admin portal, got nil")
+		}
+		var roleErr *RoleMismatchError
+		if !errors.As(err, &roleErr) {
+			t.Fatalf("expected RoleMismatchError, got: %T (%v)", err, err)
+		}
+		if roleErr.ActualRole != "owner" || roleErr.ExpectedRole != "business_admin" {
+			t.Fatalf("expected actual=owner, expected=business_admin, got: %+v", roleErr)
+		}
+		if !strings.Contains(roleErr.Message, "Pemilik Toko (Owner)") {
+			t.Fatalf("expected message to mention Pemilik Toko, got: %s", roleErr.Message)
+		}
+		if roleErr.RedirectPortal != "/owner/login" {
+			t.Fatalf("expected redirect portal /owner/login, got: %s", roleErr.RedirectPortal)
+		}
+	})
+
+	t.Run("business_admin logging in with alias role=admin succeeds", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier: "admin@example.com",
+			Password:   "secret123",
+			Role:       "admin", // alias for business_admin
+		})
+		if err != nil {
+			t.Fatalf("expected business_admin login with role=admin to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("business_admin logging in on owner portal is rejected", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier:   "admin@example.com",
+			Password:     "secret123",
+			ExpectedRole: "owner",
+		})
+		if err == nil {
+			t.Fatal("expected error for business_admin logging in on owner portal, got nil")
+		}
+		var roleErr *RoleMismatchError
+		if !errors.As(err, &roleErr) {
+			t.Fatalf("expected RoleMismatchError, got: %T (%v)", err, err)
+		}
+		if roleErr.ActualRole != "business_admin" || roleErr.ExpectedRole != "owner" {
+			t.Fatalf("expected actual=business_admin, expected=owner, got: %+v", roleErr)
+		}
+		if !strings.Contains(roleErr.Message, "Admin/Staff Toko") {
+			t.Fatalf("expected message to mention Admin/Staff Toko, got: %s", roleErr.Message)
+		}
+	})
+
+	t.Run("customer logging in on admin portal is rejected", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier:   "081234567890",
+			Password:     "secret123",
+			ExpectedRole: "business_admin",
+		})
+		if err == nil {
+			t.Fatal("expected error for customer logging in on admin portal, got nil")
+		}
+		var roleErr *RoleMismatchError
+		if !errors.As(err, &roleErr) {
+			t.Fatalf("expected RoleMismatchError, got: %T (%v)", err, err)
+		}
+		if roleErr.ActualRole != "customer" {
+			t.Fatalf("expected actual=customer, got: %+v", roleErr)
+		}
+		if !strings.Contains(roleErr.Message, "Pelanggan (Customer)") {
+			t.Fatalf("expected message to mention Pelanggan (Customer), got: %s", roleErr.Message)
 		}
 	})
 }

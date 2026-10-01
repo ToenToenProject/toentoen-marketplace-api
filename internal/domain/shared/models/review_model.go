@@ -262,3 +262,25 @@ type ProductReviewCommentResponse struct {
 	Replies                []ProductReviewCommentResponse `json:"replies,omitempty"`
 	CreatedAt              time.Time                      `json:"created_at"`
 }
+
+type MyActivityReviewResponse struct {
+	ReviewID     string     `json:"review_id"`
+	ReviewType   string     `json:"review_type"` // "business" atau "product"
+	BusinessID   string     `json:"business_id"`
+	ProductID    *string    `json:"product_id,omitempty"`
+	AccountID    string     `json:"account_id"`
+	Rating       float64    `json:"rating"`
+	Comment      string     `json:"comment"`
+	ReviewImages []string   `json:"review_images"`
+	ReviewVideo  *string    `json:"review_video,omitempty"`
+	ReplyComment *string    `json:"reply_comment,omitempty"`
+	RepliedAt    *time.Time `json:"replied_at,omitempty"`
+	LikeCount    int        `json:"like_count"`
+	CommentCount int        `json:"comment_count"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+
+	Business *Business `json:"business,omitempty"`
+	Store    *Business `json:"store,omitempty"`
+	Product  *Product  `json:"product,omitempty"`
+}

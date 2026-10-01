@@ -26,7 +26,7 @@ type AuthService interface {
 	VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error
 	EvaluateAccountStatus(account *models.Account) string
 	Login(input models.LoginUnifiedInput) error
-	VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error)
+	VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, *models.Account, error)
 	ForgotPassword(input models.ForgotPasswordInput) error
 	VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error)
 	ResetPassword(input models.ResetPasswordInput) error
@@ -554,6 +554,15 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 		return errors.New("Email atau password salah")
 	}
 
+	// Validasi kesesuaian role dengan portal yang dituju (jika parameter role dikirimkan)
+	if input.ExpectedRole == "" && input.Role != "" {
+		input.ExpectedRole = input.Role
+	}
+	targetRole := NormalizeExpectedRole(input.ExpectedRole)
+	if targetRole != "" && account.Role != targetRole {
+		return NewRoleMismatchError(account.Role, targetRole)
+	}
+
 	loginSubj := "Kode Verifikasi Login ToenToen"
 	if account.Role == "business_admin" {
 		loginSubj = "Kode Verifikasi Login Admin Toko ToenToen"
@@ -561,20 +570,29 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "login_otp", loginSubj)
 }
 
-func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, error) {
+func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, *models.Account, error) {
 	input.Identifier = cleanIdentifier(input.Identifier)
 	redisKey := fmt.Sprintf("login_otp:%s", input.Identifier)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
 	if err == redis.Nil || storedOTP != input.OTP {
-		return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
+		return "", nil, errors.New("OTP tidak valid atau sudah kadaluarsa")
 	}
 
 	config.RDB.Del(config.Ctx, redisKey)
 
 	account, err := s.repo.FindByIdentifier(input.Identifier)
 	if err != nil {
-		return "", errors.New("Gagal memuat data akun")
+		return "", nil, errors.New("Gagal memuat data akun")
+	}
+
+	// Validasi kesesuaian role pada saat verifikasi OTP
+	if input.ExpectedRole == "" && input.Role != "" {
+		input.ExpectedRole = input.Role
+	}
+	targetRole := NormalizeExpectedRole(input.ExpectedRole)
+	if targetRole != "" && account.Role != targetRole {
+		return "", nil, NewRoleMismatchError(account.Role, targetRole)
 	}
 
 	now := time.Now()
@@ -583,10 +601,10 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 
 	token, err := utils.GenerateToken(account.AccountID, account.Role)
 	if err != nil {
-		return "", errors.New("Gagal membuat sesi pengguna")
+		return "", nil, errors.New("Gagal membuat sesi pengguna")
 	}
 
-	return token, nil
+	return token, account, nil
 }
 
 func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {

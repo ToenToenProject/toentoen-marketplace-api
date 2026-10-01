@@ -87,3 +87,6 @@ go.work.sum
 # Temporary and build files
 tmp/
 server
+
+# Documentation
+docs/

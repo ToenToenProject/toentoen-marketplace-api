@@ -53,8 +53,9 @@ func (h *MyActivityHandler) GetMyBusinessReviews(c *fiber.Ctx) error {
 
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "10"))
+	reviewType := c.Query("type", c.Query("filter", "all"))
 
-	reviews, err := h.service.GetMyBusinessReviews(accountID, page, limit)
+	reviews, err := h.service.GetMyBusinessReviews(accountID, page, limit, reviewType)
 	if err != nil {
 		return utils.SendResponse(c, 500, "99", "Gagal memuat ulasan", nil)
 	}

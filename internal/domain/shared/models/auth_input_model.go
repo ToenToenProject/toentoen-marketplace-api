@@ -50,13 +50,17 @@ func (c *ConsentInput) Normalize() {
 }
 
 type LoginUnifiedInput struct {
-	Identifier string `json:"identifier" validate:"required"`
-	Password   string `json:"password" validate:"required"`
+	Identifier   string `json:"identifier" validate:"required"`
+	Password     string `json:"password" validate:"required"`
+	ExpectedRole string `json:"expected_role" query:"expected_role"`
+	Role         string `json:"role" query:"role"`
 }
 
 type VerifyLoginOTPInput struct {
-	Identifier string `json:"identifier" validate:"required"`
-	OTP        string `json:"otp" validate:"required"`
+	Identifier   string `json:"identifier" validate:"required"`
+	OTP          string `json:"otp" validate:"required"`
+	ExpectedRole string `json:"expected_role" query:"expected_role"`
+	Role         string `json:"role" query:"role"`
 }
 
 type ForgotPasswordInput struct {

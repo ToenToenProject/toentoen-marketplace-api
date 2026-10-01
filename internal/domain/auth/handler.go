@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"strings"
 	"time"
 	"toentoen-backend/internal/config"
@@ -161,11 +162,29 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if input.ExpectedRole == "" && input.Role != "" {
+		input.ExpectedRole = input.Role
+	}
+	if input.ExpectedRole == "" {
+		input.ExpectedRole = c.Query("expected_role")
+		if input.ExpectedRole == "" {
+			input.ExpectedRole = c.Query("role")
+		}
+	}
+
 	if errors := utils.ValidateStruct(&input); errors != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
 	if err := h.service.Login(input); err != nil {
+		var roleErr *RoleMismatchError
+		if errors.As(err, &roleErr) {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, roleErr.Error(), fiber.Map{
+				"actual_role":     roleErr.ActualRole,
+				"expected_role":   roleErr.ExpectedRole,
+				"redirect_portal": roleErr.RedirectPortal,
+			})
+		}
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedAuth, err.Error(), nil)
 	}
 
@@ -178,12 +197,30 @@ func (h *AuthHandler) VerifyLoginOTP(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
+	if input.ExpectedRole == "" && input.Role != "" {
+		input.ExpectedRole = input.Role
+	}
+	if input.ExpectedRole == "" {
+		input.ExpectedRole = c.Query("expected_role")
+		if input.ExpectedRole == "" {
+			input.ExpectedRole = c.Query("role")
+		}
+	}
+
 	if errors := utils.ValidateStruct(&input); errors != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	token, err := h.service.VerifyLoginOTP(input)
+	token, account, err := h.service.VerifyLoginOTP(input)
 	if err != nil {
+		var roleErr *RoleMismatchError
+		if errors.As(err, &roleErr) {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, roleErr.Error(), fiber.Map{
+				"actual_role":     roleErr.ActualRole,
+				"expected_role":   roleErr.ExpectedRole,
+				"redirect_portal": roleErr.RedirectPortal,
+			})
+		}
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, err.Error(), nil)
 	}
 
@@ -198,7 +235,15 @@ func (h *AuthHandler) VerifyLoginOTP(c *fiber.Ctx) error {
 		SameSite: "Lax",
 	})
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Login berhasil", nil)
+	data := fiber.Map{
+		"token": token,
+	}
+	if account != nil {
+		data["account_id"] = account.AccountID
+		data["role"] = account.Role
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Login berhasil", data)
 }
 
 func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
