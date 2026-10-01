@@ -64,6 +64,10 @@ services:
       - APP_ENV=${APP_ENV}
       - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY}
       - BLIND_INDEX_KEY=${BLIND_INDEX_KEY}
+      - WHATSAPP_API_URL=${WHATSAPP_API_URL:-https://graph.facebook.com/v20.0}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+      - WHATSAPP_TOKEN=${WHATSAPP_TOKEN}
+      - WHATSAPP_VERIFY_TOKEN=${WHATSAPP_VERIFY_TOKEN}
     depends_on:
       - postgres-db
       - redis-cache

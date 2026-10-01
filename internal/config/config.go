@@ -47,6 +47,11 @@ type AppConfig struct {
 	DataEncryptionKey        string
 	BlindIndexKey            string
 	RequirePhoneVerification bool
+
+	WhatsAppAPIURL        string
+	WhatsAppToken         string
+	WhatsAppPhoneNumberID string
+	WhatsAppVerifyToken   string
 }
 
 var Envs *AppConfig
@@ -96,6 +101,11 @@ func InitConfig() {
 		AWSS3Bucket:  getEnvMust("AWS_S3_BUCKET"),
 
 		RequirePhoneVerification: getEnv("REQUIRE_PHONE_VERIFICATION", "false") == "true",
+
+		WhatsAppAPIURL:        getEnv("WHATSAPP_API_URL", "https://graph.facebook.com/v20.0"),
+		WhatsAppToken:         getEnv("WHATSAPP_TOKEN", ""),
+		WhatsAppPhoneNumberID: getEnv("WHATSAPP_PHONE_NUMBER_ID", ""),
+		WhatsAppVerifyToken:   getEnv("WHATSAPP_VERIFY_TOKEN", ""),
 	}
 }
 

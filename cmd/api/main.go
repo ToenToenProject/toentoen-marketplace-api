@@ -32,6 +32,7 @@ import (
 	support_ticket "toentoen-backend/internal/domain/support/ticket"
 	"toentoen-backend/internal/domain/business_chat"
 	"toentoen-backend/internal/domain/merchant/transfer"
+	"toentoen-backend/internal/domain/webhook"
 
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/middlewares"
@@ -217,6 +218,8 @@ func main() {
 	businessTransferService := transfer.NewBusinessTransferService(businessTransferRepo, notifService)
 	businessTransferHandler := transfer.NewBusinessTransferHandler(businessTransferService)
 
+	webhookHandler := webhook.NewWebhookHandler()
+
 	// ==========================================
 	// 3. FIBER APP SETUP
 	// ==========================================
@@ -277,7 +280,15 @@ func main() {
 	// Static Assets (Logos, public media)
 	app.Static("/assets", "./assets")
 
+	// ==========================================
+	// ROUTES: WEBHOOKS (Meta WhatsApp Cloud API)
+	// ==========================================
+	app.Get("/webhook/whatsapp", webhookHandler.VerifyWhatsAppWebhook)
+	app.Post("/webhook/whatsapp", webhookHandler.HandleWhatsAppWebhookEvent)
+
 	api := app.Group("/api/v1")
+	api.Get("/webhook/whatsapp", webhookHandler.VerifyWhatsAppWebhook)
+	api.Post("/webhook/whatsapp", webhookHandler.HandleWhatsAppWebhookEvent)
 
 	// ==========================================
 	// ROUTES: PUBLIC METADATA (Categories, Tags)
