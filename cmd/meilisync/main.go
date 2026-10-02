@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"time"
-	"fmt"
 
 	"github.com/joho/godotenv"
 	"toentoen-backend/internal/config"
@@ -11,6 +10,7 @@ import (
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
 	myMeili "toentoen-backend/pkg/meilisearch"
+	"toentoen-backend/pkg/utils"
 )
 
 func main() {
@@ -51,7 +51,7 @@ func main() {
 
 	var docs []explore.MeiliBusinessDocument
 
-	loc, _ := time.LoadLocation("Asia/Jakarta")
+	loc := utils.GetWIBLocation()
 	now := time.Now().In(loc)
 	currentDayInt := int(now.Weekday())
 
@@ -65,28 +65,16 @@ func main() {
 			productNames = append(productNames, p.ProductName)
 		}
 
-		// Hitung IsOpen & CloseTime
-		isOpen := false
+		// Hitung IsOpen & CloseTime secara akurat
+		isOpen := utils.CalculateStoreStatus(b.IsManuallyClosed, b.Hours)
 		closeTime := ""
-
-		if !b.IsManuallyClosed {
-			for _, h := range b.Hours {
-				if h.DayOfWeek == currentDayInt {
-					if h.OpenTime != nil && h.CloseTime != nil {
-						openT, _ := time.Parse("15:04", *h.OpenTime)
-						closeT, _ := time.Parse("15:04", *h.CloseTime)
-
-						nowT, _ := time.Parse("15:04", fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()))
-
-						if (nowT.After(openT) || nowT.Equal(openT)) && nowT.Before(closeT) {
-							isOpen = true
-						}
-						closeTime = *h.CloseTime
-					}
-					break
-				}
+		for _, h := range b.Hours {
+			if h.DayOfWeek == currentDayInt && h.CloseTime != nil {
+				closeTime = *h.CloseTime
+				break
 			}
 		}
+
 
 		name := ""
 		if b.BusinessName != nil {

@@ -1,57 +1,75 @@
 package utils
 
 import (
-	"log"
+	"strconv"
 	"strings"
 	"time"
 
 	"toentoen-backend/internal/domain/shared/models"
 )
 
-// CalculateStoreStatus menghitung apakah toko buka SECARA REAL TIME
+var defaultWIBLocation = time.FixedZone("WIB", 7*3600)
+
+// GetWIBLocation mengembalikan pointer ke *time.Location untuk zona Asia/Jakarta (WIB / UTC+7).
+// Jika sistem OS tidak memiliki tzdata, fungsi ini secara aman fallback ke FixedZone ("WIB", +7 jam).
+func GetWIBLocation() *time.Location {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil || loc == nil {
+		return defaultWIBLocation
+	}
+	return loc
+}
+
+// CalculateStoreStatus menghitung apakah toko buka SECARA REAL TIME terkunci pada zona WIB (UTC+7)
 func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bool {
-	// 1. Filter Manual: Jika owner menekan tombol tutup darurat, langsung kembalikan FALSE
+	// 1. Filter Manual: Jika owner menekan tombol tutup darurat/manual, langsung kembalikan FALSE
 	if isManuallyClosed {
 		return false
 	}
 
 	// 2. Kunci Zona Waktu ke WIB (GMT+7)
-	loc, err := time.LoadLocation("Asia/Jakarta")
-	if err != nil {
-		log.Println("Gagal load timezone:", err)
-		loc = time.FixedZone("WIB", 7*3600) // Fallback manual ke WIB
-	}
-	
+	loc := GetWIBLocation()
 	now := time.Now().In(loc)
-	currentDay := int(now.Weekday()) // 0 = Minggu, 1 = Senin, dst.
+	currentDay := int(now.Weekday()) // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
 
-	// 3. Filter Sistem: Cek jadwal hari ini
+	nowMinutes := now.Hour()*60 + now.Minute()
+
+	// 3. Filter Sistem: Cek jadwal operasional hari ini
 	for _, h := range hours {
 		if h.DayOfWeek == currentDay {
-			// Parse OpenTime dan CloseTime (Format dari DB biasanya "15:00:00" atau "15:00")
+			// Parse OpenTime dan CloseTime (Format dari DB bisa "08:00:00" atau "08:00")
 			if h.OpenTime != nil && h.CloseTime != nil {
-				openStr := strings.Split(*h.OpenTime, ":")
-				closeStr := strings.Split(*h.CloseTime, ":")
-				
+				openStr := strings.Split(strings.TrimSpace(*h.OpenTime), ":")
+				closeStr := strings.Split(strings.TrimSpace(*h.CloseTime), ":")
+
 				if len(openStr) >= 2 && len(closeStr) >= 2 {
-					openHour, _ := time.Parse("15", openStr[0])
-					openMinute, _ := time.Parse("04", openStr[1])
-					
-					closeHour, _ := time.Parse("15", closeStr[0])
-					closeMinute, _ := time.Parse("04", closeStr[1])
+					openHour, errOH := strconv.Atoi(openStr[0])
+					openMinute, errOM := strconv.Atoi(openStr[1])
+					closeHour, errCH := strconv.Atoi(closeStr[0])
+					closeMinute, errCM := strconv.Atoi(closeStr[1])
 
-					// Konversi jam ke menit total (misal 15:30 -> 930 menit) agar mudah dibandingkan
-					nowMinutes := now.Hour()*60 + now.Minute()
-					openTotalMinutes := openHour.Hour()*60 + openMinute.Minute()
-					closeTotalMinutes := closeHour.Hour()*60 + closeMinute.Minute()
+					if errOH == nil && errOM == nil && errCH == nil && errCM == nil {
+						openTotalMinutes := openHour*60 + openMinute
+						closeTotalMinutes := closeHour*60 + closeMinute
 
-					// Pengecekan krusial
-					return nowMinutes >= openTotalMinutes && nowMinutes <= closeTotalMinutes
+						// Toko buka 24 jam (misal 00:00 - 24:00 atau 00:00 - 23:59)
+						if openTotalMinutes == 0 && (closeTotalMinutes == 0 || closeTotalMinutes >= 1439) {
+							return true
+						}
+
+						// Jadwal operasional reguler di hari yang sama (misal 08:00 - 17:00)
+						if openTotalMinutes <= closeTotalMinutes {
+							return nowMinutes >= openTotalMinutes && nowMinutes <= closeTotalMinutes
+						}
+
+						// Jadwal lintas tengah malam (misal 18:00 - 02:00 dini hari)
+						return nowMinutes >= openTotalMinutes || nowMinutes <= closeTotalMinutes
+					}
 				}
 			}
 		}
 	}
 
-	// Jika tidak ada data hari ini, anggap tutup
-	return false 
-}
+	// Jika tidak ada data jadwal hari ini atau format tidak valid, anggap tutup
+	return false
+}

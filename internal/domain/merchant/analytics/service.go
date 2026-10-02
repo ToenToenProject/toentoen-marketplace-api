@@ -7,6 +7,7 @@ import (
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/merchant/catalog"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/utils"
 )
 
 type AnalyticsService interface {
@@ -43,7 +44,7 @@ func (s *analyticsService) GetDailyAnalytics(requesterID, role, businessID strin
 	}
 
 	limit := 6
-	loc, _ := time.LoadLocation("Asia/Jakarta")
+	loc := utils.GetWIBLocation()
 	today := time.Now().In(loc).Format("2006-01-02")
 
 	response, err := s.analyticsRepo.GetDailyAnalytics(businessID, today, limit)

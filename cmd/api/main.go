@@ -56,7 +56,7 @@ import (
 func startMidnightResetWorker(businessRepo business.BusinessRepository) {
 	go func() {
 		for {
-			loc, _ := time.LoadLocation("Asia/Jakarta")
+			loc := utils.GetWIBLocation()
 			now := time.Now().In(loc)
 
 			// Hitung berapa lama lagi menuju jam 00:00:00 (Tengah Malam Berikutnya)
@@ -449,7 +449,10 @@ func main() {
 	customerSignalGroup.Get("/me", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
 	customerSignalGroup.Put("/:signal_id", customerSignalHandler.UpdateSignal)
+	customerSignalGroup.Delete("/:signal_id", customerSignalHandler.DeleteSignal)
 	customerSignalGroup.Put("/:signal_id/complete", customerSignalHandler.CompleteSignal)
+	customerSignalGroup.Post("/:signal_id/complete", customerSignalHandler.CompleteSignal)
+	customerSignalGroup.Patch("/:signal_id/complete", customerSignalHandler.CompleteSignal)
 
 	customerConvGroup := api.Group("/customer/conversations", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	customerConvGroup.Get("/", customerSignalHandler.GetMyConversations)

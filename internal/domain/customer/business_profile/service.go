@@ -1,7 +1,6 @@
 package business_profile
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -33,9 +32,10 @@ type BusinessProfileResponse struct {
 	Category        string   `json:"category"`
 	CustomCategory  *string  `json:"custom_category,omitempty"`
 	CustomTags      []string `json:"custom_tags,omitempty"`
-	Hashtags        []string `json:"hashtags,omitempty"`
-	IsOpenNow       bool     `json:"is_open_now"`
-	IsBookmarked    bool     `json:"is_bookmarked"`
+	Hashtags         []string `json:"hashtags,omitempty"`
+	IsOpenNow        bool     `json:"is_open_now"`
+	IsManuallyClosed bool     `json:"is_manually_closed"`
+	IsBookmarked     bool     `json:"is_bookmarked"`
 	IsLive          bool     `json:"is_live"`
 	LivePlatform    *string  `json:"live_platform,omitempty"`
 	LiveStartedAt   *time.Time `json:"live_started_at,omitempty"`
@@ -114,28 +114,8 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		category = *business.CustomCategory
 	}
 
-	// Hitung IsOpenNow
-	isOpenNow := false
-	if !business.IsManuallyClosed {
-		loc, _ := time.LoadLocation("Asia/Jakarta")
-		now := time.Now().In(loc)
-		currentDayInt := int(now.Weekday())
-
-		for _, h := range business.Hours {
-			if h.DayOfWeek == currentDayInt {
-				if h.OpenTime != nil && h.CloseTime != nil {
-					openT, _ := time.Parse("15:04", *h.OpenTime)
-					closeT, _ := time.Parse("15:04", *h.CloseTime)
-					nowT, _ := time.Parse("15:04", fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()))
-
-					if (nowT.After(openT) || nowT.Equal(openT)) && nowT.Before(closeT) {
-						isOpenNow = true
-					}
-				}
-				break
-			}
-		}
-	}
+	// Hitung IsOpenNow secara akurat menggunakan utils.CalculateStoreStatus (terkunci ke WIB / UTC+7)
+	isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
 
 	bName := ""
 	if business.BusinessName != nil {
@@ -165,6 +145,10 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 	similarBusinesses, _ := s.repo.GetSimilarBusinesses(category, city, businessID, 10)
 	if similarBusinesses == nil {
 		similarBusinesses = []models.Business{}
+	} else {
+		for i := range similarBusinesses {
+			similarBusinesses[i].IsOpenNow = utils.CalculateStoreStatus(similarBusinesses[i].IsManuallyClosed, similarBusinesses[i].Hours)
+		}
 	}
 
 	recentReviews, _ := s.repo.GetRecentTopReviews(businessID, 4)
@@ -192,9 +176,10 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		Category:        category,
 		CustomCategory:  business.CustomCategory,
 		CustomTags:      business.CustomTags,
-		Hashtags:        business.Hashtags,
-		IsOpenNow:       isOpenNow,
-		IsBookmarked:    isBookmarked,
+		Hashtags:         business.Hashtags,
+		IsOpenNow:        isOpenNow,
+		IsManuallyClosed: business.IsManuallyClosed,
+		IsBookmarked:     isBookmarked,
 		IsLive:          isLive,
 		LivePlatform:    livePlatform,
 		LiveStartedAt:   liveStartedAt,
@@ -267,28 +252,8 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			category = *business.CustomCategory
 		}
 
-		// Hitung IsOpenNow
-		isOpenNow := false
-		if !business.IsManuallyClosed {
-			loc, _ := time.LoadLocation("Asia/Jakarta")
-			now := time.Now().In(loc)
-			currentDayInt := int(now.Weekday())
-
-			for _, h := range business.Hours {
-				if h.DayOfWeek == currentDayInt {
-					if h.OpenTime != nil && h.CloseTime != nil {
-						openT, _ := time.Parse("15:04", *h.OpenTime)
-						closeT, _ := time.Parse("15:04", *h.CloseTime)
-						nowT, _ := time.Parse("15:04", fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()))
-
-						if (nowT.After(openT) || nowT.Equal(openT)) && nowT.Before(closeT) {
-							isOpenNow = true
-						}
-					}
-					break
-				}
-			}
-		}
+		// Hitung IsOpenNow secara akurat menggunakan utils.CalculateStoreStatus (terkunci ke WIB / UTC+7)
+		isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
 
 		bName := ""
 		if business.BusinessName != nil {
@@ -314,9 +279,10 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			Category:        category,
 			CustomCategory:  business.CustomCategory,
 			CustomTags:      business.CustomTags,
-			Hashtags:        business.Hashtags,
-			IsOpenNow:       isOpenNow,
-			IsBookmarked:    true, // always true if fetched from bookmarks
+			Hashtags:         business.Hashtags,
+			IsOpenNow:        isOpenNow,
+			IsManuallyClosed: business.IsManuallyClosed,
+			IsBookmarked:     true, // always true if fetched from bookmarks
 			IsLive:          isLive,
 			LivePlatform:    livePlatform,
 			LiveStartedAt:   liveStartedAt,
