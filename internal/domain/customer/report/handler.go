@@ -238,3 +238,11 @@ func (h *Handler) SubmitReport(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Laporan berhasil dikirim", nil)
 }
+
+// GetReportCategories mengembalikan daftar master jenis/kategori laporan beserta sub-kategorinya.
+// Endpoint: GET /api/v1/reports/categories?target_type=business
+func (h *Handler) GetReportCategories(c *fiber.Ctx) error {
+	targetType := c.Query("target_type")
+	categories := models.GetReportCategories(targetType)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar jenis laporan berhasil diambil", categories)
+}

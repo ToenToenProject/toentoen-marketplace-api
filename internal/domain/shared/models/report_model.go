@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ==========================================
 // 1. DTO INPUT PELAPORAN UNIVERSAL
@@ -187,3 +190,92 @@ type BusinessPostCommentReport struct {
 	Status      string    `gorm:"column:status;default:'pending'" json:"status"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
+
+// ==========================================
+// 4. MASTER KATEGORI & ALASAN LAPORAN (REPORT CATEGORIES)
+// ==========================================
+
+type ReportSubCategory struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type ReportCategory struct {
+	ID             string              `json:"id"`
+	ParentCategory string              `json:"parent_category"`
+	TargetType     string              `json:"target_type"`
+	SubCategories  []ReportSubCategory `json:"sub_categories"`
+}
+
+var MasterReportCategories = []ReportCategory{
+	{
+		ID:             "cat_biz_01",
+		ParentCategory: "Report a Business",
+		TargetType:     "business",
+		SubCategories: []ReportSubCategory{
+			{ID: "sub_biz_1", Name: "Fake or fraudulent business"},
+			{ID: "sub_biz_2", Name: "Inaccurate business information"},
+			{ID: "sub_biz_3", Name: "Policy violation (Illegal business)"},
+			{ID: "sub_biz_4", Name: "Sham or misleading practices"},
+			{ID: "sub_biz_5", Name: "Other"},
+		},
+	},
+	{
+		ID:             "cat_post_02",
+		ParentCategory: "Report a post",
+		TargetType:     "post",
+		SubCategories: []ReportSubCategory{
+			{ID: "sub_post_1", Name: "Spam content"},
+			{ID: "sub_post_2", Name: "Inappropriate media"},
+			{ID: "sub_post_3", Name: "Copyright violation"},
+		},
+	},
+	{
+		ID:             "cat_cmt_03",
+		ParentCategory: "Report a comment",
+		TargetType:     "comment",
+		SubCategories: []ReportSubCategory{
+			{ID: "sub_cmt_1", Name: "Hate speech"},
+			{ID: "sub_cmt_2", Name: "Harassment or bullying"},
+			{ID: "sub_cmt_3", Name: "Promotional spam"},
+		},
+	},
+	{
+		ID:             "cat_prod_04",
+		ParentCategory: "Report a product",
+		TargetType:     "product",
+		SubCategories: []ReportSubCategory{
+			{ID: "sub_prod_1", Name: "Counterfeit item"},
+			{ID: "sub_prod_2", Name: "Misleading description"},
+			{ID: "sub_prod_3", Name: "Prohibited item"},
+		},
+	},
+	{
+		ID:             "cat_rev_05",
+		ParentCategory: "Report a review",
+		TargetType:     "review",
+		SubCategories: []ReportSubCategory{
+			{ID: "sub_rev_1", Name: "Fake review"},
+			{ID: "sub_rev_2", Name: "Offensive language"},
+			{ID: "sub_rev_3", Name: "Irrelevant to product"},
+		},
+	},
+}
+
+func GetReportCategories(targetType string) []ReportCategory {
+	if targetType == "" {
+		return MasterReportCategories
+	}
+	targetType = strings.ToLower(strings.TrimSpace(targetType))
+	var filtered []ReportCategory
+	for _, cat := range MasterReportCategories {
+		if strings.ToLower(cat.TargetType) == targetType || strings.Contains(strings.ToLower(cat.ParentCategory), targetType) {
+			filtered = append(filtered, cat)
+		}
+	}
+	if len(filtered) == 0 {
+		return MasterReportCategories
+	}
+	return filtered
+}
+

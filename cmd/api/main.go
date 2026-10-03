@@ -298,6 +298,7 @@ func main() {
 	metaGroup.Get("/tags", metaHandler.GetTags)
 	metaGroup.Get("/store-types", metaHandler.GetStoreTypes)
 	metaGroup.Get("/occupations", metaHandler.GetOccupations)
+	metaGroup.Get("/report-categories", reportHandler.GetReportCategories)
 
 	// ==========================================
 	// ROUTE: WEBSOCKET (Real-Time)
@@ -460,6 +461,7 @@ func main() {
 	customerConvGroup.Post("/:conversation_id/messages", customerSignalHandler.SendMessage)
 
 	// 4. UNIFIED ROUTES (UNIVERSAL REPORTS, LIKES, COMMENTS, REVIEWS)
+	api.Get("/reports/categories", reportHandler.GetReportCategories)
 	reportsGroup := api.Group("/reports", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	reportsGroup.Post("/", reportHandler.CreateReport)
 	reportsGroup.Get("/", reportHandler.GetAllReports)
