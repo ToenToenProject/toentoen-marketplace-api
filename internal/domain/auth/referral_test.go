@@ -19,19 +19,45 @@ type mockAuthRepo struct {
 func (m *mockAuthRepo) CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error {
 	return nil
 }
-func (m *mockAuthRepo) UpdateAccountStatus(identifier string, status string) error {
+func (m *mockAuthRepo) UpdateAccountStatus(accountID string, status string) error {
 	return nil
 }
-func (m *mockAuthRepo) UpdateEmailVerified(identifier string, verifiedAt time.Time, newStatus string) error {
+func (m *mockAuthRepo) UpdateEmailVerified(accountID string, verifiedAt time.Time, newStatus string) error {
 	return nil
 }
-func (m *mockAuthRepo) UpdatePhoneVerified(identifier string, verifiedAt time.Time, newStatus string) error {
+func (m *mockAuthRepo) UpdatePhoneVerified(accountID string, verifiedAt time.Time, newStatus string) error {
 	return nil
 }
-func (m *mockAuthRepo) FindByIdentifier(identifier string) (*models.Account, error) {
+func (m *mockAuthRepo) FindByIdentifier(identifier string, roleGroup string) (*models.Account, error) {
 	if m.accounts != nil {
-		if acc, ok := m.accounts[identifier]; ok {
-			return acc, nil
+		var matched []*models.Account
+		for idKey, acc := range m.accounts {
+			matchesIdent := strings.EqualFold(idKey, identifier)
+			if !matchesIdent && acc != nil {
+				if acc.Email != nil && strings.EqualFold(*acc.Email, identifier) {
+					matchesIdent = true
+				} else if acc.PhoneNumber != nil && strings.EqualFold(*acc.PhoneNumber, identifier) {
+					matchesIdent = true
+				} else if strings.EqualFold(acc.Username, identifier) {
+					matchesIdent = true
+				}
+			}
+			if matchesIdent && acc != nil {
+				if roleGroup == "" {
+					matched = append(matched, acc)
+				} else {
+					g := models.RoleGroupOf(acc.Role)
+					if g == roleGroup {
+						matched = append(matched, acc)
+					}
+				}
+			}
+		}
+		if len(matched) > 1 {
+			return nil, ErrAmbiguousAccount
+		}
+		if len(matched) == 1 {
+			return matched[0], nil
 		}
 	}
 	return nil, gorm.ErrRecordNotFound
@@ -138,6 +164,7 @@ func TestRegisterWithReferralCode(t *testing.T) {
 			accounts: map[string]*models.Account{
 				activeEmail: {
 					Email:         &activeEmail,
+					Role:          "customer",
 					AccountStatus: "active",
 				},
 			},
@@ -173,7 +200,10 @@ func TestLogin(t *testing.T) {
 	hashStr := string(hash)
 
 	phone := "081234567890"
-	email := "unverified@example.com"
+	emailOwner := "unverified@example.com"
+	emailSuspended := "suspended@example.com"
+	emailBanned := "banned@example.com"
+	emailAdmin := "admin@example.com"
 
 	mockRepo := &mockAuthRepo{
 		accounts: map[string]*models.Account{
@@ -186,28 +216,28 @@ func TestLogin(t *testing.T) {
 			},
 			"unverified@example.com": {
 				AccountID:     "ACC-2",
-				Email:         &email,
+				Email:         &emailOwner,
 				PasswordHash:  &hashStr,
 				Role:          "owner",
 				AccountStatus: "inactive", // Status belum verified
 			},
 			"suspended@example.com": {
 				AccountID:     "ACC-3",
-				Email:         &email,
+				Email:         &emailSuspended,
 				PasswordHash:  &hashStr,
 				Role:          "customer",
 				AccountStatus: "suspended",
 			},
 			"banned@example.com": {
 				AccountID:     "ACC-4",
-				Email:         &email,
+				Email:         &emailBanned,
 				PasswordHash:  &hashStr,
 				Role:          "customer",
 				AccountStatus: "banned",
 			},
 			"admin@example.com": {
 				AccountID:     "ACC-5",
-				Email:         &email,
+				Email:         &emailAdmin,
 				PasswordHash:  &hashStr,
 				Role:          "business_admin",
 				AccountStatus: "active",
@@ -351,6 +381,120 @@ func TestLogin(t *testing.T) {
 		}
 		if !strings.Contains(roleErr.Message, "Pelanggan (Customer)") {
 			t.Fatalf("expected message to mention Pelanggan (Customer), got: %s", roleErr.Message)
+		}
+	})
+}
+
+func TestSharedEmailBetweenCustomerAndMerchant(t *testing.T) {
+	password := "secret123"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashStr := string(hash)
+	sharedEmail := "user@toentoen.com"
+
+	ownerAcc := &models.Account{
+		AccountID:     "ACC_OWNER_1",
+		Email:         &sharedEmail,
+		Role:          "owner",
+		PasswordHash:  &hashStr,
+		AccountStatus: "active",
+	}
+	custAcc := &models.Account{
+		AccountID:     "ACC_CUST_1",
+		Email:         &sharedEmail,
+		Role:          "customer",
+		PasswordHash:  &hashStr,
+		AccountStatus: "active",
+	}
+
+	mockRepo := &mockAuthRepo{
+		accounts: map[string]*models.Account{
+			sharedEmail + ":owner":    ownerAcc,
+			sharedEmail + ":customer": custAcc,
+		},
+	}
+	svc := NewAuthService(mockRepo)
+
+	t.Run("login as customer with shared email succeeds and targets customer account", func(t *testing.T) {
+		err := svc.Login(models.LoginUnifiedInput{
+			Identifier:   sharedEmail,
+			Password:     password,
+			ExpectedRole: "customer",
+		})
+		if err != nil {
+			t.Fatalf("expected customer login to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("login as owner with shared email succeeds and targets owner account", func(t *testing.T) {
+		err := svc.Login(models.LoginUnifiedInput{
+			Identifier:   sharedEmail,
+			Password:     password,
+			ExpectedRole: "owner",
+		})
+		if err != nil {
+			t.Fatalf("expected owner login to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("register customer allows email already used by owner", func(t *testing.T) {
+		// Repo hanya punya akun owner dengan email ini
+		repoOwnerOnly := &mockAuthRepo{
+			accounts: map[string]*models.Account{
+				sharedEmail: ownerAcc,
+			},
+		}
+		svcOwnerOnly := NewAuthService(repoOwnerOnly)
+		err := svcOwnerOnly.Register(models.RegisterUnifiedInput{
+			Identifier: sharedEmail,
+			Password:   "passwordBaru123",
+			Role:       "customer",
+		})
+		if err != nil {
+			t.Fatalf("expected register customer to be allowed for email owned by owner, got: %v", err)
+		}
+	})
+
+	t.Run("register owner allows email already used by customer", func(t *testing.T) {
+		repoCustOnly := &mockAuthRepo{
+			accounts: map[string]*models.Account{
+				sharedEmail: custAcc,
+			},
+		}
+		svcCustOnly := NewAuthService(repoCustOnly)
+		err := svcCustOnly.Register(models.RegisterUnifiedInput{
+			Identifier: sharedEmail,
+			Password:   "passwordBaru123",
+			Role:       "owner",
+		})
+		if err != nil {
+			t.Fatalf("expected register owner to be allowed for email owned by customer, got: %v", err)
+		}
+	})
+
+	t.Run("register admin rejects email already used by owner", func(t *testing.T) {
+		repoOwnerOnly := &mockAuthRepo{
+			accounts: map[string]*models.Account{
+				sharedEmail: ownerAcc,
+			},
+		}
+		svcOwnerOnly := NewAuthService(repoOwnerOnly)
+		err := svcOwnerOnly.Register(models.RegisterUnifiedInput{
+			Identifier: sharedEmail,
+			Password:   "passwordBaru123",
+			Role:       "business_admin",
+		})
+		if err == nil || !strings.Contains(err.Error(), "tidak boleh") {
+			t.Fatalf("expected owner vs admin collision rejection, got: %v", err)
+		}
+	})
+
+	t.Run("login without role when ambiguous returns ErrAmbiguousAccount", func(t *testing.T) {
+		err := svc.Login(models.LoginUnifiedInput{
+			Identifier: sharedEmail,
+			Password:   password,
+		})
+		if err == nil || !errors.Is(err, ErrAmbiguousAccount) {
+			t.Fatalf("expected ErrAmbiguousAccount, got: %v", err)
 		}
 	})
 }

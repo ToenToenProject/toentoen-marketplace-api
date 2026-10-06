@@ -1,12 +1,53 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+// ==========================================
+// ROLE GROUP (Pemisahan identitas akun)
+// ==========================================
+// Satu email / nomor telepon boleh dipakai maksimal 1x per kelompok role:
+//   - RoleGroupCustomer : role "customer"
+//   - RoleGroupMerchant : role "owner" dan "business_admin" (tidak boleh berbagi email)
+// Setiap akun tetap memiliki account_id sendiri sehingga seluruh relasi data
+// (review, signal, bisnis, laporan, dll.) tidak pernah tercampur antar kelompok.
+const (
+	RoleGroupCustomer = "customer"
+	RoleGroupMerchant = "merchant"
+)
+
+// RoleGroupOf mengembalikan kelompok role. String kosong jika role tidak dikenal/kosong.
+func RoleGroupOf(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "customer":
+		return RoleGroupCustomer
+	case "owner", "business_admin":
+		return RoleGroupMerchant
+	default:
+		return ""
+	}
+}
+
+// RolesInGroup mengembalikan daftar role yang termasuk dalam kelompok tertentu.
+func RolesInGroup(group string) []string {
+	switch group {
+	case RoleGroupCustomer:
+		return []string{"customer"}
+	case RoleGroupMerchant:
+		return []string{"owner", "business_admin"}
+	default:
+		return nil
+	}
+}
 
 type Account struct {
 	AccountID     string     `gorm:"primaryKey" json:"accountId"`
 	AuthProvider  string     `gorm:"default:'local'" json:"authProvider"`
-	Email             *string    `gorm:"unique;" json:"email"`
-	PhoneNumber       *string    `gorm:"unique;" json:"phoneNumber"`
+	// Unik per kelompok role (lihat scripts/migrations/20261006_accounts_identity_per_role_group.sql)
+	Email             *string    `json:"email"`
+	PhoneNumber       *string    `json:"phoneNumber"`
 	FirstName         string     `json:"firstName"`
 	LastName          string     `json:"lastName"`
 	Username          string     `gorm:"unique;" json:"username"`

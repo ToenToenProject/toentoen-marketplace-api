@@ -24,8 +24,8 @@ type ProfileRepository interface {
 
 	DeleteAccountTx(accountID string, role string) ([]string, []string, error)
 	CheckUsernameExists(username string, excludeAccountID string) (bool, error)
-	CheckEmailExists(email string, excludeAccountID string) (bool, error)
-	CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error)
+	CheckEmailExists(email string, excludeAccountID string, roleGroup ...string) (bool, error)
+	CheckPhoneNumberExists(phone string, excludeAccountID string, roleGroup ...string) (bool, error)
 	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
 	FindReferralCode(code string) (*models.ReferralUser, error)
 	UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error
@@ -168,13 +168,27 @@ func (r *profileRepository) CheckUsernameExists(username string, excludeAccountI
 	return count > 0, err
 }
 
-func (r *profileRepository) CheckEmailExists(email string, excludeAccountID string) (bool, error) {
+func (r *profileRepository) CheckEmailExists(email string, excludeAccountID string, roleGroup ...string) (bool, error) {
+	query := r.db.Model(&models.Account{}).Where("LOWER(email) = LOWER(?) AND account_id != ?", strings.TrimSpace(email), excludeAccountID)
+	var group string
+	if len(roleGroup) > 0 && roleGroup[0] != "" {
+		group = roleGroup[0]
+	} else if excludeAccountID != "" {
+		// Dapatkan group dari akun yang sedang mengedit
+		var acc models.Account
+		if err := r.db.Select("role").Where("account_id = ?", excludeAccountID).First(&acc).Error; err == nil {
+			group = models.RoleGroupOf(acc.Role)
+		}
+	}
+	if roles := models.RolesInGroup(group); len(roles) > 0 {
+		query = query.Where("role IN ?", roles)
+	}
 	var count int64
-	err := r.db.Model(&models.Account{}).Where("LOWER(email) = LOWER(?) AND account_id != ?", strings.TrimSpace(email), excludeAccountID).Count(&count).Error
+	err := query.Count(&count).Error
 	return count > 0, err
 }
 
-func (r *profileRepository) CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error) {
+func (r *profileRepository) CheckPhoneNumberExists(phone string, excludeAccountID string, roleGroup ...string) (bool, error) {
 	clean := strings.TrimPrefix(strings.TrimSpace(phone), "+")
 	var phones []string
 	if strings.HasPrefix(clean, "08") {
@@ -185,8 +199,22 @@ func (r *profileRepository) CheckPhoneNumberExists(phone string, excludeAccountI
 		phones = []string{phone, "+" + phone, clean}
 	}
 
+	query := r.db.Model(&models.Account{}).Where("phone_number IN ? AND account_id != ?", phones, excludeAccountID)
+	var group string
+	if len(roleGroup) > 0 && roleGroup[0] != "" {
+		group = roleGroup[0]
+	} else if excludeAccountID != "" {
+		var acc models.Account
+		if err := r.db.Select("role").Where("account_id = ?", excludeAccountID).First(&acc).Error; err == nil {
+			group = models.RoleGroupOf(acc.Role)
+		}
+	}
+	if roles := models.RolesInGroup(group); len(roles) > 0 {
+		query = query.Where("role IN ?", roles)
+	}
+
 	var count int64
-	err := r.db.Model(&models.Account{}).Where("phone_number IN ? AND account_id != ?", phones, excludeAccountID).Count(&count).Error
+	err := query.Count(&count).Error
 	return count > 0, err
 }
 

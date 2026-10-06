@@ -31,7 +31,8 @@ func NewBusinessTransferRepository(db *gorm.DB) BusinessTransferRepository {
 
 func (r *businessTransferRepository) FindAccountByIdentifier(identifier string) (*models.Account, error) {
 	var account models.Account
-	err := r.db.Where("email = ? OR phone_number = ? OR username = ?", identifier, identifier, identifier).First(&account).Error
+	// Target transfer bisnis wajib berstatus sebagai owner, filter spesifik ke role='owner'
+	err := r.db.Where("(LOWER(email) = LOWER(?) OR phone_number = ? OR LOWER(username) = LOWER(?)) AND role = 'owner'", identifier, identifier, identifier).First(&account).Error
 	if err != nil {
 		return nil, err
 	}

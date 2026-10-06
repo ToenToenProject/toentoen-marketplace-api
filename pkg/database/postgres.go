@@ -224,6 +224,51 @@ func ConnectDB() {
 					FOREIGN KEY (report_id) REFERENCES business_post_reports(report_id) ON DELETE CASCADE;
 			END IF;
 		END $$;`,
+		`DO $$
+		DECLARE
+			r RECORD;
+		BEGIN
+			-- Hapus seluruh constraint UNIQUE global lama pada kolom email dan phone_number di tabel accounts
+			FOR r IN (
+				SELECT tc.constraint_name 
+				FROM information_schema.table_constraints tc 
+				JOIN information_schema.key_column_usage kcu 
+				  ON tc.constraint_name = kcu.constraint_name 
+				 AND tc.table_schema = kcu.table_schema
+				WHERE tc.constraint_type = 'UNIQUE' 
+				  AND tc.table_name = 'accounts' 
+				  AND kcu.column_name IN ('email', 'phone_number')
+			) LOOP
+				EXECUTE 'ALTER TABLE accounts DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name);
+			END LOOP;
+
+			-- Hapus indeks unik lama jika dibuat sebagai standalone index
+			DROP INDEX IF EXISTS idx_accounts_email;
+			DROP INDEX IF EXISTS idx_accounts_phone_number;
+			DROP INDEX IF EXISTS accounts_email_key;
+			DROP INDEX IF EXISTS accounts_phone_number_key;
+			DROP INDEX IF EXISTS uq_accounts_email;
+			DROP INDEX IF EXISTS uq_accounts_phone;
+
+			-- Buat Partial Unique Index per kelompok role:
+			-- 1) Kelompok Customer: 1 email unik hanya untuk akun customer
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_customer_email 
+				ON accounts (LOWER(email)) 
+				WHERE role = 'customer' AND email IS NOT NULL AND email != '';
+
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_customer_phone 
+				ON accounts (phone_number) 
+				WHERE role = 'customer' AND phone_number IS NOT NULL AND phone_number != '';
+
+			-- 2) Kelompok Merchant: 1 email unik untuk owner & business_admin (owner & admin tetap tidak boleh berbagi email)
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_merchant_email 
+				ON accounts (LOWER(email)) 
+				WHERE role IN ('owner', 'business_admin') AND email IS NOT NULL AND email != '';
+
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_merchant_phone 
+				ON accounts (phone_number) 
+				WHERE role IN ('owner', 'business_admin') AND phone_number IS NOT NULL AND phone_number != '';
+		END $$;`,
 	}
 
 	for _, q := range alterQueries {

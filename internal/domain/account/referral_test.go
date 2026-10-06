@@ -43,10 +43,10 @@ func (m *mockProfileRepo) DeleteAccountTx(accountID string, role string) ([]stri
 func (m *mockProfileRepo) CheckUsernameExists(username string, excludeAccountID string) (bool, error) {
 	return false, nil
 }
-func (m *mockProfileRepo) CheckEmailExists(email string, excludeAccountID string) (bool, error) {
+func (m *mockProfileRepo) CheckEmailExists(email string, excludeAccountID string, roleGroup ...string) (bool, error) {
 	return false, nil
 }
-func (m *mockProfileRepo) CheckPhoneNumberExists(phone string, excludeAccountID string) (bool, error) {
+func (m *mockProfileRepo) CheckPhoneNumberExists(phone string, excludeAccountID string, roleGroup ...string) (bool, error) {
 	return false, nil
 }
 func (m *mockProfileRepo) CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error) {

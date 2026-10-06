@@ -93,12 +93,15 @@ func (h *AuthHandler) SendEmailOTP(c *fiber.Ctx) error {
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
+	if input.Role == "" {
+		input.Role = c.Query("role")
+	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
 	}
 
-	if err := h.service.SendEmailOTP(input.Email); err != nil {
+	if err := h.service.SendEmailOTP(input.Email, input.Role); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
 	}
 
@@ -109,6 +112,9 @@ func (h *AuthHandler) VerifyEmailOTP(c *fiber.Ctx) error {
 	var input models.VerifyEmailOTPInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+	if input.Role == "" {
+		input.Role = c.Query("role")
 	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {
@@ -251,6 +257,9 @@ func (h *AuthHandler) ForgotPassword(c *fiber.Ctx) error {
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
+	if input.Role == "" {
+		input.Role = c.Query("role")
+	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
@@ -267,6 +276,9 @@ func (h *AuthHandler) VerifyForgotOTP(c *fiber.Ctx) error {
 	var input models.VerifyForgotOTPInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+	if input.Role == "" {
+		input.Role = c.Query("role")
 	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {
@@ -285,6 +297,9 @@ func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
 	var input models.ResetPasswordInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+	if input.Role == "" {
+		input.Role = c.Query("role")
 	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {

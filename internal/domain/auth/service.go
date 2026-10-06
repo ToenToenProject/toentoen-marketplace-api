@@ -20,7 +20,7 @@ type AuthService interface {
 	Register(input models.RegisterUnifiedInput) error
 	CheckReferralCode(code string) (*models.CheckReferralResponse, error)
 	VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (string, error)
-	SendEmailOTP(email string) error
+	SendEmailOTP(email string, role string) error
 	VerifyEmailOTP(input models.VerifyEmailOTPInput) error
 	SendPhoneOTP(phone string) error
 	VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error
@@ -67,7 +67,45 @@ func isEmail(identifier string) bool {
 	return len(parts) == 2 && strings.Contains(parts[1], ".")
 }
 
-func (s *authService) sendOTP(identifier string, email *string, phoneNumber *string, redisPrefix string, customSubject ...string) error {
+// roleGroupFromInput mengubah role dari request (termasuk alias FE) menjadi kelompok role.
+// Mengembalikan string kosong jika role tidak dikirim / tidak dikenal.
+func roleGroupFromInput(role string) string {
+	return models.RoleGroupOf(NormalizeExpectedRole(role))
+}
+
+// candidateGroups mengembalikan kelompok yang perlu diperiksa: kelompok dari role jika dikirim,
+// atau kedua kelompok jika role kosong.
+func candidateGroups(role string) []string {
+	if g := roleGroupFromInput(role); g != "" {
+		return []string{g}
+	}
+	return []string{models.RoleGroupCustomer, models.RoleGroupMerchant}
+}
+
+// scopedKey membuat key Redis yang dipisah per kelompok role, contoh: login_otp:customer:user@mail.com
+func scopedKey(prefix, group, identifier string) string {
+	return fmt.Sprintf("%s:%s:%s", prefix, group, identifier)
+}
+
+// findAccountInGroup mencari akun secara ketat di kelompok role yang diminta (tanpa fallback
+// ke kelompok lain). Dipakai untuk alur sensitif seperti reset password dan verifikasi OTP.
+func (s *authService) findAccountInGroup(identifier, role string) (*models.Account, error) {
+	return s.repo.FindByIdentifier(identifier, roleGroupFromInput(role))
+}
+
+// findAccountForLogin mencari akun di kelompok role yang diminta. Jika tidak ada namun identifier
+// terdaftar di kelompok lain, akun tersebut dikembalikan agar pemanggil dapat memberi
+// RoleMismatchError (arahkan user ke portal yang benar). Akun lain tidak pernah diberi sesi.
+func (s *authService) findAccountForLogin(identifier, targetRole string) (*models.Account, error) {
+	group := models.RoleGroupOf(targetRole)
+	account, err := s.repo.FindByIdentifier(identifier, group)
+	if errors.Is(err, gorm.ErrRecordNotFound) && group != "" {
+		return s.repo.FindByIdentifier(identifier, "")
+	}
+	return account, err
+}
+
+func (s *authService) sendOTP(identifier string, group string, email *string, phoneNumber *string, redisPrefix string, customSubject ...string) error {
 	var cleanEmail string
 	if email != nil {
 		cleanEmail = strings.ToLower(strings.TrimSpace(*email))
@@ -87,7 +125,7 @@ func (s *authService) sendOTP(identifier string, email *string, phoneNumber *str
 	}
 
 	otp := utils.GenerateNumericOTP(6)
-	redisKey := fmt.Sprintf("%s:%s", redisPrefix, identifier)
+	redisKey := scopedKey(redisPrefix, group, identifier)
 
 	if config.RDB != nil {
 		if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
@@ -170,6 +208,15 @@ func (s *authService) sendOTP(identifier string, email *string, phoneNumber *str
 func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
 
+	// Normalisasi role (alias FE) dan tentukan kelompok role.
+	// customer  -> kelompok customer
+	// owner / business_admin -> kelompok merchant (tidak boleh berbagi email/telepon)
+	input.Role = NormalizeExpectedRole(input.Role)
+	group := models.RoleGroupOf(input.Role)
+	if group == "" {
+		return errors.New("Role tidak valid. Gunakan customer, owner, atau business_admin")
+	}
+
 	var cleanRefCode *string
 	if input.Role == "owner" && input.ReferralCode != nil && strings.TrimSpace(*input.ReferralCode) != "" {
 		code := strings.TrimSpace(*input.ReferralCode)
@@ -180,8 +227,15 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		cleanRefCode = ref.ReferralCode
 	}
 
-	existingAccount, err := s.repo.FindByIdentifier(input.Identifier)
+	// Cek duplikasi hanya di dalam kelompok role yang sama.
+	existingAccount, err := s.repo.FindByIdentifier(input.Identifier, group)
 	if err == nil {
+		if group == models.RoleGroupMerchant && existingAccount.Role != input.Role {
+			if existingAccount.Role == "business_admin" {
+				return errors.New("Email/nomor ini sudah digunakan sebagai akun Admin Toko. Akun Owner dan Admin Toko tidak boleh menggunakan email/nomor yang sama.")
+			}
+			return errors.New("Email/nomor ini sudah digunakan sebagai akun Pemilik Toko (Owner). Akun Owner dan Admin Toko tidak boleh menggunakan email/nomor yang sama.")
+		}
 		switch existingAccount.AccountStatus {
 		case "active":
 			if isEmail(input.Identifier) {
@@ -193,7 +247,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 			if existingAccount.Role == "business_admin" {
 				customSubj = "Kode Verifikasi Aktivasi Akun Admin Toko ToenToen"
 			}
-			if err := s.sendOTP(input.Identifier, existingAccount.Email, existingAccount.PhoneNumber, "register_otp", customSubj); err != nil {
+			if err := s.sendOTP(input.Identifier, group, existingAccount.Email, existingAccount.PhoneNumber, "register_otp", customSubj); err != nil {
 				return err
 			}
 			if isEmail(input.Identifier) {
@@ -203,7 +257,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		default:
 			return errors.New("Akun ini tidak dapat digunakan. Silakan hubungi layanan bantuan.")
 		}
-	} else if err != gorm.ErrRecordNotFound {
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return errors.New("Terjadi kesalahan pada server saat mengecek data akun")
 	}
 
@@ -228,8 +282,8 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 		return errors.New("Gagal memproses data pendaftaran sementara")
 	}
 
-	pendingKey := fmt.Sprintf("register_pending:%s", input.Identifier)
-	otpKey := fmt.Sprintf("register_otp:%s", input.Identifier)
+	pendingKey := scopedKey("register_pending", group, input.Identifier)
+	otpKey := scopedKey("register_otp", group, input.Identifier)
 
 	// Simpan data pendaftaran sementara dan kode OTP ke Redis (TTL 5 menit)
 	if config.RDB != nil {
@@ -304,23 +358,44 @@ func (s *authService) EvaluateAccountStatus(account *models.Account) string {
 
 func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (string, error) {
 	input.Identifier = cleanIdentifier(input.Identifier)
-	pendingKey := fmt.Sprintf("register_pending:%s", input.Identifier)
-	otpKey := fmt.Sprintf("register_otp:%s", input.Identifier)
+	groups := candidateGroups(input.Role)
 
 	if config.RDB != nil {
-		storedJSON, err := config.RDB.Get(config.Ctx, pendingKey).Result()
-		if err == nil && storedJSON != "" {
-			var pending models.PendingRegistration
-			if err := json.Unmarshal([]byte(storedJSON), &pending); err != nil {
+		// Cari data pendaftaran sementara di setiap kelompok role yang relevan.
+		// Kelompok yang dipakai adalah yang kode OTP-nya cocok.
+		var pending *models.PendingRegistration
+		var group string
+		hasAnyPending := false
+		for _, g := range groups {
+			storedJSON, err := config.RDB.Get(config.Ctx, scopedKey("register_pending", g, input.Identifier)).Result()
+			if err != nil || storedJSON == "" {
+				continue
+			}
+			hasAnyPending = true
+			var p models.PendingRegistration
+			if err := json.Unmarshal([]byte(storedJSON), &p); err != nil {
 				return "", errors.New("Gagal membaca data pendaftaran sementara")
 			}
-
-			if pending.OTP != input.OTP {
-				return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
+			if p.OTP != input.OTP {
+				continue
 			}
+			if pending != nil {
+				return "", ErrAmbiguousAccount
+			}
+			matched := p
+			pending = &matched
+			group = g
+		}
+		if pending == nil && hasAnyPending {
+			return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
+		}
 
-			// Idempotency check: pastikan email belum didaftarkan di database
-			existingAccount, errFind := s.repo.FindByIdentifier(input.Identifier)
+		if pending != nil {
+			pendingKey := scopedKey("register_pending", group, input.Identifier)
+			otpKey := scopedKey("register_otp", group, input.Identifier)
+
+			// Idempotency check: pastikan identifier belum didaftarkan di kelompok role yang sama
+			existingAccount, errFind := s.repo.FindByIdentifier(input.Identifier, group)
 			if errFind == nil && existingAccount != nil {
 				config.RDB.Del(config.Ctx, pendingKey)
 				config.RDB.Del(config.Ctx, otpKey)
@@ -377,19 +452,37 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 		}
 	}
 
-	// Alur Fallback: Jika data pending tidak ada di Redis, cek register_otp warisan untuk akun inactive lama
+	// Alur Fallback: Jika data pending tidak ada di Redis, cari register_otp warisan atau scoped
+	var matchedGroup string
+	var account *models.Account
+
 	if config.RDB != nil {
-		storedOTP, errOTP := config.RDB.Get(config.Ctx, otpKey).Result()
-		if errOTP == redis.Nil || storedOTP != input.OTP {
-			return "", errors.New("OTP tidak valid atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
+		for _, g := range groups {
+			k := scopedKey("register_otp", g, input.Identifier)
+			storedOTP, errOTP := config.RDB.Get(config.Ctx, k).Result()
+			if errOTP == nil && storedOTP == input.OTP {
+				matchedGroup = g
+				config.RDB.Del(config.Ctx, k)
+				break
+			}
 		}
-		config.RDB.Del(config.Ctx, otpKey)
+		// Cek key un-scoped legacy
+		if matchedGroup == "" {
+			legacyKey := fmt.Sprintf("register_otp:%s", input.Identifier)
+			storedOTP, errOTP := config.RDB.Get(config.Ctx, legacyKey).Result()
+			if errOTP == nil && storedOTP == input.OTP {
+				config.RDB.Del(config.Ctx, legacyKey)
+			} else {
+				return "", errors.New("OTP tidak valid atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
+			}
+		}
 	}
 
-	account, err := s.repo.FindByIdentifier(input.Identifier)
+	acc, err := s.repo.FindByIdentifier(input.Identifier, matchedGroup)
 	if err != nil {
 		return "", errors.New("Data pendaftaran tidak ditemukan atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
 	}
+	account = acc
 
 	if account.AccountStatus == "banned" {
 		return "", errors.New("Akun anda telah diblokir dari platform")
@@ -408,11 +501,11 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 	newStatus := s.EvaluateAccountStatus(account)
 
 	if isEmail(input.Identifier) {
-		if err := s.repo.UpdateEmailVerified(input.Identifier, now, newStatus); err != nil {
+		if err := s.repo.UpdateEmailVerified(account.AccountID, now, newStatus); err != nil {
 			return "", errors.New("Gagal mengaktifkan akun")
 		}
 	} else {
-		if err := s.repo.UpdatePhoneVerified(input.Identifier, now, newStatus); err != nil {
+		if err := s.repo.UpdatePhoneVerified(account.AccountID, now, newStatus); err != nil {
 			return "", errors.New("Gagal mengaktifkan akun")
 		}
 	}
@@ -426,13 +519,14 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 	return token, nil
 }
 
-func (s *authService) SendEmailOTP(email string) error {
+func (s *authService) SendEmailOTP(email string, role string) error {
 	cleanEmail := strings.ToLower(strings.TrimSpace(email))
 	if !isEmail(cleanEmail) {
 		return errors.New("Format alamat email tidak valid")
 	}
 
-	account, err := s.repo.FindByIdentifier(cleanEmail)
+	groups := candidateGroups(role)
+	account, err := s.repo.FindByIdentifier(cleanEmail, roleGroupFromInput(role))
 	if err == nil {
 		if account.AccountStatus == "banned" {
 			return errors.New("Akun anda telah diblokir dari platform")
@@ -440,6 +534,7 @@ func (s *authService) SendEmailOTP(email string) error {
 		if account.AccountStatus == "suspended" {
 			return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 		}
+		group := models.RoleGroupOf(account.Role)
 		customSubj := "Kode Verifikasi Email ToenToen"
 		if account.Role == "business_admin" {
 			if account.LastLoginAt == nil || account.PasswordHash == nil || account.AccountStatus == "inactive" {
@@ -448,28 +543,32 @@ func (s *authService) SendEmailOTP(email string) error {
 				customSubj = "Kode Verifikasi Email Admin Toko ToenToen"
 			}
 		}
-		return s.sendOTP(cleanEmail, account.Email, account.PhoneNumber, "email_verify_otp", customSubj)
-	} else if err != gorm.ErrRecordNotFound {
+		return s.sendOTP(cleanEmail, group, account.Email, account.PhoneNumber, "email_verify_otp", customSubj)
+	} else if errors.Is(err, ErrAmbiguousAccount) {
+		return ErrAmbiguousAccount
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return errors.New("Terjadi kesalahan sistem saat mencari data akun")
 	}
 
 	// Jika akun belum ada di database, cek apakah sedang dalam status pending registration di Redis
 	if config.RDB != nil {
-		pendingKey := fmt.Sprintf("register_pending:%s", cleanEmail)
-		storedJSON, errRedis := config.RDB.Get(config.Ctx, pendingKey).Result()
-		if errRedis == nil && storedJSON != "" {
-			var pending models.PendingRegistration
-			if err := json.Unmarshal([]byte(storedJSON), &pending); err == nil {
-				newOTP := utils.GenerateNumericOTP(6)
-				pending.OTP = newOTP
-				updatedJSON, _ := json.Marshal(pending)
-				_ = config.RDB.Set(config.Ctx, pendingKey, string(updatedJSON), 5*time.Minute).Err()
-				_ = config.RDB.Set(config.Ctx, fmt.Sprintf("register_otp:%s", cleanEmail), newOTP, 5*time.Minute).Err()
-				subject := "Kode Verifikasi Registrasi Akun ToenToen"
-				if pending.Role == "business_admin" {
-					subject = "Kode Verifikasi Registrasi Admin Toko ToenToen"
+		for _, g := range groups {
+			pendingKey := scopedKey("register_pending", g, cleanEmail)
+			storedJSON, errRedis := config.RDB.Get(config.Ctx, pendingKey).Result()
+			if errRedis == nil && storedJSON != "" {
+				var pending models.PendingRegistration
+				if err := json.Unmarshal([]byte(storedJSON), &pending); err == nil {
+					newOTP := utils.GenerateNumericOTP(6)
+					pending.OTP = newOTP
+					updatedJSON, _ := json.Marshal(pending)
+					_ = config.RDB.Set(config.Ctx, pendingKey, string(updatedJSON), 5*time.Minute).Err()
+					_ = config.RDB.Set(config.Ctx, scopedKey("register_otp", g, cleanEmail), newOTP, 5*time.Minute).Err()
+					subject := "Kode Verifikasi Registrasi Akun ToenToen"
+					if pending.Role == "business_admin" {
+						subject = "Kode Verifikasi Registrasi Admin Toko ToenToen"
+					}
+					return utils.SendEmailOTP(cleanEmail, newOTP, subject)
 				}
-				return utils.SendEmailOTP(cleanEmail, newOTP, subject)
 			}
 		}
 	}
@@ -483,21 +582,46 @@ func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
 		return errors.New("Format alamat email tidak valid")
 	}
 
-	redisKey := fmt.Sprintf("email_verify_otp:%s", cleanEmail)
-	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
-	if err == redis.Nil || storedOTP != input.OTP {
-		// Fallback check register_otp jikalau kode OTP diminta dari registrasi
-		regKey := fmt.Sprintf("register_otp:%s", cleanEmail)
-		storedRegOTP, regErr := config.RDB.Get(config.Ctx, regKey).Result()
-		if regErr == redis.Nil || storedRegOTP != input.OTP {
-			return errors.New("OTP tidak valid atau sudah kadaluarsa")
+	groups := candidateGroups(input.Role)
+	var matchedGroup string
+
+	if config.RDB != nil {
+		for _, g := range groups {
+			key := scopedKey("email_verify_otp", g, cleanEmail)
+			storedOTP, err := config.RDB.Get(config.Ctx, key).Result()
+			if err == nil && storedOTP == input.OTP {
+				matchedGroup = g
+				config.RDB.Del(config.Ctx, key)
+				break
+			}
+			regKey := scopedKey("register_otp", g, cleanEmail)
+			storedRegOTP, regErr := config.RDB.Get(config.Ctx, regKey).Result()
+			if regErr == nil && storedRegOTP == input.OTP {
+				matchedGroup = g
+				config.RDB.Del(config.Ctx, regKey)
+				break
+			}
 		}
-		config.RDB.Del(config.Ctx, regKey)
-	} else {
-		config.RDB.Del(config.Ctx, redisKey)
+
+		// Fallback cek un-scoped legacy key
+		if matchedGroup == "" {
+			legacyKey := fmt.Sprintf("email_verify_otp:%s", cleanEmail)
+			storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
+			if err == nil && storedOTP == input.OTP {
+				config.RDB.Del(config.Ctx, legacyKey)
+			} else {
+				legacyReg := fmt.Sprintf("register_otp:%s", cleanEmail)
+				storedRegOTP, regErr := config.RDB.Get(config.Ctx, legacyReg).Result()
+				if regErr == nil && storedRegOTP == input.OTP {
+					config.RDB.Del(config.Ctx, legacyReg)
+				} else {
+					return errors.New("OTP tidak valid atau sudah kadaluarsa")
+				}
+			}
+		}
 	}
 
-	account, err := s.repo.FindByIdentifier(cleanEmail)
+	account, err := s.repo.FindByIdentifier(cleanEmail, matchedGroup)
 	if err != nil {
 		return errors.New("Akun tidak ditemukan")
 	}
@@ -513,7 +637,7 @@ func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
 	account.EmailVerifiedAt = &now
 	newStatus := s.EvaluateAccountStatus(account)
 
-	if err := s.repo.UpdateEmailVerified(cleanEmail, now, newStatus); err != nil {
+	if err := s.repo.UpdateEmailVerified(account.AccountID, now, newStatus); err != nil {
 		return errors.New("Gagal memverifikasi email")
 	}
 
@@ -531,12 +655,26 @@ func (s *authService) VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error {
 func (s *authService) Login(input models.LoginUnifiedInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
 
-	account, err := s.repo.FindByIdentifier(input.Identifier)
+	if input.ExpectedRole == "" && input.Role != "" {
+		input.ExpectedRole = input.Role
+	}
+	targetRole := NormalizeExpectedRole(input.ExpectedRole)
+
+	// Cari akun yang sesuai target role atau deteksi keberadaan di role lain
+	account, err := s.findAccountForLogin(input.Identifier, targetRole)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, ErrAmbiguousAccount) {
+			return ErrAmbiguousAccount
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("Email atau password salah")
 		}
 		return errors.New("Terjadi kesalahan sistem")
+	}
+
+	// Jika akun ditemukan tetapi rolenya bukan target role yang dituju
+	if targetRole != "" && account.Role != targetRole {
+		return NewRoleMismatchError(account.Role, targetRole)
 	}
 
 	switch account.AccountStatus {
@@ -554,43 +692,60 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 		return errors.New("Email atau password salah")
 	}
 
-	// Validasi kesesuaian role dengan portal yang dituju (jika parameter role dikirimkan)
-	if input.ExpectedRole == "" && input.Role != "" {
-		input.ExpectedRole = input.Role
-	}
-	targetRole := NormalizeExpectedRole(input.ExpectedRole)
-	if targetRole != "" && account.Role != targetRole {
-		return NewRoleMismatchError(account.Role, targetRole)
-	}
-
+	group := models.RoleGroupOf(account.Role)
 	loginSubj := "Kode Verifikasi Login ToenToen"
 	if account.Role == "business_admin" {
 		loginSubj = "Kode Verifikasi Login Admin Toko ToenToen"
 	}
-	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "login_otp", loginSubj)
+	return s.sendOTP(input.Identifier, group, account.Email, account.PhoneNumber, "login_otp", loginSubj)
 }
 
 func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, *models.Account, error) {
 	input.Identifier = cleanIdentifier(input.Identifier)
-	redisKey := fmt.Sprintf("login_otp:%s", input.Identifier)
-	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 
-	if err == redis.Nil || storedOTP != input.OTP {
-		return "", nil, errors.New("OTP tidak valid atau sudah kadaluarsa")
-	}
-
-	config.RDB.Del(config.Ctx, redisKey)
-
-	account, err := s.repo.FindByIdentifier(input.Identifier)
-	if err != nil {
-		return "", nil, errors.New("Gagal memuat data akun")
-	}
-
-	// Validasi kesesuaian role pada saat verifikasi OTP
 	if input.ExpectedRole == "" && input.Role != "" {
 		input.ExpectedRole = input.Role
 	}
 	targetRole := NormalizeExpectedRole(input.ExpectedRole)
+	groups := candidateGroups(targetRole)
+
+	var matchedGroup string
+	if config.RDB != nil {
+		for _, g := range groups {
+			key := scopedKey("login_otp", g, input.Identifier)
+			storedOTP, err := config.RDB.Get(config.Ctx, key).Result()
+			if err == nil && storedOTP == input.OTP {
+				matchedGroup = g
+				config.RDB.Del(config.Ctx, key)
+				break
+			}
+		}
+
+		// Fallback check legacy key
+		if matchedGroup == "" {
+			legacyKey := fmt.Sprintf("login_otp:%s", input.Identifier)
+			storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
+			if err == nil && storedOTP == input.OTP {
+				config.RDB.Del(config.Ctx, legacyKey)
+			} else {
+				return "", nil, errors.New("OTP tidak valid atau sudah kadaluarsa")
+			}
+		}
+	}
+
+	// Cari akun pada matched group jika ada, atau target role
+	lookupRole := targetRole
+	if matchedGroup != "" && targetRole == "" {
+		if matchedGroup == models.RoleGroupCustomer {
+			lookupRole = "customer"
+		}
+	}
+
+	account, err := s.findAccountInGroup(input.Identifier, lookupRole)
+	if err != nil {
+		return "", nil, errors.New("Gagal memuat data akun")
+	}
+
 	if targetRole != "" && account.Role != targetRole {
 		return "", nil, NewRoleMismatchError(account.Role, targetRole)
 	}
@@ -613,11 +768,15 @@ func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 		return errors.New("Layanan reset kata sandi menggunakan nomor telepon sedang dalam pengembangan. Silakan gunakan email terdaftar Anda.")
 	}
 
-	account, err := s.repo.FindByIdentifier(input.Identifier)
+	account, err := s.findAccountInGroup(input.Identifier, input.Role)
 	if err != nil {
+		if errors.Is(err, ErrAmbiguousAccount) {
+			return ErrAmbiguousAccount
+		}
 		return errors.New("Akun tidak ditemukan")
 	}
 
+	group := models.RoleGroupOf(account.Role)
 	// Kirim OTP verifikasi (berlaku untuk semua akun lokal maupun akun OAuth yang ingin membuat kata sandi baru)
 	subject := "Kode Verifikasi Reset Password ToenToen"
 	if account.Role == "business_admin" {
@@ -627,37 +786,43 @@ func (s *authService) ForgotPassword(input models.ForgotPasswordInput) error {
 			subject = "Kode Verifikasi Reset Password Admin Toko ToenToen"
 		}
 	}
-	return s.sendOTP(input.Identifier, account.Email, account.PhoneNumber, "forgot_otp", subject)
+	return s.sendOTP(input.Identifier, group, account.Email, account.PhoneNumber, "forgot_otp", subject)
 }
 
 func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string, error) {
 	input.Identifier = cleanIdentifier(input.Identifier)
-	redisKey := fmt.Sprintf("forgot_otp:%s", input.Identifier)
-	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+	groups := candidateGroups(input.Role)
 
-	if err == redis.Nil {
-		return "", errors.New("Kode OTP telah kadaluarsa atau tidak ditemukan")
-	}
-
-	if storedOTP != input.OTP {
-		attemptKey := fmt.Sprintf("forgot_otp_attempts:%s", input.Identifier)
-		attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
-		config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
-		if attempts >= 5 {
+	var matchedGroup string
+	for _, g := range groups {
+		redisKey := scopedKey("forgot_otp", g, input.Identifier)
+		storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
+		if err == nil && storedOTP == input.OTP {
+			matchedGroup = g
 			config.RDB.Del(config.Ctx, redisKey)
-			config.RDB.Del(config.Ctx, attemptKey)
-			return "", errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
+			config.RDB.Del(config.Ctx, scopedKey("forgot_otp_attempts", g, input.Identifier))
+			break
 		}
-		return "", errors.New("Kode OTP tidak valid")
 	}
 
-	config.RDB.Del(config.Ctx, redisKey)
-	config.RDB.Del(config.Ctx, fmt.Sprintf("forgot_otp_attempts:%s", input.Identifier))
+	// Fallback check legacy key
+	if matchedGroup == "" {
+		legacyKey := fmt.Sprintf("forgot_otp:%s", input.Identifier)
+		storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
+		if err == nil && storedOTP == input.OTP {
+			config.RDB.Del(config.Ctx, legacyKey)
+			config.RDB.Del(config.Ctx, fmt.Sprintf("forgot_otp_attempts:%s", input.Identifier))
+		} else {
+			return "", errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
+		}
+	}
 
 	// Generate secure UUID reset token
 	resetToken := utils.GenerateUUID("RST")
-	tokenRedisKey := fmt.Sprintf("reset_token:%s", input.Identifier)
-	config.RDB.Set(config.Ctx, tokenRedisKey, resetToken, 10*time.Minute)
+	if matchedGroup != "" {
+		config.RDB.Set(config.Ctx, scopedKey("reset_token", matchedGroup, input.Identifier), resetToken, 10*time.Minute)
+	}
+	config.RDB.Set(config.Ctx, fmt.Sprintf("reset_token:%s", input.Identifier), resetToken, 10*time.Minute)
 
 	return resetToken, nil
 }
@@ -668,14 +833,35 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 		return errors.New("Kata sandi baru dan konfirmasi kata sandi tidak cocok")
 	}
 
-	tokenRedisKey := fmt.Sprintf("reset_token:%s", input.Identifier)
-	storedToken, err := config.RDB.Get(config.Ctx, tokenRedisKey).Result()
+	groups := candidateGroups(input.Role)
+	var matchedGroup string
+	var verifiedToken bool
 
-	if err == redis.Nil || storedToken != input.ResetToken {
+	for _, g := range groups {
+		tokenRedisKey := scopedKey("reset_token", g, input.Identifier)
+		storedToken, err := config.RDB.Get(config.Ctx, tokenRedisKey).Result()
+		if err == nil && storedToken == input.ResetToken {
+			matchedGroup = g
+			verifiedToken = true
+			config.RDB.Del(config.Ctx, tokenRedisKey)
+			break
+		}
+	}
+
+	if !verifiedToken {
+		legacyKey := fmt.Sprintf("reset_token:%s", input.Identifier)
+		storedToken, err := config.RDB.Get(config.Ctx, legacyKey).Result()
+		if err == nil && storedToken == input.ResetToken {
+			verifiedToken = true
+			config.RDB.Del(config.Ctx, legacyKey)
+		}
+	}
+
+	if !verifiedToken {
 		return errors.New("Sesi reset password tidak valid atau sudah kadaluarsa")
 	}
 
-	account, err := s.repo.FindByIdentifier(input.Identifier)
+	account, err := s.repo.FindByIdentifier(input.Identifier, matchedGroup)
 	if err != nil {
 		return errors.New("Akun tidak ditemukan")
 	}
@@ -704,7 +890,6 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 		return errors.New("Gagal memperbarui kata sandi")
 	}
 
-	config.RDB.Del(config.Ctx, tokenRedisKey)
 	return nil
 }
 
@@ -779,13 +964,14 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 	// Catatan: Jika hasExistingEmail == false (kasus penautan pertama kali / Bind),
 	// current_email tidak perlu diperiksa dan tidak wajib diisi.
 
-	// 2. Cek apakah email baru sudah terdaftar pada akun lain
-	if exists, err := s.repo.FindByIdentifier(newEmailClean); err == nil && exists != nil && exists.AccountID != accountID {
+	// 2. Cek apakah email baru sudah terdaftar pada akun lain di kelompok role yang sama
+	group := models.RoleGroupOf(account.Role)
+	if exists, err := s.repo.FindByIdentifier(newEmailClean, group); err == nil && exists != nil && exists.AccountID != accountID {
 		return errors.New("Email baru sudah terdaftar pada akun lain")
 	}
 
 	otp := utils.GenerateNumericOTP(6)
-	redisKey := fmt.Sprintf("change_email_otp:%s", newEmailClean)
+	redisKey := scopedKey("change_email_otp", group, newEmailClean)
 
 	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
 		return errors.New("Gagal memproses kode verifikasi")
@@ -821,21 +1007,28 @@ func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEma
 		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	}
 
-	redisKey := fmt.Sprintf("change_email_otp:%s", newEmailClean)
-	attemptKey := fmt.Sprintf("change_email_attempts:%s", newEmailClean)
+	group := models.RoleGroupOf(account.Role)
+	redisKey := scopedKey("change_email_otp", group, newEmailClean)
+	attemptKey := scopedKey("change_email_attempts", group, newEmailClean)
 
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 	if err == redis.Nil || storedOTP != input.OTP {
-		attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
-		if attempts == 1 {
-			config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
+		// Fallback check legacy key
+		legacyKey := fmt.Sprintf("change_email_otp:%s", newEmailClean)
+		legacyOTP, legErr := config.RDB.Get(config.Ctx, legacyKey).Result()
+		if legErr != nil || legacyOTP != input.OTP {
+			attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
+			if attempts == 1 {
+				config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
+			}
+			if attempts >= 5 {
+				config.RDB.Del(config.Ctx, redisKey)
+				config.RDB.Del(config.Ctx, attemptKey)
+				return errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
+			}
+			return errors.New("OTP tidak valid atau sudah kadaluarsa")
 		}
-		if attempts >= 5 {
-			config.RDB.Del(config.Ctx, redisKey)
-			config.RDB.Del(config.Ctx, attemptKey)
-			return errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
-		}
-		return errors.New("OTP tidak valid atau sudah kadaluarsa")
+		config.RDB.Del(config.Ctx, legacyKey)
 	}
 
 	if err := s.repo.UpdateEmail(accountID, newEmailClean); err != nil {
@@ -877,8 +1070,9 @@ func (s *authService) RequestPhoneChange(accountID string, input models.RequestP
 	// Catatan: Jika hasExistingPhone == false (kasus penautan pertama kali / Bind),
 	// current_phone tidak perlu diperiksa dan tidak wajib diisi.
 
-	// 2. Cek apakah nomor telepon baru sudah terdaftar pada akun lain
-	if exists, err := s.repo.FindByIdentifier(newPhoneClean); err == nil && exists != nil && exists.AccountID != accountID {
+	// 2. Cek apakah nomor telepon baru sudah terdaftar pada akun lain di kelompok role yang sama
+	group := models.RoleGroupOf(account.Role)
+	if exists, err := s.repo.FindByIdentifier(newPhoneClean, group); err == nil && exists != nil && exists.AccountID != accountID {
 		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
 	}
 
@@ -890,6 +1084,15 @@ func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPho
 }
 
 func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {
+	// Pastikan identitas tidak dipakai oleh akun lain di kelompok merchant (owner atau admin)
+	cleanIdent := cleanIdentifier(input.Identifier)
+	if exists, err := s.repo.FindByIdentifier(cleanIdent, models.RoleGroupMerchant); err == nil && exists != nil {
+		if exists.Role == "owner" {
+			return nil, errors.New("Email/nomor ini sudah digunakan sebagai akun Pemilik Toko (Owner). Akun Owner dan Admin Toko tidak boleh menggunakan identitas yang sama.")
+		}
+		return nil, errors.New("Email/nomor ini sudah terdaftar sebagai Admin Toko lain.")
+	}
+
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, errors.New("Gagal memproses kata sandi")

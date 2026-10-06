@@ -13,6 +13,8 @@ type RegisterUnifiedInput struct {
 type VerifyRegisterOTPInput struct {
 	Identifier string `json:"identifier" validate:"required"`
 	OTP        string `json:"otp" validate:"required,len=6"`
+	// Role opsional, wajib jika identifier sedang mendaftar di 2 kelompok role sekaligus
+	Role string `json:"role" query:"role"`
 }
 
 type PendingRegistration struct {
@@ -65,11 +67,13 @@ type VerifyLoginOTPInput struct {
 
 type ForgotPasswordInput struct {
 	Identifier string `json:"identifier" validate:"required"`
+	Role       string `json:"role" query:"role"`
 }
 
 type VerifyForgotOTPInput struct {
 	Identifier string `json:"identifier" validate:"required"`
 	OTP        string `json:"otp" validate:"required"`
+	Role       string `json:"role" query:"role"`
 }
 
 type ResetPasswordInput struct {
@@ -77,6 +81,7 @@ type ResetPasswordInput struct {
 	ResetToken         string `json:"reset_token" validate:"required"`
 	NewPassword        string `json:"new_password" validate:"required,min=6"`
 	ConfirmNewPassword string `json:"confirm_new_password" validate:"required,eqfield=NewPassword"`
+	Role               string `json:"role" query:"role"`
 }
 
 type RequestEmailChangeInput struct {
@@ -122,11 +127,13 @@ type CheckReferralResponse struct {
 
 type SendEmailOTPInput struct {
 	Email string `json:"email" validate:"required,email"`
+	Role  string `json:"role" query:"role"`
 }
 
 type VerifyEmailOTPInput struct {
 	Email string `json:"email" validate:"required,email"`
 	OTP   string `json:"otp" validate:"required,len=6"`
+	Role  string `json:"role" query:"role"`
 }
 
 type SendPhoneOTPInput struct {
