@@ -27,8 +27,6 @@ type AppConfig struct {
 	RedisHost string
 
 	JWTSecret          string
-	GoogleClientID     string
-	GoogleClientSecret string
 
 	SMTPHost    string
 	SMTPPort    int
@@ -80,9 +78,7 @@ func InitConfig() {
 		DBConnMaxLifetimeMinutes: getEnvAsInt("DB_CONN_MAX_LIFETIME_MINUTES", 30),
 		DBConnMaxIdleTimeMinutes: getEnvAsInt("DB_CONN_MAX_IDLE_TIME_MINUTES", 5),
 
-		JWTSecret:          getEnvMust("JWT_SECRET"),
-		GoogleClientID:     getEnvMust("GOOGLE_CLIENT_ID"),
-		GoogleClientSecret: getEnvMust("GOOGLE_CLIENT_SECRET"),
+		JWTSecret: getEnvMust("JWT_SECRET"),
 
 		DataEncryptionKey: getEnv("DATA_ENCRYPTION_KEY", "toentoen-secret-key-32bytes-long!"),
 		BlindIndexKey:     getEnv("BLIND_INDEX_KEY", "toentoen-blind-index-key-32bytes!"),

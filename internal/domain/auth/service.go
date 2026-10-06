@@ -93,16 +93,27 @@ func (s *authService) findAccountInGroup(identifier, role string) (*models.Accou
 	return s.repo.FindByIdentifier(identifier, roleGroupFromInput(role))
 }
 
-// findAccountForLogin mencari akun di kelompok role yang diminta. Jika tidak ada namun identifier
-// terdaftar di kelompok lain, akun tersebut dikembalikan agar pemanggil dapat memberi
-// RoleMismatchError (arahkan user ke portal yang benar). Akun lain tidak pernah diberi sesi.
+// findAccountForLogin mencari akun di kelompok role yang diminta.
+// Jika targetRole ditentukan, pencarian dibatasi ketat pada role group target tersebut.
+// Jika di dalam grup merchant (owner/business_admin) terjadi mismatch role, akun tetap dikembalikan
+// agar dapat diarahkan dengan RoleMismatchError. Namun tidak pernah menyeberang antara Customer dan Merchant/Admin,
+// sehingga jika belum terdaftar di role group tersebut, sistem mengembalikan record not found (akun belum terdaftar / kredensial salah).
 func (s *authService) findAccountForLogin(identifier, targetRole string) (*models.Account, error) {
 	group := models.RoleGroupOf(targetRole)
 	account, err := s.repo.FindByIdentifier(identifier, group)
-	if errors.Is(err, gorm.ErrRecordNotFound) && group != "" {
-		return s.repo.FindByIdentifier(identifier, "")
+	if err == nil {
+		return account, nil
 	}
-	return account, err
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	// Jika targetRole adalah merchant group (owner atau business_admin), fallback cek di dalam merchant group
+	if group == models.RoleGroupMerchant {
+		return s.repo.FindByIdentifier(identifier, models.RoleGroupMerchant)
+	}
+
+	return nil, gorm.ErrRecordNotFound
 }
 
 func (s *authService) sendOTP(identifier string, group string, email *string, phoneNumber *string, redisPrefix string, customSubject ...string) error {

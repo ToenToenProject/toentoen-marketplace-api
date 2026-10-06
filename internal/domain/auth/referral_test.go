@@ -363,7 +363,7 @@ func TestLogin(t *testing.T) {
 		}
 	})
 
-	t.Run("customer logging in on admin portal is rejected", func(t *testing.T) {
+	t.Run("customer logging in on admin portal is treated as not found in merchant group", func(t *testing.T) {
 		err := service.Login(models.LoginUnifiedInput{
 			Identifier:   "081234567890",
 			Password:     "secret123",
@@ -372,15 +372,8 @@ func TestLogin(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for customer logging in on admin portal, got nil")
 		}
-		var roleErr *RoleMismatchError
-		if !errors.As(err, &roleErr) {
-			t.Fatalf("expected RoleMismatchError, got: %T (%v)", err, err)
-		}
-		if roleErr.ActualRole != "customer" {
-			t.Fatalf("expected actual=customer, got: %+v", roleErr)
-		}
-		if !strings.Contains(roleErr.Message, "Pelanggan (Customer)") {
-			t.Fatalf("expected message to mention Pelanggan (Customer), got: %s", roleErr.Message)
+		if err.Error() != "Email atau password salah" {
+			t.Fatalf("expected 'Email atau password salah', got: %v", err)
 		}
 	})
 }
