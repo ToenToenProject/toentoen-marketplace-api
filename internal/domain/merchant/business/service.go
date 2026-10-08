@@ -95,6 +95,7 @@ type BusinessService interface {
 	UpdateBusiness(ownerID, businessID string, input models.UpdateBusinessInput) (error)
 	DeleteBusiness(ownerID, businessID string) error
 	ToggleStoreStatus(ownerID, businessID string) (bool, error)
+	ConfirmScheduleAction(requesterID, businessID string, input models.ConfirmScheduleInput) error
 	ToggleLiveStatus(requesterID, businessID string, input models.ToggleLiveInput) (*models.LiveStatusResponse, error)
 }
 
@@ -366,7 +367,7 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	business.BusinessCertificatesAlias = business.Certificates
 
 	// 🪄 MAGIC: Hitung is_open_now secara live sebelum dikembalikan ke Frontend
-	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
+	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours, business.ConfirmedOpenDate, business.ConfirmedOvertimeDate)
 
 	// Filter: Jika bisnis belum memiliki NIB, pastikan tag NIB tidak ikut dimunculkan
 	hasNIBDetail := business.NIB != nil && strings.TrimSpace(*business.NIB) != ""
@@ -861,6 +862,42 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	}
 
 	return business.IsManuallyClosed, nil
+}
+
+func (s *businessService) ConfirmScheduleAction(requesterID, businessID string, input models.ConfirmScheduleInput) error {
+	business, err := s.repo.FindBusinessByID(businessID)
+	if err != nil {
+		return errors.New("bisnis tidak ditemukan")
+	}
+
+	isOwner := business.AccountID == requesterID
+	if !isOwner {
+		var assignment models.BusinessAdminAssignment
+		if err := database.DB.Where("admin_id = ? AND business_id = ? AND status IN ('active', 'scheduled_for_deletion')", requesterID, businessID).First(&assignment).Error; err != nil {
+			return errors.New("forbidden: Anda tidak memiliki akses untuk mengonfirmasi jadwal toko ini")
+		}
+
+		if !permissions.HasPermission(database.DB, requesterID, businessID, models.PermManageStoreStatus) {
+			return errors.New("forbidden: Anda tidak memiliki izin untuk mengonfirmasi jadwal toko")
+		}
+	}
+
+	loc := utils.GetWIBLocation()
+	todayStr := time.Now().In(loc).Format("2006-01-02")
+
+	switch input.Action {
+	case "confirm_open":
+		// Merchant konfirmasi: Toko siap buka sesuai jadwal hari ini
+		return s.repo.ConfirmOpenToday(businessID, todayStr)
+	case "confirm_overtime":
+		// Merchant konfirmasi: Toko lanjut buka / lembur melewati jam tutup reguler
+		return s.repo.ConfirmOvertimeToday(businessID, todayStr)
+	case "decline":
+		// Merchant menolak: Toko tetap tutup / langsung tutup
+		return s.repo.DeclineSchedule(businessID)
+	default:
+		return errors.New("aksi tidak valid")
+	}
 }
 
 func formatSocialURL(platform string, raw string) string {

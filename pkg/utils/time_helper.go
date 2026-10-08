@@ -21,7 +21,8 @@ func GetWIBLocation() *time.Location {
 }
 
 // CalculateStoreStatus menghitung apakah toko buka SECARA REAL TIME terkunci pada zona WIB (UTC+7)
-func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bool {
+// confirmedDates (opsional): [confirmedOpenDate, confirmedOvertimeDate] dalam format string YYYY-MM-DD
+func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, confirmedDates ...*string) bool {
 	// 1. Filter Manual: Jika owner menekan tombol tutup darurat/manual, langsung kembalikan FALSE
 	if isManuallyClosed {
 		return false
@@ -30,7 +31,20 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bo
 	// 2. Kunci Zona Waktu ke WIB (GMT+7)
 	loc := GetWIBLocation()
 	now := time.Now().In(loc)
+	todayStr := now.Format("2006-01-02")
 	currentDay := int(now.Weekday()) // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
+
+	var confirmedOpenDate *string
+	var confirmedOvertimeDate *string
+	if len(confirmedDates) > 0 {
+		confirmedOpenDate = confirmedDates[0]
+	}
+	if len(confirmedDates) > 1 {
+		confirmedOvertimeDate = confirmedDates[1]
+	}
+
+	isOpenConfirmedToday := confirmedOpenDate != nil && *confirmedOpenDate == todayStr
+	isOvertimeConfirmedToday := confirmedOvertimeDate != nil && *confirmedOvertimeDate == todayStr
 
 	nowMinutes := now.Hour()*60 + now.Minute()
 
@@ -54,18 +68,35 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bo
 						openTotalMinutes := openHour*60 + openMinute
 						closeTotalMinutes := closeHour*60 + closeMinute
 
+						// Belum masuk jam buka hari ini
+						if nowMinutes < openTotalMinutes {
+							return false
+						}
+
+						// Toko harus sudah dikonfirmasi buka untuk hari ini
+						if !isOpenConfirmedToday {
+							return false
+						}
+
 						// Toko buka 24 jam (misal 00:00 - 24:00 atau 00:00 - 23:59)
 						if openTotalMinutes == 0 && (closeTotalMinutes == 0 || closeTotalMinutes >= 1439) {
 							return true
 						}
 
-						// Jadwal operasional reguler di hari yang sama (misal 08:00 - 17:00)
+						// Jadwal reguler (misal 08:00 - 21:00)
 						if openTotalMinutes <= closeTotalMinutes {
-							return nowMinutes >= openTotalMinutes && nowMinutes <= closeTotalMinutes
+							if nowMinutes <= closeTotalMinutes {
+								return true
+							}
+							// Jika sudah lewat jam tutup reguler, hanya buka jika dikonfirmasi lembur (maksimal tengah malam)
+							return isOvertimeConfirmedToday
 						}
 
-						// Jadwal lintas tengah malam (misal 18:00 - 02:00 dini hari)
-						return nowMinutes >= openTotalMinutes || nowMinutes <= closeTotalMinutes
+						// Jadwal lintas tengah malam (misal 18:00 - 02:00)
+						if nowMinutes >= openTotalMinutes || nowMinutes <= closeTotalMinutes {
+							return true
+						}
+						return isOvertimeConfirmedToday
 					}
 				}
 			}
@@ -78,6 +109,5 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bo
 		return !isManuallyClosed
 	}
 
-	// Jika ada jadwal teratur tetapi sekarang di luar jam buka, toko tutup
 	return false
 }

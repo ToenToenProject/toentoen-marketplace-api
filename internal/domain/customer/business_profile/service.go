@@ -115,7 +115,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 	}
 
 	// Hitung IsOpenNow secara akurat menggunakan utils.CalculateStoreStatus (terkunci ke WIB / UTC+7)
-	isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
+	isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours, business.ConfirmedOpenDate, business.ConfirmedOvertimeDate)
 
 	bName := ""
 	if business.BusinessName != nil {
@@ -147,7 +147,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		similarBusinesses = []models.Business{}
 	} else {
 		for i := range similarBusinesses {
-			similarBusinesses[i].IsOpenNow = utils.CalculateStoreStatus(similarBusinesses[i].IsManuallyClosed, similarBusinesses[i].Hours)
+			similarBusinesses[i].IsOpenNow = utils.CalculateStoreStatus(similarBusinesses[i].IsManuallyClosed, similarBusinesses[i].Hours, similarBusinesses[i].ConfirmedOpenDate, similarBusinesses[i].ConfirmedOvertimeDate)
 		}
 	}
 
@@ -253,7 +253,7 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 		}
 
 		// Hitung IsOpenNow secara akurat menggunakan utils.CalculateStoreStatus (terkunci ke WIB / UTC+7)
-		isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours)
+		isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours, business.ConfirmedOpenDate, business.ConfirmedOvertimeDate)
 
 		bName := ""
 		if business.BusinessName != nil {

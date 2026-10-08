@@ -25,6 +25,10 @@ type BusinessRepository interface {
 	FindBusinessByID(businessID string) (*models.Business, error)
 	ToggleStoreStatus(business *models.Business) error
 	ResetManualCloseStatus() error
+	ConfirmOpenToday(businessID string, todayDate string) error
+	ConfirmOvertimeToday(businessID string, todayDate string) error
+	DeclineSchedule(businessID string) error
+	GetBusinessesWithHours() ([]models.Business, error)
 	UpdateBusinessRating(businessID string, avgRating float64, totalReviews int) error
 	GetBusinessListWithPreviews(accountID string, role string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error)
 	GetBusinessStaffAccountIDs(businessID string) ([]string, error)
@@ -249,6 +253,27 @@ func (r *businessRepository) ToggleStoreStatus(business *models.Business) error 
 func (r *businessRepository) ResetManualCloseStatus() error {
 	// Otomatis tutup toko di tengah malam (00:00 WIB) jika merchant lupa mematikan toggle (is_manually_closed = false -> true)
 	return r.db.Exec("UPDATE businesses SET is_manually_closed = true WHERE is_manually_closed = false AND status != 'draft'").Error
+}
+
+func (r *businessRepository) ConfirmOpenToday(businessID string, todayDate string) error {
+	return r.db.Exec("UPDATE businesses SET confirmed_open_date = ?, is_manually_closed = false WHERE business_id = ?", todayDate, businessID).Error
+}
+
+func (r *businessRepository) ConfirmOvertimeToday(businessID string, todayDate string) error {
+	return r.db.Exec("UPDATE businesses SET confirmed_overtime_date = ?, is_manually_closed = false WHERE business_id = ?", todayDate, businessID).Error
+}
+
+func (r *businessRepository) DeclineSchedule(businessID string) error {
+	return r.db.Exec("UPDATE businesses SET is_manually_closed = true WHERE business_id = ?", businessID).Error
+}
+
+func (r *businessRepository) GetBusinessesWithHours() ([]models.Business, error) {
+	var businesses []models.Business
+	err := r.db.Model(&models.Business{}).
+		Preload("Hours").
+		Where("status != 'draft' AND is_active = true").
+		Find(&businesses).Error
+	return businesses, err
 }
 
 // Di repositories/business_repository.go

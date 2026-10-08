@@ -52,27 +52,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Pekerja Belakang Layar (Cron)
-func startMidnightResetWorker(businessRepo business.BusinessRepository) {
-	go func() {
-		for {
-			loc := utils.GetWIBLocation()
-			now := time.Now().In(loc)
 
-			// Hitung berapa lama lagi menuju jam 00:00:00 (Tengah Malam Berikutnya)
-			nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
-			durationUntilMidnight := nextMidnight.Sub(now)
-
-			// Tidurkan worker ini sampai tengah malam
-			time.Sleep(durationUntilMidnight)
-
-			// BANGUN! Eksekusi reset database
-			log.Println("[CRON] Menjalankan reset is_manually_closed ke false dan reset status live streaming...")
-			businessRepo.ResetManualCloseStatus()
-			businessRepo.ResetLiveStatus()
-		}
-	}()
-}
 
 func main() {
 	// ==========================================
@@ -123,7 +103,7 @@ func main() {
 	profileService.SetNotificationService(notifService)
 
 	businessRepo := business.NewBusinessRepository(database.DB)
-	startMidnightResetWorker(businessRepo) // Jalankan cron job
+	business.StartScheduleReminderWorker(businessRepo, notifService) // Jalankan worker pengingat jadwal & auto-close
 	businessService := business.NewBusinessService(businessRepo, notifService)
 	businessHandler := business.NewBusinessHandler(businessService)
 
@@ -583,6 +563,7 @@ func main() {
 	sharedBusinessScope.Patch("", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/toggle-status", middlewares.RequireKYC, businessHandler.ToggleStoreStatus)
+	sharedBusinessScope.Post("/schedule-confirmation", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
 	sharedBusinessScope.Patch("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 	sharedBusinessScope.Post("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 

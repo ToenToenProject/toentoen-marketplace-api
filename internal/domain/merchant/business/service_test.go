@@ -10,12 +10,17 @@ import (
 
 type mockBusinessRepo struct {
 	BusinessRepository
-	emailVerified bool
-	kycStatus     string
-	getKYCErr     error
-	createdBiz    *models.Business
-	updatedBiz    *models.Business
-	findBiz       *models.Business
+	emailVerified      bool
+	kycStatus          string
+	getKYCErr          error
+	createdBiz         *models.Business
+	updatedBiz         *models.Business
+	findBiz            *models.Business
+	confirmedOpenBizID string
+	confirmedOpenDate  string
+	confirmedOTBizID   string
+	confirmedOTDate    string
+	declinedBizID      string
 }
 
 func (m *mockBusinessRepo) GetOwnerKYCStatus(ownerID string) (bool, string, error) {
@@ -52,6 +57,31 @@ func (m *mockBusinessRepo) HasNIBTag(tagIDs []int64) (bool, error) {
 
 func (m *mockBusinessRepo) RemoveNIBTagFromBusiness(businessID string) error {
 	return nil
+}
+
+func (m *mockBusinessRepo) ResetManualCloseStatus() error {
+	return nil
+}
+
+func (m *mockBusinessRepo) ConfirmOpenToday(businessID, todayDate string) error {
+	m.confirmedOpenBizID = businessID
+	m.confirmedOpenDate = todayDate
+	return nil
+}
+
+func (m *mockBusinessRepo) ConfirmOvertimeToday(businessID, todayDate string) error {
+	m.confirmedOTBizID = businessID
+	m.confirmedOTDate = todayDate
+	return nil
+}
+
+func (m *mockBusinessRepo) DeclineSchedule(businessID string) error {
+	m.declinedBizID = businessID
+	return nil
+}
+
+func (m *mockBusinessRepo) GetBusinessesWithHours() ([]models.Business, error) {
+	return nil, nil
 }
 
 func TestCreateBusiness_OwnerRestrictions(t *testing.T) {
@@ -342,4 +372,82 @@ func TestGetBusinessDetail_CertificatesDecryption(t *testing.T) {
 	if cert.ImageURL != "https://storage.toentoen.com/cert.jpg" || cert.URL != "https://storage.toentoen.com/cert.jpg" {
 		t.Errorf("expected ImageURL and URL to match, got ImageURL='%s' URL='%s'", cert.ImageURL, cert.URL)
 	}
+}
+
+func TestConfirmScheduleAction(t *testing.T) {
+	existingBiz := &models.Business{
+		BusinessID: "BIZ_123",
+		AccountID:  "OWNER_1",
+	}
+
+	t.Run("confirm_open calls ConfirmOpenToday", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			findBiz: existingBiz,
+		}
+		service := NewBusinessService(repo, nil)
+
+		err := service.ConfirmScheduleAction("OWNER_1", "BIZ_123", models.ConfirmScheduleInput{
+			Action: "confirm_open",
+		})
+		if err != nil {
+			t.Fatalf("expected success, got error: %v", err)
+		}
+		if repo.confirmedOpenBizID != "BIZ_123" {
+			t.Errorf("expected confirmedOpenBizID BIZ_123, got %s", repo.confirmedOpenBizID)
+		}
+		if repo.confirmedOpenDate == "" {
+			t.Errorf("expected confirmedOpenDate to be set, got empty")
+		}
+	})
+
+	t.Run("confirm_overtime calls ConfirmOvertimeToday", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			findBiz: existingBiz,
+		}
+		service := NewBusinessService(repo, nil)
+
+		err := service.ConfirmScheduleAction("OWNER_1", "BIZ_123", models.ConfirmScheduleInput{
+			Action: "confirm_overtime",
+		})
+		if err != nil {
+			t.Fatalf("expected success, got error: %v", err)
+		}
+		if repo.confirmedOTBizID != "BIZ_123" {
+			t.Errorf("expected confirmedOTBizID BIZ_123, got %s", repo.confirmedOTBizID)
+		}
+		if repo.confirmedOTDate == "" {
+			t.Errorf("expected confirmedOTDate to be set, got empty")
+		}
+	})
+
+	t.Run("decline calls DeclineSchedule", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			findBiz: existingBiz,
+		}
+		service := NewBusinessService(repo, nil)
+
+		err := service.ConfirmScheduleAction("OWNER_1", "BIZ_123", models.ConfirmScheduleInput{
+			Action: "decline",
+		})
+		if err != nil {
+			t.Fatalf("expected success, got error: %v", err)
+		}
+		if repo.declinedBizID != "BIZ_123" {
+			t.Errorf("expected declinedBizID BIZ_123, got %s", repo.declinedBizID)
+		}
+	})
+
+	t.Run("invalid action returns error", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			findBiz: existingBiz,
+		}
+		service := NewBusinessService(repo, nil)
+
+		err := service.ConfirmScheduleAction("OWNER_1", "BIZ_123", models.ConfirmScheduleInput{
+			Action: "invalid_action",
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid action, got nil")
+		}
+	})
 }

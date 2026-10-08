@@ -202,6 +202,52 @@ func (h *BusinessHandler) ToggleStoreStatus(c *fiber.Ctx) error {
 	})
 }
 
+func (h *BusinessHandler) ConfirmSchedule(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
+
+	requesterID, _, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input models.ConfirmScheduleInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+
+	if errors := utils.ValidateStruct(&input); errors != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
+	}
+
+	if errSvc := h.service.ConfirmScheduleAction(requesterID, businessID, input); errSvc != nil {
+		if strings.Contains(errSvc.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
+		}
+		if strings.Contains(errSvc.Error(), "forbidden") || strings.Contains(errSvc.Error(), "tidak memiliki akses") || strings.Contains(errSvc.Error(), "izin") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	message := "Konfirmasi jadwal berhasil disimpan"
+	switch input.Action {
+	case "confirm_open":
+		message = "Toko telah dikonfirmasi dan akan otomatis Buka sesuai jadwal"
+	case "confirm_overtime":
+		message = "Toko telah dikonfirmasi untuk tetap Buka (lembur) hingga maksimal tengah malam"
+	case "decline":
+		message = "Toko disetel ke status Tutup"
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{
+		"action":      input.Action,
+		"business_id": businessID,
+	})
+}
+
 func (h *BusinessHandler) ToggleLiveStatus(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {

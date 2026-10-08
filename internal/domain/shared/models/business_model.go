@@ -102,6 +102,8 @@ type Business struct {
 	StoreType *string `gorm:"default:'regular';column:store_type" json:"store_type"`
 
 	IsManuallyClosed bool     `gorm:"default:true;column:is_manually_closed" json:"is_manually_closed"`
+	ConfirmedOpenDate     *string    `gorm:"type:date;column:confirmed_open_date" json:"confirmed_open_date,omitempty"`
+	ConfirmedOvertimeDate *string    `gorm:"type:date;column:confirmed_overtime_date" json:"confirmed_overtime_date,omitempty"`
 	IsOpenNow        bool `gorm:"-" json:"is_open_now"`
 	IsLive           bool     `gorm:"default:false;column:is_live" json:"is_live"`
 	LivePlatform     *string  `gorm:"column:live_platform" json:"live_platform,omitempty"`
@@ -272,4 +274,9 @@ type LiveStatusResponse struct {
 	LivePlatform  *string    `json:"live_platform,omitempty"`
 	LiveStartedAt *time.Time `json:"live_started_at,omitempty"`
 	SocialURL     *string    `json:"social_url,omitempty"`
+}
+
+// ConfirmScheduleInput adalah payload dari notifikasi/popup konfirmasi jadwal buka/tutup
+type ConfirmScheduleInput struct {
+	Action string `json:"action" validate:"required,oneof=confirm_open confirm_overtime decline"`
 }
