@@ -35,10 +35,12 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bo
 	nowMinutes := now.Hour()*60 + now.Minute()
 
 	// 3. Filter Sistem: Cek jadwal operasional hari ini
+	hasScheduleToday := false
 	for _, h := range hours {
 		if h.DayOfWeek == currentDay {
 			// Parse OpenTime dan CloseTime (Format dari DB bisa "08:00:00" atau "08:00")
 			if h.OpenTime != nil && h.CloseTime != nil {
+				hasScheduleToday = true
 				openStr := strings.Split(strings.TrimSpace(*h.OpenTime), ":")
 				closeStr := strings.Split(strings.TrimSpace(*h.CloseTime), ":")
 
@@ -70,6 +72,12 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour) bo
 		}
 	}
 
-	// Jika tidak ada data jadwal hari ini atau format tidak valid, anggap tutup
+	// Jika toko TIDAK mengatur jadwal hari ini, status buka ditentukan oleh toggle manual:
+	// Jika !isManuallyClosed (toggle dinyalakan), toko buka dan akan otomatis ditutup saat reset tengah malam (00:00).
+	if !hasScheduleToday {
+		return !isManuallyClosed
+	}
+
+	// Jika ada jadwal teratur tetapi sekarang di luar jam buka, toko tutup
 	return false
 }

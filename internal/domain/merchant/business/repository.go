@@ -247,8 +247,8 @@ func (r *businessRepository) ToggleStoreStatus(business *models.Business) error 
 }
 
 func (r *businessRepository) ResetManualCloseStatus() error {
-	// Set semua is_manually_closed yang true menjadi false kecuali toko yang masih draft
-	return r.db.Exec("UPDATE businesses SET is_manually_closed = false WHERE is_manually_closed = true AND status != 'draft'").Error
+	// Otomatis tutup toko di tengah malam (00:00 WIB) jika merchant lupa mematikan toggle (is_manually_closed = false -> true)
+	return r.db.Exec("UPDATE businesses SET is_manually_closed = true WHERE is_manually_closed = false AND status != 'draft'").Error
 }
 
 // Di repositories/business_repository.go

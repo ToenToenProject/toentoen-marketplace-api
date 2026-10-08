@@ -78,13 +78,23 @@ func TestCalculateStoreStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("Tidak Ada Jadwal Hari Ini", func(t *testing.T) {
+	t.Run("Tidak Ada Jadwal Hari Ini Tapi Toggle Buka", func(t *testing.T) {
 		otherDay := (currentDay + 1) % 7
 		hours := []models.BusinessHour{
 			{DayOfWeek: otherDay, OpenTime: &openTimeActive, CloseTime: &closeTimeActive},
 		}
-		if CalculateStoreStatus(false, hours) {
-			t.Errorf("Expected store to be closed because no schedule for today, got open")
+		if !CalculateStoreStatus(false, hours) {
+			t.Errorf("Expected store without today's schedule to be open when isManuallyClosed=false")
+		}
+	})
+
+	t.Run("Tidak Ada Jadwal Hari Ini dan Toggle Tutup", func(t *testing.T) {
+		otherDay := (currentDay + 1) % 7
+		hours := []models.BusinessHour{
+			{DayOfWeek: otherDay, OpenTime: &openTimeActive, CloseTime: &closeTimeActive},
+		}
+		if CalculateStoreStatus(true, hours) {
+			t.Errorf("Expected store without today's schedule to be closed when isManuallyClosed=true")
 		}
 	})
 }
