@@ -404,7 +404,7 @@ func (s *profileService) RequestDeleteOTP(accountID string) error {
 
 	if err := utils.SendEmailOTP(*account.Email, otp, "Kode Verifikasi Penghapusan Akun ToenToen"); err != nil {
 		config.RDB.Del(config.Ctx, redisKey)
-		return fmt.Errorf("Gagal mengirim kode OTP ke email: %w", err)
+		return errors.New("Gagal mengirimkan kode OTP ke email Anda. Silakan coba beberapa saat lagi.")
 	}
 
 	return nil

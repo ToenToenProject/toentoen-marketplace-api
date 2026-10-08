@@ -144,7 +144,7 @@ func (s *businessTransferService) InitiateTransfer(ownerID, businessID string, i
 		if err := utils.SendEmailOTP(*currentOwner.Email, otp, "Kode Verifikasi Otorisasi Pengalihan Bisnis ToenToen"); err != nil {
 			config.RDB.Del(config.Ctx, otpKey)
 			config.RDB.Del(config.Ctx, targetKey)
-			return nil, fmt.Errorf("Gagal mengirim kode OTP ke email: %w", err)
+			return nil, errors.New("Gagal mengirimkan kode OTP ke email Anda. Silakan coba beberapa saat lagi.")
 		}
 	} else {
 		config.RDB.Del(config.Ctx, otpKey)

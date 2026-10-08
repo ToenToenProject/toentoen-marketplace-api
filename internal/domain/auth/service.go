@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/mail"
+	"regexp"
 	"strings"
 	"time"
 	"toentoen-backend/internal/config"
@@ -58,13 +60,21 @@ func cleanIdentifier(identifier string) string {
 	return identifier
 }
 
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
 func isEmail(identifier string) bool {
+	identifier = strings.TrimSpace(identifier)
+	if len(identifier) < 6 || len(identifier) > 254 {
+		return false
+	}
+	if strings.Contains(identifier, "..") {
+		return false
+	}
 	addr, err := mail.ParseAddress(identifier)
 	if err != nil {
 		return false
 	}
-	parts := strings.Split(addr.Address, "@")
-	return len(parts) == 2 && strings.Contains(parts[1], ".")
+	return emailRegex.MatchString(addr.Address)
 }
 
 // roleGroupFromInput mengubah role dari request (termasuk alias FE) menjadi kelompok role.
@@ -208,9 +218,14 @@ func (s *authService) sendOTP(identifier string, group string, email *string, ph
 			config.RDB.Del(config.Ctx, redisKey)
 		}
 		if lastErr != nil {
-			return fmt.Errorf("Gagal mengirim kode verifikasi: %w", lastErr)
+			log.Printf("[SEND-OTP-ERROR] Gagal mengirim OTP (%s): %v", identifier, lastErr)
 		}
-		return errors.New("Gagal mengirim kode verifikasi")
+		if hasEmail && !hasPhone {
+			return errors.New("Gagal mengirimkan kode verifikasi ke email Anda. Pastikan alamat email aktif dan valid, atau coba beberapa saat lagi.")
+		} else if hasPhone && !hasEmail {
+			return errors.New("Gagal mengirimkan kode verifikasi ke nomor WhatsApp Anda. Pastikan nomor terdaftar di WhatsApp dan coba lagi.")
+		}
+		return errors.New("Gagal mengirimkan kode verifikasi. Pastikan email atau nomor WhatsApp Anda aktif dan coba lagi.")
 	}
 
 	return nil
@@ -218,6 +233,11 @@ func (s *authService) sendOTP(identifier string, group string, email *string, ph
 
 func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
+	if strings.Contains(input.Identifier, "@") {
+		if !isEmail(input.Identifier) {
+			return errors.New("Format alamat email tidak valid")
+		}
+	}
 
 	// Normalisasi role (alias FE) dan tentukan kelompok role.
 	// customer  -> kelompok customer
@@ -315,7 +335,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 				config.RDB.Del(config.Ctx, pendingKey)
 				config.RDB.Del(config.Ctx, otpKey)
 			}
-			return fmt.Errorf("Gagal mengirim kode verifikasi ke email: %w", err)
+			return errors.New("Gagal mengirimkan kode verifikasi ke email Anda. Pastikan alamat email aktif dan valid, atau coba beberapa saat lagi.")
 		}
 	} else {
 		// Kirim kode verifikasi ke WhatsApp
@@ -328,7 +348,7 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 				config.RDB.Del(config.Ctx, pendingKey)
 				config.RDB.Del(config.Ctx, otpKey)
 			}
-			return fmt.Errorf("Gagal mengirim kode verifikasi ke WhatsApp: %w", err)
+			return errors.New("Gagal mengirimkan kode verifikasi ke nomor WhatsApp Anda. Pastikan nomor aktif dan coba lagi.")
 		}
 	}
 
@@ -420,7 +440,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 				AccountID:    utils.GenerateUUID("ACC"),
 				PasswordHash: &pending.PasswordHash,
 				Role:         pending.Role,
-				Username:     utils.GenerateRandomUsername(pending.Identifier),
+				Username:     utils.GenerateRandomUsername(pending.Identifier, pending.Role),
 				FirstName:    "New",
 				LastName:     "Account",
 				AuthProvider: "local",
@@ -446,6 +466,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 
 			// Simpan akun dan profil ke database PostgreSQL secara atomik
 			if err := s.repo.CreateAccountWithProfile(&account, pending.Role); err != nil {
+				log.Printf("[REGISTER-DB-ERROR] Gagal create account (%s, %s): %v", pending.Identifier, pending.Role, err)
 				return "", errors.New("Gagal membuat akun baru di database")
 			}
 
@@ -995,7 +1016,7 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 
 	if err := utils.SendEmailOTP(newEmailClean, otp, subject); err != nil {
 		config.RDB.Del(config.Ctx, redisKey)
-		return fmt.Errorf("Gagal mengirim kode verifikasi ke email baru: %w", err)
+		return errors.New("Gagal mengirimkan kode verifikasi ke email baru. Pastikan alamat email aktif dan valid, atau coba beberapa saat lagi.")
 	}
 
 	return nil
@@ -1114,7 +1135,7 @@ func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBus
 		AccountID:     utils.GenerateUUID("ACC"),
 		PasswordHash:  &pwd,
 		Role:          "business_admin",
-		Username:      utils.GenerateRandomUsername(input.Identifier),
+		Username:      utils.GenerateRandomUsername(input.Identifier, "business_admin"),
 		FirstName:     "Business",
 		LastName:      "Admin",
 		AuthProvider:  "local",
