@@ -31,4 +31,13 @@ func main() {
 	}
 
 	log.Println(" Tabel business_bookmarks berhasil ditambahkan!")
+
+	log.Println(" Menambahkan kolom confirmed_open_date dan confirmed_overtime_date ke tabel businesses...")
+	if err := database.DB.Exec(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_open_date DATE;`).Error; err != nil {
+		log.Fatalf("Gagal menambahkan confirmed_open_date: %v", err)
+	}
+	if err := database.DB.Exec(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_overtime_date DATE;`).Error; err != nil {
+		log.Fatalf("Gagal menambahkan confirmed_overtime_date: %v", err)
+	}
+	log.Println(" Kolom konfirmasi jadwal berhasil ditambahkan ke businesses!")
 }

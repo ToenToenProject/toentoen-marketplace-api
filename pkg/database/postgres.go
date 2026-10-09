@@ -72,6 +72,14 @@ func ConnectDB() {
 	log.Printf("🔌 Database connection pool initialized: max_open=%d, max_idle=%d, lifetime=%v, idle_time=%v",
 		maxOpen, maxIdle, connMaxLifetime, connMaxIdleTime)
 
+	// Selalu pastikan kolom esensial jadwal toko ada (idempotent, aman, cepat)
+	if err := DB.Exec(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_open_date DATE`).Error; err != nil {
+		log.Printf("⚠️ Warning ensuring confirmed_open_date: %v", err)
+	}
+	if err := DB.Exec(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_overtime_date DATE`).Error; err != nil {
+		log.Printf("⚠️ Warning ensuring confirmed_overtime_date: %v", err)
+	}
+
 	if !config.Envs.EnableAutoMigrate {
 		log.Println("ℹ️ AutoMigrate dinonaktifkan (ENABLE_AUTO_MIGRATE=false) — menjalankan aplikasi dengan izin least privilege")
 		return
