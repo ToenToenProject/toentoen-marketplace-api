@@ -266,7 +266,7 @@ func main() {
 	}
 
 	// Rate Limiting Global
-	rateLimitMax := 500
+	rateLimitMax := 1000
 	if envMax := os.Getenv("RATE_LIMIT_MAX"); envMax != "" {
 		if parsedMax, err := strconv.Atoi(envMax); err == nil && parsedMax > 0 {
 			rateLimitMax = parsedMax
@@ -277,11 +277,17 @@ func main() {
 		Max:        rateLimitMax,
 		Expiration: 1 * time.Minute,
 		Next: func(c *fiber.Ctx) bool {
+			// Buka bypass jika disetel di environment
+			if os.Getenv("ENABLE_RATE_LIMITER") == "false" {
+				return true
+			}
 			// Lewati preflight OPTIONS agar request CORS browser tidak menghabiskan kuota
 			return c.Method() == fiber.MethodOptions
 		},
 		KeyGenerator: getClientIP,
 		LimitReached: func(c *fiber.Ctx) error {
+			clientIP := getClientIP(c)
+			log.Printf("⚠️ [RateLimiter Global 429] IP: %s terblokir di %s %s", clientIP, c.Method(), c.Path())
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"responseCode": "429",
 				"message":      "Terlalu banyak request. Silakan coba lagi nanti.",
@@ -329,7 +335,7 @@ func main() {
 	// ==========================================
 	api.Post("/logout", auth.Logout)
 
-	authLimiterMax := 30
+	authLimiterMax := 60
 	if envAuthMax := os.Getenv("AUTH_RATE_LIMIT_MAX"); envAuthMax != "" {
 		if parsedAuthMax, err := strconv.Atoi(envAuthMax); err == nil && parsedAuthMax > 0 {
 			authLimiterMax = parsedAuthMax
@@ -340,10 +346,15 @@ func main() {
 		Max:        authLimiterMax,
 		Expiration: 1 * time.Minute,
 		Next: func(c *fiber.Ctx) bool {
+			if os.Getenv("ENABLE_RATE_LIMITER") == "false" {
+				return true
+			}
 			return c.Method() == fiber.MethodOptions
 		},
 		KeyGenerator: getClientIP,
 		LimitReached: func(c *fiber.Ctx) error {
+			clientIP := getClientIP(c)
+			log.Printf("⚠️ [RateLimiter Auth 429] IP: %s terblokir di %s %s", clientIP, c.Method(), c.Path())
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"responseCode": "429",
 				"message":      "Terlalu banyak percobaan autentikasi. Silakan coba lagi setelah 1 menit.",
