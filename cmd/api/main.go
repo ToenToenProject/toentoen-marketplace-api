@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 	"toentoen-backend/internal/domain/account"
 	"toentoen-backend/internal/domain/auth"
@@ -204,6 +206,7 @@ func main() {
 	// 3. FIBER APP SETUP
 	// ==========================================
 	app := fiber.New(fiber.Config{
+		ProxyHeader: fiber.HeaderXForwardedFor,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
 			var e *fiber.Error
@@ -245,10 +248,39 @@ func main() {
 
 	app.Use(cors.New(corsConfig))
 
-	// Rate Limiting
+	// Helper untuk mengekstrak Real Client IP di balik Reverse Proxy / Cloudflare / Load Balancer
+	getClientIP := func(c *fiber.Ctx) string {
+		if cf := c.Get("CF-Connecting-IP"); cf != "" {
+			return cf
+		}
+		if xff := c.Get("X-Forwarded-For"); xff != "" {
+			ips := strings.Split(xff, ",")
+			if len(ips) > 0 && strings.TrimSpace(ips[0]) != "" {
+				return strings.TrimSpace(ips[0])
+			}
+		}
+		if xri := c.Get("X-Real-IP"); xri != "" {
+			return xri
+		}
+		return c.IP()
+	}
+
+	// Rate Limiting Global
+	rateLimitMax := 500
+	if envMax := os.Getenv("RATE_LIMIT_MAX"); envMax != "" {
+		if parsedMax, err := strconv.Atoi(envMax); err == nil && parsedMax > 0 {
+			rateLimitMax = parsedMax
+		}
+	}
+
 	app.Use(limiter.New(limiter.Config{
-		Max:        100,
+		Max:        rateLimitMax,
 		Expiration: 1 * time.Minute,
+		Next: func(c *fiber.Ctx) bool {
+			// Lewati preflight OPTIONS agar request CORS browser tidak menghabiskan kuota
+			return c.Method() == fiber.MethodOptions
+		},
+		KeyGenerator: getClientIP,
 		LimitReached: func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"responseCode": "429",
@@ -297,9 +329,20 @@ func main() {
 	// ==========================================
 	api.Post("/logout", auth.Logout)
 
+	authLimiterMax := 30
+	if envAuthMax := os.Getenv("AUTH_RATE_LIMIT_MAX"); envAuthMax != "" {
+		if parsedAuthMax, err := strconv.Atoi(envAuthMax); err == nil && parsedAuthMax > 0 {
+			authLimiterMax = parsedAuthMax
+		}
+	}
+
 	authLimiter := limiter.New(limiter.Config{
-		Max:        15,
+		Max:        authLimiterMax,
 		Expiration: 1 * time.Minute,
+		Next: func(c *fiber.Ctx) bool {
+			return c.Method() == fiber.MethodOptions
+		},
+		KeyGenerator: getClientIP,
 		LimitReached: func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"responseCode": "429",
