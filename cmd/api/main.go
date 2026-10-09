@@ -564,6 +564,9 @@ func main() {
 	sharedBusinessScope.Patch("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/toggle-status", middlewares.RequireKYC, businessHandler.ToggleStoreStatus)
 	sharedBusinessScope.Post("/schedule-confirmation", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
+	sharedBusinessScope.Post("/schedule-confirmation/", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
+	sharedBusinessScope.Patch("/schedule-confirmation", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
+	sharedBusinessScope.Patch("/schedule-confirmation/", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
 	sharedBusinessScope.Patch("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 	sharedBusinessScope.Post("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 

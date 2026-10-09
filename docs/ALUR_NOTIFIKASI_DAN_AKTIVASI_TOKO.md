@@ -118,13 +118,13 @@ sequenceDiagram
 
     alt Merchant Menekan "Ya" (Buka Toko)
         Merchant->>App: Tekan tombol "Ya" (pukul 07:15)
-        App->>Server: POST /business/:id/schedule-confirmation {"action": "confirm_open"}
+        App->>Server: POST /api/v1/business/:id/schedule-confirmation {"action": "confirm_open"}
         Server-->>App: confirmed_open_date = today (Toko terjadwal)
         Note over Server: Pukul 07:15 - 07:59: Status tetap TUTUP
         Note over Server: Pukul 08:00: Status otomatis menjadi BUKA
     else Merchant Menekan "Tidak" (Tolak Buka)
         Merchant->>App: Tekan tombol "Tidak"
-        App->>Server: POST /business/:id/schedule-confirmation {"action": "decline"}
+        App->>Server: POST /api/v1/business/:id/schedule-confirmation {"action": "decline"}
         Server-->>App: is_manually_closed = true
         Note over Server: Toko tetap TUTUP sepanjang hari
     else Merchant Mengabaikan Notifikasi
