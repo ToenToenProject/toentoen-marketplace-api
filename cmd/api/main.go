@@ -282,7 +282,15 @@ func main() {
 				return true
 			}
 			// Lewati preflight OPTIONS agar request CORS browser tidak menghabiskan kuota
-			return c.Method() == fiber.MethodOptions
+			if c.Method() == fiber.MethodOptions {
+				return true
+			}
+			// Lewati request yang BUKAN rute resmi /api/v1 (seperti scanner bot internet untuk .env, phpinfo, wp-config, dll.)
+			// agar serangan bot tidak menghabiskan kuota rate limit aplikasi!
+			if !strings.HasPrefix(c.Path(), "/api/v1") {
+				return true
+			}
+			return false
 		},
 		KeyGenerator: getClientIP,
 		LimitReached: func(c *fiber.Ctx) error {
