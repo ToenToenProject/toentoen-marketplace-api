@@ -835,10 +835,26 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	// Nilai baru yang akan di-apply (Flip)
 	newStatus := !business.IsManuallyClosed
 
+	loc := utils.GetWIBLocation()
+	todayStr := time.Now().In(loc).Format("2006-01-02")
+
 	// Simpan status barunya
 	business.IsManuallyClosed = newStatus
+	if !newStatus {
+		// Jika merchant menyalakan toggle ke "Buka":
+		// Selalu set confirmed_open_date ke hari ini agar toko langsung buka dan tidak tertutup kembali
+		business.ConfirmedOpenDate = &todayStr
+		// Set juga confirmed_overtime_date ke hari ini untuk mendukung merchant yang sengaja membuka toko di luar jam reguler
+		business.ConfirmedOvertimeDate = &todayStr
+	}
+
 	if err := s.repo.ToggleStoreStatus(business); err != nil {
 		return false, errors.New("gagal memperbarui status toko")
+	}
+
+	// Invalidate cache detail bisnis agar selalu fresh
+	if config.RDB != nil {
+		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
 	}
 
 	// 🔔 Notifikasi ke Owner jika dilakukan oleh staf admin
@@ -885,19 +901,31 @@ func (s *businessService) ConfirmScheduleAction(requesterID, businessID string, 
 	loc := utils.GetWIBLocation()
 	todayStr := time.Now().In(loc).Format("2006-01-02")
 
+	var actionErr error
 	switch input.Action {
 	case "confirm_open":
 		// Merchant konfirmasi: Toko siap buka sesuai jadwal hari ini
-		return s.repo.ConfirmOpenToday(businessID, todayStr)
+		actionErr = s.repo.ConfirmOpenToday(businessID, todayStr)
 	case "confirm_overtime":
 		// Merchant konfirmasi: Toko lanjut buka / lembur melewati jam tutup reguler
-		return s.repo.ConfirmOvertimeToday(businessID, todayStr)
+		actionErr = s.repo.ConfirmOvertimeToday(businessID, todayStr)
 	case "decline":
 		// Merchant menolak: Toko tetap tutup / langsung tutup
-		return s.repo.DeclineSchedule(businessID)
+		actionErr = s.repo.DeclineSchedule(businessID)
 	default:
 		return errors.New("aksi tidak valid")
 	}
+
+	if actionErr != nil {
+		return actionErr
+	}
+
+	// Invalidate cache detail bisnis agar selalu fresh
+	if config.RDB != nil {
+		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
+	}
+
+	return nil
 }
 
 func formatSocialURL(platform string, raw string) string {

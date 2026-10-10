@@ -246,8 +246,18 @@ func (r *businessRepository) FindBusinessByID(businessID string) (*models.Busine
 }
 
 func (r *businessRepository) ToggleStoreStatus(business *models.Business) error {
-	// Update kolom is_manually_closed di database menggunakan Raw SQL agar GORM tidak mencoba save relasi (ON CONFLICT)
-	return r.db.Exec("UPDATE businesses SET is_manually_closed = ? WHERE business_id = ?", business.IsManuallyClosed, business.BusinessID).Error
+	// Update kolom status operasional di database menggunakan Raw SQL agar GORM tidak mencoba save relasi (ON CONFLICT)
+	if !business.IsManuallyClosed {
+		return r.db.Exec(`
+			UPDATE businesses 
+			SET is_manually_closed = false, 
+			    confirmed_open_date = ?, 
+			    confirmed_overtime_date = ? 
+			WHERE business_id = ?`,
+			business.ConfirmedOpenDate, business.ConfirmedOvertimeDate, business.BusinessID,
+		).Error
+	}
+	return r.db.Exec("UPDATE businesses SET is_manually_closed = true WHERE business_id = ?", business.BusinessID).Error
 }
 
 func (r *businessRepository) ResetManualCloseStatus() error {
@@ -260,7 +270,7 @@ func (r *businessRepository) ConfirmOpenToday(businessID string, todayDate strin
 }
 
 func (r *businessRepository) ConfirmOvertimeToday(businessID string, todayDate string) error {
-	return r.db.Exec("UPDATE businesses SET confirmed_overtime_date = ?, is_manually_closed = false WHERE business_id = ?", todayDate, businessID).Error
+	return r.db.Exec("UPDATE businesses SET confirmed_open_date = ?, confirmed_overtime_date = ?, is_manually_closed = false WHERE business_id = ?", todayDate, todayDate, businessID).Error
 }
 
 func (r *businessRepository) DeclineSchedule(businessID string) error {

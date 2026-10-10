@@ -197,6 +197,12 @@ func (h *BusinessHandler) ToggleStoreStatus(c *fiber.Ctx) error {
 		msg = "Toko sekarang berstatus Tutup (manual)"
 	}
 
+	// Langsung kembalikan payload data toko terbaru ke FE
+	latestDetail, errDetail := h.service.GetBusinessDetail(businessID)
+	if errDetail == nil && latestDetail != nil {
+		return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, latestDetail)
+	}
+
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, fiber.Map{
 		"is_manually_closed": isClosed,
 	})
@@ -240,6 +246,12 @@ func (h *BusinessHandler) ConfirmSchedule(c *fiber.Ctx) error {
 		message = "Toko telah dikonfirmasi untuk tetap Buka (lembur) hingga maksimal tengah malam"
 	case "decline":
 		message = "Toko disetel ke status Tutup"
+	}
+
+	// Langsung kembalikan payload data toko terbaru ke FE
+	latestDetail, errDetail := h.service.GetBusinessDetail(businessID)
+	if errDetail == nil && latestDetail != nil {
+		return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, latestDetail)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{

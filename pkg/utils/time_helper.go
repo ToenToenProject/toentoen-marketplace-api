@@ -43,8 +43,8 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 		confirmedOvertimeDate = confirmedDates[1]
 	}
 
-	isOpenConfirmedToday := confirmedOpenDate != nil && *confirmedOpenDate == todayStr
 	isOvertimeConfirmedToday := confirmedOvertimeDate != nil && *confirmedOvertimeDate == todayStr
+	isOpenConfirmedToday := (confirmedOpenDate != nil && *confirmedOpenDate == todayStr) || isOvertimeConfirmedToday
 
 	nowMinutes := now.Hour()*60 + now.Minute()
 
