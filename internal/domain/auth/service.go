@@ -62,8 +62,58 @@ func cleanIdentifier(identifier string) string {
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
+var typoEmailDomains = map[string]bool{
+	"gmaill.com":  true,
+	"gamil.com":   true,
+	"gmai.com":    true,
+	"gmaild.com":  true,
+	"gmail.co":    true,
+	"yaho.com":    true,
+	"yaho.co":     true,
+	"yaho.co.id":  true,
+	"hotmial.com": true,
+	"outlok.com":  true,
+	"outlock.com": true,
+	"iclud.com":   true,
+}
+
+var disposableEmailDomains = map[string]bool{
+	"mailinator.com":    true,
+	"tempmail.com":      true,
+	"guerrillamail.com": true,
+	"10minutemail.com":  true,
+	"throwawaymail.com": true,
+	"dispostable.com":   true,
+	"trashmail.com":     true,
+	"yopmail.com":       true,
+}
+
+func hasExcessiveRepetitiveChars(s string, maxConsecutive int) bool {
+	if len(s) == 0 {
+		return false
+	}
+	count := 1
+	var last rune
+	for i, r := range s {
+		if i == 0 {
+			last = r
+			continue
+		}
+		if r == last {
+			count++
+			if count >= maxConsecutive {
+				return true
+			}
+		} else {
+			last = r
+			count = 1
+		}
+	}
+	return false
+}
+
 func isEmail(identifier string) bool {
-	identifier = strings.TrimSpace(identifier)
+	identifier = strings.TrimSpace(strings.ToLower(identifier))
 	if len(identifier) < 6 || len(identifier) > 254 {
 		return false
 	}
@@ -74,7 +124,32 @@ func isEmail(identifier string) bool {
 	if err != nil {
 		return false
 	}
-	return emailRegex.MatchString(addr.Address)
+	if !emailRegex.MatchString(addr.Address) {
+		return false
+	}
+
+	parts := strings.Split(addr.Address, "@")
+	if len(parts) != 2 {
+		return false
+	}
+	localPart, domain := parts[0], parts[1]
+
+	// Tolak domain typo yang sering salah ketik
+	if typoEmailDomains[domain] {
+		return false
+	}
+
+	// Tolak domain email sementara/disposable
+	if disposableEmailDomains[domain] {
+		return false
+	}
+
+	// Tolak karakter berulang tidak wajar pada nama email (contoh: va.ricky.joooooooooooo)
+	if hasExcessiveRepetitiveChars(localPart, 5) {
+		return false
+	}
+
+	return true
 }
 
 // roleGroupFromInput mengubah role dari request (termasuk alias FE) menjadi kelompok role.
@@ -557,55 +632,34 @@ func (s *authService) SendEmailOTP(email string, role string) error {
 		return errors.New("Format alamat email tidak valid")
 	}
 
-	groups := candidateGroups(role)
 	account, err := s.repo.FindByIdentifier(cleanEmail, roleGroupFromInput(role))
-	if err == nil {
-		if account.AccountStatus == "banned" {
-			return errors.New("Akun anda telah diblokir dari platform")
+	if err != nil {
+		if errors.Is(err, ErrAmbiguousAccount) {
+			return ErrAmbiguousAccount
 		}
-		if account.AccountStatus == "suspended" {
-			return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("Akun dengan email ini tidak ditemukan")
 		}
-		group := models.RoleGroupOf(account.Role)
-		customSubj := "Kode Verifikasi Email ToenToen"
-		if account.Role == "business_admin" {
-			if account.LastLoginAt == nil || account.PasswordHash == nil || account.AccountStatus == "inactive" {
-				customSubj = "Kode Verifikasi Aktivasi Akun Admin Toko ToenToen"
-			} else {
-				customSubj = "Kode Verifikasi Email Admin Toko ToenToen"
-			}
-		}
-		return s.sendOTP(cleanEmail, group, account.Email, account.PhoneNumber, "email_verify_otp", customSubj)
-	} else if errors.Is(err, ErrAmbiguousAccount) {
-		return ErrAmbiguousAccount
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return errors.New("Terjadi kesalahan sistem saat mencari data akun")
 	}
 
-	// Jika akun belum ada di database, cek apakah sedang dalam status pending registration di Redis
-	if config.RDB != nil {
-		for _, g := range groups {
-			pendingKey := scopedKey("register_pending", g, cleanEmail)
-			storedJSON, errRedis := config.RDB.Get(config.Ctx, pendingKey).Result()
-			if errRedis == nil && storedJSON != "" {
-				var pending models.PendingRegistration
-				if err := json.Unmarshal([]byte(storedJSON), &pending); err == nil {
-					newOTP := utils.GenerateNumericOTP(6)
-					pending.OTP = newOTP
-					updatedJSON, _ := json.Marshal(pending)
-					_ = config.RDB.Set(config.Ctx, pendingKey, string(updatedJSON), 5*time.Minute).Err()
-					_ = config.RDB.Set(config.Ctx, scopedKey("register_otp", g, cleanEmail), newOTP, 5*time.Minute).Err()
-					subject := "Kode Verifikasi Registrasi Akun ToenToen"
-					if pending.Role == "business_admin" {
-						subject = "Kode Verifikasi Registrasi Admin Toko ToenToen"
-					}
-					return utils.SendEmailOTP(cleanEmail, newOTP, subject)
-				}
-			}
-		}
+	if account.AccountStatus == "banned" {
+		return errors.New("Akun anda telah diblokir dari platform")
+	}
+	if account.AccountStatus == "suspended" {
+		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	}
 
-	return errors.New("Akun dengan email ini tidak ditemukan")
+	group := models.RoleGroupOf(account.Role)
+	customSubj := "Kode Verifikasi Email ToenToen"
+	if account.Role == "business_admin" {
+		if account.LastLoginAt == nil || account.PasswordHash == nil || account.AccountStatus == "inactive" {
+			customSubj = "Kode Verifikasi Aktivasi Akun Admin Toko ToenToen"
+		} else {
+			customSubj = "Kode Verifikasi Email Admin Toko ToenToen"
+		}
+	}
+	return s.sendOTP(cleanEmail, group, account.Email, account.PhoneNumber, "email_verify_otp", customSubj)
 }
 
 func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
@@ -614,42 +668,31 @@ func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
 		return errors.New("Format alamat email tidak valid")
 	}
 
+	if config.RDB == nil {
+		return errors.New("Layanan verifikasi sedang tidak tersedia")
+	}
+
 	groups := candidateGroups(input.Role)
 	var matchedGroup string
 
-	if config.RDB != nil {
-		for _, g := range groups {
-			key := scopedKey("email_verify_otp", g, cleanEmail)
-			storedOTP, err := config.RDB.Get(config.Ctx, key).Result()
-			if err == nil && storedOTP == input.OTP {
-				matchedGroup = g
-				config.RDB.Del(config.Ctx, key)
-				break
-			}
-			regKey := scopedKey("register_otp", g, cleanEmail)
-			storedRegOTP, regErr := config.RDB.Get(config.Ctx, regKey).Result()
-			if regErr == nil && storedRegOTP == input.OTP {
-				matchedGroup = g
-				config.RDB.Del(config.Ctx, regKey)
-				break
-			}
+	for _, g := range groups {
+		key := scopedKey("email_verify_otp", g, cleanEmail)
+		storedOTP, err := config.RDB.Get(config.Ctx, key).Result()
+		if err == nil && storedOTP == input.OTP {
+			matchedGroup = g
+			config.RDB.Del(config.Ctx, key)
+			break
 		}
+	}
 
-		// Fallback cek un-scoped legacy key
-		if matchedGroup == "" {
-			legacyKey := fmt.Sprintf("email_verify_otp:%s", cleanEmail)
-			storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
-			if err == nil && storedOTP == input.OTP {
-				config.RDB.Del(config.Ctx, legacyKey)
-			} else {
-				legacyReg := fmt.Sprintf("register_otp:%s", cleanEmail)
-				storedRegOTP, regErr := config.RDB.Get(config.Ctx, legacyReg).Result()
-				if regErr == nil && storedRegOTP == input.OTP {
-					config.RDB.Del(config.Ctx, legacyReg)
-				} else {
-					return errors.New("OTP tidak valid atau sudah kadaluarsa")
-				}
-			}
+	// Fallback cek un-scoped legacy key
+	if matchedGroup == "" {
+		legacyKey := fmt.Sprintf("email_verify_otp:%s", cleanEmail)
+		storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
+		if err == nil && storedOTP == input.OTP {
+			config.RDB.Del(config.Ctx, legacyKey)
+		} else {
+			return errors.New("OTP tidak valid atau sudah kadaluarsa")
 		}
 	}
 

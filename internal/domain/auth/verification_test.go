@@ -58,3 +58,50 @@ func TestEvaluateAccountStatus(t *testing.T) {
 		}
 	})
 }
+
+func TestIsEmailStrictValidation(t *testing.T) {
+	testCases := []struct {
+		email    string
+		expected bool
+	}{
+		{"user@gmail.com", true},
+		{"john.doe@toentoen.com", true},
+		{"customer_123@yahoo.co.id", true},
+		{"va.ricky.joooooooooooo@gmail.com", false}, // Karakter berulang 5+ huruf 'o'
+		{"fake.user.aaaaaaa@gmail.com", false},       // Karakter berulang 5+ huruf 'a'
+		{"test@gmaill.com", false},                   // Typo domain gmaill.com
+		{"test@gamil.com", false},                    // Typo domain gamil.com
+		{"test@gmai.com", false},                     // Typo domain gmai.com
+		{"test@yaho.com", false},                     // Typo domain yaho.com
+		{"test@mailinator.com", false},               // Disposable email domain
+		{"test@tempmail.com", false},                 // Disposable email domain
+		{"invalid-format", false},
+		{"@no-user.com", false},
+		{"user@.com", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.email, func(t *testing.T) {
+			got := isEmail(tc.email)
+			if got != tc.expected {
+				t.Errorf("isEmail(%q) = %v, expected %v", tc.email, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestSendEmailOTP_AccountNotFound(t *testing.T) {
+	mockRepo := &mockAuthRepo{
+		accounts: make(map[string]*models.Account),
+	}
+	service := NewAuthService(mockRepo)
+
+	err := service.SendEmailOTP("nonexistent@gmail.com", "customer")
+	if err == nil {
+		t.Fatal("expected error for non-existent account, got nil")
+	}
+	if err.Error() != "Akun dengan email ini tidak ditemukan" {
+		t.Errorf("expected 'Akun dengan email ini tidak ditemukan', got '%s'", err.Error())
+	}
+}
+
