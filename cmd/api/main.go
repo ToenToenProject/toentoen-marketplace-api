@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -70,6 +71,17 @@ func main() {
 	meilisearch.ConnectMeilisearch()
 	storage.InitS3Client()
 	config.InitFirebase()
+
+	// 🔍 Auto-sync PostgreSQL businesses to Meilisearch on startup
+	go func() {
+		meilisearch.InitMeilisearchIndices()
+		count, err := meilisearch.SyncAllBusinesses(database.DB)
+		if err != nil {
+			log.Printf("⚠️ Meilisearch auto-sync error: %v", err)
+		} else {
+			log.Printf("🔍 Meilisearch auto-synced %d businesses successfully", count)
+		}
+	}()
 
 	// WebSocket Hub (Real-Time)
 	wsHub := realtime.NewHub(config.RDB)
@@ -721,6 +733,16 @@ func main() {
 	customerExploreGroup.Get("/feed", middlewares.OptionalAuth, exploreHandler.GetTimeline)
 	customerExploreGroup.Post("/feed/events", middlewares.OptionalAuth, exploreHandler.RecordFeedEvents)
 	customerExploreGroup.Post("/timeline/events", middlewares.OptionalAuth, exploreHandler.RecordFeedEvents)
+	customerExploreGroup.Post("/sync", func(c *fiber.Ctx) error {
+		meilisearch.InitMeilisearchIndices()
+		count, err := meilisearch.SyncAllBusinesses(database.DB)
+		if err != nil {
+			return utils.SendResponse(c, 500, "99", fmt.Sprintf("Gagal sinkronisasi Meilisearch: %v", err), nil)
+		}
+		return utils.SendResponse(c, 200, "00", fmt.Sprintf("Berhasil menyinkronkan %d bisnis ke Meilisearch", count), fiber.Map{
+			"total_synced": count,
+		})
+	})
 
 	// Batch Impressions dari Flutter
 	api.Post("/customer/analytics/impressions", analyticsHandler.TrackImpressions)

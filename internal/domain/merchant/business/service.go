@@ -283,6 +283,8 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		return "", err
 	}
 
+	go meilisearch.SyncBusiness(database.DB, business.BusinessID)
+
 	return business.BusinessID, nil
 }
 
@@ -796,6 +798,8 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		)
 	}
 
+	go meilisearch.SyncBusiness(database.DB, businessID)
+
 	return nil
 }
 
@@ -874,6 +878,8 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
 	}
 
+	go meilisearch.SyncBusiness(database.DB, businessID)
+
 	// 🔔 Notifikasi ke Owner jika dilakukan oleh staf admin
 	if !isOwner {
 		statusStr := "Buka"
@@ -941,6 +947,8 @@ func (s *businessService) ConfirmScheduleAction(requesterID, businessID string, 
 	if config.RDB != nil {
 		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
 	}
+
+	go meilisearch.SyncBusiness(database.DB, businessID)
 
 	return nil
 }

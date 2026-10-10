@@ -8,6 +8,7 @@ import (
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -170,6 +171,8 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
 	}
 
+	go meilisearch.SyncBusiness(database.DB, businessID)
+
 	return nil
 }
 
@@ -323,6 +326,8 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
 	}
 
+	go meilisearch.SyncBusiness(database.DB, businessID)
+
 	return nil
 }
 
@@ -355,6 +360,8 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 			},
 		)
 	}
+
+	go meilisearch.SyncBusiness(database.DB, businessID)
 
 	return nil
 }
@@ -608,6 +615,8 @@ func (s *productService) BulkDelete(requesterID, role, businessID string, produc
 			},
 		)
 	}
+
+	go meilisearch.SyncBusiness(database.DB, businessID)
 
 	return nil
 }

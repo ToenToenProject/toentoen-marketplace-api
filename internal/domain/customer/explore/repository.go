@@ -43,25 +43,14 @@ type SearchRequest struct {
 	Offset  int64
 }
 
-type MeiliBusinessDocument struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Products      []string    `json:"products"`
-	Rating        float64     `json:"rating"`
-	ReviewCount   int64       `json:"review_count"`
-	PreviewImages []string    `json:"preview_images"`
-	IsOpen        bool        `json:"is_open"`
-	CloseTime     string      `json:"close_time"`
-	Geo           GeoLocation `json:"_geo"`
-	Distance      float64     `json:"_geoDistance,omitempty"`
-}
-
-type GeoLocation struct {
-	Lat float64 `json:"lat"`
-	Lng float64 `json:"lng"`
-}
+type MeiliBusinessDocument = myMeili.MeiliBusinessDocument
+type GeoLocation = myMeili.GeoLocation
 
 func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusinessDocument, int64, error) {
+	if myMeili.Client == nil {
+		log.Println("⚠️ Meilisearch client is nil, returning empty result")
+		return []MeiliBusinessDocument{}, 0, nil
+	}
 	index := myMeili.Client.Index("businesses")
 
 	// Prepare Search Request

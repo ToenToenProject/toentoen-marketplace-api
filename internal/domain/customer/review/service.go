@@ -11,6 +11,7 @@ import (
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -285,6 +286,7 @@ func (s *reviewService) recalculateBusinessRating(businessID string) {
 	summary, err := s.reviewRepo.GetReviewSummary(businessID)
 	if err == nil && summary != nil {
 		_ = s.businessRepo.UpdateBusinessRating(businessID, summary.AverageRating, int(summary.TotalReviews))
+		go meilisearch.SyncBusiness(database.DB, businessID)
 	}
 }
 
