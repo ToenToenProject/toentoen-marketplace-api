@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"unicode/utf8"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
@@ -209,6 +210,14 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 	}
 	if input.Certificates == nil {
 		input.Certificates = []models.BusinessCertificate{}
+	}
+
+	// Resolusi alias deskripsi jika dikirim field 'description'
+	if strings.TrimSpace(input.BusinessDetails) == "" && strings.TrimSpace(input.Description) != "" {
+		input.BusinessDetails = strings.TrimSpace(input.Description)
+	}
+	if utf8.RuneCountInString(input.BusinessDetails) > 300 {
+		return "", errors.New("deskripsi bisnis maksimal 300 karakter")
 	}
 
 	business := models.Business{
@@ -497,8 +506,16 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		}
 	}
 
+	// Resolusi alias deskripsi jika field utama kosong namun alias dikirim
+	if input.BusinessDetails == nil && input.Description != nil {
+		input.BusinessDetails = input.Description
+	}
+
 	if input.BusinessDetails != nil {
 		cleanDetails := strings.TrimSpace(*input.BusinessDetails)
+		if utf8.RuneCountInString(cleanDetails) > 300 {
+			return errors.New("deskripsi bisnis maksimal 300 karakter")
+		}
 		if cleanDetails == "" {
 			business.BusinessDetails = nil
 		} else {

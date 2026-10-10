@@ -451,3 +451,71 @@ func TestConfirmScheduleAction(t *testing.T) {
 		}
 	})
 }
+
+func TestBusinessDetails_Max300Chars(t *testing.T) {
+	longText := strings.Repeat("A", 301)
+	validText := "Toko kami menjual berbagai macam kebutuhan sehari-hari."
+
+	t.Run("CreateBusiness fails when description exceeds 300 chars", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			emailVerified: true,
+			kycStatus:     "verified",
+		}
+		service := NewBusinessService(repo, nil)
+
+		_, err := service.CreateBusiness("OWNER_1", models.CreateBusinessInput{
+			BusinessName:    "Toko Berkah",
+			Email:           "owner@example.com",
+			CategoryIDs:     []int64{1},
+			BusinessDetails: longText,
+		})
+		if err == nil {
+			t.Fatal("expected error when description > 300 chars, got nil")
+		}
+		if !strings.Contains(err.Error(), "maksimal 300 karakter") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("CreateBusiness succeeds and resolves Description alias", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			emailVerified: true,
+			kycStatus:     "verified",
+		}
+		service := NewBusinessService(repo, nil)
+
+		_, err := service.CreateBusiness("OWNER_1", models.CreateBusinessInput{
+			BusinessName: "Toko Berkah",
+			Email:        "owner@example.com",
+			CategoryIDs:  []int64{1},
+			Description:  validText,
+		})
+		if err != nil {
+			t.Fatalf("expected success with Description alias, got error: %v", err)
+		}
+		if repo.createdBiz == nil || repo.createdBiz.BusinessDetails == nil || *repo.createdBiz.BusinessDetails != validText {
+			t.Errorf("expected BusinessDetails to be resolved from Description alias")
+		}
+	})
+
+	t.Run("UpdateBusiness fails when description exceeds 300 chars", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			findBiz: &models.Business{
+				BusinessID: "BIZ_123",
+				AccountID:  "OWNER_1",
+			},
+		}
+		service := NewBusinessService(repo, nil)
+
+		err := service.UpdateBusiness("OWNER_1", "BIZ_123", models.UpdateBusinessInput{
+			BusinessDetails: &longText,
+		})
+		if err == nil {
+			t.Fatal("expected error when updating description > 300 chars, got nil")
+		}
+		if !strings.Contains(err.Error(), "maksimal 300 karakter") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+

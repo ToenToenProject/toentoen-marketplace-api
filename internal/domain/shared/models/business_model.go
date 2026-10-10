@@ -158,7 +158,8 @@ type CreateBusinessInput struct {
 	Tags            []int64  `json:"tags"`
 	CustomTags      []string `json:"custom_tags"`
 	Hashtags        []string `json:"hashtags"`
-	BusinessDetails string   `json:"business_details" validate:"max=2000"`
+	BusinessDetails string   `json:"business_details" validate:"max=300"`
+	Description     string   `json:"description" validate:"max=300"` // Alias untuk business_details
 
 	NIB             string  `json:"nib"`
 	Country         string  `json:"country"`
@@ -209,7 +210,8 @@ type UpdateBusinessInput struct {
 	Tags            *[]int64  `json:"tags"`
 	CustomTags      *[]string `json:"custom_tags"`
 	Hashtags        *[]string `json:"hashtags"`
-	BusinessDetails *string  `json:"business_details" validate:"omitempty,max=2000"`
+	BusinessDetails *string  `json:"business_details" validate:"omitempty,max=300"`
+	Description     *string  `json:"description" validate:"omitempty,max=300"` // Alias untuk business_details
 
 	NIB            *string  `json:"nib"`
 	Country        *string  `json:"country"`
