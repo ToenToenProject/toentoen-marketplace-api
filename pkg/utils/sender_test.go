@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ func TestBuildOTPEmailHTML(t *testing.T) {
 	testTime := time.Date(2026, 10, 12, 1, 30, 0, 0, time.UTC) // 08:30 WIB
 
 	html := buildOTPEmailHTML(content, otp, testTime)
+	_ = os.WriteFile("C:/Users/ADMIN/.gemini/antigravity-ide/brain/9a0fec54-8ee1-4d0f-96f7-863de21acdca/scratch/preview_email.html", []byte(html), 0644)
 
 	// Verifikasi elemen kunci ada di dalam HTML
 	if !strings.Contains(html, "Hey Sobat ToenToen!") {
@@ -24,15 +26,15 @@ func TestBuildOTPEmailHTML(t *testing.T) {
 
 	// Cek tiap digit ter-render dalam box terpisah
 	for _, ch := range otp {
-		digitTag := string(ch) + "</span>"
+		digitTag := string(ch) + "</td>"
 		if !strings.Contains(html, digitTag) {
-			t.Errorf("HTML should contain digit span for %c", ch)
+			t.Errorf("HTML should contain digit cell for %c", ch)
 		}
 	}
 
-	// Cek keberadaan logo ToenToen SVG
-	if !strings.Contains(html, "viewBox=\"0 0 46 46\"") {
-		t.Errorf("HTML should contain logo SVG")
+	// Cek keberadaan badge merek ToenToen (TO EN)
+	if !strings.Contains(html, "TO<br>EN") || !strings.Contains(html, "#00B5AD") {
+		t.Errorf("HTML should contain ToenToen brand badge")
 	}
 
 	// Cek keberadaan swoosh SVG

@@ -114,7 +114,11 @@ func renderOTPDigitsHTML(otp string) string {
 	var sb strings.Builder
 	for _, ch := range strings.TrimSpace(otp) {
 		sb.WriteString(fmt.Sprintf(
-			`<span style="width: 28px; height: 38px; line-height: 38px; background: #d4f1f1; border-radius: 4px; display: inline-block; text-align: center; font-size: 19px; font-weight: 700; color: #008f88; font-family: 'Poppins', Arial, sans-serif; margin-right: 4px; vertical-align: middle;">%c</span>`,
+			`<td style="padding-right: 4px;" valign="middle">`+
+				`<table cellpadding="0" cellspacing="0" border="0" width="28" height="38" bgcolor="#d4f1f1" style="width: 28px; height: 38px; background-color: #d4f1f1; border-radius: 4px; text-align: center; border-collapse: separate;">`+
+				`<tr><td align="center" valign="middle" style="font-family: 'Poppins', Arial, sans-serif; font-size: 19px; font-weight: 700; color: #008f88; line-height: 38px; padding: 0;">%c</td></tr>`+
+				`</table>`+
+				`</td>`,
 			ch,
 		))
 	}
@@ -132,185 +136,155 @@ func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time)
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{SUBJECT}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; }
+  body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+  table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
   body {
-    background: #1e1e1e;
-    font-family: 'Poppins', Arial, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
+    background-color: #1e1e1e !important;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
     margin: 0;
+    padding: 0;
   }
-  .frame {
-    width: 423px;
-    max-width: 100%;
-    margin: 0 auto;
-    padding: 0 0 12px;
-  }
-  .frame-label {
-    color: #9a9a9a;
-    font-size: 12px;
-    margin: 0 0 12px 0;
-    font-weight: 400;
-  }
-  .card {
-    position: relative;
-    width: 100%;
-    background: #fff;
-    border-radius: 12px;
-    overflow: hidden;
-    padding: 49px 23px 24px;
-    color: #000;
-  }
-  .swoosh { position: absolute; pointer-events: none; }
-  .swoosh.tl { top: 0; left: 0; width: 64px; height: 70px; }
-  .swoosh.br { bottom: 0; right: 0; width: 96px; height: 108px; overflow: visible; }
-  .logo {
-    position: absolute;
-    top: 17px;
-    right: 22px;
-    width: 46px;
-    height: 46px;
-  }
-  .greeting {
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.5;
-    margin-bottom: 8px;
-    color: #000;
-    position: relative;
-    z-index: 2;
-  }
-  p.body {
-    font-size: 12px;
-    line-height: 1.55;
-    font-weight: 400;
-    color: #222;
-    margin-bottom: 12px;
-    position: relative;
-    z-index: 2;
-  }
-  .otp {
-    display: flex;
-    gap: 4px;
-    margin: 18px 0 6px;
-    position: relative;
-    z-index: 2;
-  }
-  .copy {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 24px;
-    padding: 0 10px;
-    background: #e6e6e6;
-    color: #555555;
-    font-size: 10px;
-    font-weight: 600;
-    border: 0;
-    border-radius: 3px;
-    font-family: inherit;
-    margin-bottom: 18px;
-    position: relative;
-    z-index: 2;
-  }
-  .footer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    margin-top: 28px;
-    padding-top: 12px;
-    border-top: 1px solid #f0f0f0;
-    font-size: 10.5px;
-    font-weight: 500;
-    color: #666;
-    padding-bottom: 6px;
-    position: relative;
-    z-index: 2;
-    text-align: center;
-  }
-  .footer svg { width: 14px; height: 14px; flex: none; vertical-align: middle; }
+  .swoosh-tl { position: absolute; top: 0; left: 0; width: 64px; height: 70px; pointer-events: none; }
+  .swoosh-br { position: absolute; bottom: 0; right: 0; width: 96px; height: 108px; pointer-events: none; }
   @media (max-width: 440px) {
-    .card { padding-left: 18px; padding-right: 18px; }
+    .card-box { padding: 32px 18px 20px !important; }
+    .email-wrapper { padding: 16px 8px !important; }
   }
 </style>
 </head>
-<body style="background: #1e1e1e; font-family: 'Poppins', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 16px;">
-  <div class="frame" style="width: 423px; max-width: 100%; margin: 0 auto; padding: 0 0 12px;">
-    <div class="frame-label" style="color: #9a9a9a; font-size: 12px; margin: 0 0 12px 0; font-weight: 400;">Email</div>
+<body bgcolor="#1e1e1e" style="background-color: #1e1e1e; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif; margin: 0; padding: 0;">
+  <!-- Full-width Dark Container Table (Ensures dark background in Gmail & Outlook) -->
+  <table class="email-wrapper" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#1e1e1e" style="background-color: #1e1e1e; width: 100%; min-height: 100vh; padding: 24px 12px; margin: 0;">
+    <tr>
+      <td align="center" valign="top">
+        <!-- Frame width container (423px max-width) -->
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 423px; width: 100%; margin: 0 auto;">
+          <!-- Label Email -->
+          <tr>
+            <td align="left" style="color: #9a9a9a; font-size: 12px; font-family: 'Poppins', Arial, sans-serif; padding-bottom: 12px; font-weight: 400;">
+              Email
+            </td>
+          </tr>
+          <!-- Main White Card -->
+          <tr>
+            <td>
+              <table class="card-box" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#ffffff" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; padding: 36px 24px 24px; position: relative; color: #000000; box-shadow: 0 4px 16px rgba(0,0,0,0.18);">
+                
+                <!-- Decorative Top-Left Swoosh (for clients supporting SVG/relative) -->
+                <div class="swoosh-tl" style="position: absolute; top: 0; left: 0; width: 64px; height: 70px; pointer-events: none; z-index: 1;">
+                  <svg class="swoosh tl" viewBox="0 0 64 70" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 64px; height: 70px;">
+                    <g stroke="#00B5AD" stroke-width="7" stroke-linecap="butt">
+                      <path d="M27 -4 C28 14, 19 22, 10 26 S0 33, -6 35"/>
+                      <path d="M41 -4 C41 22, 30 33, 17 40 S3 52, -6 56"/>
+                    </g>
+                  </svg>
+                </div>
 
-    <div class="card" style="position: relative; width: 100%; background: #ffffff; border-radius: 12px; overflow: hidden; padding: 49px 23px 24px; color: #000000; box-sizing: border-box;">
-      <!-- Swoosh kiri atas -->
-      <svg class="swoosh tl" viewBox="0 0 64 70" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; width: 64px; height: 70px; pointer-events: none;">
-        <g stroke="#00B5AD" stroke-width="7" stroke-linecap="butt">
-          <path d="M27 -4 C28 14, 19 22, 10 26 S0 33, -6 35"/>
-          <path d="M41 -4 C41 22, 30 33, 17 40 S3 52, -6 56"/>
-        </g>
-      </svg>
+                <!-- Header: Two-column layout (Greeting on left, ToenToen circular badge on right) -->
+                <tr>
+                  <td>
+                    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="position: relative; z-index: 2; margin-bottom: 12px;">
+                      <tr>
+                        <td valign="top" align="left" style="padding-right: 12px;">
+                          <div style="font-family: 'Poppins', Arial, sans-serif; font-size: 15.5px; font-weight: 600; line-height: 1.45; color: #000000;">
+                            {{GREETING}}
+                          </div>
+                        </td>
+                        <td valign="top" align="right" width="46" style="width: 46px; min-width: 46px;">
+                          <!-- ToenToen Brand Circle Badge (Renders 100% in all email clients including Gmail) -->
+                          <table cellpadding="0" cellspacing="0" border="0" width="46" height="46" bgcolor="#00B5AD" style="width: 46px; height: 46px; background-color: #00B5AD; border-radius: 50%; text-align: center; border-collapse: separate;">
+                            <tr>
+                              <td align="center" valign="middle" style="color: #ffffff; font-family: 'Poppins', Arial, sans-serif; font-size: 11px; font-weight: 800; line-height: 12px; letter-spacing: 0.5px; padding: 0;">
+                                TO<br>EN
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
 
-      <!-- Logo ToenToen -->
-      <svg class="logo" viewBox="0 0 46 46" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 17px; right: 22px; width: 46px; height: 46px;">
-        <circle cx="23" cy="23" r="23" fill="#00B5AD"/>
-        <g fill="#fff" font-family="'Poppins', Arial, sans-serif" font-weight="700" font-size="10.5" text-anchor="middle">
-          <text x="19" y="21">TO</text>
-          <text x="19" y="33">EN</text>
-        </g>
-        <g stroke="#fff" stroke-width="1.8" stroke-linecap="round">
-          <path d="M31 16.5h5M33.5 14v5"/>
-          <path d="M8.5 29.5h5M11 27v5"/>
-          <path d="M31 29h5"/>
-        </g>
-      </svg>
+                <!-- Description Paragraph -->
+                <tr>
+                  <td style="position: relative; z-index: 2;">
+                    <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin: 0 0 14px 0;">
+                      {{DESCRIPTION}}
+                    </p>
+                  </td>
+                </tr>
 
-      <div class="greeting" style="font-size: 15px; font-weight: 600; line-height: 1.5; margin-bottom: 8px; color: #000000; position: relative; z-index: 2;">
-        {{GREETING}}
-      </div>
+                <!-- OTP Digits Container (Table Row with 6 separate teal rounded boxes) -->
+                <tr>
+                  <td style="position: relative; z-index: 2; padding: 4px 0 10px 0;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        {{OTP_DIGITS}}
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
 
-      <p class="body" style="font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin-bottom: 12px; position: relative; z-index: 2;">
-        {{DESCRIPTION}}
-      </p>
+                <!-- Salin Kode Tag -->
+                <tr>
+                  <td style="position: relative; z-index: 2; padding-bottom: 18px;">
+                    <table cellpadding="0" cellspacing="0" border="0" bgcolor="#e6e6e6" style="background-color: #e6e6e6; border-radius: 3px; display: inline-table;">
+                      <tr>
+                        <td style="padding: 4px 10px; font-family: 'Poppins', Arial, sans-serif; font-size: 10px; font-weight: 600; color: #555555;">
+                          Salin Kode: <span style="color: #007A74; margin-left: 5px; letter-spacing: 1.2px; font-size: 11px;">{{OTP_RAW}}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
 
-      <div class="otp" style="display: flex; gap: 4px; margin: 18px 0 6px; position: relative; z-index: 2;" aria-label="Kode OTP">
-        {{OTP_DIGITS}}
-      </div>
+                <!-- Warning Paragraph -->
+                <tr>
+                  <td style="position: relative; z-index: 2;">
+                    <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin: 0 0 10px 0;">
+                      {{WARNING}}
+                    </p>
+                    <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 12px; line-height: 1.55; font-weight: 400; color: #666666; margin: 0 0 8px 0;">
+                      Jika Anda tidak merasa melakukan permintaan verifikasi ini, silakan abaikan pesan ini. Akun Anda tetap aman terlindungi.
+                    </p>
+                  </td>
+                </tr>
 
-      <div style="margin-bottom: 18px; position: relative; z-index: 2;">
-        <span class="copy" style="display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 0 10px; background: #e6e6e6; color: #555555; font-size: 10px; font-weight: 600; border-radius: 3px; font-family: inherit;">
-          Salin Kode: <strong style="color: #007A74; margin-left: 5px; letter-spacing: 1px;">{{OTP_RAW}}</strong>
-        </span>
-      </div>
+                <!-- Footer with timestamp -->
+                <tr>
+                  <td style="position: relative; z-index: 2; padding-top: 18px;">
+                    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-top: 1px solid #f0f0f0; padding-top: 12px;">
+                      <tr>
+                        <td align="center" style="font-family: 'Poppins', Arial, sans-serif; font-size: 10.5px; font-weight: 500; color: #666666; text-align: center;">
+                          <span style="font-size: 13px; vertical-align: middle; margin-right: 4px;">⏱</span>
+                          <span style="vertical-align: middle;">{{FOOTER_TIME}}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
 
-      <p class="body" style="font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin-bottom: 10px; position: relative; z-index: 2;">
-        {{WARNING}}
-      </p>
+                <!-- Decorative Bottom-Right Swoosh -->
+                <div class="swoosh-br" style="position: absolute; bottom: 0; right: 0; width: 96px; height: 108px; pointer-events: none; z-index: 1;">
+                  <svg class="swoosh br" viewBox="0 0 80 90" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 96px; height: 108px;">
+                    <g stroke="#00B5AD" stroke-width="6.5" stroke-linecap="butt" transform="rotate(180 40 45)">
+                      <path d="M33 -4 C33 14, 24 22, 13 27 S0 35, -6 35"/>
+                      <path d="M45 -4 C45 22, 32 32, 18 38 S2 52, -6 55"/>
+                      <path d="M57 -4 C57 30, 42 44, 26 52 S6 70, -6 76"/>
+                    </g>
+                  </svg>
+                </div>
 
-      <p class="body" style="font-size: 12px; line-height: 1.55; font-weight: 400; color: #666666; margin-bottom: 10px; position: relative; z-index: 2;">
-        Jika Anda tidak merasa melakukan permintaan verifikasi ini, silakan abaikan pesan ini. Akun Anda tetap aman terlindungi.
-      </p>
-
-      <div class="footer" style="display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 28px; padding-top: 12px; border-top: 1px solid #f0f0f0; font-size: 10.5px; font-weight: 500; color: #666666; padding-bottom: 6px; text-align: center; position: relative; z-index: 2;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M12 6v6l4 2"/>
-        </svg>
-        <span style="vertical-align: middle; margin-left: 3px;">{{FOOTER_TIME}}</span>
-      </div>
-
-      <!-- Swoosh kanan bawah -->
-      <svg class="swoosh br" viewBox="0 0 80 90" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; bottom: 0; right: 0; width: 96px; height: 108px; pointer-events: none;">
-        <g stroke="#00B5AD" stroke-width="6.5" stroke-linecap="butt" transform="rotate(180 40 45)">
-          <path d="M33 -4 C33 14, 24 22, 13 27 S0 35, -6 35"/>
-          <path d="M45 -4 C45 22, 32 32, 18 38 S2 52, -6 55"/>
-          <path d="M57 -4 C57 30, 42 44, 26 52 S6 70, -6 76"/>
-        </g>
-      </svg>
-    </div>
-  </div>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`
 
