@@ -75,6 +75,7 @@ func TestIsEmailStrictValidation(t *testing.T) {
 		{"test@yaho.com", false},                     // Typo domain yaho.com
 		{"test@mailinator.com", false},               // Disposable email domain
 		{"test@tempmail.com", false},                 // Disposable email domain
+		{"test@nonexistentdomain1234567xyz.com", false}, // Domain tidak memiliki DNS MX record
 		{"invalid-format", false},
 		{"@no-user.com", false},
 		{"user@.com", false},

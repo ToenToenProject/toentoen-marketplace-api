@@ -1,13 +1,16 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/mail"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
@@ -88,6 +91,69 @@ var disposableEmailDomains = map[string]bool{
 	"yopmail.com":       true,
 }
 
+var knownValidDomains = map[string]bool{
+	"gmail.com":      true,
+	"googlemail.com": true,
+	"yahoo.com":      true,
+	"yahoo.co.id":    true,
+	"ymail.com":      true,
+	"outlook.com":    true,
+	"hotmail.com":    true,
+	"live.com":       true,
+	"icloud.com":     true,
+	"me.com":         true,
+	"mac.com":        true,
+	"proton.me":      true,
+	"protonmail.com": true,
+	"zoho.com":       true,
+	"mail.com":       true,
+	"aol.com":        true,
+	"toentoen.com":   true,
+}
+
+var domainMXCache sync.Map
+
+func checkDomainMX(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		return false
+	}
+	if knownValidDomains[domain] {
+		return true
+	}
+	if typoEmailDomains[domain] || disposableEmailDomains[domain] {
+		return false
+	}
+
+	if val, ok := domainMXCache.Load(domain); ok {
+		if hasMX, ok := val.(bool); ok {
+			return hasMX
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	defer cancel()
+
+	mxs, err := net.DefaultResolver.LookupMX(ctx, domain)
+	if err != nil {
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			domainMXCache.Store(domain, false)
+			return false
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "no such host") {
+			domainMXCache.Store(domain, false)
+			return false
+		}
+		log.Printf("⚠️ DNS MX lookup gagal/timeout untuk domain %s: %v", domain, err)
+		return false
+	}
+
+	hasMX := len(mxs) > 0
+	domainMXCache.Store(domain, hasMX)
+	return hasMX
+}
+
 func hasExcessiveRepetitiveChars(s string, maxConsecutive int) bool {
 	if len(s) == 0 {
 		return false
@@ -146,6 +212,11 @@ func isEmail(identifier string) bool {
 
 	// Tolak karakter berulang tidak wajar pada nama email (contoh: va.ricky.joooooooooooo)
 	if hasExcessiveRepetitiveChars(localPart, 5) {
+		return false
+	}
+
+	// Cek apakah domain memiliki mail server aktif (DNS MX record)
+	if !checkDomainMX(domain) {
 		return false
 	}
 
