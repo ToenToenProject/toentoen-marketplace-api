@@ -42,6 +42,7 @@ type DemandResponse struct {
 type CreateSignalInput struct {
 	CategoryID     *int64   `json:"category_id"`
 	Category       string   `json:"category"`
+	CategoryIDs    []int64  `json:"category_ids"`
 	TagIDs         []int64  `json:"tag_ids"`
 	Description    string   `json:"description"`
 	MediaUrls      []string `json:"media_urls"`
@@ -60,6 +61,7 @@ type CreateSignalInput struct {
 type UpdateSignalInput struct {
 	CategoryID     *int64   `json:"category_id"`
 	Category       string   `json:"category"`
+	CategoryIDs    []int64  `json:"category_ids"`
 	TagIDs         []int64  `json:"tag_ids"`
 	Description    string   `json:"description"`
 	MediaUrls      []string `json:"media_urls"`
@@ -92,6 +94,8 @@ type Signal struct {
 	Description string    `gorm:"not null" json:"description"`
 	CategoryID  *int64    `gorm:"column:category_id" json:"category_id,omitempty"`
 	Category    string    `gorm:"not null" json:"category"`
+	CategoryIDs []int64   `gorm:"-" json:"category_ids"`
+	Categories  []string  `gorm:"-" json:"categories"`
 	Latitude    float64   `gorm:"not null" json:"latitude"`
 	Longitude   float64   `gorm:"not null" json:"longitude"`
 	RadiusKm    int       `gorm:"default:5" json:"radius_km"`
@@ -108,14 +112,48 @@ type Signal struct {
 	// location geometry(Point, 4326)
 
 	// Relations
-	Account       *Account             `gorm:"foreignKey:CustomerID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
-	CategoryObj   *Category            `gorm:"foreignKey:CategoryID;references:CategoryID" json:"category_detail,omitempty"`
-	Tags          []SignalTag          `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"tags,omitempty"`
-	Images        []SignalImage        `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"images,omitempty"`
-	Conversations []SignalConversation `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"conversations,omitempty"`
+	Account          *Account             `gorm:"foreignKey:CustomerID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"account,omitempty"`
+	CategoryObj      *Category            `gorm:"foreignKey:CategoryID;references:CategoryID" json:"category_detail,omitempty"`
+	SignalCategories []SignalCategory     `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"signal_categories,omitempty"`
+	Tags             []SignalTag          `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"tags,omitempty"`
+	Images           []SignalImage        `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"images,omitempty"`
+	Conversations    []SignalConversation `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"conversations,omitempty"`
 }
 
 func (Signal) TableName() string { return "signals" }
+
+// PopulateCategories mengisi CategoryIDs dan Categories dari SignalCategories atau fallback ke CategoryID tunggal
+func (s *Signal) PopulateCategories() {
+	if len(s.SignalCategories) > 0 {
+		s.CategoryIDs = make([]int64, 0, len(s.SignalCategories))
+		s.Categories = make([]string, 0, len(s.SignalCategories))
+		for _, sc := range s.SignalCategories {
+			s.CategoryIDs = append(s.CategoryIDs, sc.CategoryID)
+			if sc.Category != nil && sc.Category.Name != "" {
+				s.Categories = append(s.Categories, sc.Category.Name)
+			}
+		}
+	} else if s.CategoryID != nil && *s.CategoryID > 0 {
+		s.CategoryIDs = []int64{*s.CategoryID}
+		if s.Category != "" {
+			s.Categories = []string{s.Category}
+		} else {
+			s.Categories = []string{}
+		}
+	} else {
+		s.CategoryIDs = []int64{}
+		s.Categories = []string{}
+	}
+}
+
+// SignalCategory adalah relasi many-to-many antara signal dan kategori bisnis (maks 5 kategori)
+type SignalCategory struct {
+	SignalID   string    `gorm:"primaryKey;column:signal_id" json:"signal_id"`
+	CategoryID int64     `gorm:"primaryKey;column:category_id" json:"category_id"`
+	Category   *Category `gorm:"foreignKey:CategoryID;references:CategoryID" json:"category,omitempty"`
+}
+
+func (SignalCategory) TableName() string { return "signal_categories" }
 
 // SignalTag adalah relasi antara signal dan tag bisnis yang dipilih customer
 type SignalTag struct {
@@ -194,6 +232,8 @@ type SignalListItem struct {
 	Description       string    `json:"description"`
 	CategoryID        *int64    `json:"category_id,omitempty"`
 	Category          string    `json:"category"`
+	CategoryIDs       []int64   `json:"category_ids"`
+	Categories        []string  `json:"categories"`
 	IsUrgent          bool      `json:"is_urgent"`
 	Status            string    `json:"status"`
 	MinBudget         *float64  `json:"min_budget,omitempty"`
@@ -212,6 +252,8 @@ type SignalExploreItem struct {
 	Description     string    `json:"description"`
 	CategoryID      *int64    `json:"category_id,omitempty"`
 	Category        string    `json:"category"`
+	CategoryIDs     []int64   `json:"category_ids"`
+	Categories      []string  `json:"categories"`
 	IsUrgent        bool      `json:"is_urgent"`
 	RadiusKm        int       `json:"radius_km"`
 	DistanceKm      float64   `json:"distance_km"`

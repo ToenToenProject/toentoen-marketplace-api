@@ -63,24 +63,64 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		return nil, errors.New("deskripsi kebutuhan wajib diisi")
 	}
 
-	// Validasi Kategori: Tangkap dari database (bukan string bebas)
-	var catID int64
-	if input.CategoryID != nil && *input.CategoryID > 0 {
-		catID = *input.CategoryID
+	// 1. Kumpulkan semua category ID yang diminta
+	var requestedCatIDs []int64
+	if len(input.CategoryIDs) > 0 {
+		seen := make(map[int64]bool)
+		for _, id := range input.CategoryIDs {
+			if id > 0 && !seen[id] {
+				seen[id] = true
+				requestedCatIDs = append(requestedCatIDs, id)
+			}
+		}
+	} else if input.CategoryID != nil && *input.CategoryID > 0 {
+		requestedCatIDs = append(requestedCatIDs, *input.CategoryID)
 	}
 
 	catInput := strings.TrimSpace(input.Category)
-	if catInput == "" && catID <= 0 {
+	if len(requestedCatIDs) == 0 && catInput == "" {
 		return nil, errors.New("kategori wajib dipilih dari daftar kategori yang tersedia")
 	}
 
-	validCategory, errCat := s.signalRepo.GetCategoryByNameOrID(catInput, catID)
-	if errCat != nil || validCategory == nil {
-		return nil, errors.New("kategori tidak valid. Silakan pilih kategori resmi yang tersedia di sistem")
+	if len(requestedCatIDs) > 5 {
+		return nil, errors.New("maksimal 5 kategori dapat dipilih")
 	}
 
-	cat := validCategory.Name
-	resolvedCatID := validCategory.CategoryID
+	// 2. Validasi ke database
+	var resolvedCategories []models.Category
+	if len(requestedCatIDs) > 0 {
+		cats, err := s.signalRepo.GetCategoriesByIDs(requestedCatIDs)
+		if err != nil || len(cats) == 0 {
+			return nil, errors.New("kategori tidak valid. Silakan pilih kategori resmi yang tersedia di sistem")
+		}
+		catMap := make(map[int64]models.Category)
+		for _, c := range cats {
+			catMap[c.CategoryID] = c
+		}
+		for _, id := range requestedCatIDs {
+			c, ok := catMap[id]
+			if !ok {
+				return nil, fmt.Errorf("kategori dengan ID %d tidak ditemukan di sistem", id)
+			}
+			resolvedCategories = append(resolvedCategories, c)
+		}
+	} else {
+		validCategory, errCat := s.signalRepo.GetCategoryByNameOrID(catInput, 0)
+		if errCat != nil || validCategory == nil {
+			return nil, errors.New("kategori tidak valid. Silakan pilih kategori resmi yang tersedia di sistem")
+		}
+		resolvedCategories = append(resolvedCategories, *validCategory)
+	}
+
+	var resolvedCatIDs []int64
+	var resolvedCatNames []string
+	for _, c := range resolvedCategories {
+		resolvedCatIDs = append(resolvedCatIDs, c.CategoryID)
+		resolvedCatNames = append(resolvedCatNames, c.Name)
+	}
+
+	primaryCatID := resolvedCatIDs[0]
+	primaryCatName := resolvedCatNames[0]
 
 	if input.Latitude == 0 || input.Longitude == 0 {
 		return nil, errors.New("lokasi (latitude/longitude) wajib diisi")
@@ -107,8 +147,10 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		SignalID:    utils.GenerateUUID("SIG"),
 		CustomerID:  customerID,
 		Description: desc,
-		CategoryID:  &resolvedCatID,
-		Category:    cat,
+		CategoryID:  &primaryCatID,
+		Category:    primaryCatName,
+		CategoryIDs: resolvedCatIDs,
+		Categories:  resolvedCatNames,
 		Latitude:    input.Latitude,
 		Longitude:   input.Longitude,
 		RadiusKm:    radiusKm,
@@ -126,12 +168,25 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		return nil, fmt.Errorf("gagal membuat signal: %w", err)
 	}
 
-	// 2. Update kolom PostGIS location via raw SQL
+	// 2. Simpan relasi multi-kategori ke database
+	var signalCats []models.SignalCategory
+	for _, c := range resolvedCategories {
+		signalCats = append(signalCats, models.SignalCategory{
+			SignalID:   signal.SignalID,
+			CategoryID: c.CategoryID,
+		})
+	}
+	if err := s.signalRepo.CreateSignalCategories(signalCats); err != nil {
+		fmt.Printf("Warning: gagal menyimpan signal categories: %v\n", err)
+	}
+	signal.SignalCategories = signalCats
+
+	// 3. Update kolom PostGIS location via raw SQL
 	if err := s.signalRepo.UpdateSignalLocation(signal.SignalID, input.Latitude, input.Longitude); err != nil {
 		fmt.Printf("Warning: gagal update lokasi PostGIS untuk signal %s: %v\n", signal.SignalID, err)
 	}
 
-	// 3. Simpan gambar lampiran (jika ada, dukung image_urls, media_urls, atau images)
+	// 4. Simpan gambar lampiran (jika ada, dukung image_urls, media_urls, atau images)
 	imgList := input.ImageURLs
 	if len(imgList) == 0 && len(input.MediaUrls) > 0 {
 		imgList = input.MediaUrls
@@ -160,7 +215,7 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		}
 	}
 
-	// 4. Simpan tags yang dipilih customer (jika ada) — digunakan sebagai booster relevansi
+	// 5. Simpan tags yang dipilih customer (jika ada) — digunakan sebagai booster relevansi
 	if len(input.TagIDs) > 0 {
 		var signalTags []models.SignalTag
 		for _, tagID := range input.TagIDs {
@@ -178,8 +233,8 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		}
 	}
 
-	// 5. 🔔 REAL-TIME BROADCAST: Kirim notifikasi instan ke toko terdekat yang relevan
-	go s.notifyNearbyMerchantsNewSignal(signal.SignalID, resolvedCatID, signal.Category, input.Latitude, input.Longitude, float64(radiusKm), signal.IsUrgent)
+	// 6. 🔔 REAL-TIME BROADCAST: Kirim notifikasi instan ke toko terdekat yang relevan
+	go s.notifyNearbyMerchantsNewSignal(signal.SignalID, resolvedCatIDs, resolvedCatNames, input.Latitude, input.Longitude, float64(radiusKm), signal.IsUrgent)
 
 	return &signal, nil
 }
@@ -204,18 +259,65 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 	}
 
 	// 2. Kategori jika diubah
-	var catID int64
-	if input.CategoryID != nil && *input.CategoryID > 0 {
-		catID = *input.CategoryID
-	}
-	catInput := strings.TrimSpace(input.Category)
-	if catInput != "" || catID > 0 {
-		validCategory, errCat := s.signalRepo.GetCategoryByNameOrID(catInput, catID)
-		if errCat != nil || validCategory == nil {
-			return nil, errors.New("kategori tidak valid. Silakan pilih kategori resmi yang tersedia di sistem")
+	if len(input.CategoryIDs) > 0 || (input.CategoryID != nil && *input.CategoryID > 0) || strings.TrimSpace(input.Category) != "" {
+		var requestedCatIDs []int64
+		if len(input.CategoryIDs) > 0 {
+			seen := make(map[int64]bool)
+			for _, id := range input.CategoryIDs {
+				if id > 0 && !seen[id] {
+					seen[id] = true
+					requestedCatIDs = append(requestedCatIDs, id)
+				}
+			}
+		} else if input.CategoryID != nil && *input.CategoryID > 0 {
+			requestedCatIDs = append(requestedCatIDs, *input.CategoryID)
 		}
-		signal.Category = validCategory.Name
-		signal.CategoryID = &validCategory.CategoryID
+
+		if len(requestedCatIDs) > 5 {
+			return nil, errors.New("maksimal 5 kategori dapat dipilih")
+		}
+
+		var resolvedCategories []models.Category
+		if len(requestedCatIDs) > 0 {
+			cats, err := s.signalRepo.GetCategoriesByIDs(requestedCatIDs)
+			if err != nil || len(cats) == 0 {
+				return nil, errors.New("kategori tidak valid. Silakan pilih kategori resmi yang tersedia di sistem")
+			}
+			catMap := make(map[int64]models.Category)
+			for _, c := range cats {
+				catMap[c.CategoryID] = c
+			}
+			for _, id := range requestedCatIDs {
+				c, ok := catMap[id]
+				if !ok {
+					return nil, fmt.Errorf("kategori dengan ID %d tidak ditemukan di sistem", id)
+				}
+				resolvedCategories = append(resolvedCategories, c)
+			}
+		} else {
+			catInput := strings.TrimSpace(input.Category)
+			validCategory, errCat := s.signalRepo.GetCategoryByNameOrID(catInput, 0)
+			if errCat != nil || validCategory == nil {
+				return nil, errors.New("kategori tidak valid. Silakan pilih kategori resmi yang tersedia di sistem")
+			}
+			resolvedCategories = append(resolvedCategories, *validCategory)
+		}
+
+		primaryCatID := resolvedCategories[0].CategoryID
+		primaryCatName := resolvedCategories[0].Name
+		signal.CategoryID = &primaryCatID
+		signal.Category = primaryCatName
+
+		var signalCats []models.SignalCategory
+		for _, c := range resolvedCategories {
+			signalCats = append(signalCats, models.SignalCategory{
+				SignalID:   signal.SignalID,
+				CategoryID: c.CategoryID,
+			})
+		}
+		if err := s.signalRepo.ReplaceSignalCategories(signal.SignalID, signalCats); err != nil {
+			fmt.Printf("Warning: gagal update signal categories: %v\n", err)
+		}
 	}
 
 	// 3. Lokasi jika diubah
@@ -371,27 +473,43 @@ func (s *signalService) CompleteSignal(customerID, signalID string) error {
 	return nil
 }
 
-// notifyNearbyMerchantsNewSignal menyebarkan event dan push notifikasi ke seluruh merchant terdekat yang relevan
-func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, categoryID int64, categoryName string, lat, lng, radiusKm float64, isUrgent bool) {
-	accountIDs, err := s.signalRepo.FindNearbyMatchingMerchantAccountIDs(categoryID, lat, lng, radiusKm)
+// notifyNearbyMerchantsNewSignal menyebarkan event dan push notifikasi ke seluruh merchant terdekat yang relevan (semua kategori yang cocok)
+func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, categoryIDs []int64, categoryNames []string, lat, lng, radiusKm float64, isUrgent bool) {
+	accountIDs, err := s.signalRepo.FindNearbyMatchingMerchantAccountIDs(categoryIDs, lat, lng, radiusKm)
 	if err != nil || len(accountIDs) == 0 {
 		return
+	}
+
+	catLabel := strings.Join(categoryNames, ", ")
+	if catLabel == "" {
+		catLabel = "kebutuhan"
+	}
+
+	primaryCatID := int64(0)
+	primaryCatName := ""
+	if len(categoryIDs) > 0 {
+		primaryCatID = categoryIDs[0]
+	}
+	if len(categoryNames) > 0 {
+		primaryCatName = categoryNames[0]
 	}
 
 	title := "📢 Peluang Baru: Permintaan Kebutuhan Sekitarmu!"
 	if isUrgent {
 		title = "🚨 Mendesak: Calon Pembeli Butuh Cepat di Dekatmu!"
 	}
-	body := fmt.Sprintf("Ada calon pembeli mencari kebutuhan kategori %s dalam radius %.0f km dari tokomu.", categoryName, radiusKm)
+	body := fmt.Sprintf("Ada calon pembeli mencari kebutuhan kategori %s dalam radius %.0f km dari tokomu.", catLabel, radiusKm)
 
 	event := realtime.WSEvent{
 		Type: "NEW_DEMAND_SIGNAL",
 		Data: map[string]interface{}{
-			"signal_id":   signalID,
-			"category_id": categoryID,
-			"category":    categoryName,
-			"is_urgent":   isUrgent,
-			"radius_km":   radiusKm,
+			"signal_id":    signalID,
+			"category_id":  primaryCatID,
+			"category":     primaryCatName,
+			"category_ids": categoryIDs,
+			"categories":   categoryNames,
+			"is_urgent":    isUrgent,
+			"radius_km":    radiusKm,
 		},
 	}
 
@@ -408,10 +526,12 @@ func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, category
 			title,
 			body,
 			map[string]interface{}{
-				"type":      "new_demand_signal",
-				"signal_id": signalID,
-				"category":  categoryName,
-				"is_urgent": isUrgent,
+				"type":         "new_demand_signal",
+				"signal_id":    signalID,
+				"category":     primaryCatName,
+				"category_ids": categoryIDs,
+				"categories":   categoryNames,
+				"is_urgent":    isUrgent,
 			},
 			nil,
 		)

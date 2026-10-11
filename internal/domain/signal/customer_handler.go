@@ -39,7 +39,11 @@ func (h *CustomerHandler) CreateSignal(c *fiber.Ctx) error {
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Signal berhasil dibuat", fiber.Map{
-		"signal_id": signal.SignalID,
+		"signal_id":    signal.SignalID,
+		"category_id":  signal.CategoryID,
+		"category":     signal.Category,
+		"category_ids": signal.CategoryIDs,
+		"categories":   signal.Categories,
 	})
 }
 
