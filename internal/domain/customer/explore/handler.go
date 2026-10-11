@@ -2,6 +2,7 @@ package explore
 
 import (
 	"strconv"
+	"strings"
 
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -18,9 +19,75 @@ func NewExploreHandler(service ExploreService) *ExploreHandler {
 }
 
 func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
+	keyword := strings.TrimSpace(c.Query("keyword", ""))
+	if keyword == "" {
+		keyword = strings.TrimSpace(c.Query("search", ""))
+	}
+	if keyword == "" {
+		keyword = strings.TrimSpace(c.Query("q", ""))
+	}
+
+	sort := strings.ToLower(strings.TrimSpace(c.Query("sort", "")))
+
+	// Parse category_ids, category_id, category
+	var catIDs []int64
+	var catName string
+
+	rawCatIDs := c.Query("category_ids")
+	if rawCatIDs != "" {
+		for _, part := range strings.Split(rawCatIDs, ",") {
+			if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil && id > 0 {
+				catIDs = append(catIDs, id)
+			}
+		}
+	}
+	if singleCatID, err := strconv.ParseInt(c.Query("category_id", ""), 10, 64); err == nil && singleCatID > 0 {
+		catIDs = append(catIDs, singleCatID)
+	}
+
+	rawCat := strings.TrimSpace(c.Query("category"))
+	if rawCat != "" {
+		if id, err := strconv.ParseInt(rawCat, 10, 64); err == nil && id > 0 {
+			catIDs = append(catIDs, id)
+		} else {
+			catName = rawCat
+		}
+	}
+
+	// Parse tags (mendukung format nama string misal "WiFi, AC" maupun array ID "10, 11")
+	var tagIDs []int64
+	var tagNames []string
+
+	rawTags := c.Query("tags")
+	if rawTags == "" {
+		rawTags = c.Query("tag")
+	}
+	if rawTags == "" {
+		rawTags = c.Query("tag_ids")
+	}
+
+	if rawTags != "" {
+		for _, item := range strings.Split(rawTags, ",") {
+			trimmed := strings.TrimSpace(item)
+			if trimmed == "" {
+				continue
+			}
+			if id, err := strconv.ParseInt(trimmed, 10, 64); err == nil && id > 0 {
+				tagIDs = append(tagIDs, id)
+			} else {
+				tagNames = append(tagNames, trimmed)
+			}
+		}
+	}
+
 	req := SearchRequest{
-		Keyword: c.Query("keyword", ""),
-		Sort:    c.Query("sort", "nearest"),
+		Keyword:     keyword,
+		CategoryIDs: catIDs,
+		Category:    catName,
+		TagIDs:      tagIDs,
+		TagNames:    tagNames,
+		RawTags:     rawTags,
+		Sort:        sort,
 	}
 
 	if lat, err := strconv.ParseFloat(c.Query("lat", "0"), 64); err == nil {
@@ -39,7 +106,16 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		req.Limit = limit
 	}
 
-	// Validate nearest requirement
+	// Default sort resolution
+	if req.Sort == "" {
+		if req.Lat != 0 && req.Lng != 0 {
+			req.Sort = "nearest"
+		} else {
+			req.Sort = "rating"
+		}
+	}
+
+	// Validate nearest requirement hanya jika user meminta secara eksplisit sort nearest tanpa koordinat
 	if req.Sort == "nearest" && (req.Lat == 0 || req.Lng == 0) {
 		return utils.SendResponse(c, 400, "11", "Latitude dan longitude wajib diisi untuk pengurutan 'terdekat'", nil)
 	}

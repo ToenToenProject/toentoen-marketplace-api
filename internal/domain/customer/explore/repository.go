@@ -3,6 +3,7 @@ package explore
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,66 +35,272 @@ func NewExploreRepository(db *gorm.DB) ExploreRepository {
 }
 
 type SearchRequest struct {
-	Keyword string
-	Lat     float64
-	Lng     float64
-	Radius  int // in meters
-	Sort    string
-	Limit   int64
-	Offset  int64
+	Keyword     string
+	CategoryIDs []int64
+	Category    string
+	TagIDs      []int64
+	TagNames    []string
+	RawTags     string
+	Lat         float64
+	Lng         float64
+	Radius      int // in meters
+	Sort        string
+	Limit       int64
+	Offset      int64
 }
 
 type MeiliBusinessDocument = myMeili.MeiliBusinessDocument
 type GeoLocation = myMeili.GeoLocation
 
-func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusinessDocument, int64, error) {
-	if myMeili.Client == nil {
-		log.Println("⚠️ Meilisearch client is nil, returning empty result")
-		return []MeiliBusinessDocument{}, 0, nil
-	}
-	index := myMeili.Client.Index("businesses")
-
-	// Prepare Search Request
-	searchReq := &meilisearch.SearchRequest{
-		Limit:  req.Limit,
-		Offset: req.Offset,
-	}
-
-	// Geo filtering
-	if req.Lat != 0 && req.Lng != 0 {
-		// Filter by radius (e.g., 10km)
-		searchReq.Filter = []string{
-			"_geoRadius(" + formatFloat(req.Lat) + ", " + formatFloat(req.Lng) + ", " + formatInt(req.Radius) + ")",
+func containsInt64(slice []int64, val int64) bool {
+	for _, v := range slice {
+		if v == val {
+			return true
 		}
+	}
+	return false
+}
 
-		if req.Sort == "nearest" {
-			searchReq.Sort = []string{
-				"_geoPoint(" + formatFloat(req.Lat) + ", " + formatFloat(req.Lng) + "):asc",
+func containsStringCaseInsensitive(slice []string, val string) bool {
+	lowerVal := strings.ToLower(val)
+	for _, v := range slice {
+		if strings.ToLower(v) == lowerVal {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusinessDocument, int64, error) {
+	// 1. Resolusi Kategori Dua Arah (Nama <-> ID)
+	if req.Category != "" && len(req.CategoryIDs) == 0 {
+		var foundCatIDs []int64
+		r.db.Table("business_categories").Where("LOWER(name) = LOWER(?)", strings.TrimSpace(req.Category)).Pluck("category_id", &foundCatIDs)
+		req.CategoryIDs = append(req.CategoryIDs, foundCatIDs...)
+	} else if len(req.CategoryIDs) > 0 && req.Category == "" {
+		var catNames []string
+		r.db.Table("business_categories").Where("category_id IN (?)", req.CategoryIDs).Pluck("name", &catNames)
+		if len(catNames) > 0 {
+			req.Category = catNames[0]
+		}
+	}
+
+	// 2. Resolusi Tag Dua Arah (Nama String <-> ID Integer)
+	if len(req.TagNames) > 0 {
+		lowerNames := make([]string, len(req.TagNames))
+		for i, n := range req.TagNames {
+			lowerNames[i] = strings.ToLower(strings.TrimSpace(n))
+		}
+		var foundTagIDs []int64
+		r.db.Table("business_tags").Where("LOWER(name) IN (?)", lowerNames).Pluck("tag_id", &foundTagIDs)
+		for _, id := range foundTagIDs {
+			if !containsInt64(req.TagIDs, id) {
+				req.TagIDs = append(req.TagIDs, id)
+			}
+		}
+	}
+	if len(req.TagIDs) > 0 {
+		var foundTagNames []string
+		r.db.Table("business_tags").Where("tag_id IN (?)", req.TagIDs).Pluck("name", &foundTagNames)
+		for _, n := range foundTagNames {
+			if !containsStringCaseInsensitive(req.TagNames, n) {
+				req.TagNames = append(req.TagNames, n)
 			}
 		}
 	}
 
-	if req.Sort == "rating" {
-		searchReq.Sort = []string{"rating:desc"}
-	}
+	// 3. Eksekusi Pencarian via Meilisearch jika client aktif
+	if myMeili.Client != nil {
+		index := myMeili.Client.Index("businesses")
 
-	res, err := index.Search(req.Keyword, searchReq)
-	if err != nil {
-		log.Printf("Meilisearch error: %v", err)
-		return nil, 0, err
-	}
+		searchReq := &meilisearch.SearchRequest{
+			Limit:  req.Limit,
+			Offset: req.Offset,
+		}
 
-	var docs []MeiliBusinessDocument
-	for _, hit := range res.Hits {
-		var doc MeiliBusinessDocument
-		if err := hit.DecodeInto(&doc); err == nil {
-			// Convert meters to km for response
-			doc.Distance = doc.Distance / 1000
-			docs = append(docs, doc)
+		var filters []string
+
+		// Filter GeoRadius
+		if req.Lat != 0 && req.Lng != 0 && req.Radius > 0 {
+			filters = append(filters, "_geoRadius("+formatFloat(req.Lat)+", "+formatFloat(req.Lng)+", "+formatInt(req.Radius)+")")
+		}
+
+		// Filter Kategori
+		var catFilters []string
+		for _, cid := range req.CategoryIDs {
+			catFilters = append(catFilters, fmt.Sprintf("category_ids = %d", cid))
+		}
+		if req.Category != "" {
+			cleanCat := strings.ReplaceAll(req.Category, "\"", "\\\"")
+			catFilters = append(catFilters, fmt.Sprintf("category_names = \"%s\"", cleanCat))
+		}
+		if len(catFilters) > 0 {
+			filters = append(filters, "("+strings.Join(catFilters, " OR ")+")")
+		}
+
+		// Filter Tag (Mendukung ID dan Nama)
+		var tagFilters []string
+		for _, tid := range req.TagIDs {
+			tagFilters = append(tagFilters, fmt.Sprintf("tag_ids = %d", tid))
+		}
+		for _, tname := range req.TagNames {
+			cleanTag := strings.ReplaceAll(tname, "\"", "\\\"")
+			tagFilters = append(tagFilters, fmt.Sprintf("tag_names = \"%s\"", cleanTag))
+		}
+		if len(tagFilters) > 0 {
+			filters = append(filters, "("+strings.Join(tagFilters, " OR ")+")")
+		}
+
+		if len(filters) > 0 {
+			searchReq.Filter = strings.Join(filters, " AND ")
+		}
+
+		if req.Sort == "nearest" && req.Lat != 0 && req.Lng != 0 {
+			searchReq.Sort = []string{"_geoPoint(" + formatFloat(req.Lat) + ", " + formatFloat(req.Lng) + "):asc"}
+		} else if req.Sort == "rating" {
+			searchReq.Sort = []string{"rating:desc"}
+		}
+
+		res, err := index.Search(req.Keyword, searchReq)
+		if err == nil && len(res.Hits) > 0 {
+			var docs []MeiliBusinessDocument
+			for _, hit := range res.Hits {
+				var doc MeiliBusinessDocument
+				if err := hit.DecodeInto(&doc); err == nil {
+					doc.Distance = doc.Distance / 1000 // Convert meters to km
+					docs = append(docs, doc)
+				}
+			}
+			return docs, res.TotalHits, nil
+		}
+		if err != nil {
+			log.Printf("⚠️ Meilisearch query error: %v, beralih ke fallback PostgreSQL", err)
 		}
 	}
 
-	return docs, res.TotalHits, nil
+	// 4. PostgreSQL Fallback jika Meilisearch mengembalikan 0 data atau offline/error
+	log.Printf("ℹ️ Menjalankan fallback PostgreSQL untuk explore bisnis (keyword='%s', category='%s', catIDs=%v, tags=%v)", req.Keyword, req.Category, req.CategoryIDs, req.TagNames)
+	return r.searchBusinessesFromPostgres(req)
+}
+
+func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]MeiliBusinessDocument, int64, error) {
+	query := r.db.Model(&models.Business{}).
+		Preload("Hours").
+		Preload("Categories").
+		Preload("Tags").
+		Where("businesses.is_active = ? AND businesses.status != ?", true, "deleted")
+
+	if strings.TrimSpace(req.Keyword) != "" {
+		kw := "%" + strings.TrimSpace(req.Keyword) + "%"
+		query = query.Where(
+			"(businesses.business_name ILIKE ? OR businesses.handle ILIKE ? OR businesses.business_details ILIKE ? OR businesses.business_id IN (SELECT business_id FROM products WHERE product_name ILIKE ?))",
+			kw, kw, kw, kw,
+		)
+	}
+
+	if len(req.CategoryIDs) > 0 || req.Category != "" {
+		var catConds []string
+		var catArgs []interface{}
+		if len(req.CategoryIDs) > 0 {
+			catConds = append(catConds, "businesses.business_id IN (SELECT business_id FROM business_has_categories WHERE category_id IN (?))")
+			catArgs = append(catArgs, req.CategoryIDs)
+		}
+		if req.Category != "" {
+			catConds = append(catConds, "businesses.business_id IN (SELECT bhc.business_id FROM business_has_categories bhc JOIN business_categories bc ON bc.category_id = bhc.category_id WHERE LOWER(bc.name) = LOWER(?))")
+			catArgs = append(catArgs, strings.TrimSpace(req.Category))
+			catConds = append(catConds, "LOWER(businesses.custom_category) = LOWER(?)")
+			catArgs = append(catArgs, strings.TrimSpace(req.Category))
+		}
+		if len(catConds) > 0 {
+			query = query.Where("("+strings.Join(catConds, " OR ")+")", catArgs...)
+		}
+	}
+
+	if len(req.TagIDs) > 0 || len(req.TagNames) > 0 {
+		var tagConds []string
+		var tagArgs []interface{}
+		if len(req.TagIDs) > 0 {
+			tagConds = append(tagConds, "businesses.business_id IN (SELECT business_id FROM business_has_tags WHERE tag_id IN (?))")
+			tagArgs = append(tagArgs, req.TagIDs)
+		}
+		if len(req.TagNames) > 0 {
+			tagConds = append(tagConds, "businesses.business_id IN (SELECT bht.business_id FROM business_has_tags bht JOIN business_tags bt ON bt.tag_id = bht.tag_id WHERE LOWER(bt.name) IN (?))")
+			lowerNames := make([]string, len(req.TagNames))
+			for i, n := range req.TagNames {
+				lowerNames[i] = strings.ToLower(strings.TrimSpace(n))
+			}
+			tagArgs = append(tagArgs, lowerNames)
+		}
+		if len(tagConds) > 0 {
+			query = query.Where("("+strings.Join(tagConds, " OR ")+")", tagArgs...)
+		}
+	}
+
+	if req.Sort == "rating" {
+		query = query.Order("businesses.average_rating desc, businesses.review_count desc")
+	}
+
+	var businesses []models.Business
+	if err := query.Find(&businesses).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var allDocs []MeiliBusinessDocument
+	maxRadiusKm := float64(req.Radius) / 1000.0
+
+	for i := range businesses {
+		b := &businesses[i]
+		distKm := 0.0
+		if req.Lat != 0 && req.Lng != 0 {
+			if b.Latitude == nil || b.Longitude == nil {
+				if req.Radius > 0 {
+					continue
+				}
+			} else {
+				distKm = haversineDistance(req.Lat, req.Lng, *b.Latitude, *b.Longitude)
+				if req.Radius > 0 && distKm > maxRadiusKm {
+					continue
+				}
+			}
+		}
+
+		doc := myMeili.BuildBusinessDocument(r.db, b)
+		doc.Distance = distKm
+		allDocs = append(allDocs, doc)
+	}
+
+	if req.Sort == "nearest" && req.Lat != 0 && req.Lng != 0 {
+		sort.Slice(allDocs, func(i, j int) bool {
+			return allDocs[i].Distance < allDocs[j].Distance
+		})
+	}
+
+	totalHits := int64(len(allDocs))
+	if totalHits == 0 {
+		return []MeiliBusinessDocument{}, 0, nil
+	}
+
+	start := req.Offset
+	if start < 0 {
+		start = 0
+	}
+	if start >= totalHits {
+		return []MeiliBusinessDocument{}, totalHits, nil
+	}
+
+	end := start + req.Limit
+	if end > totalHits {
+		end = totalHits
+	}
+
+	paginated := allDocs[start:end]
+
+	// Sembuhkan indeks Meilisearch di latar belakang untuk dokumen yang ditemukan
+	for _, doc := range paginated {
+		go myMeili.SyncBusiness(r.db, doc.ID)
+	}
+
+	return paginated, totalHits, nil
 }
 
 func formatFloat(f float64) string {

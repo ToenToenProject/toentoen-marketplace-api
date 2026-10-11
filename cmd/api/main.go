@@ -636,6 +636,17 @@ func main() {
 	sharedBusinessScope.Put("/", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("", businessHandler.UpdateBusiness)
 	sharedBusinessScope.Patch("/", businessHandler.UpdateBusiness)
+
+	// Aliases untuk /merchant/businesses dan /merchant/business
+	for _, mPrefix := range []string{"/merchant/businesses", "/merchant/business"} {
+		mScope := api.Group(mPrefix+"/:business_id", sharedAccess, middlewares.BusinessAccessGuard())
+		mScope.Get("", businessHandler.GetBusinessDetail)
+		mScope.Get("/", businessHandler.GetBusinessDetail)
+		mScope.Put("", businessHandler.UpdateBusiness)
+		mScope.Put("/", businessHandler.UpdateBusiness)
+		mScope.Patch("", businessHandler.UpdateBusiness)
+		mScope.Patch("/", businessHandler.UpdateBusiness)
+	}
 	sharedBusinessScope.Patch("/toggle-status", middlewares.RequireKYC, businessHandler.ToggleStoreStatus)
 	sharedBusinessScope.Post("/schedule-confirmation", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
 	sharedBusinessScope.Post("/schedule-confirmation/", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
