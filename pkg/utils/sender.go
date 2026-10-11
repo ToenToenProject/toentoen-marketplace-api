@@ -66,50 +66,12 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 	mailer.SetHeader("Subject", content.Subject)
 
 	// Plain text fallback
-	plainBody := fmt.Sprintf("%s\n\n%s\n\nKode verifikasi (OTP) Anda adalah: %s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.\n\nSalam,\nTim ToenToen",
+	plainBody := fmt.Sprintf("%s\n\n%s\n\nKode verifikasi (OTP) Anda adalah: %s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.\n\nJika Anda tidak merasa melakukan permintaan verifikasi ini, silakan abaikan pesan ini.\n\nSalam,\nTim ToenToen",
 		content.Greeting, stripBasicHTML(content.Description), otp)
 	mailer.SetBody("text/plain", plainBody)
 
-	// HTML body
-	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<style>
-		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 24px; color: #2d3748; }
-		.container { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 16px; padding: 36px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
-		.logo-row { text-align: center; margin-bottom: 24px; }
-		.logo { font-size: 26px; font-weight: 800; color: #0077b6; letter-spacing: -0.5px; }
-		.badge { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; }
-		.greeting { font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #1a202c; }
-		.desc { font-size: 14px; line-height: 1.6; color: #4a5568; margin-bottom: 24px; }
-		.otp-box { background: #f0f7ff; border: 2px dashed #0077b6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px; }
-		.otp-code { font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0077b6; font-family: 'Courier New', monospace; }
-		.warning { font-size: 12px; color: #718096; text-align: center; line-height: 1.6; background: #f7fafc; padding: 12px; border-radius: 8px; }
-		.footer { margin-top: 32px; border-top: 1px solid #edf2f7; padding-top: 18px; font-size: 11px; color: #a0aec0; text-align: center; line-height: 1.5; }
-	</style>
-</head>
-<body>
-	<div class="container">
-		<div class="logo-row">
-			<div class="logo">ToenToen</div>
-			<div><span class="badge">%s</span></div>
-		</div>
-		<div class="greeting">%s</div>
-		<div class="desc">%s</div>
-		<div class="otp-box">
-			<div class="otp-code">%s</div>
-		</div>
-		<div class="warning">
-			%s
-		</div>
-		<div class="footer">
-			Email ini dikirim otomatis oleh sistem ToenToen. Jika Anda tidak merasa melakukan permintaan ini, silakan abaikan pesan ini.
-		</div>
-	</div>
-</body>
-</html>`, content.Badge, content.Greeting, content.Description, otp, content.Warning)
+	// HTML body (modern card design dengan tema ToenToen)
+	htmlBody := buildOTPEmailHTML(content, otp, time.Now())
 	mailer.AddAlternative("text/html", htmlBody)
 
 	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)
@@ -127,6 +89,242 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 
 	log.Printf("[OTP-EMAIL-SUCCESS] Email OTP berhasil dikirim ke %s", toEmail)
 	return nil
+}
+
+func formatWIBDate(t time.Time) string {
+	wib := time.FixedZone("WIB", 7*3600)
+	tWIB := t.In(wib)
+
+	dayNames := [...]string{
+		"Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu",
+	}
+	monthNames := [...]string{
+		"", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+		"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+	}
+
+	dayName := dayNames[tWIB.Weekday()]
+	monthName := monthNames[tWIB.Month()]
+
+	return fmt.Sprintf("%s, %d %s %d, %02d:%02d WIB",
+		dayName, tWIB.Day(), monthName, tWIB.Year(), tWIB.Hour(), tWIB.Minute())
+}
+
+func renderOTPDigitsHTML(otp string) string {
+	var sb strings.Builder
+	for _, ch := range strings.TrimSpace(otp) {
+		sb.WriteString(fmt.Sprintf(
+			`<span style="width: 28px; height: 38px; line-height: 38px; background: #d4f1f1; border-radius: 4px; display: inline-block; text-align: center; font-size: 19px; font-weight: 700; color: #008f88; font-family: 'Poppins', Arial, sans-serif; margin-right: 4px; vertical-align: middle;">%c</span>`,
+			ch,
+		))
+	}
+	return sb.String()
+}
+
+func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time) string {
+	otpDigitsHTML := renderOTPDigitsHTML(otp)
+	footerTime := formatWIBDate(createdAt)
+
+	rawHTML := `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{SUBJECT}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1e1e1e;
+    font-family: 'Poppins', Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    margin: 0;
+  }
+  .frame {
+    width: 423px;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0 0 12px;
+  }
+  .frame-label {
+    color: #9a9a9a;
+    font-size: 12px;
+    margin: 0 0 12px 0;
+    font-weight: 400;
+  }
+  .card {
+    position: relative;
+    width: 100%;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    padding: 49px 23px 24px;
+    color: #000;
+  }
+  .swoosh { position: absolute; pointer-events: none; }
+  .swoosh.tl { top: 0; left: 0; width: 64px; height: 70px; }
+  .swoosh.br { bottom: 0; right: 0; width: 96px; height: 108px; overflow: visible; }
+  .logo {
+    position: absolute;
+    top: 17px;
+    right: 22px;
+    width: 46px;
+    height: 46px;
+  }
+  .greeting {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+    margin-bottom: 8px;
+    color: #000;
+    position: relative;
+    z-index: 2;
+  }
+  p.body {
+    font-size: 12px;
+    line-height: 1.55;
+    font-weight: 400;
+    color: #222;
+    margin-bottom: 12px;
+    position: relative;
+    z-index: 2;
+  }
+  .otp {
+    display: flex;
+    gap: 4px;
+    margin: 18px 0 6px;
+    position: relative;
+    z-index: 2;
+  }
+  .copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    padding: 0 10px;
+    background: #e6e6e6;
+    color: #555555;
+    font-size: 10px;
+    font-weight: 600;
+    border: 0;
+    border-radius: 3px;
+    font-family: inherit;
+    margin-bottom: 18px;
+    position: relative;
+    z-index: 2;
+  }
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 28px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #666;
+    padding-bottom: 6px;
+    position: relative;
+    z-index: 2;
+    text-align: center;
+  }
+  .footer svg { width: 14px; height: 14px; flex: none; vertical-align: middle; }
+  @media (max-width: 440px) {
+    .card { padding-left: 18px; padding-right: 18px; }
+  }
+</style>
+</head>
+<body style="background: #1e1e1e; font-family: 'Poppins', Arial, sans-serif; min-height: 100vh; margin: 0; padding: 16px;">
+  <div class="frame" style="width: 423px; max-width: 100%; margin: 0 auto; padding: 0 0 12px;">
+    <div class="frame-label" style="color: #9a9a9a; font-size: 12px; margin: 0 0 12px 0; font-weight: 400;">Email</div>
+
+    <div class="card" style="position: relative; width: 100%; background: #ffffff; border-radius: 12px; overflow: hidden; padding: 49px 23px 24px; color: #000000; box-sizing: border-box;">
+      <!-- Swoosh kiri atas -->
+      <svg class="swoosh tl" viewBox="0 0 64 70" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; width: 64px; height: 70px; pointer-events: none;">
+        <g stroke="#00B5AD" stroke-width="7" stroke-linecap="butt">
+          <path d="M27 -4 C28 14, 19 22, 10 26 S0 33, -6 35"/>
+          <path d="M41 -4 C41 22, 30 33, 17 40 S3 52, -6 56"/>
+        </g>
+      </svg>
+
+      <!-- Logo ToenToen -->
+      <svg class="logo" viewBox="0 0 46 46" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 17px; right: 22px; width: 46px; height: 46px;">
+        <circle cx="23" cy="23" r="23" fill="#00B5AD"/>
+        <g fill="#fff" font-family="'Poppins', Arial, sans-serif" font-weight="700" font-size="10.5" text-anchor="middle">
+          <text x="19" y="21">TO</text>
+          <text x="19" y="33">EN</text>
+        </g>
+        <g stroke="#fff" stroke-width="1.8" stroke-linecap="round">
+          <path d="M31 16.5h5M33.5 14v5"/>
+          <path d="M8.5 29.5h5M11 27v5"/>
+          <path d="M31 29h5"/>
+        </g>
+      </svg>
+
+      <div class="greeting" style="font-size: 15px; font-weight: 600; line-height: 1.5; margin-bottom: 8px; color: #000000; position: relative; z-index: 2;">
+        {{GREETING}}
+      </div>
+
+      <p class="body" style="font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin-bottom: 12px; position: relative; z-index: 2;">
+        {{DESCRIPTION}}
+      </p>
+
+      <div class="otp" style="display: flex; gap: 4px; margin: 18px 0 6px; position: relative; z-index: 2;" aria-label="Kode OTP">
+        {{OTP_DIGITS}}
+      </div>
+
+      <div style="margin-bottom: 18px; position: relative; z-index: 2;">
+        <span class="copy" style="display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 0 10px; background: #e6e6e6; color: #555555; font-size: 10px; font-weight: 600; border-radius: 3px; font-family: inherit;">
+          Salin Kode: <strong style="color: #007A74; margin-left: 5px; letter-spacing: 1px;">{{OTP_RAW}}</strong>
+        </span>
+      </div>
+
+      <p class="body" style="font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin-bottom: 10px; position: relative; z-index: 2;">
+        {{WARNING}}
+      </p>
+
+      <p class="body" style="font-size: 12px; line-height: 1.55; font-weight: 400; color: #666666; margin-bottom: 10px; position: relative; z-index: 2;">
+        Jika Anda tidak merasa melakukan permintaan verifikasi ini, silakan abaikan pesan ini. Akun Anda tetap aman terlindungi.
+      </p>
+
+      <div class="footer" style="display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 28px; padding-top: 12px; border-top: 1px solid #f0f0f0; font-size: 10.5px; font-weight: 500; color: #666666; padding-bottom: 6px; text-align: center; position: relative; z-index: 2;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+        <span style="vertical-align: middle; margin-left: 3px;">{{FOOTER_TIME}}</span>
+      </div>
+
+      <!-- Swoosh kanan bawah -->
+      <svg class="swoosh br" viewBox="0 0 80 90" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; bottom: 0; right: 0; width: 96px; height: 108px; pointer-events: none;">
+        <g stroke="#00B5AD" stroke-width="6.5" stroke-linecap="butt" transform="rotate(180 40 45)">
+          <path d="M33 -4 C33 14, 24 22, 13 27 S0 35, -6 35"/>
+          <path d="M45 -4 C45 22, 32 32, 18 38 S2 52, -6 55"/>
+          <path d="M57 -4 C57 30, 42 44, 26 52 S6 70, -6 76"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>`
+
+	replacer := strings.NewReplacer(
+		"{{SUBJECT}}", content.Subject,
+		"{{GREETING}}", content.Greeting,
+		"{{DESCRIPTION}}", content.Description,
+		"{{OTP_DIGITS}}", otpDigitsHTML,
+		"{{OTP_RAW}}", otp,
+		"{{WARNING}}", content.Warning,
+		"{{FOOTER_TIME}}", footerTime,
+	)
+
+	return replacer.Replace(rawHTML)
 }
 
 type otpEmailContent struct {
@@ -151,7 +349,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Verifikasi Keamanan",
-			Greeting:    "Halo Sobat ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: strings.TrimSpace(customDesc[0]),
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun termasuk pihak ToenToen.",
 		}
@@ -164,7 +362,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Aktivasi Admin Toko",
-			Greeting:    "Halo Rekan Admin!",
+			Greeting:    "Hey Rekan Admin!",
 			Description: "Anda telah didaftarkan sebagai <strong>Admin Toko</strong> di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru dan mengaktifkan akun admin Anda:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jangan pernah membagikan kode ini kepada siapapun demi keamanan akses toko Anda.",
 		}
@@ -172,7 +370,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Registrasi Admin Toko",
-			Greeting:    "Halo Rekan Admin!",
+			Greeting:    "Hey Rekan Admin!",
 			Description: "Terima kasih telah mendaftar sebagai <strong>Admin Toko</strong> di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk menyelesaikan proses pendaftaran akun Anda:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun.",
 		}
@@ -180,7 +378,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Reset Password Admin Toko",
-			Greeting:    "Halo Rekan Admin!",
+			Greeting:    "Hey Rekan Admin!",
 			Description: "Kami menerima permintaan untuk mengatur ulang kata sandi akun Admin Toko Anda di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun toko Anda, jangan pernah membagikan kode ini kepada siapapun.",
 		}
@@ -188,7 +386,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Login Admin Toko",
-			Greeting:    "Halo Rekan Admin!",
+			Greeting:    "Hey Rekan Admin!",
 			Description: "Kami mendeteksi aktivitas login ke akun Admin Toko Anda di ToenToen. Masukkan kode verifikasi (OTP) berikut untuk melanjutkan:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jika Anda tidak merasa mencoba login, segera hubungi Owner toko Anda.",
 		}
@@ -196,7 +394,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Verifikasi Email Admin",
-			Greeting:    "Halo Rekan Admin!",
+			Greeting:    "Hey Rekan Admin!",
 			Description: "Gunakan kode verifikasi (OTP) berikut untuk memverifikasi alamat email akun Admin Toko Anda di platform ToenToen:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun toko Anda, jangan pernah membagikan kode ini kepada siapapun.",
 		}
@@ -204,7 +402,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Pendaftaran Akun Baru",
-			Greeting:    "Selamat Datang di ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Terima kasih telah bergabung di platform ToenToen. Gunakan kode verifikasi (OTP) berikut untuk menyelesaikan proses pendaftaran dan verifikasi akun Anda:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun.",
 		}
@@ -212,7 +410,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Verifikasi Masuk (Login)",
-			Greeting:    "Halo Sobat ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Kami mendeteksi aktivitas login ke akun ToenToen Anda. Masukkan kode verifikasi (OTP) berikut untuk melanjutkan proses masuk:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jika Anda tidak merasa mencoba login, segera amankan akun Anda.",
 		}
@@ -220,7 +418,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Atur Ulang Kata Sandi",
-			Greeting:    "Halo Sobat ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Kami menerima permintaan untuk mengatur ulang kata sandi akun ToenToen Anda. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jika Anda tidak meminta perubahan kata sandi, abaikan pesan ini dan akun Anda tetap aman.",
 		}
@@ -228,7 +426,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Penautan Email",
-			Greeting:    "Halo Sobat ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Anda sedang menautkan alamat email ini ke akun ToenToen Anda. Masukkan kode verifikasi (OTP) berikut untuk mengonfirmasi penautan email:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jangan berikan kode ini kepada orang lain.",
 		}
@@ -236,7 +434,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Perubahan Alamat Email",
-			Greeting:    "Halo Sobat ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Anda mengajukan permohonan perubahan alamat email akun ToenToen. Masukkan kode verifikasi (OTP) berikut untuk mengonfirmasi bahwa email baru ini milik Anda:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Jangan berikan kode ini kepada orang lain.",
 		}
@@ -244,7 +442,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "⚠️ Konfirmasi Hapus Akun",
-			Greeting:    "Pemberitahuan Keamanan Penting,",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Kami menerima permintaan untuk menghapus akun ToenToen Anda secara permanen. Jika ini benar Anda, masukkan kode verifikasi (OTP) berikut untuk mengonfirmasi:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br><strong>PERHATIAN:</strong> Tindakan penghapusan akun bersifat permanen dan data Anda tidak dapat dipulihkan.",
 		}
@@ -252,7 +450,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Otorisasi Pengalihan Toko",
-			Greeting:    "Halo Pemilik Toko!",
+			Greeting:    "Hey Pemilik Toko!",
 			Description: "Anda sedang mengajukan otorisasi pengalihan kepemilikan bisnis di ToenToen. Masukkan kode verifikasi (OTP) berikut untuk mengotorisasi permohonan transfer toko Anda:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Pastikan Anda hanya memberikan otorisasi transfer kepada pihak yang sah.",
 		}
@@ -260,7 +458,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Verifikasi Alamat Email",
-			Greeting:    "Halo Sobat ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Gunakan kode verifikasi (OTP) berikut untuk memverifikasi alamat email Anda di platform ToenToen:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun.",
 		}
@@ -268,7 +466,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 		return otpEmailContent{
 			Subject:     subject,
 			Badge:       "Verifikasi Keamanan",
-			Greeting:    "Halo Sobat ToenToen!",
+			Greeting:    "Hey Sobat ToenToen!",
 			Description: "Gunakan kode verifikasi berikut untuk melanjutkan proses verifikasi di ToenToen:",
 			Warning:     "Kode ini hanya berlaku selama <strong>5 menit</strong>.<br>Demi keamanan akun Anda, jangan pernah membagikan kode ini kepada siapapun termasuk pihak ToenToen.",
 		}
