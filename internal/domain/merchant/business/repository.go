@@ -332,7 +332,7 @@ func (r *businessRepository) GetBusinessListWithPreviews(accountID string, role 
 		}
 	}
 	
-	err := query.Order("created_at DESC, business_id DESC").Limit(limit).Find(&businesses).Error
+	err := query.Preload("Hours").Order("created_at DESC, business_id DESC").Limit(limit).Find(&businesses).Error
 	if err != nil {
 		return nil, err
 	}

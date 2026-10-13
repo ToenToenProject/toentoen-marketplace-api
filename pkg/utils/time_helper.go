@@ -43,8 +43,8 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 		confirmedOvertimeDate = confirmedDates[1]
 	}
 
-	isOvertimeConfirmedToday := confirmedOvertimeDate != nil && *confirmedOvertimeDate == todayStr
-	isOpenConfirmedToday := (confirmedOpenDate != nil && *confirmedOpenDate == todayStr) || isOvertimeConfirmedToday
+	isOvertimeConfirmedToday := confirmedOvertimeDate != nil && strings.HasPrefix(strings.TrimSpace(*confirmedOvertimeDate), todayStr)
+	isOpenConfirmedToday := (confirmedOpenDate != nil && strings.HasPrefix(strings.TrimSpace(*confirmedOpenDate), todayStr)) || isOvertimeConfirmedToday
 
 	nowMinutes := now.Hour()*60 + now.Minute()
 
@@ -68,9 +68,9 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 						openTotalMinutes := openHour*60 + openMinute
 						closeTotalMinutes := closeHour*60 + closeMinute
 
-						// Belum masuk jam buka hari ini
+						// Belum masuk jam buka hari ini (izinkan jika merchant sengaja mengaktifkan buka di luar jam reguler)
 						if nowMinutes < openTotalMinutes {
-							return false
+							return isOvertimeConfirmedToday
 						}
 
 						// Toko harus sudah dikonfirmasi buka untuk hari ini

@@ -916,6 +916,13 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 				perms = models.AdminPermissions{}
 			}
 
+			var isOpenNow bool
+			var isManuallyClosed bool = true
+			if assignment.Business != nil {
+				isManuallyClosed = assignment.Business.IsManuallyClosed
+				isOpenNow = utils.CalculateStoreStatus(assignment.Business.IsManuallyClosed, assignment.Business.Hours, assignment.Business.ConfirmedOpenDate, assignment.Business.ConfirmedOvertimeDate)
+			}
+
 			item := models.AdminAssignmentListItem{
 				AssignmentID: assignment.AssignmentID,
 				Role:         assignment.Role,
@@ -929,6 +936,8 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 					Address:             fullAddress,
 					AverageRating:       0,
 					TotalProductReviews: 0,
+					IsOpenNow:           isOpenNow,
+					IsManuallyClosed:    isManuallyClosed,
 				},
 			}
 			response = append(response, item)

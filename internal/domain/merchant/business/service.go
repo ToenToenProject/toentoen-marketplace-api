@@ -329,14 +329,23 @@ func (s *businessService) GetMyBusinesses(accountID, userRole, search string, ca
 			fullAddress += *b.Province
 		}
 
+		bizName := ""
+		if b.BusinessName != nil {
+			bizName = *b.BusinessName
+		}
+
+		isOpenNow := utils.CalculateStoreStatus(b.IsManuallyClosed, b.Hours, b.ConfirmedOpenDate, b.ConfirmedOvertimeDate)
+
 		item := models.BusinessListItem{
 			BusinessID:          b.BusinessID,
-			BusinessName:        *b.BusinessName,
+			BusinessName:        bizName,
 			OwnerName:           b.OwnerName,
 			LogoURL:             mainImage,
 			Address:             fullAddress,
 			AverageRating:       b.AverageRating,
 			TotalProductReviews: b.TotalProductReviews,
+			IsOpenNow:           isOpenNow,
+			IsManuallyClosed:    b.IsManuallyClosed,
 		}
 		
 		responseList = append(responseList, item)

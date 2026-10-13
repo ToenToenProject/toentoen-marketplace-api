@@ -248,6 +248,8 @@ type BusinessListItem struct {
 	Address             string  `json:"address"` // Gabungan AddressDetail, City, Province
 	AverageRating       float64 `json:"average_rating"`
 	TotalProductReviews int64   `json:"total_product_reviews"`
+	IsOpenNow           bool    `json:"is_open_now"`
+	IsManuallyClosed    bool    `json:"is_manually_closed"`
 }
 
 // GetBusinessListResponse adalah bungkus utama paginasi
