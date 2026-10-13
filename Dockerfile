@@ -19,6 +19,7 @@ RUN apk --no-cache add tzdata
 
 COPY --from=builder /app/server .
 COPY --from=builder /app/pkg/config/ ./pkg/config/
+COPY --from=builder /app/assets/ ./assets/
 
 EXPOSE 3000
 
