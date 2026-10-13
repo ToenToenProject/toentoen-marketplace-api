@@ -16,7 +16,8 @@ func TestBuildOTPEmailHTML(t *testing.T) {
 	testTime := time.Date(2026, 10, 12, 1, 30, 0, 0, time.UTC) // 08:30 WIB
 
 	html := buildOTPEmailHTML(content, otp, testTime)
-	_ = os.WriteFile("C:/Users/ADMIN/.gemini/antigravity-ide/brain/a81798aa-7e37-4b12-bc8c-01bc76ac888a/scratch/preview_email.html", []byte(html), 0644)
+	_ = os.MkdirAll("C:/Users/ADMIN/.gemini/antigravity/brain/c91a8afd-aa22-40f8-94dd-962b4148c3ce/scratch", 0755)
+	_ = os.WriteFile("C:/Users/ADMIN/.gemini/antigravity/brain/c91a8afd-aa22-40f8-94dd-962b4148c3ce/scratch/preview_email.html", []byte(html), 0644)
 
 	// Verifikasi greeting dan teks utama
 	if !strings.Contains(html, "Hey Sobat ToenToen!") {
@@ -28,12 +29,17 @@ func TestBuildOTPEmailHTML(t *testing.T) {
 		t.Errorf("HTML should contain the raw OTP code '482910'")
 	}
 
-	// Pastikan background hitam (#1e1e1e) sudah dihapus dan diganti tema terang (#f1f5f9)
-	if strings.Contains(html, "#1e1e1e") {
-		t.Errorf("HTML should not contain dark background #1e1e1e")
+	// Pastikan background hitam (#1e1e1e) dan card putih (#ffffff) sesuai desain referensi
+	if !strings.Contains(html, "#1e1e1e") {
+		t.Errorf("HTML should contain dark background #1e1e1e from reference design")
 	}
-	if !strings.Contains(html, "#f1f5f9") {
-		t.Errorf("HTML should contain modern light background #f1f5f9")
+	if !strings.Contains(html, "#ffffff") {
+		t.Errorf("HTML should contain white card #ffffff")
+	}
+
+	// Pastikan tombol Copy OTP ada sesuai desain referensi
+	if !strings.Contains(html, "Copy OTP") {
+		t.Errorf("HTML should contain 'Copy OTP' button")
 	}
 
 	// Pastikan logo resmi ToenToen dari asset digunakan via CID
@@ -68,8 +74,13 @@ func TestFormatWIBDate(t *testing.T) {
 
 func TestRenderOTPDigitsHTML(t *testing.T) {
 	digits := renderOTPDigitsHTML("123456")
-	if digits != "123456" {
-		t.Errorf("Expected '123456', got '%s'", digits)
+	if strings.Count(digits, "otp-digit-box") != 6 {
+		t.Errorf("Expected 6 otp-digit-box elements, got count %d", strings.Count(digits, "otp-digit-box"))
+	}
+	for _, ch := range "123456" {
+		if !strings.Contains(digits, string(ch)) {
+			t.Errorf("Expected digit %c in rendered HTML", ch)
+		}
 	}
 }
 
