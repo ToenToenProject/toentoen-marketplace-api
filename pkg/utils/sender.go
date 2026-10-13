@@ -3,9 +3,11 @@ package utils
 import (
 	"bytes"
 	"crypto/tls"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +17,23 @@ import (
 
 	"gopkg.in/gomail.v2"
 )
+
+//go:embed assets/toentoen-logo.png
+var embeddedLogoBytes []byte
+
+// getLogoBytes mengembalikan byte logo resmi ToenToen.
+// Prioritas: byte embedded langsung dari binary (go:embed) -> fallback pembacaan disk file.
+func getLogoBytes() []byte {
+	if len(embeddedLogoBytes) > 0 {
+		return embeddedLogoBytes
+	}
+	if p := findLogoPath(); p != "" {
+		if data, err := os.ReadFile(p); err == nil && len(data) > 0 {
+			return data
+		}
+	}
+	return nil
+}
 
 // SendEmailOTP mengirimkan kode OTP ke alamat email tujuan.
 // Mengembalikan error jika pengiriman gagal agar caller dapat menangani kegagalan dengan tepat.
@@ -70,13 +89,20 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 		content.Greeting, stripBasicHTML(content.Description), otp)
 	mailer.SetBody("text/plain", plainBody)
 
-	// Embed logo resmi ToenToen dari folder assets jika file fisik tersedia
-	if logoPath := findLogoPath(); logoPath != "" {
-		mailer.Embed(logoPath)
+	// Embed logo resmi ToenToen (selalu tersedia di memori via go:embed)
+	logoBytes := getLogoBytes()
+	hasLogo := len(logoBytes) > 0
+	if hasLogo {
+		mailer.Embed("toentoen-logo.png", gomail.SetCopyFunc(func(w io.Writer) error {
+			_, err := w.Write(logoBytes)
+			return err
+		}), gomail.SetHeader(map[string][]string{
+			"Content-Type": {"image/png"},
+		}))
 	}
 
 	// HTML body (modern card design dengan tema ToenToen)
-	htmlBody := buildOTPEmailHTML(content, otp, time.Now())
+	htmlBody := buildOTPEmailHTML(content, otp, time.Now(), hasLogo)
 	mailer.AddAlternative("text/html", htmlBody)
 
 	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)
@@ -134,9 +160,19 @@ func renderOTPDigitsHTML(otp string) string {
 	return strings.TrimSpace(otp)
 }
 
-func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time) string {
+func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time, hasLogoOpt ...bool) string {
 	footerTime := formatWIBDate(createdAt)
 	cleanOTP := strings.TrimSpace(otp)
+
+	hasLogo := true
+	if len(hasLogoOpt) > 0 {
+		hasLogo = hasLogoOpt[0]
+	}
+
+	logoHTML := `<div style="width: 48px; height: 48px; line-height: 48px; border-radius: 10px; background-color: #007A74; color: #ffffff; font-family: 'Poppins', Arial, sans-serif; font-size: 13px; font-weight: 800; text-align: center; letter-spacing: 0.5px;">TOEN</div>`
+	if hasLogo {
+		logoHTML = `<img src="cid:toentoen-logo.png" alt="ToenToen" width="48" height="48" style="display: block; width: 48px; height: 48px; max-width: 48px; max-height: 48px; border-radius: 10px; border: 1px solid #e2e8f0; object-fit: contain; background-color: #ffffff;" />`
+	}
 
 	rawHTML := `<!DOCTYPE html>
 <html lang="id">
@@ -199,11 +235,11 @@ func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time)
                           </div>
                         </td>
                         <td valign="top" align="right" width="52" style="width: 52px; min-width: 52px;">
-                          <!-- Official ToenToen Logo from assets/logo/toentoen-logo.png -->
+                          <!-- Official ToenToen Logo or Fallback Badge -->
                           <table cellpadding="0" cellspacing="0" border="0" width="50" height="50" style="width: 50px; height: 50px;">
                             <tr>
                               <td align="center" valign="middle">
-                                <img src="cid:toentoen-logo.png" alt="ToenToen" width="48" height="48" style="display: block; width: 48px; height: 48px; max-width: 48px; max-height: 48px; border-radius: 10px; border: 1px solid #e2e8f0; object-fit: contain; background-color: #ffffff;" />
+                                {{LOGO_HTML}}
                               </td>
                             </tr>
                           </table>
@@ -303,6 +339,7 @@ func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time)
 		"{{OTP_RAW}}", cleanOTP,
 		"{{WARNING}}", content.Warning,
 		"{{FOOTER_TIME}}", footerTime,
+		"{{LOGO_HTML}}", logoHTML,
 	)
 
 	return replacer.Replace(rawHTML)

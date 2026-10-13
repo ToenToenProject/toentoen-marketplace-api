@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"io"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/gomail.v2"
 )
 
 func TestBuildOTPEmailHTML(t *testing.T) {
@@ -79,3 +82,51 @@ func TestFindLogoPath(t *testing.T) {
 		t.Errorf("Expected path to end with toentoen-logo.png, got %s", path)
 	}
 }
+
+func TestGetLogoBytes(t *testing.T) {
+	bytes := getLogoBytes()
+	if len(bytes) == 0 {
+		t.Fatalf("Expected getLogoBytes to return non-empty embedded bytes")
+	}
+}
+
+func TestBuildOTPEmailHTML_FallbackBadge(t *testing.T) {
+	content := getOTPEmailContent("Verifikasi Akun")
+	html := buildOTPEmailHTML(content, "123456", time.Now(), false)
+	if !strings.Contains(html, "TOEN") {
+		t.Errorf("Expected fallback badge 'TOEN' when hasLogo is false")
+	}
+	if strings.Contains(html, "cid:toentoen-logo.png") {
+		t.Errorf("Should not contain cid:toentoen-logo.png when hasLogo is false")
+	}
+}
+
+func TestGomailEmbedOutput(t *testing.T) {
+	mailer := gomail.NewMessage()
+	mailer.SetHeader("From", "support@toentoen.com")
+	mailer.SetHeader("To", "user@example.com")
+	mailer.SetHeader("Subject", "Test Subject")
+	mailer.SetBody("text/plain", "Hello world")
+	mailer.Embed("toentoen-logo.png", gomail.SetCopyFunc(func(w io.Writer) error {
+		_, err := w.Write([]byte("fake png content"))
+		return err
+	}), gomail.SetHeader(map[string][]string{
+		"Content-Type": {"image/png"},
+	}))
+	content := getOTPEmailContent("Verifikasi Akun")
+	mailer.AddAlternative("text/html", buildOTPEmailHTML(content, "123456", time.Now()))
+
+	var buf strings.Builder
+	_, err := mailer.WriteTo(&buf)
+	if err != nil {
+		t.Fatalf("WriteTo error: %v", err)
+	}
+	fullMIME := buf.String()
+	lines := strings.Split(fullMIME, "\n")
+	for _, l := range lines {
+		if strings.HasPrefix(l, "Content-") || strings.HasPrefix(l, "--") {
+			t.Logf("HEADER: %s", l)
+		}
+	}
+}
+
