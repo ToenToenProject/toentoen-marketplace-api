@@ -202,7 +202,7 @@ func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time,
   table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
   img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
   body {
-    background-color: #1e1e1e !important;
+    background-color: #f8fafc !important;
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
     margin: 0;
     padding: 0;
@@ -216,23 +216,17 @@ func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time,
   }
 </style>
 </head>
-<body bgcolor="#1e1e1e" style="background-color: #1e1e1e; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif; margin: 0; padding: 0;">
-  <!-- Full-width Dark Outer Table -->
-  <table class="email-wrapper" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#1e1e1e" style="background-color: #1e1e1e; width: 100%; min-height: 100vh; padding: 28px 12px; margin: 0;">
+<body bgcolor="#f8fafc" style="background-color: #f8fafc; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif; margin: 0; padding: 0;">
+  <!-- Full-width Outer Table -->
+  <table class="email-wrapper" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f8fafc" style="background-color: #f8fafc; width: 100%; min-height: 100vh; padding: 32px 12px; margin: 0;">
     <tr>
       <td align="center" valign="top">
         <!-- Container table (420px max-width) -->
         <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 420px; width: 100%; margin: 0 auto;">
-          <!-- Top subtle label 'Email' from reference -->
-          <tr>
-            <td align="left" style="color: #888888; font-size: 12px; font-weight: 500; font-family: 'Poppins', Arial, sans-serif; padding-bottom: 12px;">
-              Email
-            </td>
-          </tr>
           <!-- Main White Card -->
           <tr>
             <td>
-              <table class="card-box" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#ffffff" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; padding: 32px 28px 24px; color: #1e293b; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);">
+              <table class="card-box" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#ffffff" style="background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; padding: 32px 28px 24px; color: #1e293b; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);">
                 
                 <!-- Header Row: Greeting on Left, Circular ToenToen Logo on Right -->
                 <tr>

@@ -29,9 +29,12 @@ func TestBuildOTPEmailHTML(t *testing.T) {
 		t.Errorf("HTML should contain the raw OTP code '482910'")
 	}
 
-	// Pastikan background hitam (#1e1e1e) dan card putih (#ffffff) sesuai desain referensi
-	if !strings.Contains(html, "#1e1e1e") {
-		t.Errorf("HTML should contain dark background #1e1e1e from reference design")
+	// Pastikan background hitam (#1e1e1e) sudah dihapus dan menggunakan background bersih (#f8fafc) serta card putih (#ffffff)
+	if strings.Contains(html, "#1e1e1e") {
+		t.Errorf("HTML should not contain dark background #1e1e1e")
+	}
+	if !strings.Contains(html, "#f8fafc") {
+		t.Errorf("HTML should contain clean light background #f8fafc")
 	}
 	if !strings.Contains(html, "#ffffff") {
 		t.Errorf("HTML should contain white card #ffffff")
