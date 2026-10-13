@@ -70,6 +70,11 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 		content.Greeting, stripBasicHTML(content.Description), otp)
 	mailer.SetBody("text/plain", plainBody)
 
+	// Embed logo resmi ToenToen dari folder assets jika file fisik tersedia
+	if logoPath := findLogoPath(); logoPath != "" {
+		mailer.Embed(logoPath)
+	}
+
 	// HTML body (modern card design dengan tema ToenToen)
 	htmlBody := buildOTPEmailHTML(content, otp, time.Now())
 	mailer.AddAlternative("text/html", htmlBody)
@@ -110,95 +115,95 @@ func formatWIBDate(t time.Time) string {
 		dayName, tWIB.Day(), monthName, tWIB.Year(), tWIB.Hour(), tWIB.Minute())
 }
 
-func renderOTPDigitsHTML(otp string) string {
-	var sb strings.Builder
-	for _, ch := range strings.TrimSpace(otp) {
-		sb.WriteString(fmt.Sprintf(
-			`<td style="padding-right: 4px;" valign="middle">`+
-				`<table cellpadding="0" cellspacing="0" border="0" width="28" height="38" bgcolor="#d4f1f1" style="width: 28px; height: 38px; background-color: #d4f1f1; border-radius: 4px; text-align: center; border-collapse: separate;">`+
-				`<tr><td align="center" valign="middle" style="font-family: 'Poppins', Arial, sans-serif; font-size: 19px; font-weight: 700; color: #008f88; line-height: 38px; padding: 0;">%c</td></tr>`+
-				`</table>`+
-				`</td>`,
-			ch,
-		))
+func findLogoPath() string {
+	candidates := []string{
+		"assets/logo/toentoen-logo.png",
+		"./assets/logo/toentoen-logo.png",
+		"../assets/logo/toentoen-logo.png",
+		"../../assets/logo/toentoen-logo.png",
 	}
-	return sb.String()
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+func renderOTPDigitsHTML(otp string) string {
+	return strings.TrimSpace(otp)
 }
 
 func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time) string {
-	otpDigitsHTML := renderOTPDigitsHTML(otp)
 	footerTime := formatWIBDate(createdAt)
+	cleanOTP := strings.TrimSpace(otp)
 
 	rawHTML := `<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>{{SUBJECT}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
   table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+  img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
   body {
-    background-color: #1e1e1e !important;
+    background-color: #f1f5f9 !important;
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
     margin: 0;
     padding: 0;
+    color: #1e293b;
   }
-  .swoosh-tl { position: absolute; top: 0; left: 0; width: 64px; height: 70px; pointer-events: none; }
-  .swoosh-br { position: absolute; bottom: 0; right: 0; width: 96px; height: 108px; pointer-events: none; }
-  @media (max-width: 440px) {
-    .card-box { padding: 32px 18px 20px !important; }
+  @media only screen and (max-width: 480px) {
     .email-wrapper { padding: 16px 8px !important; }
+    .card-box { padding: 24px 18px 20px !important; border-radius: 12px !important; }
+    .otp-code-text { font-size: 28px !important; letter-spacing: 6px !important; }
+    .greeting-title { font-size: 16px !important; }
   }
 </style>
 </head>
-<body bgcolor="#1e1e1e" style="background-color: #1e1e1e; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif; margin: 0; padding: 0;">
-  <!-- Full-width Dark Container Table (Ensures dark background in Gmail & Outlook) -->
-  <table class="email-wrapper" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#1e1e1e" style="background-color: #1e1e1e; width: 100%; min-height: 100vh; padding: 24px 12px; margin: 0;">
+<body bgcolor="#f1f5f9" style="background-color: #f1f5f9; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Arial, sans-serif; margin: 0; padding: 0;">
+  <!-- Full-width Light Wrapper Table -->
+  <table class="email-wrapper" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f1f5f9" style="background-color: #f1f5f9; width: 100%; min-height: 100vh; padding: 32px 12px; margin: 0;">
     <tr>
       <td align="center" valign="top">
-        <!-- Frame width container (423px max-width) -->
-        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 423px; width: 100%; margin: 0 auto;">
-          <!-- Label Email -->
-          <tr>
-            <td align="left" style="color: #9a9a9a; font-size: 12px; font-family: 'Poppins', Arial, sans-serif; padding-bottom: 12px; font-weight: 400;">
-              Email
-            </td>
-          </tr>
+        <!-- Frame width container (440px max-width) -->
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 440px; width: 100%; margin: 0 auto;">
           <!-- Main White Card -->
           <tr>
             <td>
-              <table class="card-box" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#ffffff" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; padding: 36px 24px 24px; position: relative; color: #000000; box-shadow: 0 4px 16px rgba(0,0,0,0.18);">
+              <table class="card-box" width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#ffffff" style="background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); padding: 32px 28px 24px; color: #1e293b;">
                 
-                <!-- Decorative Top-Left Swoosh (for clients supporting SVG/relative) -->
-                <div class="swoosh-tl" style="position: absolute; top: 0; left: 0; width: 64px; height: 70px; pointer-events: none; z-index: 1;">
-                  <svg class="swoosh tl" viewBox="0 0 64 70" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 64px; height: 70px;">
-                    <g stroke="#00B5AD" stroke-width="7" stroke-linecap="butt">
-                      <path d="M27 -4 C28 14, 19 22, 10 26 S0 33, -6 35"/>
-                      <path d="M41 -4 C41 22, 30 33, 17 40 S3 52, -6 56"/>
-                    </g>
-                  </svg>
-                </div>
-
-                <!-- Header: Two-column layout (Greeting on left, ToenToen circular badge on right) -->
+                <!-- Header: Badge & Greeting on Left, Official Logo on Right -->
                 <tr>
                   <td>
-                    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="position: relative; z-index: 2; margin-bottom: 12px;">
+                    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 16px;">
                       <tr>
                         <td valign="top" align="left" style="padding-right: 12px;">
-                          <div style="font-family: 'Poppins', Arial, sans-serif; font-size: 15.5px; font-weight: 600; line-height: 1.45; color: #000000;">
+                          <!-- Badge chip -->
+                          <table cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 8px;">
+                            <tr>
+                              <td style="background-color: #e6f7f5; color: #007A74; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 10px; border-radius: 20px; font-family: 'Poppins', Arial, sans-serif;">
+                                {{BADGE}}
+                              </td>
+                            </tr>
+                          </table>
+                          <!-- Greeting -->
+                          <div class="greeting-title" style="font-family: 'Poppins', Arial, sans-serif; font-size: 18px; font-weight: 700; line-height: 1.35; color: #0f172a;">
                             {{GREETING}}
                           </div>
                         </td>
-                        <td valign="top" align="right" width="46" style="width: 46px; min-width: 46px;">
-                          <!-- ToenToen Brand Circle Badge (Renders 100% in all email clients including Gmail) -->
-                          <table cellpadding="0" cellspacing="0" border="0" width="46" height="46" bgcolor="#00B5AD" style="width: 46px; height: 46px; background-color: #00B5AD; border-radius: 50%; text-align: center; border-collapse: separate;">
+                        <td valign="top" align="right" width="52" style="width: 52px; min-width: 52px;">
+                          <!-- Official ToenToen Logo from assets/logo/toentoen-logo.png -->
+                          <table cellpadding="0" cellspacing="0" border="0" width="50" height="50" style="width: 50px; height: 50px;">
                             <tr>
-                              <td align="center" valign="middle" style="color: #ffffff; font-family: 'Poppins', Arial, sans-serif; font-size: 11px; font-weight: 800; line-height: 12px; letter-spacing: 0.5px; padding: 0;">
-                                TO<br>EN
+                              <td align="center" valign="middle">
+                                <img src="cid:toentoen-logo.png" alt="ToenToen" width="48" height="48" style="display: block; width: 48px; height: 48px; max-width: 48px; max-height: 48px; border-radius: 10px; border: 1px solid #e2e8f0; object-fit: contain; background-color: #ffffff;" />
                               </td>
                             </tr>
                           </table>
@@ -210,73 +215,74 @@ func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time)
 
                 <!-- Description Paragraph -->
                 <tr>
-                  <td style="position: relative; z-index: 2;">
-                    <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin: 0 0 14px 0;">
+                  <td>
+                    <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 13px; line-height: 1.6; color: #475569; margin: 0 0 18px 0;">
                       {{DESCRIPTION}}
                     </p>
                   </td>
                 </tr>
 
-                <!-- OTP Digits Container (Table Row with 6 separate teal rounded boxes) -->
+                <!-- OTP Code Container (Single unbroken string with letter-spacing, immune to copy \n bug) -->
                 <tr>
-                  <td style="position: relative; z-index: 2; padding: 4px 0 10px 0;">
-                    <table cellpadding="0" cellspacing="0" border="0">
+                  <td align="center" style="padding-bottom: 12px;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f0fdfa" style="background-color: #f0fdfa; border: 1.5px dashed #00B5AD; border-radius: 12px; text-align: center; width: 100%;">
                       <tr>
-                        {{OTP_DIGITS}}
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-                <!-- Salin Kode Tag -->
-                <tr>
-                  <td style="position: relative; z-index: 2; padding-bottom: 18px;">
-                    <table cellpadding="0" cellspacing="0" border="0" bgcolor="#e6e6e6" style="background-color: #e6e6e6; border-radius: 3px; display: inline-table;">
-                      <tr>
-                        <td style="padding: 4px 10px; font-family: 'Poppins', Arial, sans-serif; font-size: 10px; font-weight: 600; color: #555555;">
-                          Salin Kode: <span style="color: #007A74; margin-left: 5px; letter-spacing: 1.2px; font-size: 11px;">{{OTP_RAW}}</span>
+                        <td align="center" valign="middle" style="padding: 16px 20px;">
+                          <div style="font-family: 'Poppins', Arial, sans-serif; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #007A74; margin-bottom: 6px;">
+                            KODE VERIFIKASI (OTP)
+                          </div>
+                          <div class="otp-code-text" style="font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Poppins', Consolas, Monaco, monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #006D67; line-height: 1.2; user-select: all; -webkit-user-select: all; cursor: pointer;">
+                            {{OTP_RAW}}
+                          </div>
+                          <div style="font-family: 'Poppins', Arial, sans-serif; font-size: 11px; color: #0d9488; margin-top: 6px; font-weight: 500;">
+                            Tekan &amp; tahan untuk menyalin kode
+                          </div>
                         </td>
                       </tr>
                     </table>
                   </td>
                 </tr>
 
-                <!-- Warning Paragraph -->
+                <!-- Salin Cepat Tag (Clean unbroken string for 100% newline-free copy) -->
                 <tr>
-                  <td style="position: relative; z-index: 2;">
-                    <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 12px; line-height: 1.55; font-weight: 400; color: #222222; margin: 0 0 10px 0;">
-                      {{WARNING}}
-                    </p>
-                    <p style="font-family: 'Poppins', Arial, sans-serif; font-size: 12px; line-height: 1.55; font-weight: 400; color: #666666; margin: 0 0 8px 0;">
-                      Jika Anda tidak merasa melakukan permintaan verifikasi ini, silakan abaikan pesan ini. Akun Anda tetap aman terlindungi.
-                    </p>
+                  <td align="center" style="padding-bottom: 20px;">
+                    <table cellpadding="0" cellspacing="0" border="0" bgcolor="#f8fafc" style="display: inline-table; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                      <tr>
+                        <td style="padding: 5px 12px; font-family: 'Poppins', Arial, sans-serif; font-size: 11px; font-weight: 600; color: #64748b;">
+                          Salin Cepat: <span style="font-family: Consolas, Monaco, monospace; color: #007A74; font-size: 12.5px; font-weight: 700; letter-spacing: 1.2px; background-color: #ffffff; padding: 2px 8px; border-radius: 4px; border: 1px solid #cbd5e1; margin-left: 4px; user-select: all; -webkit-user-select: all;">{{OTP_RAW}}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Warning Notice Box -->
+                <tr>
+                  <td style="padding-bottom: 20px;">
+                    <table cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#fffbeb" style="background-color: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 6px; width: 100%;">
+                      <tr>
+                        <td style="padding: 10px 14px; font-family: 'Poppins', Arial, sans-serif; font-size: 11.5px; line-height: 1.55; color: #92400e;">
+                          <p style="margin: 0 0 6px 0;">{{WARNING}}</p>
+                          <p style="margin: 0; color: #a16207;">Jika Anda tidak merasa melakukan permintaan verifikasi ini, silakan abaikan pesan ini. Akun Anda tetap aman terlindungi.</p>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
 
                 <!-- Footer with timestamp -->
                 <tr>
-                  <td style="position: relative; z-index: 2; padding-top: 18px;">
-                    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-top: 1px solid #f0f0f0; padding-top: 12px;">
+                  <td style="border-top: 1px solid #f1f5f9; padding-top: 14px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td align="center" style="font-family: 'Poppins', Arial, sans-serif; font-size: 10.5px; font-weight: 500; color: #666666; text-align: center;">
+                        <td align="center" style="font-family: 'Poppins', Arial, sans-serif; font-size: 11px; font-weight: 500; color: #94a3b8; text-align: center;">
                           <span style="font-size: 13px; vertical-align: middle; margin-right: 4px;">⏱</span>
-                          <span style="vertical-align: middle;">{{FOOTER_TIME}}</span>
+                          <span style="vertical-align: middle;">{{FOOTER_TIME}} • ToenToen Security</span>
                         </td>
                       </tr>
                     </table>
                   </td>
                 </tr>
-
-                <!-- Decorative Bottom-Right Swoosh -->
-                <div class="swoosh-br" style="position: absolute; bottom: 0; right: 0; width: 96px; height: 108px; pointer-events: none; z-index: 1;">
-                  <svg class="swoosh br" viewBox="0 0 80 90" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 96px; height: 108px;">
-                    <g stroke="#00B5AD" stroke-width="6.5" stroke-linecap="butt" transform="rotate(180 40 45)">
-                      <path d="M33 -4 C33 14, 24 22, 13 27 S0 35, -6 35"/>
-                      <path d="M45 -4 C45 22, 32 32, 18 38 S2 52, -6 55"/>
-                      <path d="M57 -4 C57 30, 42 44, 26 52 S6 70, -6 76"/>
-                    </g>
-                  </svg>
-                </div>
 
               </table>
             </td>
@@ -290,10 +296,11 @@ func buildOTPEmailHTML(content otpEmailContent, otp string, createdAt time.Time)
 
 	replacer := strings.NewReplacer(
 		"{{SUBJECT}}", content.Subject,
+		"{{BADGE}}", content.Badge,
 		"{{GREETING}}", content.Greeting,
 		"{{DESCRIPTION}}", content.Description,
-		"{{OTP_DIGITS}}", otpDigitsHTML,
-		"{{OTP_RAW}}", otp,
+		"{{OTP_DIGITS}}", cleanOTP,
+		"{{OTP_RAW}}", cleanOTP,
 		"{{WARNING}}", content.Warning,
 		"{{FOOTER_TIME}}", footerTime,
 	)
