@@ -98,6 +98,9 @@ func ConnectDB() {
 		&models.SignalConversation{},
 		&models.SignalMessage{},
 		&models.Product{},
+		&models.Promotion{},
+		&models.PromotionProduct{},
+		&models.PromotionEvent{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {
@@ -156,6 +159,8 @@ func ConnectDB() {
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_open_date DATE`,
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_overtime_date DATE`,
 		`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+		`ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS is_promotion BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS promotion_id VARCHAR(50)`,
 		`DO $$
 		BEGIN
 			IF EXISTS (

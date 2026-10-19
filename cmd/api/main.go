@@ -23,11 +23,13 @@ import (
 	"toentoen-backend/internal/domain/customer/profile"
 	"toentoen-backend/internal/domain/customer/report"
 	"toentoen-backend/internal/domain/customer/review"
+	customer_promotion "toentoen-backend/internal/domain/customer/promotion"
 	"toentoen-backend/internal/domain/merchant/admin"
 	"toentoen-backend/internal/domain/merchant/analytics"
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/merchant/catalog"
 	"toentoen-backend/internal/domain/merchant/post"
+	merchant_promotion "toentoen-backend/internal/domain/merchant/promotion"
 	"toentoen-backend/internal/domain/meta"
 	"toentoen-backend/internal/domain/notification"
 	support_chat "toentoen-backend/internal/domain/support/chat"
@@ -146,6 +148,13 @@ func main() {
 	businessPostRepo := post.NewBusinessPostRepository(database.DB)
 	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo, notifService)
 	businessPostHandler := post.NewBusinessPostHandler(businessPostService)
+
+	// 🎁 INIT PROMOTIONS
+	promotionRepo := merchant_promotion.NewPromotionRepository(database.DB)
+	promotionService := merchant_promotion.NewPromotionService(promotionRepo, notifService)
+	promotionHandler := merchant_promotion.NewPromotionHandler(promotionService)
+	customerPromotionHandler := customer_promotion.NewCustomerPromotionHandler(promotionService, promotionRepo)
+	merchant_promotion.StartPromotionWorker(database.DB, notifService)
 
 	// Signal V2 (menggantikan demand lama) — dengan Real-Time Hub & Notification Service
 	signalRepo := signal.NewSignalRepository(database.DB)
@@ -689,6 +698,17 @@ func main() {
 	postRoutes.Patch("/:post_id", businessPostHandler.UpdatePost)
 	postRoutes.Delete("/:post_id", businessPostHandler.DeletePost)
 
+	// -> Promotions (Promosi Merchant)
+	promoRoutes := sharedBusinessScope.Group("/promotions")
+	promoRoutes.Get("/eligible-products", promotionHandler.GetEligibleProducts)
+	promoRoutes.Post("", middlewares.RequireKYC, promotionHandler.CreatePromotion)
+	promoRoutes.Post("/", middlewares.RequireKYC, promotionHandler.CreatePromotion)
+	promoRoutes.Get("", promotionHandler.GetPromotions)
+	promoRoutes.Get("/", promotionHandler.GetPromotions)
+	promoRoutes.Get("/:promotion_id", promotionHandler.GetPromotionDetail)
+	promoRoutes.Patch("/:promotion_id/extend", middlewares.RequireKYC, promotionHandler.ExtendPromotion)
+	promoRoutes.Patch("/:promotion_id/stop", middlewares.RequireKYC, promotionHandler.StopPromotion)
+
 	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - MERCHANT
 	// ==========================================
@@ -757,6 +777,10 @@ func main() {
 
 	// Batch Impressions dari Flutter
 	api.Post("/customer/analytics/impressions", analyticsHandler.TrackImpressions)
+
+	// Customer Promotion Tracking & Detail
+	api.Post("/customer/promotions/events", middlewares.OptionalAuth, customerPromotionHandler.RecordEvents)
+	api.Get("/customer/promotions/:promotion_id", middlewares.OptionalAuth, customerPromotionHandler.GetPromotionDetail)
 
 	// ==========================================
 	// ROUTES: LIVE LOCATION

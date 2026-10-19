@@ -11,6 +11,8 @@ type BusinessPost struct {
 	VideoURL     *string   `gorm:"column:video_url" json:"video_url"` // Pointer agar bisa null
 	LikeCount    int       `gorm:"default:0;column:like_count" json:"like_count"`
 	CommentCount int       `gorm:"default:0;column:comment_count" json:"comment_count"`
+	IsPromotion  bool      `gorm:"column:is_promotion;default:false" json:"is_promotion"`
+	PromotionID  *string   `gorm:"column:promotion_id" json:"promotion_id,omitempty"`
 	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
 
@@ -43,4 +45,8 @@ type PostResponse struct {
 
 	IsLikedByMe  bool      `json:"is_liked_by_me"`
 	Business     *Business `json:"business,omitempty"`
+	IsPromotion  bool      `json:"is_promotion"`
+	PromotionID  *string   `json:"promotion_id,omitempty"`
+	BadgeText    *string   `json:"badge_text,omitempty"`    // "Promosi" jika is_promotion = true
+	TargetAction *string   `json:"target_action,omitempty"` // "open_promotion_group" jika is_promotion = true
 }

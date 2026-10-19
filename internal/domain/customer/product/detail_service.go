@@ -2,6 +2,7 @@ package product
 
 import (
 	"errors"
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 )
@@ -57,7 +58,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 	var discountPct float64
 	isDiscounted := false
 
-	if prod.Discount > 0 {
+	if utils.IsDiscountActive(prod.Discount, prod.DiscountStartAt, prod.DiscountEndAt, time.Now()) {
 		cut, pct := utils.CalculateProductDiscount(prod.Price, prod.DiscountType, prod.Discount, prod.MaxDiscount)
 		if cut > 0 {
 			isDiscounted = true
@@ -114,7 +115,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		var discountPct float64
 		isDiscounted := false
 
-		if sim.Discount > 0 {
+		if utils.IsDiscountActive(sim.Discount, sim.DiscountStartAt, sim.DiscountEndAt, time.Now()) {
 			cut, pct := utils.CalculateProductDiscount(sim.Price, sim.DiscountType, sim.Discount, sim.MaxDiscount)
 			if cut > 0 {
 				isDiscounted = true

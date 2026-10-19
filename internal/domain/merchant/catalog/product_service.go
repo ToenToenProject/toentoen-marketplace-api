@@ -253,6 +253,12 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		}
 		product.Price = *input.Price
 	}
+	// Cek apakah ada perubahan diskon saat produk sedang terdaftar di promosi aktif/terjadwal
+	isUpdatingDiscount := input.DiscountType != nil || input.Discount != nil || input.MaxDiscount != nil || input.DiscountStartAt != nil || input.DiscountEndAt != nil
+	if isUpdatingDiscount && s.repo.IsProductInActiveOrScheduledPromotion(productID) {
+		return errors.New("diskon produk ini sedang dikunci karena terdaftar dalam promosi yang sedang aktif atau terjadwal. Harap kelola melalui menu Promosi")
+	}
+
 	if input.DiscountType != nil {
 		cleanType := strings.ToLower(strings.TrimSpace(*input.DiscountType))
 		if cleanType != "nominal" && cleanType != "percentage" {
@@ -398,16 +404,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 
 	// Cek apakah ada nominal/persen diskon yang dipasang
 	if p.Discount > 0 {
-		isDiscountActive := true
-		
-		// Validasi apakah waktu promo di dunia nyata sudah masuk jadwal atau belum
-		if p.DiscountStartAt != nil && p.DiscountEndAt != nil {
-			if now.Before(*p.DiscountStartAt) || now.After(*p.DiscountEndAt) {
-				isDiscountActive = false // Diskon tidak aktif (belum mulai / kedaluwarsa)
-			}
-		}
-
-		if isDiscountActive {
+		if utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, now) {
 			isDiscounted = true
 			minCut, pct := utils.CalculateProductDiscount(originalMinPrice, p.DiscountType, p.Discount, p.MaxDiscount)
 			maxCut, _ := utils.CalculateProductDiscount(originalMaxPrice, p.DiscountType, p.Discount, p.MaxDiscount)
@@ -511,14 +508,7 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 		var discountPct float64
 
 		if p.Discount > 0 {
-			isDiscountActive := true
-			if p.DiscountStartAt != nil && p.DiscountEndAt != nil {
-				if now.Before(*p.DiscountStartAt) || now.After(*p.DiscountEndAt) {
-					isDiscountActive = false
-				}
-			}
-
-			if isDiscountActive {
+		if utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, now) {
 				isDiscounted = true
 				minCut, pct := utils.CalculateProductDiscount(originalMinPrice, p.DiscountType, p.Discount, p.MaxDiscount)
 				maxCut, _ := utils.CalculateProductDiscount(originalMaxPrice, p.DiscountType, p.Discount, p.MaxDiscount)

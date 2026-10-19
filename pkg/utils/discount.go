@@ -1,6 +1,9 @@
 package utils
 
-import "math"
+import (
+	"math"
+	"time"
+)
 
 // CalculateProductDiscount menghitung nilai potongan riil (Rupiah) dan persentase riil diskon.
 // Menerima parameter:
@@ -39,4 +42,19 @@ func CalculateProductDiscount(price float64, discountType string, discountValue 
 	}
 
 	return math.Round(discountAmount*100) / 100, math.Round(discountPct*10) / 10
+}
+
+// IsDiscountActive mengecek apakah diskon produk sedang aktif berdasarkan nilai diskon
+// dan batas waktu mulai (startAt) serta batas waktu berakhir (endAt).
+func IsDiscountActive(discount float64, startAt, endAt *time.Time, now time.Time) bool {
+	if discount <= 0 {
+		return false
+	}
+	if startAt != nil && now.Before(*startAt) {
+		return false
+	}
+	if endAt != nil && now.After(*endAt) {
+		return false
+	}
+	return true
 }

@@ -35,6 +35,7 @@ const (
 
 	// --- Pemasaran & Konten Feed Toko ---
 	PermManageBusinessPosts = "manage_business_posts" // 4A. Kelola postingan feed toko
+	PermManagePromotions    = "manage_promotions"     // 4B. Kelola promosi toko
 
 	// --- Laporan & Analitik Toko ---
 	PermViewAnalyticsDaily   = "view_analytics_daily"   // 5Aa. Melihat analitik harian
@@ -79,6 +80,7 @@ var AllPermissions = []string{
 
 	// 4. Pemasaran & Konten
 	PermManageBusinessPosts,
+	PermManagePromotions,
 
 	// 5. Laporan & Analitik
 	PermViewAnalyticsDaily,
@@ -104,6 +106,7 @@ var PermissionLabels = map[string]string{
 	PermReplyFeedComments:        "Balas Komentar Feed & Beri Like",
 	PermReplyProductReviews:      "Balas Ulasan Produk & Beri Like",
 	PermManageBusinessPosts:      "Kelola Postingan Feed Toko",
+	PermManagePromotions:         "Kelola Promosi Toko",
 	PermViewAnalyticsDaily:       "Melihat Analitik Harian",
 	PermViewAnalyticsHistory:     "Melihat Analitik Riwayat",
 	PermViewAnalyticsExplore:     "Melihat Analitik Jelajahi",

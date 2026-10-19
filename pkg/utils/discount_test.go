@@ -2,6 +2,7 @@ package utils
 
 import (
 	"testing"
+	"time"
 )
 
 func TestCalculateProductDiscount(t *testing.T) {
@@ -90,6 +91,80 @@ func TestCalculateProductDiscount(t *testing.T) {
 			}
 			if gotPct != tt.wantPct {
 				t.Errorf("CalculateProductDiscount() gotPct = %v, want %v", gotPct, tt.wantPct)
+			}
+		})
+	}
+}
+
+func TestIsDiscountActive(t *testing.T) {
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-2 * time.Hour)
+	future := now.Add(2 * time.Hour)
+	farFuture := now.Add(24 * time.Hour)
+
+	tests := []struct {
+		name     string
+		discount float64
+		startAt  *time.Time
+		endAt    *time.Time
+		want     bool
+	}{
+		{
+			name:     "Zero discount is inactive",
+			discount: 0,
+			startAt:  &past,
+			endAt:    &future,
+			want:     false,
+		},
+		{
+			name:     "Negative discount is inactive",
+			discount: -10,
+			startAt:  nil,
+			endAt:    nil,
+			want:     false,
+		},
+		{
+			name:     "Discount without dates is active",
+			discount: 10,
+			startAt:  nil,
+			endAt:    nil,
+			want:     true,
+		},
+		{
+			name:     "Discount scheduled for future is inactive",
+			discount: 10,
+			startAt:  &future,
+			endAt:    &farFuture,
+			want:     false,
+		},
+		{
+			name:     "Discount ended in past is inactive",
+			discount: 10,
+			startAt:  &past,
+			endAt:    &past,
+			want:     false,
+		},
+		{
+			name:     "Discount in valid range is active",
+			discount: 10,
+			startAt:  &past,
+			endAt:    &future,
+			want:     true,
+		},
+		{
+			name:     "Discount with only future endAt is active",
+			discount: 10,
+			startAt:  nil,
+			endAt:    &future,
+			want:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsDiscountActive(tt.discount, tt.startAt, tt.endAt, now)
+			if got != tt.want {
+				t.Errorf("IsDiscountActive() = %v, want %v", got, tt.want)
 			}
 		})
 	}

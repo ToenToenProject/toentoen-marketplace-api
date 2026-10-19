@@ -26,6 +26,8 @@ type ProductRepository interface {
 	// FUNGSI BARU: Bulk Operations
 	BulkUpdateStatus(businessID string, productIDs []string, isActive bool) error
 	BulkDelete(businessID string, productIDs []string) error
+
+	IsProductInActiveOrScheduledPromotion(productID string) bool
 }
 
 type productRepository struct {
@@ -157,8 +159,12 @@ func (r *productRepository) GetProducts(businessID, search, productGroupID, stoc
 		query = query.Where(searchQuery)
 	}
 
-	if productGroupID != "" {
-		query = query.Where("product_group_id = ?", productGroupID)
+	if productGroupID != "" && productGroupID != "all" {
+		if productGroupID == "promotion" {
+			query = query.Where("products.product_id IN (SELECT pp.product_id FROM promotion_products pp JOIN promotions p ON p.promotion_id = pp.promotion_id WHERE p.business_id = ? AND p.status = 'active')", businessID)
+		} else {
+			query = query.Where("products.product_group_id = ?", productGroupID)
+		}
 	}
 
 	if stockType != "" {
@@ -243,7 +249,11 @@ func (r *productRepository) GetProductSummary(businessID, search, productGroupID
 	}
 
 	if productGroupID != "" && productGroupID != "all" {
-		query = query.Where("product_group_id = ?", productGroupID)
+		if productGroupID == "promotion" {
+			query = query.Where("product_id IN (SELECT pp.product_id FROM promotion_products pp JOIN promotions p ON p.promotion_id = pp.promotion_id WHERE p.business_id = ? AND p.status = 'active')", businessID)
+		} else {
+			query = query.Where("product_group_id = ?", productGroupID)
+		}
 	}
 
 	if isActive != nil {
@@ -259,4 +269,13 @@ func (r *productRepository) GetProductSummary(businessID, search, productGroupID
 	`).Scan(&summary).Error
 
 	return &summary, err
+}
+
+func (r *productRepository) IsProductInActiveOrScheduledPromotion(productID string) bool {
+	var count int64
+	r.db.Table("promotion_products").
+		Joins("JOIN promotions ON promotions.promotion_id = promotion_products.promotion_id").
+		Where("promotion_products.product_id = ? AND promotions.status IN ?", productID, []string{models.PromotionStatusActive, models.PromotionStatusScheduled}).
+		Count(&count)
+	return count > 0
 }

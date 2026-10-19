@@ -311,7 +311,21 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 }
 
 func (s *service) GetAllProductGroups(businessID string) ([]models.ProductGroup, error) {
-	return s.repo.GetAllProductGroups(businessID)
+	groups, err := s.repo.GetAllProductGroups(businessID)
+	if err != nil {
+		return nil, err
+	}
+	if s.repo.HasActivePromotion(businessID) {
+		virtualPromo := models.ProductGroup{
+			ProductGroupID: "promotion",
+			BusinessID:     businessID,
+			Name:           "Promosi",
+			DisplayOrder:   0,
+			IsActive:       true,
+		}
+		groups = append([]models.ProductGroup{virtualPromo}, groups...)
+	}
+	return groups, nil
 }
 
 func mapToSimpleProduct(p models.Product) SimpleProductResponse {
@@ -321,7 +335,7 @@ func mapToSimpleProduct(p models.Product) SimpleProductResponse {
 	var discountPct float64
 	isDiscounted := false
 
-	if p.Discount > 0 {
+	if utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, time.Now()) {
 		cut, pct := utils.CalculateProductDiscount(p.Price, p.DiscountType, p.Discount, p.MaxDiscount)
 		if cut > 0 {
 			isDiscounted = true

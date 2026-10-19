@@ -40,14 +40,18 @@ func SendPushNotification(tokens []string, title, body string, data map[string]s
 
 	successCount := 0
 	for _, token := range tokens {
-		// Menggunakan messaging.Message (satuan), bukan Multicast
+		notif := &messaging.Notification{
+			Title: title,
+			Body:  body,
+		}
+		if img, ok := data["image_url"]; ok && img != "" {
+			notif.ImageURL = img
+		}
+
 		message := &messaging.Message{
-			Token: token,
-			Notification: &messaging.Notification{
-				Title: title,
-				Body:  body,
-			},
-			Data: data,
+			Token:        token,
+			Notification: notif,
+			Data:         data,
 		}
 
 		// Kirim ke endpoint v1 (/messages:send)

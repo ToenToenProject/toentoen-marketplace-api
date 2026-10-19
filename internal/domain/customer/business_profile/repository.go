@@ -21,6 +21,7 @@ type Repository interface {
 	GetReviewSummary(businessID string) (*models.ReviewSummary, error)
 
 	GetAllProductGroups(businessID string) ([]models.ProductGroup, error)
+	HasActivePromotion(businessID string) bool
 	GetAllProducts(businessID string, groupID string) ([]models.Product, error)
 	GetAllPosts(businessID string) ([]models.BusinessPost, error)
 	GetPostLikesByAccount(accountID string, postIDs []string) (map[string]bool, error)
@@ -209,12 +210,24 @@ func (r *repository) GetAllProductGroups(businessID string) ([]models.ProductGro
 	return groups, err
 }
 
+func (r *repository) HasActivePromotion(businessID string) bool {
+	var count int64
+	r.db.Table("promotions").
+		Where("business_id = ? AND status = ?", businessID, models.PromotionStatusActive).
+		Count(&count)
+	return count > 0
+}
+
 func (r *repository) GetAllProducts(businessID string, groupID string) ([]models.Product, error) {
 	var products []models.Product
 	query := r.db.Where("business_id = ? AND is_active = ?", businessID, true)
 	
 	if groupID != "" {
-		query = query.Where("product_group_id = ?", groupID)
+		if groupID == "promotion" {
+			query = query.Where("product_id IN (SELECT pp.product_id FROM promotion_products pp JOIN promotions p ON p.promotion_id = pp.promotion_id WHERE p.business_id = ? AND p.status = 'active')", businessID)
+		} else {
+			query = query.Where("product_group_id = ?", groupID)
+		}
 	}
 
 	err := query.Order("created_at DESC").Find(&products).Error

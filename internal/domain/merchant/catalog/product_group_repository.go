@@ -13,6 +13,7 @@ type ProductGroupRepository interface {
 	CheckBusinessExists(businessID string) bool
 	CheckNameExists(businessID, name string) bool
 	GetGroups(businessID string) ([]models.ProductGroup, error)
+	HasActivePromotion(businessID string) bool
 	CreateGroup(group *models.ProductGroup) error
 	GetMaxDisplayOrder(businessID string) int
 	UpdateGroup(group *models.ProductGroup) error
@@ -55,6 +56,14 @@ func (r *productGroupRepository) GetGroups(businessID string) ([]models.ProductG
 	// Diurutkan berdasarkan display_order terkecil ke terbesar, lalu ditapis berdasarkan yang aktif saja jika diperlukan
 	err := r.db.Where("business_id = ?", businessID).Order("display_order ASC, created_at DESC").Find(&groups).Error
 	return groups, err
+}
+
+func (r *productGroupRepository) HasActivePromotion(businessID string) bool {
+	var count int64
+	r.db.Table("promotions").
+		Where("business_id = ? AND status = ?", businessID, models.PromotionStatusActive).
+		Count(&count)
+	return count > 0
 }
 
 func (r *productGroupRepository) CreateGroup(group *models.ProductGroup) error {
