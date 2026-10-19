@@ -515,18 +515,70 @@ Sistem melakukan penyatuan set (*Set Union*) berbasis `account_id` di database s
 
 ---
 
-## 8. Background Scheduler & Worker
+## 8. Background Scheduler & Worker (Promosi Terjadwal & Auto-Rollback)
 
-Worker berjalan di latar belakang setiap **1 menit** (`promotion.StartPromotionWorker`):
-1. **Pemeriksaan Promosi Terjadwal (`scheduled` -> `active`):**
-   - Mencari promosi dengan status `scheduled` yang `start_at <= NOW`.
-   - Mengubah status menjadi `active`.
-   - Menerapkan diskon ke produk di katalog.
-   - Mengirim notifikasi ke pelanggan secara otomatis.
-2. **Pemeriksaan Promosi Berakhir (`active` -> `ended`):**
-   - Mencari promosi dengan status `active` yang `end_at < NOW`.
-   - Mengubah status menjadi `ended`.
-   - Memulihkan (*rollback*) seluruh diskon produk ke kondisi sebelum promosi dimulai.
+Fitur scheduler promosi berjalan secara otomatis di latar belakang tanpa memerlukan cronjob eksternal (OS/crontab), menggunakan goroutine dengan interval berkala setiap **1 menit** (`time.NewTicker(1 * time.Minute)`).
+
+- **File Implementasi:** `internal/domain/merchant/promotion/worker.go`
+- **Inisialisasi Server:** Dipanggil langsung saat server API boot di `cmd/api/main.go` via:
+  ```go
+  merchant_promotion.StartPromotionWorker(database.DB, notifService)
+  ```
+
+### 8.1 Alur Kerja Scheduler per Menit
+
+```mermaid
+flowchart TD
+    Start([Ticker: Setiap 1 Menit]) --> QueryScheduled[Cari promosi: status = 'scheduled' AND start_at <= NOW]
+    QueryScheduled --> AnyScheduled{Ada yang perlu aktif?}
+    AnyScheduled -- Ya --> LoopScheduled[Iterasi setiap promosi terjadwal]
+    LoopScheduled --> DBTx1[Mulai DB Transaction]
+    DBTx1 --> UpdateStatusActive[1. Update status = 'active' & notified_at = NOW]
+    UpdateStatusActive --> CreateFeedPost[2. Terbitkan Postingan Feed Otomatis ber-badge 'Promosi']
+    CreateFeedPost --> ApplyDiscount[3. Update kolom diskon di tabel products katalog]
+    ApplyDiscount --> CommitTx1[Commit DB Transaction]
+    CommitTx1 --> BroadcastNotif[4. Kirim Push Notification & In-App ke Followers/Wishlisters]
+    BroadcastNotif --> SyncMeili1[5. Sync Bisnis & Produk ke Meilisearch]
+    SyncMeili1 --> QueryExpired
+
+    AnyScheduled -- Tidak --> QueryExpired[Cari promosi: status = 'active' AND end_at < NOW]
+    QueryExpired --> AnyExpired{Ada yang expired?}
+    AnyExpired -- Ya --> LoopExpired[Iterasi setiap promosi yang berakhir]
+    LoopExpired --> DBTx2[Mulai DB Transaction]
+    DBTx2 --> UpdateStatusEnded[1. Update status = 'ended']
+    UpdateStatusEnded --> RollbackDiscount[2. Rollback diskon produk ke nilai awal sebelum promo]
+    RollbackDiscount --> CommitTx2[Commit DB Transaction]
+    CommitTx2 --> SyncMeili2[3. Sync Bisnis & Produk ke Meilisearch]
+    SyncMeili2 --> Done([Selesai Putaran Siklus])
+    AnyExpired -- Tidak --> Done
+```
+
+### 8.2 Rincian Tugas 1: Aktivasi Otomatis Promosi Terjadwal (`scheduled` -> `active`)
+1. **Pendeteksian:** Menjalankan query mencari semua baris di tabel `promotions` di mana:
+   ```sql
+   WHERE status = 'scheduled' AND start_at <= NOW()
+   ```
+2. **Atomic Transaction:** Setiap promosi yang diaktifkan dibungkus dalam `tx.Transaction()` database:
+   - Status diubah menjadi `'active'`.
+   - Postingan feed promosi toko otomatis dibuat di tabel `business_posts` dengan preview gambar dari produk utama dan `is_promotion = true`.
+   - Diskon promosi langsung disalin dan diperbarui pada tabel `products` (`discount_type`, `discount`, `max_discount`, `discount_start_at`, `discount_end_at`).
+3. **Pemberitahuan Otomatis:** Setelah transaksi berhasil di-commit:
+   - Sistem memicu broadcast notifikasi FCM & in-app ke target pelanggan (bookmark toko + wishlist produk yang terdeduplikasi).
+   - Indeks toko pada Meilisearch disinkronkan kembali secara otomatis.
+
+### 8.3 Rincian Tugas 2: Penyelesaian Otomatis & Rollback Diskon (`active` -> `ended`)
+1. **Pendeteksian:** Menjalankan query mencari semua baris di tabel `promotions` di mana:
+   ```sql
+   WHERE status = 'active' AND end_at < NOW()
+   ```
+2. **Pemulihan Diskon (Auto-Rollback):**
+   - Status promosi diubah menjadi `'ended'`.
+   - Sistem membaca cadangan diskon awal pada tabel `promotion_products`:
+     - **Jika produk sebelumnya memiliki diskon lama (`had_previous_discount = true`):** Nilai `discount_type`, `discount`, `max_discount`, `discount_start_at`, dan `discount_end_at` lama dikembalikan persis ke tabel `products`.
+     - **Jika produk awalnya tidak memiliki diskon (`had_previous_discount = false`):** Nilai `discount` di-set menjadi `0`, serta tanggal masa berlaku diskon di-set menjadi `NULL`.
+3. **Pembaruan Etalase:**
+   - Karena promosi telah berakhir, produk terkait otomatis tidak lagi muncul di bawah virtual group `"Promosi"`.
+   - Meilisearch disinkronkan kembali agar hasil pencarian publik langsung menampilkan harga normal/awal.
 
 ---
 
