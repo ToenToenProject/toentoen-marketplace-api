@@ -24,8 +24,17 @@ func NewExploreService(repo ExploreRepository) ExploreService {
 	return &exploreService{repo}
 }
 
+type ExploreSummary struct {
+	WithinRadiusCount  int64 `json:"within_radius_count"`
+	OutsideRadiusCount int64 `json:"outside_radius_count"`
+	TotalItems         int64 `json:"total_items"`
+}
+
 type ExploreResponse struct {
+	Scope      string                  `json:"scope"`
 	Businesses []MeiliBusinessDocument `json:"businesses"`
+	Products   []MeiliProductDocument  `json:"products,omitempty"`
+	Summary    ExploreSummary          `json:"summary"`
 	Pagination PaginationMeta          `json:"pagination"`
 }
 
@@ -43,32 +52,85 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 		req.Radius = 10000 // default 10km radius
 	}
 
+	scope := strings.ToLower(strings.TrimSpace(req.Scope))
+	if scope == "" {
+		scope = "all"
+	}
+	req.Scope = scope
+
 	page := req.Offset
 	if page <= 0 {
 		page = 1
 	}
 	req.Offset = (page - 1) * req.Limit
 
-	docs, totalHits, err := s.repo.SearchBusinesses(req)
+	// 1. Scope: PRODUCT
+	if req.Scope == "product" {
+		docs, summary, err := s.repo.SearchProducts(req)
+		if err != nil {
+			return ExploreResponse{}, err
+		}
+
+		totalPages := summary.TotalHits / req.Limit
+		if summary.TotalHits%req.Limit > 0 {
+			totalPages++
+		}
+		if docs == nil {
+			docs = []MeiliProductDocument{}
+		}
+
+		return ExploreResponse{
+			Scope:      "product",
+			Businesses: []MeiliBusinessDocument{},
+			Products:   docs,
+			Summary: ExploreSummary{
+				WithinRadiusCount:  summary.WithinRadiusCount,
+				OutsideRadiusCount: summary.OutsideRadiusCount,
+				TotalItems:         summary.TotalHits,
+			},
+			Pagination: PaginationMeta{
+				CurrentPage: page,
+				TotalPages:  totalPages,
+				TotalItems:  summary.TotalHits,
+			},
+		}, nil
+	}
+
+	// 2. Scope: STORE atau ALL
+	docs, summary, err := s.repo.SearchBusinesses(req)
 	if err != nil {
 		return ExploreResponse{}, err
 	}
 
-	totalPages := totalHits / req.Limit
-	if totalHits%req.Limit > 0 {
+	totalPages := summary.TotalHits / req.Limit
+	if summary.TotalHits%req.Limit > 0 {
 		totalPages++
 	}
-
 	if docs == nil {
 		docs = []MeiliBusinessDocument{}
 	}
 
+	if req.Scope == "store" {
+		cleaned := make([]MeiliBusinessDocument, len(docs))
+		for i := range docs {
+			cleaned[i] = docs[i]
+			cleaned[i].MatchedProducts = nil
+		}
+		docs = cleaned
+	}
+
 	return ExploreResponse{
+		Scope:      req.Scope,
 		Businesses: docs,
+		Summary: ExploreSummary{
+			WithinRadiusCount:  summary.WithinRadiusCount,
+			OutsideRadiusCount: summary.OutsideRadiusCount,
+			TotalItems:         summary.TotalHits,
+		},
 		Pagination: PaginationMeta{
 			CurrentPage: page,
 			TotalPages:  totalPages,
-			TotalItems:  totalHits,
+			TotalItems:  summary.TotalHits,
 		},
 	}, nil
 }
@@ -351,4 +413,3 @@ func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 
 	return earthRadiusKm * c
 }
-

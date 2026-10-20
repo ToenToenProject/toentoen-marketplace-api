@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"toentoen-backend/internal/domain/shared/models"
+	myMeili "toentoen-backend/pkg/meilisearch"
 )
 
 func TestHaversineDistance(t *testing.T) {
@@ -47,5 +48,267 @@ func TestScoringAndRankingCalculation(t *testing.T) {
 
 	if recencyScore1 <= recencyScore2 {
 		t.Errorf("Recent post should have higher recency score: %f vs %f", recencyScore1, recencyScore2)
+	}
+}
+
+func TestStoreTypeNormalizationAndLabels(t *testing.T) {
+	cases := []struct {
+		input         string
+		expectedType  string
+		expectedLabel string
+	}{
+		{"Rumah", models.StoreTypeRumah, "Rumah / Dapur Rumahan"},
+		{"toko", models.StoreTypeToko, "Toko / Warung Kelontong"},
+		{"KELILING", models.StoreTypeKeliling, "Pedagang Keliling"},
+		{"gerobak", models.StoreTypeGerobak, "Gerobak / Kaki Lima"},
+		{"Alun-Alun", models.StoreTypeAlunAlun, "Alun-Alun / Lapangan Terbuka"},
+		{"pusat_belanja", models.StoreTypePusatBelanja, "Pusat Perbelanjaan / Mall"},
+		{"unknown_type", "regular", "Regular"},
+	}
+
+	for _, c := range cases {
+		norm := models.NormalizeStoreType(c.input)
+		if norm != c.expectedType {
+			t.Errorf("NormalizeStoreType(%q) = %q; expected %q", c.input, norm, c.expectedType)
+		}
+		label := models.GetStoreTypeLabel(norm)
+		if label != c.expectedLabel {
+			t.Errorf("GetStoreTypeLabel(%q) = %q; expected %q", norm, label, c.expectedLabel)
+		}
+	}
+}
+
+func TestSynonymExpansion(t *testing.T) {
+	// Keyword "eskrim" should expand to contain "es krim" and "ice cream"
+	expanded := myMeili.ExpandKeywordWithSynonyms("eskrim")
+	foundEsKrim := false
+	for _, term := range expanded {
+		if term == "es krim" || term == "ice cream" {
+			foundEsKrim = true
+			break
+		}
+	}
+	if !foundEsKrim {
+		t.Errorf("ExpandKeywordWithSynonyms(\"eskrim\") did not include 'es krim': got %v", expanded)
+	}
+
+	// Keyword "ngopi" should expand to "kopi"
+	kopiExpanded := myMeili.ExpandKeywordWithSynonyms("ngopi")
+	foundKopi := false
+	for _, term := range kopiExpanded {
+		if term == "kopi" {
+			foundKopi = true
+			break
+		}
+	}
+	if !foundKopi {
+		t.Errorf("ExpandKeywordWithSynonyms(\"ngopi\") did not include 'kopi': got %v", kopiExpanded)
+	}
+}
+
+func TestTieredRadiusRankingAndHashtagBooster(t *testing.T) {
+	// Radius 5 km
+	req := SearchRequest{
+		Lat:      -6.2000,
+		Lng:      106.8000,
+		Radius:   5000, // 5 km
+		Sort:     "nearest",
+		Hashtags: []string{"pedas"},
+	}
+
+	docs := []MeiliBusinessDocument{
+		{
+			ID:       "BIZ-FAR-BOOSTED",
+			Name:     "Warung Jauh Pedas",
+			Distance: 8.0, // Outside radius (8 km)
+			Hashtags: []string{"pedas"},
+		},
+		{
+			ID:       "BIZ-NEAR-REGULAR",
+			Name:     "Warung Dekat Biasa",
+			Distance: 1.5, // Inside radius (1.5 km), NO hashtag
+			Hashtags: []string{"manis"},
+		},
+		{
+			ID:       "BIZ-NEAR-BOOSTED",
+			Name:     "Warung Dekat Pedas",
+			Distance: 3.0, // Inside radius (3.0 km), HAS hashtag "pedas"
+			Hashtags: []string{"pedas"},
+		},
+		{
+			ID:       "BIZ-FAR-REGULAR",
+			Name:     "Warung Jauh Biasa",
+			Distance: 12.0, // Outside radius (12 km)
+			Hashtags: []string{},
+		},
+	}
+
+	ranked, withinCount, outsideCount := rankBusinessDocuments(docs, req, 5.0)
+
+	if withinCount != 2 {
+		t.Errorf("Expected 2 items within radius, got %d", withinCount)
+	}
+	if outsideCount != 2 {
+		t.Errorf("Expected 2 items outside radius, got %d", outsideCount)
+	}
+
+	// Rule 1: All Tier 1 (within radius) items MUST appear before Tier 2 (outside radius)
+	// BIZ-FAR-BOOSTED has the hashtag, but it is OUTSIDE 5 km, so it MUST NOT jump over Tier 1 items!
+	if !ranked[0].IsWithinRadius || !ranked[1].IsWithinRadius {
+		t.Errorf("First two items must be within radius. Got item[0]: %s (within=%v), item[1]: %s (within=%v)",
+			ranked[0].Name, ranked[0].IsWithinRadius, ranked[1].Name, ranked[1].IsWithinRadius)
+	}
+
+	// Rule 2: Inside Tier 1, BIZ-NEAR-BOOSTED (3.0 km with #pedas) should be boosted ABOVE BIZ-NEAR-REGULAR (1.5 km without hashtag)
+	if ranked[0].ID != "BIZ-NEAR-BOOSTED" {
+		t.Errorf("Expected BIZ-NEAR-BOOSTED to be ranked #1 due to hashtag booster, got %s", ranked[0].ID)
+	}
+	if ranked[1].ID != "BIZ-NEAR-REGULAR" {
+		t.Errorf("Expected BIZ-NEAR-REGULAR to be ranked #2, got %s", ranked[1].ID)
+	}
+
+	// Rule 3: Inside Tier 2, BIZ-FAR-BOOSTED (8.0 km with #pedas) should be boosted ABOVE BIZ-FAR-REGULAR (12.0 km without hashtag)
+	if ranked[2].ID != "BIZ-FAR-BOOSTED" {
+		t.Errorf("Expected BIZ-FAR-BOOSTED to be ranked #3 in Tier 2, got %s", ranked[2].ID)
+	}
+	if ranked[3].ID != "BIZ-FAR-REGULAR" {
+		t.Errorf("Expected BIZ-FAR-REGULAR to be ranked #4 in Tier 2, got %s", ranked[3].ID)
+	}
+}
+
+func TestProductTieredRadiusAndPriceSort(t *testing.T) {
+	req := SearchRequest{
+		Lat:    -6.2000,
+		Lng:    106.8000,
+		Radius: 5000, // 5 km
+		Sort:   "price_asc",
+	}
+
+	prods := []MeiliProductDocument{
+		{
+			ProductID:  "P-NEAR-EXPENSIVE",
+			Distance:   2.0, // Inside radius
+			FinalPrice: 35000,
+		},
+		{
+			ProductID:  "P-NEAR-CHEAP",
+			Distance:   4.0, // Inside radius
+			FinalPrice: 15000,
+		},
+		{
+			ProductID:  "P-FAR-SUPERCHEAP",
+			Distance:   15.0, // Outside radius
+			FinalPrice: 5000,
+		},
+	}
+
+	ranked, withinCount, outsideCount := rankProductDocuments(prods, req, 5.0)
+
+	if withinCount != 2 || outsideCount != 1 {
+		t.Errorf("Expected 2 within and 1 outside, got within=%d, outside=%d", withinCount, outsideCount)
+	}
+
+	// Within radius tier: P-NEAR-CHEAP (15000) should come before P-NEAR-EXPENSIVE (35000)
+	if ranked[0].ProductID != "P-NEAR-CHEAP" {
+		t.Errorf("Expected ranked[0] to be P-NEAR-CHEAP, got %s", ranked[0].ProductID)
+	}
+	if ranked[1].ProductID != "P-NEAR-EXPENSIVE" {
+		t.Errorf("Expected ranked[1] to be P-NEAR-EXPENSIVE, got %s", ranked[1].ProductID)
+	}
+
+	// Outside radius tier: P-FAR-SUPERCHEAP (5000) must stay in Tier 2 despite cheaper price
+	if ranked[2].ProductID != "P-FAR-SUPERCHEAP" {
+		t.Errorf("Expected ranked[2] to be P-FAR-SUPERCHEAP, got %s", ranked[2].ProductID)
+	}
+}
+
+// Mock Repository for Service Testing
+type mockExploreRepo struct {
+	ExploreRepository
+	businesses []MeiliBusinessDocument
+	products   []MeiliProductDocument
+}
+
+func (m *mockExploreRepo) SearchBusinesses(req SearchRequest) ([]MeiliBusinessDocument, SearchSummary, error) {
+	cloned := make([]MeiliBusinessDocument, len(m.businesses))
+	for i, b := range m.businesses {
+		cloned[i] = b
+		if b.MatchedProducts != nil {
+			cloned[i].MatchedProducts = append([]MatchedProductPreview{}, b.MatchedProducts...)
+		}
+	}
+	return cloned, SearchSummary{
+		WithinRadiusCount:  int64(len(cloned)),
+		OutsideRadiusCount: 0,
+		TotalHits:          int64(len(cloned)),
+	}, nil
+}
+
+func (m *mockExploreRepo) SearchProducts(req SearchRequest) ([]MeiliProductDocument, SearchSummary, error) {
+	return m.products, SearchSummary{
+		WithinRadiusCount:  int64(len(m.products)),
+		OutsideRadiusCount: 0,
+		TotalHits:          int64(len(m.products)),
+	}, nil
+}
+
+func TestExploreServiceScopes(t *testing.T) {
+	mockRepo := &mockExploreRepo{
+		businesses: []MeiliBusinessDocument{
+			{
+				ID:   "BIZ-1",
+				Name: "Toko Sinar",
+				MatchedProducts: []MatchedProductPreview{
+					{ProductID: "PROD-1", ProductName: "Kopi Susu"},
+				},
+			},
+		},
+		products: []MeiliProductDocument{
+			{ProductID: "PROD-1", ProductName: "Kopi Susu", FinalPrice: 18000},
+		},
+	}
+
+	svc := NewExploreService(mockRepo)
+
+	// 1. Test Scope "store" (MatchedProducts should be stripped)
+	resStore, err := svc.GetExploreBusinesses(SearchRequest{Scope: "store"})
+	if err != nil {
+		t.Fatalf("Scope store error: %v", err)
+	}
+	if resStore.Scope != "store" {
+		t.Errorf("Expected scope 'store', got %q", resStore.Scope)
+	}
+	if len(resStore.Businesses) != 1 {
+		t.Fatalf("Expected 1 business, got %d", len(resStore.Businesses))
+	}
+	if len(resStore.Businesses[0].MatchedProducts) != 0 {
+		t.Errorf("Expected MatchedProducts to be stripped in scope 'store', got %v", resStore.Businesses[0].MatchedProducts)
+	}
+
+	// 2. Test Scope "all" (MatchedProducts preserved)
+	resAll, err := svc.GetExploreBusinesses(SearchRequest{Scope: "all"})
+	if err != nil {
+		t.Fatalf("Scope all error: %v", err)
+	}
+	if resAll.Scope != "all" {
+		t.Errorf("Expected scope 'all', got %q", resAll.Scope)
+	}
+	if len(resAll.Businesses[0].MatchedProducts) != 1 {
+		t.Errorf("Expected MatchedProducts to be preserved in scope 'all', got %v", resAll.Businesses[0].MatchedProducts)
+	}
+
+	// 3. Test Scope "product" (Returns Products array)
+	resProd, err := svc.GetExploreBusinesses(SearchRequest{Scope: "product"})
+	if err != nil {
+		t.Fatalf("Scope product error: %v", err)
+	}
+	if resProd.Scope != "product" {
+		t.Errorf("Expected scope 'product', got %q", resProd.Scope)
+	}
+	if len(resProd.Products) != 1 || resProd.Products[0].ProductID != "PROD-1" {
+		t.Errorf("Expected product PROD-1 in products array, got %v", resProd.Products)
+	}
+	if len(resProd.Businesses) != 0 {
+		t.Errorf("Expected businesses array to be empty in scope 'product', got %d", len(resProd.Businesses))
 	}
 }

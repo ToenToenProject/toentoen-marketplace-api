@@ -245,7 +245,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		EventEndDate:     parseDatePointer(input.EventEndDate),
 		EventSchedules:   input.EventSchedules,
 
-		StoreType:        toPointerOrNil(input.StoreType),
+		StoreType:        toPointerOrNil(models.NormalizeStoreType(input.StoreType)),
 		PhoneContact:     toPointerOrNil(input.PhoneContact),
 		WhatsappContact:  toPointerOrNil(input.WhatsappContact),
 		SocialInstagram:  toPointerOrNil(input.SocialInstagram),
@@ -469,10 +469,26 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	// ==========================================
 	// 1. ATRIBUT WAJIB (MANDATORY FIELDS)
 	// ==========================================
+	if input.BusinessName == nil && input.Name != nil {
+		input.BusinessName = input.Name
+	}
+
 	if input.BusinessName != nil {
 		cleanName := strings.TrimSpace(*input.BusinessName)
 		if cleanName == "" {
 			return errors.New("nama bisnis wajib diisi dan tidak boleh kosong")
+		}
+		// Catat riwayat perubahan nama jika berbeda dari nama lama
+		if business.BusinessName != nil && *business.BusinessName != "" && *business.BusinessName != cleanName {
+			history := models.BusinessNameHistory{
+				HistoryID:  utils.GenerateUUID("BNH"),
+				BusinessID: business.BusinessID,
+				OldName:    *business.BusinessName,
+				NewName:    cleanName,
+				ChangedBy:  requesterID,
+				CreatedAt:  time.Now(),
+			}
+			_ = s.repo.CreateNameHistory(&history)
 		}
 		business.BusinessName = &cleanName
 	}
@@ -498,9 +514,9 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 
 	if input.StoreType != nil {
-		cleanStoreType := strings.TrimSpace(*input.StoreType)
+		cleanStoreType := models.NormalizeStoreType(*input.StoreType)
 		if cleanStoreType == "" {
-			return errors.New("tipe toko wajib diisi dan tidak boleh kosong")
+			cleanStoreType = models.StoreTypeToko
 		}
 		business.StoreType = &cleanStoreType
 	}

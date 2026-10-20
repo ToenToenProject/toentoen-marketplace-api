@@ -760,6 +760,13 @@ func main() {
 	// ==========================================
 	customerExploreGroup := api.Group("/customer/explore")
 	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
+	customerExploreGroup.Get("/search", exploreHandler.SearchBusinesses)
+	customerExploreGroup.Get("/products", func(c *fiber.Ctx) error {
+		if c.Query("scope") == "" {
+			c.Request().URI().QueryArgs().Set("scope", "product")
+		}
+		return exploreHandler.SearchBusinesses(c)
+	})
 	customerExploreGroup.Get("/timeline", middlewares.OptionalAuth, exploreHandler.GetTimeline)
 	customerExploreGroup.Get("/feed", middlewares.OptionalAuth, exploreHandler.GetTimeline)
 	customerExploreGroup.Post("/feed/events", middlewares.OptionalAuth, exploreHandler.RecordFeedEvents)

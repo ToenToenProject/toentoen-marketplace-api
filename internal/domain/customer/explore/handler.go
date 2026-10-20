@@ -27,7 +27,23 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		keyword = strings.TrimSpace(c.Query("q", ""))
 	}
 
-	sort := strings.ToLower(strings.TrimSpace(c.Query("sort", "")))
+	rawSort := strings.ToLower(strings.TrimSpace(c.Query("sort", "")))
+	sort := rawSort
+	switch rawSort {
+	case "murah", "cheapest":
+		sort = "price_asc"
+	case "mahal", "expensive":
+		sort = "price_desc"
+	case "terdekat":
+		sort = "nearest"
+	case "terbaru":
+		sort = "latest"
+	}
+
+	scope := strings.ToLower(strings.TrimSpace(c.Query("scope", "all")))
+	if scope != "store" && scope != "product" && scope != "all" {
+		scope = "all"
+	}
 
 	// Parse category_ids, category_id, category
 	var catIDs []int64
@@ -80,14 +96,105 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
+	// Soft Filter / Ranking Booster: hashtags
+	var hashtags []string
+	rawHashtags := c.Query("hashtags")
+	if rawHashtags == "" {
+		rawHashtags = c.Query("hashtag")
+	}
+	if rawHashtags != "" {
+		for _, ht := range strings.Split(rawHashtags, ",") {
+			trimmed := strings.TrimSpace(ht)
+			if trimmed != "" {
+				trimmed = strings.TrimPrefix(trimmed, "#")
+				hashtags = append(hashtags, strings.ToLower(trimmed))
+			}
+		}
+	}
+
+	// Gatekeeping: is_open_now
+	var isOpenNow *bool
+	rawIsOpen := c.Query("is_open_now")
+	if rawIsOpen == "" {
+		rawIsOpen = c.Query("is_open")
+	}
+	if rawIsOpen != "" {
+		if val, err := strconv.ParseBool(rawIsOpen); err == nil {
+			isOpenNow = &val
+		}
+	}
+
+	// Gatekeeping: is_promo
+	var isPromo *bool
+	rawPromo := c.Query("is_promo")
+	if rawPromo == "" {
+		rawPromo = c.Query("promo")
+	}
+	if rawPromo != "" {
+		if val, err := strconv.ParseBool(rawPromo); err == nil {
+			isPromo = &val
+		}
+	}
+
+	// Gatekeeping: store_type / store_types
+	var storeTypes []string
+	rawStoreTypes := c.Query("store_types")
+	if rawStoreTypes == "" {
+		rawStoreTypes = c.Query("store_type")
+	}
+	if rawStoreTypes != "" {
+		for _, st := range strings.Split(rawStoreTypes, ",") {
+			trimmed := strings.TrimSpace(st)
+			if trimmed != "" {
+				storeTypes = append(storeTypes, models.NormalizeStoreType(trimmed))
+			}
+		}
+	}
+
+	// Gatekeeping: min_price & max_price
+	var minPrice, maxPrice *float64
+	if rawMin := c.Query("min_price"); rawMin != "" {
+		if val, err := strconv.ParseFloat(rawMin, 64); err == nil {
+			minPrice = &val
+		}
+	}
+	if rawMax := c.Query("max_price"); rawMax != "" {
+		if val, err := strconv.ParseFloat(rawMax, 64); err == nil {
+			maxPrice = &val
+		}
+	}
+
+	// Gatekeeping: stock_types / stock_type
+	var stockTypes []string
+	rawStockTypes := c.Query("stock_types")
+	if rawStockTypes == "" {
+		rawStockTypes = c.Query("stock_type")
+	}
+	if rawStockTypes != "" {
+		for _, st := range strings.Split(rawStockTypes, ",") {
+			trimmed := strings.TrimSpace(st)
+			if trimmed != "" {
+				stockTypes = append(stockTypes, trimmed)
+			}
+		}
+	}
+
 	req := SearchRequest{
+		Scope:       scope,
 		Keyword:     keyword,
 		CategoryIDs: catIDs,
 		Category:    catName,
 		TagIDs:      tagIDs,
 		TagNames:    tagNames,
 		RawTags:     rawTags,
+		Hashtags:    hashtags,
 		Sort:        sort,
+		IsOpenNow:   isOpenNow,
+		IsPromo:     isPromo,
+		StoreTypes:  storeTypes,
+		MinPrice:    minPrice,
+		MaxPrice:    maxPrice,
+		StockTypes:  stockTypes,
 	}
 
 	if lat, err := strconv.ParseFloat(c.Query("lat", "0"), 64); err == nil {
@@ -179,4 +286,3 @@ func (h *ExploreHandler) RecordFeedEvents(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, "00", "Aktivitas feed berhasil direkam", nil)
 }
-

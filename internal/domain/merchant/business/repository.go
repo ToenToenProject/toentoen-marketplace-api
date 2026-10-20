@@ -38,6 +38,7 @@ type BusinessRepository interface {
 	GetOwnerKYCStatus(ownerID string) (emailVerified bool, kycStatus string, err error)
 	HasNIBTag(tagIDs []int64) (bool, error)
 	RemoveNIBTagFromBusiness(businessID string) error
+	CreateNameHistory(history *models.BusinessNameHistory) error
 }
 
 type businessRepository struct {
@@ -486,4 +487,8 @@ func (r *businessRepository) RemoveNIBTagFromBusiness(businessID string) error {
 	return r.db.Table("business_has_tags").
 		Where("business_id = ? AND tag_id IN ?", businessID, nibTagIDs).
 		Delete(nil).Error
+}
+
+func (r *businessRepository) CreateNameHistory(history *models.BusinessNameHistory) error {
+	return r.db.Create(history).Error
 }

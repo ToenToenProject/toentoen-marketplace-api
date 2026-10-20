@@ -284,3 +284,68 @@ type LiveStatusResponse struct {
 type ConfirmScheduleInput struct {
 	Action string `json:"action" validate:"required,oneof=confirm_open confirm_overtime decline"`
 }
+
+// ==========================================
+// STORE TYPE STANDARDIZATION & AUDIT HISTORY
+// ==========================================
+
+const (
+	StoreTypeRumah        = "rumah"
+	StoreTypeKeliling     = "keliling"
+	StoreTypeGerobak      = "gerobak"
+	StoreTypeToko         = "toko"
+	StoreTypeRuko         = "ruko"
+	StoreTypePasar        = "pasar"
+	StoreTypeAlunAlun     = "alun_alun"
+	StoreTypePusatBelanja = "pusat_belanja"
+	StoreTypeAcaraMusiman = "acara_musiman"
+)
+
+var StoreTypeLabels = map[string]string{
+	StoreTypeRumah:        "Rumah / Dapur Rumahan",
+	StoreTypeKeliling:     "Pedagang Keliling",
+	StoreTypeGerobak:      "Gerobak / Kaki Lima",
+	StoreTypeToko:         "Toko / Warung Kelontong",
+	StoreTypeRuko:         "Ruko / Kios Komersial",
+	StoreTypePasar:        "Pasar Tradisional",
+	StoreTypeAlunAlun:     "Alun-Alun / Lapangan Terbuka",
+	StoreTypePusatBelanja: "Pusat Perbelanjaan / Mall",
+	StoreTypeAcaraMusiman: "Acara / Musiman (Pop-up)",
+	"regular":             "Regular",
+}
+
+func NormalizeStoreType(raw string) string {
+	cleaned := strings.ToLower(strings.TrimSpace(raw))
+	cleaned = strings.ReplaceAll(cleaned, "-", "_")
+	cleaned = strings.ReplaceAll(cleaned, " ", "_")
+	cleaned = strings.ReplaceAll(cleaned, "/", "_")
+	for k := range StoreTypeLabels {
+		if cleaned == k {
+			return k
+		}
+	}
+	return "regular"
+}
+
+func GetStoreTypeLabel(storeType string) string {
+	norm := NormalizeStoreType(storeType)
+	if label, ok := StoreTypeLabels[norm]; ok {
+		return label
+	}
+	return "Regular"
+}
+
+type BusinessNameHistory struct {
+	HistoryID  string    `gorm:"primaryKey;column:history_id" json:"history_id"`
+	BusinessID string    `gorm:"column:business_id;index;not null" json:"business_id"`
+	OldName    string    `gorm:"column:old_name;not null" json:"old_name"`
+	NewName    string    `gorm:"column:new_name;not null" json:"new_name"`
+	ChangedBy  string    `gorm:"column:changed_by;not null" json:"changed_by"`
+	CreatedAt  time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+
+	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+}
+
+func (BusinessNameHistory) TableName() string {
+	return "business_name_histories"
+}
