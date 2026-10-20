@@ -202,7 +202,7 @@ func main() {
 	metaHandler := meta.NewMetaHandler(metaService)
 
 	supportChatRepo := support_chat.NewSupportChatRepository(database.DB)
-	supportChatService := support_chat.NewSupportChatService(supportChatRepo, wsHub)
+	supportChatService := support_chat.NewSupportChatService(supportChatRepo, wsHub, notifService)
 	supportChatHandler := support_chat.NewSupportChatHandler(supportChatService)
 
 	supportTicketRepo := support_ticket.NewSupportTicketRepository(database.DB)
@@ -214,7 +214,7 @@ func main() {
 	feedbackHandler := support_feedback.NewFeedbackHandler(feedbackService)
 
 	businessChatRepo := business_chat.NewBusinessChatRepository(database.DB)
-	businessChatService := business_chat.NewBusinessChatService(businessChatRepo, wsHub)
+	businessChatService := business_chat.NewBusinessChatService(businessChatRepo, wsHub, notifService)
 	businessChatHandler := business_chat.NewBusinessChatHandler(businessChatService)
 
 	businessTransferRepo := transfer.NewBusinessTransferRepository(database.DB)
@@ -472,6 +472,13 @@ func main() {
 	protected.Delete("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
 	protected.Post("/delete/execute", profileHandler.VerifyDeleteOTPAndExecute)
 	protected.Post("/delete/verify", profileHandler.VerifyDeleteOTPAndExecute)
+
+	// Device Token (Push Notification FCM Registration & Removal)
+	protected.Post("/device-token", profileHandler.RegisterDeviceToken)
+	protected.Put("/device-token", profileHandler.RegisterDeviceToken)
+	protected.Delete("/device-token", profileHandler.DeleteDeviceToken)
+	api.Post("/account/device-token", middlewares.RequireAuth, profileHandler.RegisterDeviceToken)
+	api.Delete("/account/device-token", middlewares.RequireAuth, profileHandler.DeleteDeviceToken)
 
 	// Notifications
 	notifGroup := protected.Group("/notifications")

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/shared/permissions"
@@ -21,14 +22,16 @@ type BusinessChatService interface {
 }
 
 type businessChatService struct {
-	repo BusinessChatRepository
-	hub  *realtime.Hub
+	repo         BusinessChatRepository
+	hub          *realtime.Hub
+	notifService notification.NotificationService
 }
 
-func NewBusinessChatService(repo BusinessChatRepository, hub *realtime.Hub) BusinessChatService {
+func NewBusinessChatService(repo BusinessChatRepository, hub *realtime.Hub, notifService notification.NotificationService) BusinessChatService {
 	return &businessChatService{
-		repo: repo,
-		hub:  hub,
+		repo:         repo,
+		hub:          hub,
+		notifService: notifService,
 	}
 }
 
@@ -151,15 +154,36 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 	newConv.Business = business
 	newConv.Customer = customer
 
-	// Broadcast WS event ke seluruh staff/owner toko jika ada hub
-	if s.hub != nil && firstMsg != nil {
+	// Broadcast WS event ke seluruh staff/owner toko jika ada hub & kirim Push Notification jika offline
+	if firstMsg != nil {
 		event := realtime.WSEvent{
 			Type: "BUSINESS_CHAT_NEW_MESSAGE",
 			Data: firstMsg,
 		}
 		staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(businessID)
+		var offlineStaffIDs []string
 		for _, staffID := range staffIDs {
-			s.hub.SendToAccount(staffID, event)
+			if s.hub != nil && s.hub.IsOnline(staffID) {
+				s.hub.SendToAccount(staffID, event)
+			} else {
+				offlineStaffIDs = append(offlineStaffIDs, staffID)
+			}
+		}
+
+		if s.notifService != nil && len(offlineStaffIDs) > 0 {
+			go func() {
+				title := senderName
+				body := formatChatPushBody(firstMsg.MessageType, firstMsg.Content)
+				pushData := map[string]string{
+					"conversation_id": convID,
+					"type":            "business_chat",
+					"action":          "open_business_chat",
+					"business_id":     businessID,
+					"sender_type":     "customer",
+					"sender_name":     senderName,
+				}
+				_ = s.notifService.SendPushToAccounts(offlineStaffIDs, title, body, pushData)
+			}()
 		}
 	}
 
@@ -338,24 +362,68 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 		message.ProductDetail, _ = s.repo.GetProductByID(*message.ProductID)
 	}
 
-	// Broadcast via WebSocket (kirim data plaintext ke websocket)
-	if s.hub != nil {
-		event := realtime.WSEvent{
-			Type: "BUSINESS_CHAT_NEW_MESSAGE",
-			Data: message,
-		}
+	// Broadcast via WebSocket (kirim data plaintext ke websocket) & Push Notification jika offline
+	event := realtime.WSEvent{
+		Type: "BUSINESS_CHAT_NEW_MESSAGE",
+		Data: message,
+	}
 
-		if isCustomer {
-			// Kirim ke seluruh staf dan owner toko
-			staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(conv.BusinessID)
-			for _, staffID := range staffIDs {
+	var offlineAccountIDs []string
+	if isCustomer {
+		// Kirim ke seluruh staf dan owner toko
+		staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(conv.BusinessID)
+		for _, staffID := range staffIDs {
+			if s.hub != nil && s.hub.IsOnline(staffID) {
 				s.hub.SendToAccount(staffID, event)
+			} else {
+				offlineAccountIDs = append(offlineAccountIDs, staffID)
 			}
-		} else {
-			// Kirim ke customer
-			s.hub.SendToAccount(conv.CustomerID, event)
 		}
+	} else {
+		// Kirim ke customer
+		if s.hub != nil && s.hub.IsOnline(conv.CustomerID) {
+			s.hub.SendToAccount(conv.CustomerID, event)
+		} else {
+			offlineAccountIDs = append(offlineAccountIDs, conv.CustomerID)
+		}
+	}
+
+	if s.notifService != nil && len(offlineAccountIDs) > 0 {
+		go func() {
+			title := senderName
+			body := formatChatPushBody(message.MessageType, message.Content)
+			pushData := map[string]string{
+				"conversation_id": conversationID,
+				"type":            "business_chat",
+				"action":          "open_business_chat",
+				"business_id":     conv.BusinessID,
+				"sender_type":     senderType,
+				"sender_name":     senderName,
+			}
+			_ = s.notifService.SendPushToAccounts(offlineAccountIDs, title, body, pushData)
+		}()
 	}
 
 	return message, nil
 }
+
+func formatChatPushBody(msgType, content string) string {
+	switch msgType {
+	case "image":
+		if strings.TrimSpace(content) != "" {
+			return utils.TruncateString(content, 100)
+		}
+		return "Mengirim sebuah gambar"
+	case "product_inquiry":
+		if strings.TrimSpace(content) != "" {
+			return utils.TruncateString(content, 100)
+		}
+		return "Menanyakan produk Anda"
+	default:
+		if strings.TrimSpace(content) != "" {
+			return utils.TruncateString(content, 100)
+		}
+		return "Mengirim sebuah pesan"
+	}
+}
+

@@ -227,6 +227,8 @@ type ProfileService interface {
 	RequestDeleteOTP(accountID string) error
 	VerifyDeleteOTPAndExecute(accountID string, otp string) error
 	ForceDeleteAccount(identifier string) (*ForceDeleteResult, error)
+	RegisterDeviceToken(accountID string, input models.DeviceTokenInput) error
+	DeleteDeviceToken(accountID string, input models.DeleteDeviceTokenInput) error
 	SetNotificationService(notif notification.NotificationService)
 }
 
@@ -971,5 +973,44 @@ func (s *profileService) UpdateConsent(accountID string, input models.ConsentInp
 	account.PasswordHash = nil
 
 	return account, nil
+}
+
+func (s *profileService) RegisterDeviceToken(accountID string, input models.DeviceTokenInput) error {
+	cleanAccountID := strings.TrimSpace(accountID)
+	if cleanAccountID == "" {
+		return errors.New("identitas akun tidak valid")
+	}
+
+	token := strings.TrimSpace(input.DeviceToken)
+	if token == "" {
+		token = strings.TrimSpace(input.FCMToken)
+	}
+	if token == "" {
+		return errors.New("device_token wajib diisi")
+	}
+
+	platform := strings.ToLower(strings.TrimSpace(input.Platform))
+	if platform == "" {
+		platform = strings.ToLower(strings.TrimSpace(input.DeviceType))
+	}
+	if platform == "" {
+		platform = "android"
+	}
+
+	return s.repo.UpsertDeviceToken(cleanAccountID, token, platform)
+}
+
+func (s *profileService) DeleteDeviceToken(accountID string, input models.DeleteDeviceTokenInput) error {
+	cleanAccountID := strings.TrimSpace(accountID)
+	if cleanAccountID == "" {
+		return errors.New("identitas akun tidak valid")
+	}
+
+	token := strings.TrimSpace(input.DeviceToken)
+	if token == "" {
+		token = strings.TrimSpace(input.FCMToken)
+	}
+
+	return s.repo.DeleteDeviceToken(cleanAccountID, token)
 }
 

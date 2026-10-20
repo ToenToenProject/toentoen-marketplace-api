@@ -102,6 +102,7 @@ func ConnectDB() {
 		&models.PromotionProduct{},
 		&models.PromotionEvent{},
 		&models.BusinessNameHistory{},
+		&models.DeviceToken{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {

@@ -122,3 +122,19 @@ type DeviceToken struct {
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
+
+type DeviceTokenInput struct {
+	DeviceToken string `json:"device_token"`
+	Platform    string `json:"platform"`
+	FCMToken    string `json:"fcm_token,omitempty"`
+	DeviceType  string `json:"device_type,omitempty"`
+}
+
+type DeleteDeviceTokenInput struct {
+	DeviceToken string `json:"device_token"`
+	FCMToken    string `json:"fcm_token,omitempty"`
+}
+
+func (DeviceToken) TableName() string {
+	return "device_tokens"
+}

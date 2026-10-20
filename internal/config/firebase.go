@@ -20,12 +20,14 @@ func InitFirebase() {
 	// Gunakan nil untuk config agar SDK membaca dari file kredensial
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {
-		log.Fatalf("❌ error initializing firebase app: %v\n", err)
+		log.Printf("⚠️ Warning initializing firebase app: %v (Push notifications disabled)\n", err)
+		return
 	}
 
 	client, err := app.Messaging(context.Background())
 	if err != nil {
-		log.Fatalf("❌ error getting Messaging client: %v\n", err)
+		log.Printf("⚠️ Warning getting Messaging client: %v (Push notifications disabled)\n", err)
+		return
 	}
 
 	FCMClient = client
@@ -34,7 +36,7 @@ func InitFirebase() {
 
 // SendPushNotification diperbarui untuk menghindari error 404 /batch
 func SendPushNotification(tokens []string, title, body string, data map[string]string) error {
-	if len(tokens) == 0 {
+	if FCMClient == nil || len(tokens) == 0 {
 		return nil
 	}
 

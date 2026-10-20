@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/realtime"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/crypto"
@@ -20,14 +21,16 @@ type SupportChatService interface {
 }
 
 type supportChatService struct {
-	repo SupportChatRepository
-	hub  *realtime.Hub
+	repo         SupportChatRepository
+	hub          *realtime.Hub
+	notifService notification.NotificationService
 }
 
-func NewSupportChatService(repo SupportChatRepository, hub *realtime.Hub) SupportChatService {
+func NewSupportChatService(repo SupportChatRepository, hub *realtime.Hub, notifService notification.NotificationService) SupportChatService {
 	return &supportChatService{
-		repo: repo,
-		hub:  hub,
+		repo:         repo,
+		hub:          hub,
+		notifService: notifService,
 	}
 }
 
@@ -223,22 +226,59 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 	encPreview, _ := crypto.Encrypt(message.Content)
 	_ = s.repo.UpdateSessionLastMessage(sessionID, encPreview, now, newStatus, csAdminIDToUpdate)
 
-	// Broadcast via WebSocket (kirim plaintext ke websocket client)
-	if s.hub != nil {
-		event := realtime.WSEvent{
-			Type: "CS_CHAT_NEW_MESSAGE",
-			Data: message,
-		}
+	// Broadcast via WebSocket (kirim plaintext ke websocket client) & Push Notification jika offline
+	event := realtime.WSEvent{
+		Type: "CS_CHAT_NEW_MESSAGE",
+		Data: message,
+	}
 
-		// Kirim ke pemilik chat
-		s.hub.SendToAccount(session.AccountID, event)
-
-		// Jika ada CS assigned, kirim ke CS tersebut, jika belum, broadcast ke pool CS
-		if session.CSAdminID != nil && *session.CSAdminID != "" {
-			s.hub.SendToAccount(*session.CSAdminID, event)
+	var offlineAccountIDs []string
+	if senderType == "cs" {
+		// Pengirim adalah CS, kirim ke user pemilik sesi
+		if s.hub != nil && s.hub.IsOnline(session.AccountID) {
+			s.hub.SendToAccount(session.AccountID, event)
 		} else {
-			s.hub.BroadcastToRole("cs", event)
+			offlineAccountIDs = append(offlineAccountIDs, session.AccountID)
 		}
+	} else {
+		// Pengirim adalah user, kirim ke CS assigned jika ada
+		if session.CSAdminID != nil && *session.CSAdminID != "" {
+			if s.hub != nil && s.hub.IsOnline(*session.CSAdminID) {
+				s.hub.SendToAccount(*session.CSAdminID, event)
+			} else {
+				offlineAccountIDs = append(offlineAccountIDs, *session.CSAdminID)
+			}
+		} else {
+			if s.hub != nil {
+				s.hub.BroadcastToRole("cs", event)
+			}
+		}
+	}
+
+	if s.notifService != nil && len(offlineAccountIDs) > 0 {
+		go func() {
+			title := senderName
+			body := strings.TrimSpace(message.Content)
+			if message.MessageType == "image" {
+				if body != "" {
+					body = utils.TruncateString(body, 100)
+				} else {
+					body = "Mengirim sebuah gambar"
+				}
+			} else if body != "" {
+				body = utils.TruncateString(body, 100)
+			} else {
+				body = "Mengirim sebuah pesan"
+			}
+			pushData := map[string]string{
+				"session_id":  sessionID,
+				"type":        "support_chat",
+				"action":      "open_support_chat",
+				"sender_type": senderType,
+				"sender_name": senderName,
+			}
+			_ = s.notifService.SendPushToAccounts(offlineAccountIDs, title, body, pushData)
+		}()
 	}
 
 	return message, nil

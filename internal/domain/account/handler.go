@@ -282,3 +282,41 @@ func (h *ProfileHandler) SubmitConsent(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Persetujuan Syarat & Ketentuan serta Kebijakan Privasi berhasil disimpan", updatedAccount)
 }
+
+func (h *ProfileHandler) RegisterDeviceToken(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || strings.TrimSpace(accountID) == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akses ditolak, sesi tidak valid", nil)
+	}
+
+	var input models.DeviceTokenInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
+	}
+
+	if strings.TrimSpace(input.DeviceToken) == "" && strings.TrimSpace(input.FCMToken) == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "device_token wajib diisi", nil)
+	}
+
+	if err := h.service.RegisterDeviceToken(accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mendaftarkan token perangkat: "+err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Device token berhasil didaftarkan", nil)
+}
+
+func (h *ProfileHandler) DeleteDeviceToken(c *fiber.Ctx) error {
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || strings.TrimSpace(accountID) == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akses ditolak, sesi tidak valid", nil)
+	}
+
+	var input models.DeleteDeviceTokenInput
+	_ = c.BodyParser(&input) // optional body
+
+	if err := h.service.DeleteDeviceToken(accountID, input); err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mencabut token perangkat: "+err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Device token berhasil dihapus", nil)
+}

@@ -29,6 +29,8 @@ type ProfileRepository interface {
 	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
 	FindReferralCode(code string) (*models.ReferralUser, error)
 	UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error
+	UpsertDeviceToken(accountID string, token string, platform string) error
+	DeleteDeviceToken(accountID string, token string) error
 }
 
 type profileRepository struct {
@@ -663,5 +665,48 @@ func (r *profileRepository) UpdateConsent(accountID string, acceptedTermsAt *tim
 		"updated_at":         time.Now(),
 	}
 	return r.db.Model(&models.Account{}).Where("account_id = ?", accountID).Updates(updates).Error
+}
+
+func (r *profileRepository) UpsertDeviceToken(accountID string, token string, platform string) error {
+	cleanAccountID := strings.TrimSpace(accountID)
+	cleanToken := strings.TrimSpace(token)
+	cleanPlatform := strings.ToLower(strings.TrimSpace(platform))
+	if cleanAccountID == "" || cleanToken == "" {
+		return fmt.Errorf("account_id dan token tidak boleh kosong")
+	}
+	if cleanPlatform == "" {
+		cleanPlatform = "android"
+	}
+
+	deviceToken := models.DeviceToken{
+		AccountID:  cleanAccountID,
+		FCMToken:   cleanToken,
+		DeviceType: cleanPlatform,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	return r.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "fcm_token"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"account_id":  cleanAccountID,
+			"device_type": cleanPlatform,
+			"updated_at":  time.Now(),
+		}),
+	}).Create(&deviceToken).Error
+}
+
+func (r *profileRepository) DeleteDeviceToken(accountID string, token string) error {
+	cleanAccountID := strings.TrimSpace(accountID)
+	cleanToken := strings.TrimSpace(token)
+	if cleanAccountID == "" {
+		return fmt.Errorf("account_id tidak boleh kosong")
+	}
+
+	query := r.db.Where("account_id = ?", cleanAccountID)
+	if cleanToken != "" {
+		query = query.Where("fcm_token = ?", cleanToken)
+	}
+	return query.Delete(&models.DeviceToken{}).Error
 }
 

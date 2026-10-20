@@ -68,6 +68,12 @@ func (m *mockProfileRepo) UpdateConsent(accountID string, acceptedTermsAt *time.
 	}
 	return nil
 }
+func (m *mockProfileRepo) UpsertDeviceToken(accountID string, token string, platform string) error {
+	return nil
+}
+func (m *mockProfileRepo) DeleteDeviceToken(accountID string, token string) error {
+	return nil
+}
 
 func TestUpdateOwnerProfileReferralCode(t *testing.T) {
 	codePromo := "PROMO2026"

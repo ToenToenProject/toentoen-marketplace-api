@@ -21,6 +21,8 @@ type NotificationService interface {
 	MarkAllAsRead(accountID string) error
 	DeleteNotification(accountID, notifID string) error
 	DeleteAllNotifications(accountID string) error
+	SendPushToAccount(accountID string, title, body string, data map[string]string) error
+	SendPushToAccounts(accountIDs []string, title, body string, data map[string]string) error
 }
 
 type notificationService struct {
@@ -130,7 +132,8 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 		}
 
 		// 2. Kirim via WebSocket jika Online
-		if s.hub.IsOnline(recipientID) {
+		isOnline := s.hub != nil && s.hub.IsOnline(recipientID)
+		if isOnline {
 			event := realtime.WSEvent{
 				Type: "new_notification",
 				Data: notifToSave, // Send the updated or new notification
@@ -138,8 +141,8 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 			s.hub.SendToUser(recipientID, event)
 		}
 
-		// 3. Push Notification via FCM
-		if isNew || notifType == "product_like" {
+		// 3. Push Notification via FCM (dikirim jika user offline atau notifikasi baru)
+		if isNew || notifType == "product_like" || !isOnline {
 			tokens := fcmTokensMap[recipientID]
 			if len(tokens) == 0 {
 				tokens, _ = s.repo.GetFCMTokensByAccountID(recipientID)
@@ -282,4 +285,24 @@ func (s *notificationService) SendWelcomeMerchantNotification(accountID string) 
 		_ = config.SendPushNotification(tokens, newNotif.Title, newNotif.Body, stringData)
 	}
 }
+
+func (s *notificationService) SendPushToAccount(accountID string, title, body string, data map[string]string) error {
+	cleanID := strings.TrimSpace(accountID)
+	if cleanID == "" {
+		return nil
+	}
+	tokens, err := s.repo.GetFCMTokensByAccountID(cleanID)
+	if err != nil || len(tokens) == 0 {
+		return nil
+	}
+	return config.SendPushNotification(tokens, title, body, data)
+}
+
+func (s *notificationService) SendPushToAccounts(accountIDs []string, title, body string, data map[string]string) error {
+	for _, id := range accountIDs {
+		_ = s.SendPushToAccount(id, title, body, data)
+	}
+	return nil
+}
+
 
