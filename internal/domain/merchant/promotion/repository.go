@@ -141,17 +141,25 @@ func (r *promotionRepository) CreatePromotion(
 	autoPost *models.BusinessPost,
 ) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Simpan auto-post feed jika ada
+		// 1. Simpan master promosi terlebih dahulu (tanpa PostID) agar baris promotions tersedia untuk FK business_posts
+		promo.PostID = nil
+		if err := tx.Create(promo).Error; err != nil {
+			return fmt.Errorf("gagal menyimpan promosi: %w", err)
+		}
+
+		// 2. Simpan auto-post feed jika ada (sekarang aman karena promotions(promotion_id) sudah tersimpan)
 		if autoPost != nil {
 			if err := tx.Create(autoPost).Error; err != nil {
 				return fmt.Errorf("gagal membuat postingan feed promosi: %w", err)
 			}
 			promo.PostID = &autoPost.PostID
-		}
 
-		// 2. Simpan master promosi
-		if err := tx.Create(promo).Error; err != nil {
-			return fmt.Errorf("gagal menyimpan promosi: %w", err)
+			// Tautkan post_id kembali ke promosi
+			if err := tx.Model(&models.Promotion{}).
+				Where("promotion_id = ?", promo.PromotionID).
+				Update("post_id", autoPost.PostID).Error; err != nil {
+				return fmt.Errorf("gagal menautkan postingan ke promosi: %w", err)
+			}
 		}
 
 		// 3. Simpan relasi produk promosi
