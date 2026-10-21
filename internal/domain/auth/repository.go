@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"toentoen-backend/internal/domain/shared/kychelper"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 
@@ -55,16 +56,21 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 			if account.Owner != nil && account.Owner.ReferralCode != nil {
 				ownerRecord.ReferralCode = account.Owner.ReferralCode
 			}
+			// Wariskan data KYC terverifikasi jika pengguna sudah memiliki akun Admin yang terverifikasi
+			kychelper.InheritVerifiedKYCOnCreate(tx, account, "owner", &ownerRecord, nil)
 			if err := tx.Create(&ownerRecord).Error; err != nil {
 				return err
 			}
 
 		case "business_admin":
 			inviteCode := "ADM-" + utils.GenerateRandomString(6)
-			if err := tx.Create(&models.BusinessAdmin{
+			adminRecord := models.BusinessAdmin{
 				AccountID:      account.AccountID,
 				InvitationCode: &inviteCode,
-			}).Error; err != nil {
+			}
+			// Wariskan data KYC terverifikasi jika pengguna sudah memiliki akun Owner yang terverifikasi
+			kychelper.InheritVerifiedKYCOnCreate(tx, account, "business_admin", nil, &adminRecord)
+			if err := tx.Create(&adminRecord).Error; err != nil {
 				return err
 			}
 		}

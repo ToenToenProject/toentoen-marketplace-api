@@ -2,6 +2,7 @@ package business
 
 import (
 	"time"
+	"toentoen-backend/internal/domain/shared/kychelper"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -461,6 +462,11 @@ func (r *businessRepository) GetOwnerKYCStatus(ownerID string) (bool, string, er
 	kycStatus := owner.KycStatus
 	if kycStatus == "" {
 		kycStatus = "unverified"
+	}
+	if kycStatus != "verified" {
+		if kychelper.SyncVerifiedKYCIfSiblingVerified(r.db, ownerID, "owner") {
+			kycStatus = "verified"
+		}
 	}
 
 	return emailVerified, kycStatus, nil

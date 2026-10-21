@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"toentoen-backend/internal/domain/shared/kychelper"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/crypto"
 
@@ -31,6 +32,7 @@ type ProfileRepository interface {
 	UpdateConsent(accountID string, acceptedTermsAt *time.Time, termsVersion *string, acceptedPrivacyAt *time.Time, privacyVersion *string) error
 	UpsertDeviceToken(accountID string, token string, platform string) error
 	DeleteDeviceToken(accountID string, token string) error
+	SyncVerifiedKYC(accountID string, role string) bool
 }
 
 type profileRepository struct {
@@ -220,15 +222,24 @@ func (r *profileRepository) CheckPhoneNumberExists(phone string, excludeAccountI
 	return count > 0, err
 }
 
+func (r *profileRepository) SyncVerifiedKYC(accountID string, role string) bool {
+	return kychelper.SyncVerifiedKYCIfSiblingVerified(r.db, accountID, role)
+}
+
 func (r *profileRepository) CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error) {
 	cleanKtp := strings.TrimSpace(ktp)
 	if cleanKtp == "" {
 		return false, nil
 	}
 
+	excludeIDs := []string{excludeAccountID}
+	if siblings := kychelper.FindSiblingAccountIDs(r.db, excludeAccountID); len(siblings) > 0 {
+		excludeIDs = append(excludeIDs, siblings...)
+	}
+
 	var ownerKtps []string
 	if err := r.db.Model(&models.Owner{}).
-		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id != ?", excludeAccountID).
+		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id NOT IN ?", excludeIDs).
 		Pluck("ktp_number", &ownerKtps).Error; err != nil {
 		return false, err
 	}
@@ -242,7 +253,7 @@ func (r *profileRepository) CheckKtpNumberExists(ktp string, excludeAccountID st
 
 	var adminKtps []string
 	if err := r.db.Model(&models.BusinessAdmin{}).
-		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id != ?", excludeAccountID).
+		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id NOT IN ?", excludeIDs).
 		Pluck("ktp_number", &adminKtps).Error; err != nil {
 		return false, err
 	}

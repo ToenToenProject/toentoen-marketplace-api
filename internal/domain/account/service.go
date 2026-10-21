@@ -699,6 +699,15 @@ func (s *profileService) GetKYCStatus(accountID string) (*models.KYCStatusRespon
 			res.SubmittedAt = owner.KycSubmittedAt
 			res.VerifiedAt = owner.KycVerifiedAt
 		}
+		// Jika belum verified, sinkronisasikan jika akun Admin saudara sudah terverifikasi
+		if res.KycStatus != "verified" {
+			if s.repo.SyncVerifiedKYC(accountID, "owner") {
+				res.KycStatus = "verified"
+				now := time.Now()
+				res.VerifiedAt = &now
+			}
+		}
+
 	case "business_admin":
 		admin, err := s.repo.GetBusinessAdminByAccountID(accountID)
 		if err == nil && admin != nil {
@@ -709,6 +718,15 @@ func (s *profileService) GetKYCStatus(accountID string) (*models.KYCStatusRespon
 			res.SubmittedAt = admin.KycSubmittedAt
 			res.VerifiedAt = admin.KycVerifiedAt
 		}
+		// Jika belum verified, sinkronisasikan jika akun Owner saudara sudah terverifikasi
+		if res.KycStatus != "verified" {
+			if s.repo.SyncVerifiedKYC(accountID, "business_admin") {
+				res.KycStatus = "verified"
+				now := time.Now()
+				res.VerifiedAt = &now
+			}
+		}
+
 	default:
 		res.KycStatus = "verified"
 	}
@@ -736,6 +754,11 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 
 	if account.Role != "owner" && account.Role != "business_admin" {
 		return errors.New("Pengajuan verifikasi identitas (KYC) hanya berlaku untuk merchant owner dan business admin")
+	}
+
+	// Jika akun saudara (owner <-> admin) sudah terverifikasi KYC, otomatis sinkronisasi tanpa perlu upload ulang
+	if s.repo.SyncVerifiedKYC(accountID, account.Role) {
+		return errors.New("Akun Anda sudah terverifikasi KYC")
 	}
 
 	// Periksa status pengajuan KYC saat ini: jika pending atau verified, jangan izinkan submit ulang

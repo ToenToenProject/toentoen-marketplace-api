@@ -74,6 +74,9 @@ func (m *mockProfileRepo) UpsertDeviceToken(accountID string, token string, plat
 func (m *mockProfileRepo) DeleteDeviceToken(accountID string, token string) error {
 	return nil
 }
+func (m *mockProfileRepo) SyncVerifiedKYC(accountID string, role string) bool {
+	return false
+}
 
 func TestUpdateOwnerProfileReferralCode(t *testing.T) {
 	codePromo := "PROMO2026"

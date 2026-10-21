@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"toentoen-backend/internal/domain/shared/kychelper"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
 
@@ -33,6 +34,10 @@ func RequireKYC(c *fiber.Ctx) error {
 			})
 		}
 		if owner.KycStatus != "verified" {
+			// Periksa apakah akun admin saudara sudah verified
+			if kychelper.SyncVerifiedKYCIfSiblingVerified(database.DB, accountID, "owner") {
+				return c.Next()
+			}
 			message := "Fitur ini memerlukan verifikasi identitas merchant (KYC). Silakan lengkapi berkas identitas Anda di menu Profil."
 			if owner.KycStatus == "pending" {
 				message = "akun sedang dalam verifikasi, mohon tunggu"
@@ -55,6 +60,10 @@ func RequireKYC(c *fiber.Ctx) error {
 			})
 		}
 		if admin.KycStatus != "verified" {
+			// Periksa apakah akun owner saudara sudah verified
+			if kychelper.SyncVerifiedKYCIfSiblingVerified(database.DB, accountID, "business_admin") {
+				return c.Next()
+			}
 			message := "Fitur ini memerlukan verifikasi identitas admin (KYC). Silakan lengkapi berkas identitas Anda."
 			if admin.KycStatus == "pending" {
 				message = "akun sedang dalam verifikasi, mohon tunggu"
@@ -124,6 +133,10 @@ func RequireOwnerKYCSubmitted(c *fiber.Ctx) error {
 	}
 
 	if owner.KycStatus != "pending" && owner.KycStatus != "verified" {
+		// Periksa apakah akun admin saudara sudah verified
+		if kychelper.SyncVerifiedKYCIfSiblingVerified(database.DB, accountID, "owner") {
+			return c.Next()
+		}
 		message := "Anda belum dapat membuat bisnis karena pengajuan verifikasi identitas (KYC) Anda belum dikirimkan. Silakan lengkapi dan ajukan KYC terlebih dahulu."
 		if owner.KycStatus == "rejected" {
 			message = "Pengajuan verifikasi identitas (KYC) Anda ditolak. Silakan periksa alasan penolakan dan ajukan ulang berkas KYC Anda sebelum membuat bisnis."
