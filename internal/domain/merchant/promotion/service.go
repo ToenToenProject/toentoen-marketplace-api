@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -318,43 +319,42 @@ func (s *promotionService) GetPromotions(
 		return models.GetPromotionsResponse{}, errors.New("anda tidak memiliki akses ke bisnis ini")
 	}
 
+	if limit <= 0 {
+		limit = 10
+	}
+
 	summary, err := s.repo.GetPromotionSummary(businessID)
 	if err != nil {
 		return models.GetPromotionsResponse{}, err
 	}
 
-	promos, err := s.repo.GetPromotions(businessID, tab, cursor, limit)
+	// 1. Ambil katalog promosi
+	promos, err := s.repo.GetPromotions(businessID, tab, "", 100)
 	if err != nil {
 		return models.GetPromotionsResponse{}, err
 	}
 
-	hasMore := false
-	if len(promos) > limit {
-		hasMore = true
-		promos = promos[:limit]
-	}
-
-	nextCursor := ""
-	if hasMore && len(promos) > 0 {
-		nextCursor = promos[len(promos)-1].PromotionID
-	}
+	// 2. Ambil postingan promosi
+	posts, _ := s.repo.GetPromotionalPosts(businessID, tab)
 
 	now := time.Now()
-	items := make([]models.PromotionListItem, 0, len(promos))
+	allItems := make([]models.PromotionListItem, 0, len(promos)+len(posts))
+
+	// Format katalog promosi
 	for _, p := range promos {
 		remainingDays := 0
 		if p.EndAt.After(now) {
 			remainingDays = int(math.Ceil(p.EndAt.Sub(now).Hours() / 24.0))
 		}
 
-		mainCard := models.PromotionMainProductCard{}
+		var mainCard *models.PromotionMainProductCard
 		if p.MainProduct != nil {
 			img := ""
 			if len(p.MainProduct.ProductPreview) > 0 {
 				img = p.MainProduct.ProductPreview[0]
 			}
 			cut, pct := utils.CalculateProductDiscount(p.MainProduct.Price, p.MainProduct.DiscountType, p.MainProduct.Discount, p.MainProduct.MaxDiscount)
-			mainCard = models.PromotionMainProductCard{
+			mainCard = &models.PromotionMainProductCard{
 				ProductID:      p.MainProduct.ProductID,
 				ProductName:    p.MainProduct.ProductName,
 				ImageURL:       img,
@@ -367,10 +367,13 @@ func (s *promotionService) GetPromotions(
 			}
 		}
 
-		items = append(items, models.PromotionListItem{
+		allItems = append(allItems, models.PromotionListItem{
 			PromotionID:     p.PromotionID,
+			PromotionType:   models.PromotionTypeCatalog,
+			PostID:          p.PostID,
 			Caption:         p.Caption,
 			MainProduct:     mainCard,
+			Post:            nil,
 			ProductCount:    len(p.Products),
 			RemainingDays:   remainingDays,
 			StartAt:         p.StartAt,
@@ -382,9 +385,108 @@ func (s *promotionService) GetPromotions(
 		})
 	}
 
+	// Format postingan promosi
+	for _, post := range posts {
+		remainingDays := 0
+		endAt := post.CreatedAt.AddDate(0, 0, 7)
+		if post.PromotionEndAt != nil {
+			endAt = *post.PromotionEndAt
+		}
+		if endAt.After(now) {
+			remainingDays = int(math.Ceil(endAt.Sub(now).Hours() / 24.0))
+		}
+
+		status := models.PromotionStatusActive
+		if !post.IsPromotion || endAt.Before(now) {
+			status = models.PromotionStatusEnded
+		}
+
+		postCard := &models.PromotionPostCard{
+			PostID:       post.PostID,
+			Content:      post.Content,
+			Images:       post.Images,
+			VideoURL:     post.VideoURL,
+			LikeCount:    post.LikeCount,
+			CommentCount: post.CommentCount,
+		}
+
+		postIDVal := post.PostID
+		allItems = append(allItems, models.PromotionListItem{
+			PromotionID:     post.PostID,
+			PromotionType:   models.PromotionTypePost,
+			PostID:          &postIDVal,
+			Caption:         post.Content,
+			MainProduct:     nil,
+			Post:            postCard,
+			ProductCount:    0,
+			RemainingDays:   remainingDays,
+			StartAt:         post.CreatedAt,
+			EndAt:           endAt,
+			Status:          status,
+			ImpressionCount: 0,
+			ClickCount:      post.LikeCount,
+			CreatedAt:       post.CreatedAt,
+		})
+	}
+
+	// Urutkan daftar gabungan
+	switch tab {
+	case "popular":
+		sort.Slice(allItems, func(i, j int) bool {
+			if allItems[i].ClickCount != allItems[j].ClickCount {
+				return allItems[i].ClickCount > allItems[j].ClickCount
+			}
+			return allItems[i].CreatedAt.After(allItems[j].CreatedAt)
+		})
+	case "ended":
+		sort.Slice(allItems, func(i, j int) bool {
+			if !allItems[i].EndAt.Equal(allItems[j].EndAt) {
+				return allItems[i].EndAt.After(allItems[j].EndAt)
+			}
+			return allItems[i].CreatedAt.After(allItems[j].CreatedAt)
+		})
+	default: // "active"
+		sort.Slice(allItems, func(i, j int) bool {
+			if !allItems[i].EndAt.Equal(allItems[j].EndAt) {
+				return allItems[i].EndAt.Before(allItems[j].EndAt)
+			}
+			return allItems[i].CreatedAt.After(allItems[j].CreatedAt)
+		})
+	}
+
+	// Cursor pagination
+	startIndex := 0
+	if cursor != "" {
+		for idx, item := range allItems {
+			if item.PromotionID == cursor {
+				startIndex = idx + 1
+				break
+			}
+		}
+	}
+
+	hasMore := false
+	var pagedItems []models.PromotionListItem
+	if startIndex < len(allItems) {
+		endIndex := startIndex + limit
+		if endIndex < len(allItems) {
+			hasMore = true
+			pagedItems = allItems[startIndex:endIndex]
+		} else {
+			pagedItems = allItems[startIndex:]
+		}
+	} else {
+		pagedItems = []models.PromotionListItem{}
+	}
+
+	nextCursor := ""
+	if hasMore && len(pagedItems) > 0 {
+		nextCursor = pagedItems[len(pagedItems)-1].PromotionID
+	}
+
 	return models.GetPromotionsResponse{
 		Summary:    summary,
-		Promotions: items,
+		Promotions: pagedItems,
 		Pagination: models.PaginationMeta{
 			NextCursor: nextCursor,
 			HasMore:    hasMore,
@@ -436,12 +538,15 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 		})
 	}
 
+	mainProdID := promo.MainProductID
 	return &models.PromotionDetailResponse{
 		PromotionID:     promo.PromotionID,
+		PromotionType:   models.PromotionTypeCatalog,
 		BusinessID:      promo.BusinessID,
 		Caption:         promo.Caption,
-		MainProductID:   promo.MainProductID,
+		MainProductID:   &mainProdID,
 		PostID:          promo.PostID,
+		Post:            nil,
 		StartAt:         promo.StartAt,
 		EndAt:           promo.EndAt,
 		Status:          promo.Status,
@@ -453,9 +558,62 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 	}
 }
 
+func (s *promotionService) buildPostPromotionDetailResponse(post *models.BusinessPost) *models.PromotionDetailResponse {
+	now := time.Now()
+	remainingDays := 0
+	endAt := post.CreatedAt.AddDate(0, 0, 7)
+	if post.PromotionEndAt != nil {
+		endAt = *post.PromotionEndAt
+	}
+	if endAt.After(now) {
+		remainingDays = int(math.Ceil(endAt.Sub(now).Hours() / 24.0))
+	}
+
+	status := models.PromotionStatusActive
+	if !post.IsPromotion || endAt.Before(now) {
+		status = models.PromotionStatusEnded
+	}
+
+	postCard := &models.PromotionPostCard{
+		PostID:       post.PostID,
+		Content:      post.Content,
+		Images:       post.Images,
+		VideoURL:     post.VideoURL,
+		LikeCount:    post.LikeCount,
+		CommentCount: post.CommentCount,
+	}
+
+	postIDVal := post.PostID
+	return &models.PromotionDetailResponse{
+		PromotionID:     post.PostID,
+		PromotionType:   models.PromotionTypePost,
+		BusinessID:      post.BusinessID,
+		Caption:         post.Content,
+		MainProductID:   nil,
+		PostID:          &postIDVal,
+		Post:            postCard,
+		StartAt:         post.CreatedAt,
+		EndAt:           endAt,
+		Status:          status,
+		RemainingDays:   remainingDays,
+		ImpressionCount: 0,
+		ClickCount:      post.LikeCount,
+		CreatedAt:       post.CreatedAt,
+		Products:        []models.PromotionProductDetailItem{},
+	}
+}
+
 func (s *promotionService) GetPromotionDetail(requesterID, role, businessID, promotionID string) (*models.PromotionDetailResponse, error) {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("anda tidak memiliki akses ke bisnis ini")
+	}
+
+	if strings.HasPrefix(promotionID, "PST-") {
+		post, err := s.repo.GetPostByID(businessID, promotionID)
+		if err != nil || post == nil {
+			return nil, errors.New("postingan promosi tidak ditemukan")
+		}
+		return s.buildPostPromotionDetailResponse(post), nil
 	}
 
 	promo, err := s.repo.GetPromotionByID(businessID, promotionID)
@@ -467,6 +625,14 @@ func (s *promotionService) GetPromotionDetail(requesterID, role, businessID, pro
 }
 
 func (s *promotionService) GetCustomerPromotionDetail(promotionID string) (*models.PromotionDetailResponse, error) {
+	if strings.HasPrefix(promotionID, "PST-") {
+		post, err := s.repo.GetPostByID("", promotionID)
+		if err != nil || post == nil {
+			return nil, errors.New("postingan promosi tidak ditemukan")
+		}
+		return s.buildPostPromotionDetailResponse(post), nil
+	}
+
 	promo, err := s.repo.GetPromotionByID("", promotionID)
 	if err != nil {
 		return nil, errors.New("promosi tidak ditemukan")
@@ -475,13 +641,43 @@ func (s *promotionService) GetCustomerPromotionDetail(promotionID string) (*mode
 	return s.buildPromotionDetailResponse(promo), nil
 }
 
-
 func (s *promotionService) ExtendPromotion(
 	requesterID, role, businessID, promotionID string,
 	input models.ExtendPromotionInput,
 ) error {
 	if err := s.checkManageAccess(requesterID, role, businessID); err != nil {
 		return err
+	}
+
+	if strings.HasPrefix(promotionID, "PST-") {
+		post, err := s.repo.GetPostByID(businessID, promotionID)
+		if err != nil || post == nil {
+			return errors.New("postingan promosi tidak ditemukan")
+		}
+
+		now := time.Now()
+		var newEndAt time.Time
+		if input.AddDays != nil && *input.AddDays > 0 {
+			baseTime := now
+			if post.PromotionEndAt != nil && post.PromotionEndAt.After(now) {
+				baseTime = *post.PromotionEndAt
+			}
+			newEndAt = baseTime.AddDate(0, 0, *input.AddDays)
+		} else if input.EndAt != nil {
+			newEndAt = *input.EndAt
+		} else {
+			return errors.New("wajib mengisi jumlah hari perpanjangan (add_days) atau tanggal berakhir baru (end_at)")
+		}
+
+		if post.PromotionEndAt != nil && !newEndAt.After(*post.PromotionEndAt) {
+			return errors.New("tanggal berakhir baru harus lebih lama dari tanggal berakhir saat ini")
+		}
+
+		post.IsPromotion = true
+		post.PromotionEndAt = &newEndAt
+		post.UpdatedAt = now
+
+		return s.repo.UpdatePostPromotion(post)
 	}
 
 	promo, err := s.repo.GetPromotionByID(businessID, promotionID)
@@ -527,6 +723,24 @@ func (s *promotionService) ExtendPromotion(
 func (s *promotionService) StopPromotion(requesterID, role, businessID, promotionID string) error {
 	if err := s.checkManageAccess(requesterID, role, businessID); err != nil {
 		return err
+	}
+
+	if strings.HasPrefix(promotionID, "PST-") {
+		post, err := s.repo.GetPostByID(businessID, promotionID)
+		if err != nil || post == nil {
+			return errors.New("postingan promosi tidak ditemukan")
+		}
+
+		if !post.IsPromotion {
+			return errors.New("promosi postingan ini sudah tidak aktif")
+		}
+
+		now := time.Now()
+		post.IsPromotion = false
+		post.PromotionEndAt = &now
+		post.UpdatedAt = now
+
+		return s.repo.UpdatePostPromotion(post)
 	}
 
 	promo, err := s.repo.GetPromotionByID(businessID, promotionID)

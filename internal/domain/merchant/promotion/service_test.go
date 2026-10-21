@@ -172,3 +172,68 @@ func TestPromotion_RedisDedupWindow(t *testing.T) {
 		t.Errorf("expected event to be accepted after 30 min window")
 	}
 }
+
+func TestPromotionListItem_JSONContract(t *testing.T) {
+	now := time.Now()
+	postID := "PST-123"
+
+	// 1. Catalog Promotion Item
+	catalogItem := models.PromotionListItem{
+		PromotionID:   "PRM-001",
+		PromotionType: models.PromotionTypeCatalog,
+		Caption:       "Diskon Gajian",
+		MainProduct: &models.PromotionMainProductCard{
+			ProductID:   "PRD-01",
+			ProductName: "Kopi",
+		},
+		Post:          nil,
+		ProductCount:  2,
+		RemainingDays: 5,
+		StartAt:       now,
+		EndAt:         now.AddDate(0, 0, 5),
+		Status:        models.PromotionStatusActive,
+	}
+
+	if catalogItem.PromotionType != "catalog" {
+		t.Errorf("expected promotion_type 'catalog', got %s", catalogItem.PromotionType)
+	}
+	if catalogItem.MainProduct == nil {
+		t.Errorf("expected main_product to be populated for catalog promotion")
+	}
+	if catalogItem.Post != nil {
+		t.Errorf("expected post to be nil for catalog promotion")
+	}
+
+	// 2. Post Promotion Item
+	postItem := models.PromotionListItem{
+		PromotionID:   postID,
+		PromotionType: models.PromotionTypePost,
+		PostID:        &postID,
+		Caption:       "Menu baru!",
+		MainProduct:   nil,
+		Post: &models.PromotionPostCard{
+			PostID:    postID,
+			Content:   "Menu baru!",
+			LikeCount: 15,
+		},
+		ProductCount:  0,
+		RemainingDays: 7,
+		StartAt:       now,
+		EndAt:         now.AddDate(0, 0, 7),
+		Status:        models.PromotionStatusActive,
+	}
+
+	if postItem.PromotionType != "post" {
+		t.Errorf("expected promotion_type 'post', got %s", postItem.PromotionType)
+	}
+	if postItem.Post == nil {
+		t.Errorf("expected post to be populated for post promotion")
+	}
+	if postItem.MainProduct != nil {
+		t.Errorf("expected main_product to be nil for post promotion")
+	}
+	if *postItem.PostID != postID {
+		t.Errorf("expected post_id %s, got %s", postID, *postItem.PostID)
+	}
+}
+

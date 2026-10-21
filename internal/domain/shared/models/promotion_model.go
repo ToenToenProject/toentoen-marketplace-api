@@ -22,6 +22,9 @@ const (
 	PromotionEventSourceBusinessProfile = "business_profile"
 	PromotionEventSourceNotification    = "notification"
 	PromotionEventSourceProductGroup    = "product_group"
+
+	PromotionTypeCatalog = "catalog"
+	PromotionTypePost    = "post"
 )
 
 type Promotion struct {
@@ -153,18 +156,30 @@ type PromotionMainProductCard struct {
 	DiscountPct    float64 `json:"discount_pct"`
 }
 
+type PromotionPostCard struct {
+	PostID       string   `json:"post_id"`
+	Content      string   `json:"content"`
+	Images       []string `json:"images"`
+	VideoURL     *string  `json:"video_url,omitempty"`
+	LikeCount    int      `json:"like_count"`
+	CommentCount int      `json:"comment_count"`
+}
+
 type PromotionListItem struct {
-	PromotionID     string                   `json:"promotion_id"`
-	Caption         string                   `json:"caption"`
-	MainProduct     PromotionMainProductCard `json:"main_product"`
-	ProductCount    int                      `json:"product_count"`
-	RemainingDays   int                      `json:"remaining_days"` // Dibulatkan ke atas
-	StartAt         time.Time                `json:"start_at"`
-	EndAt           time.Time                `json:"end_at"`
-	Status          string                   `json:"status"`
-	ImpressionCount int                      `json:"impression_count"`
-	ClickCount      int                      `json:"click_count"`
-	CreatedAt       time.Time                `json:"created_at"`
+	PromotionID     string                    `json:"promotion_id"`
+	PromotionType   string                    `json:"promotion_type"` // "catalog" | "post"
+	PostID          *string                   `json:"post_id"`
+	Caption         string                    `json:"caption"`
+	MainProduct     *PromotionMainProductCard `json:"main_product"`
+	Post            *PromotionPostCard        `json:"post"`
+	ProductCount    int                       `json:"product_count"`
+	RemainingDays   int                       `json:"remaining_days"` // Dibulatkan ke atas
+	StartAt         time.Time                 `json:"start_at"`
+	EndAt           time.Time                 `json:"end_at"`
+	Status          string                    `json:"status"`
+	ImpressionCount int                       `json:"impression_count"`
+	ClickCount      int                       `json:"click_count"`
+	CreatedAt       time.Time                 `json:"created_at"`
 }
 
 type PromotionProductDetailItem struct {
@@ -184,10 +199,12 @@ type PromotionProductDetailItem struct {
 
 type PromotionDetailResponse struct {
 	PromotionID     string                       `json:"promotion_id"`
+	PromotionType   string                       `json:"promotion_type"` // "catalog" | "post"
 	BusinessID      string                       `json:"business_id"`
 	Caption         string                       `json:"caption"`
-	MainProductID   string                       `json:"main_product_id"`
+	MainProductID   *string                      `json:"main_product_id,omitempty"`
 	PostID          *string                      `json:"post_id,omitempty"`
+	Post            *PromotionPostCard           `json:"post,omitempty"`
 	StartAt         time.Time                    `json:"start_at"`
 	EndAt           time.Time                    `json:"end_at"`
 	Status          string                       `json:"status"`

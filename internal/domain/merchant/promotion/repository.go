@@ -31,9 +31,12 @@ type PromotionRepository interface {
 
 	HasActivePromotions(businessID string) (bool, error)
 	GetProductsInActivePromotions(businessID string) ([]models.Product, error)
-	GetActivePromotionIDsForBusiness(businessID string) ([]string, error)
-
 	RecordPromotionEvents(events []models.PromotionEvent) error
+
+	// Post Promotions integration
+	GetPromotionalPosts(businessID, tab string) ([]models.BusinessPost, error)
+	GetPostByID(businessID, postID string) (*models.BusinessPost, error)
+	UpdatePostPromotion(post *models.BusinessPost) error
 
 	// Worker methods
 	GetScheduledPromotionsToActivate(now time.Time) ([]models.Promotion, error)
@@ -209,6 +212,15 @@ func (r *promotionRepository) GetPromotionSummary(businessID string) (models.Pro
 	summary.ActiveCount = row.ActiveCount
 	summary.TotalImpressions = row.TotalImpressions
 	summary.TotalClicks = row.TotalClicks
+
+	// Tambahkan jumlah postingan promosi yang sedang aktif
+	now := time.Now()
+	var activePostCount int64
+	_ = r.db.Model(&models.BusinessPost{}).
+		Where("business_id = ? AND is_promotion = true AND (promotion_end_at IS NULL OR promotion_end_at > ?)", businessID, now).
+		Count(&activePostCount).Error
+	summary.ActiveCount += activePostCount
+
 	return summary, nil
 }
 
@@ -576,4 +588,41 @@ func (r *promotionRepository) ExpirePromotionAndRestoreDiscounts(promo *models.P
 
 		return nil
 	})
+}
+
+func (r *promotionRepository) GetPromotionalPosts(businessID, tab string) ([]models.BusinessPost, error) {
+	var posts []models.BusinessPost
+	now := time.Now()
+	query := r.db.Model(&models.BusinessPost{}).Where("business_id = ?", businessID)
+
+	switch tab {
+	case "popular":
+		query = query.Where("is_promotion = true AND (promotion_end_at IS NULL OR promotion_end_at > ?)", now).
+			Order("like_count DESC, created_at DESC")
+	case "ended":
+		query = query.Where("(is_promotion = false AND promotion_end_at IS NOT NULL) OR (is_promotion = true AND promotion_end_at <= ?)", now).
+			Order("promotion_end_at DESC, created_at DESC")
+	default: // "active"
+		query = query.Where("is_promotion = true AND (promotion_end_at IS NULL OR promotion_end_at > ?)", now).
+			Order("promotion_end_at ASC, created_at DESC")
+	}
+
+	err := query.Find(&posts).Error
+	return posts, err
+}
+
+func (r *promotionRepository) GetPostByID(businessID, postID string) (*models.BusinessPost, error) {
+	var post models.BusinessPost
+	query := r.db.Model(&models.BusinessPost{}).Where("post_id = ?", postID)
+	if businessID != "" {
+		query = query.Where("business_id = ?", businessID)
+	}
+	if err := query.First(&post).Error; err != nil {
+		return nil, err
+	}
+	return &post, nil
+}
+
+func (r *promotionRepository) UpdatePostPromotion(post *models.BusinessPost) error {
+	return r.db.Save(post).Error
 }
