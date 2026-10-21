@@ -150,7 +150,23 @@ func processExpiredPromotions(repo PromotionRepository, now time.Time) {
 	}
 }
 
+var hasPromotionEndAtColumn bool
+
 func processExpiredPromotionalPosts(db *gorm.DB, now time.Time) {
+	if !hasPromotionEndAtColumn {
+		if db.Migrator().HasTable(&models.BusinessPost{}) && db.Migrator().HasColumn(&models.BusinessPost{}, "promotion_end_at") {
+			hasPromotionEndAtColumn = true
+		} else {
+			// Coba buat kolom jika belum ada
+			if err := db.Exec("ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS promotion_end_at TIMESTAMPTZ").Error; err == nil {
+				hasPromotionEndAtColumn = true
+			} else {
+				// Kolom belum ada dan belum bisa dibuat, tunda hingga migrasi dijalankan
+				return
+			}
+		}
+	}
+
 	err := db.Model(&models.BusinessPost{}).
 		Where("is_promotion = true AND promotion_end_at IS NOT NULL AND promotion_end_at <= ?", now).
 		Updates(map[string]interface{}{
