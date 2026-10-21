@@ -3,6 +3,7 @@ package signal
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 
@@ -103,16 +104,45 @@ func (r *signalRepository) UpdateSignalLocation(signalID string, lat, lng float6
 	).Error
 }
 
+var (
+	hasSignalCategoriesMu        sync.RWMutex
+	hasSignalCategoriesTable     bool
+	hasSignalCategoriesLastCheck time.Time
+)
+
+func hasSignalCategories(db *gorm.DB) bool {
+	hasSignalCategoriesMu.RLock()
+	if time.Since(hasSignalCategoriesLastCheck) < 30*time.Second {
+		val := hasSignalCategoriesTable
+		hasSignalCategoriesMu.RUnlock()
+		return val
+	}
+	hasSignalCategoriesMu.RUnlock()
+
+	hasSignalCategoriesMu.Lock()
+	defer hasSignalCategoriesMu.Unlock()
+	if time.Since(hasSignalCategoriesLastCheck) < 30*time.Second {
+		return hasSignalCategoriesTable
+	}
+
+	var exists bool
+	err := db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'signal_categories')").Scan(&exists).Error
+	hasSignalCategoriesTable = (err == nil && exists)
+	hasSignalCategoriesLastCheck = time.Now()
+	return hasSignalCategoriesTable
+}
+
 func (r *signalRepository) GetSignalByID(signalID string) (*models.Signal, error) {
 	var signal models.Signal
-	err := r.db.
+	q := r.db.
 		Preload("Account").
 		Preload("CategoryObj").
-		Preload("SignalCategories.Category").
 		Preload("Tags.Tag").
-		Preload("Images").
-		Where("signal_id = ?", signalID).
-		First(&signal).Error
+		Preload("Images")
+	if hasSignalCategories(r.db) {
+		q = q.Preload("SignalCategories.Category")
+	}
+	err := q.Where("signal_id = ?", signalID).First(&signal).Error
 	if err != nil {
 		return nil, err
 	}
@@ -122,12 +152,14 @@ func (r *signalRepository) GetSignalByID(signalID string) (*models.Signal, error
 
 func (r *signalRepository) GetMySignals(customerID string) ([]models.Signal, error) {
 	var signals []models.Signal
-	err := r.db.
+	q := r.db.
 		Preload("CategoryObj").
-		Preload("SignalCategories.Category").
 		Preload("Tags.Tag").
-		Preload("Images").
-		Where("customer_id = ?", customerID).
+		Preload("Images")
+	if hasSignalCategories(r.db) {
+		q = q.Preload("SignalCategories.Category")
+	}
+	err := q.Where("customer_id = ?", customerID).
 		Order("created_at DESC").
 		Find(&signals).Error
 	if err != nil {
@@ -141,19 +173,20 @@ func (r *signalRepository) GetMySignals(customerID string) ([]models.Signal, err
 
 func (r *signalRepository) GetSignalWithConversations(signalID string) (*models.Signal, error) {
 	var signal models.Signal
-	err := r.db.
+	q := r.db.
 		Preload("Account").
 		Preload("CategoryObj").
-		Preload("SignalCategories.Category").
 		Preload("Tags.Tag").
 		Preload("Images").
 		Preload("Conversations", func(db *gorm.DB) *gorm.DB {
 			return db.Order("created_at ASC")
 		}).
 		Preload("Conversations.Business").
-		Preload("Conversations.Merchant").
-		Where("signal_id = ?", signalID).
-		First(&signal).Error
+		Preload("Conversations.Merchant")
+	if hasSignalCategories(r.db) {
+		q = q.Preload("SignalCategories.Category")
+	}
+	err := q.Where("signal_id = ?", signalID).First(&signal).Error
 	if err != nil {
 		return nil, err
 	}
@@ -210,13 +243,16 @@ func (r *signalRepository) ReplaceSignalImages(signalID string, images []models.
 // ================================================================
 
 func (r *signalRepository) CreateSignalCategories(categories []models.SignalCategory) error {
-	if len(categories) == 0 {
+	if len(categories) == 0 || !hasSignalCategories(r.db) {
 		return nil
 	}
 	return r.db.Create(&categories).Error
 }
 
 func (r *signalRepository) ReplaceSignalCategories(signalID string, categories []models.SignalCategory) error {
+	if !hasSignalCategories(r.db) {
+		return nil
+	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("signal_id = ?", signalID).Delete(&models.SignalCategory{}).Error; err != nil {
 			return err
@@ -269,20 +305,34 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 	var results []models.SignalExploreItem
 
 	merchantPoint := fmt.Sprintf("ST_SetSRID(ST_MakePoint(%f, %f), 4326)", merchantLng, merchantLat)
+	categoryClause := "AND s.category_id IN (SELECT category_id FROM merchant_cats)"
+	if hasSignalCategories(r.db) {
+		categoryClause = `AND (
+		      s.category_id IN (SELECT category_id FROM merchant_cats)
+		      OR EXISTS (
+		          SELECT 1 FROM signal_categories sc
+		          WHERE sc.signal_id = s.signal_id
+		            AND sc.category_id IN (SELECT category_id FROM merchant_cats)
+		      )
+		  )`
+	}
 
 	query := fmt.Sprintf(`
 		WITH merchant_cats AS (
+			-- Kategori langsung toko
 			SELECT category_id FROM business_has_categories WHERE business_id = ?
 			UNION
-			SELECT bc.category_id FROM business_categories bc
-			JOIN business_has_categories bhc ON bc.parent_id = bhc.category_id
-			WHERE bhc.business_id = ?
+			-- Child categories: Jika toko memilih Induk "Makanan", maka sinyal dengan sub-kategori "Makanan Ringan" juga cocok
+			SELECT category_id FROM business_categories WHERE parent_id IN (
+				SELECT category_id FROM business_has_categories WHERE business_id = ?
+			)
 			UNION
-			SELECT bc.parent_id FROM business_categories bc
-			JOIN business_has_categories bhc ON bc.category_id = bhc.category_id
-			WHERE bhc.business_id = ? AND bc.parent_id IS NOT NULL
+			-- Parent category: Jika toko memilih sub-kategori "Makanan Ringan", maka sinyal dengan kategori Induk "Makanan" juga cocok
+			SELECT parent_id AS category_id FROM business_categories WHERE category_id IN (
+				SELECT category_id FROM business_has_categories WHERE business_id = ?
+			) AND parent_id IS NOT NULL
 		)
-		SELECT
+		SELECT 
 			s.signal_id,
 			s.customer_id,
 			s.description,
@@ -318,14 +368,7 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		  AND s.expires_at > NOW()
 		  AND s.location IS NOT NULL
 		  -- Layer 1 (WAJIB): Kategori signal HARUS cocok dengan salah satu kategori bisnis merchant (mendukung hierarki parent & child category serta multi-kategori)
-		  AND (
-		      s.category_id IN (SELECT category_id FROM merchant_cats)
-		      OR EXISTS (
-		          SELECT 1 FROM signal_categories sc
-		          WHERE sc.signal_id = s.signal_id
-		            AND sc.category_id IN (SELECT category_id FROM merchant_cats)
-		      )
-		  )
+		  %s
 		  -- Layer 2 (WAJIB): Signal dalam radius jangkauan yang ditentukan customer
 		  AND ST_DWithin(s.location::geography, %s::geography, s.radius_km * 1000)
 		  -- Saring signal yang offer_cap sudah tercapai (kecuali toko ini sudah termasuk yang membalas)
@@ -339,7 +382,7 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 			s.is_urgent DESC,
 			tag_overlap_score DESC,
 			s.created_at DESC
-	`, merchantPoint, merchantPoint)
+	`, merchantPoint, categoryClause, merchantPoint)
 
 	err := r.db.Raw(query,
 		merchantBusinessID, // merchant_cats: exact
@@ -410,31 +453,56 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		}
 	}
 
-	// 3. Batch query semua kategori signal dari signal_categories dalam 1 query
-	type catRow struct {
-		SignalID     string `gorm:"column:signal_id"`
-		CategoryID   int64  `gorm:"column:category_id"`
-		CategoryName string `gorm:"column:name"`
-	}
-	var allCats []catRow
-	if err := r.db.Raw(`
-		SELECT sc.signal_id, sc.category_id, bc.name
-		FROM signal_categories sc
-		JOIN business_categories bc ON sc.category_id = bc.category_id
-		WHERE sc.signal_id IN ?
-		ORDER BY sc.category_id ASC
-	`, signalIDs).Scan(&allCats).Error; err == nil && len(allCats) > 0 {
-		catIDMap := make(map[string][]int64)
-		catNameMap := make(map[string][]string)
-		for _, c := range allCats {
-			catIDMap[c.SignalID] = append(catIDMap[c.SignalID], c.CategoryID)
-			catNameMap[c.SignalID] = append(catNameMap[c.SignalID], c.CategoryName)
+	// 3. Batch query semua kategori signal dari signal_categories dalam 1 query (jika tabel ada)
+	if hasSignalCategories(r.db) {
+		type catRow struct {
+			SignalID     string `gorm:"column:signal_id"`
+			CategoryID   int64  `gorm:"column:category_id"`
+			CategoryName string `gorm:"column:name"`
 		}
-		for i, item := range results {
-			if ids, ok := catIDMap[item.SignalID]; ok && len(ids) > 0 {
-				results[i].CategoryIDs = ids
-				results[i].Categories = catNameMap[item.SignalID]
+		var allCats []catRow
+		if err := r.db.Raw(`
+			SELECT sc.signal_id, sc.category_id, bc.name
+			FROM signal_categories sc
+			JOIN business_categories bc ON sc.category_id = bc.category_id
+			WHERE sc.signal_id IN ?
+			ORDER BY sc.category_id ASC
+		`, signalIDs).Scan(&allCats).Error; err == nil && len(allCats) > 0 {
+			catIDMap := make(map[string][]int64)
+			catNameMap := make(map[string][]string)
+			for _, c := range allCats {
+				catIDMap[c.SignalID] = append(catIDMap[c.SignalID], c.CategoryID)
+				catNameMap[c.SignalID] = append(catNameMap[c.SignalID], c.CategoryName)
 			}
+			for i, item := range results {
+				if ids, ok := catIDMap[item.SignalID]; ok && len(ids) > 0 {
+					results[i].CategoryIDs = ids
+					results[i].Categories = catNameMap[item.SignalID]
+				}
+			}
+		}
+	}
+
+	for i := range results {
+		if len(results[i].Categories) == 0 {
+			if results[i].Category != "" {
+				results[i].Categories = []string{results[i].Category}
+			} else {
+				results[i].Categories = []string{}
+			}
+		}
+		if len(results[i].CategoryIDs) == 0 {
+			if results[i].CategoryID != nil && *results[i].CategoryID > 0 {
+				results[i].CategoryIDs = []int64{*results[i].CategoryID}
+			} else {
+				results[i].CategoryIDs = []int64{}
+			}
+		}
+		if results[i].Images == nil {
+			results[i].Images = []string{}
+		}
+		if results[i].Tags == nil {
+			results[i].Tags = []string{}
 		}
 	}
 

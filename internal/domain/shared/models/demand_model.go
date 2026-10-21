@@ -135,8 +135,12 @@ func (s *Signal) PopulateCategories() {
 		}
 	} else if s.CategoryID != nil && *s.CategoryID > 0 {
 		s.CategoryIDs = []int64{*s.CategoryID}
-		if s.Category != "" {
-			s.Categories = []string{s.Category}
+		name := s.Category
+		if name == "" && s.CategoryObj != nil {
+			name = s.CategoryObj.Name
+		}
+		if name != "" {
+			s.Categories = []string{name}
 		} else {
 			s.Categories = []string{}
 		}

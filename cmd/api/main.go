@@ -731,6 +731,13 @@ func main() {
 	merchantSignalGroup.Get("/:signal_id/product-suggestions", merchantSignalHandler.GetProductSuggestions)
 	merchantSignalGroup.Post("/:signal_id/reply", merchantSignalHandler.ReplyToSignal)
 
+	// Alias route untuk /signals (agar /signals/explore dapat diakses merchant)
+	directSignalGroup := api.Group("/signals", middlewares.RequireAuth, sharedAccess)
+	directSignalGroup.Get("/explore", merchantSignalHandler.ExploreSignals)
+	directSignalGroup.Get("/:signal_id", merchantSignalHandler.GetSignalDetail)
+	directSignalGroup.Get("/:signal_id/product-suggestions", merchantSignalHandler.GetProductSuggestions)
+	directSignalGroup.Post("/:signal_id/reply", merchantSignalHandler.ReplyToSignal)
+
 	merchantConvGroup := api.Group("/merchant/conversations", middlewares.RequireAuth, sharedAccess)
 	merchantConvGroup.Get("/", merchantSignalHandler.GetMyConversations)
 	merchantConvGroup.Get("/:conversation_id/messages", merchantSignalHandler.GetMessages)
