@@ -8,36 +8,47 @@ import (
 // ==========================================
 // ROLE GROUP (Pemisahan identitas akun)
 // ==========================================
-// Satu email / nomor telepon boleh dipakai maksimal 1x per kelompok role:
-//   - RoleGroupCustomer : role "customer"
-//   - RoleGroupMerchant : role "owner" dan "business_admin" (tidak boleh berbagi email)
-// Setiap akun tetap memiliki account_id sendiri sehingga seluruh relasi data
-// (review, signal, bisnis, laporan, dll.) tidak pernah tercampur antar kelompok.
+// Satu email / nomor telepon boleh dipakai untuk akun peran customer, owner, dan business_admin.
+// Setiap akun memiliki account_id sendiri sehingga seluruh relasi data
+// (review, signal, bisnis, laporan, transaksi, dll.) terisolasi dan tidak pernah tercampur antar peran.
 const (
 	RoleGroupCustomer = "customer"
-	RoleGroupMerchant = "merchant"
+	RoleGroupOwner    = "owner"
+	RoleGroupAdmin    = "business_admin"
+	RoleGroupMerchant = "merchant" // backwards-compatible alias
 )
 
-// RoleGroupOf mengembalikan kelompok role. String kosong jika role tidak dikenal/kosong.
+// RoleGroupOf mengembalikan kelompok role.
 func RoleGroupOf(role string) string {
 	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "customer":
+	case "customer", "buyer", "user", "pelanggan":
 		return RoleGroupCustomer
-	case "owner", "business_admin":
-		return RoleGroupMerchant
+	case "owner", "seller", "pemilik", "toko":
+		return RoleGroupOwner
+	case "admin", "business_admin", "staff", "karyawan":
+		return RoleGroupAdmin
+	case "merchant":
+		return RoleGroupOwner
 	default:
-		return ""
+		return strings.ToLower(strings.TrimSpace(role))
 	}
 }
 
 // RolesInGroup mengembalikan daftar role yang termasuk dalam kelompok tertentu.
 func RolesInGroup(group string) []string {
-	switch group {
+	switch strings.ToLower(strings.TrimSpace(group)) {
 	case RoleGroupCustomer:
 		return []string{"customer"}
-	case RoleGroupMerchant:
+	case RoleGroupOwner:
+		return []string{"owner"}
+	case RoleGroupAdmin:
+		return []string{"business_admin"}
+	case "merchant":
 		return []string{"owner", "business_admin"}
 	default:
+		if strings.TrimSpace(group) != "" {
+			return []string{strings.ToLower(strings.TrimSpace(group))}
+		}
 		return nil
 	}
 }

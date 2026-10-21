@@ -230,12 +230,12 @@ func roleGroupFromInput(role string) string {
 }
 
 // candidateGroups mengembalikan kelompok yang perlu diperiksa: kelompok dari role jika dikirim,
-// atau kedua kelompok jika role kosong.
+// atau seluruh kelompok jika role kosong.
 func candidateGroups(role string) []string {
 	if g := roleGroupFromInput(role); g != "" {
 		return []string{g}
 	}
-	return []string{models.RoleGroupCustomer, models.RoleGroupMerchant}
+	return []string{models.RoleGroupCustomer, models.RoleGroupOwner, models.RoleGroupAdmin}
 }
 
 // scopedKey membuat key Redis yang dipisah per kelompok role, contoh: login_otp:customer:user@mail.com
@@ -251,25 +251,35 @@ func (s *authService) findAccountInGroup(identifier, role string) (*models.Accou
 
 // findAccountForLogin mencari akun di kelompok role yang diminta.
 // Jika targetRole ditentukan, pencarian dibatasi ketat pada role group target tersebut.
-// Jika di dalam grup merchant (owner/business_admin) terjadi mismatch role, akun tetap dikembalikan
-// agar dapat diarahkan dengan RoleMismatchError. Namun tidak pernah menyeberang antara Customer dan Merchant/Admin,
-// sehingga jika belum terdaftar di role group tersebut, sistem mengembalikan record not found (akun belum terdaftar / kredensial salah).
+// Jika targetRole adalah sesama kelompok merchant (owner <-> business_admin), fallback silang dilakukan
+// agar dapat diarahkan dengan RoleMismatchError. Namun tidak pernah menyeberang ke Customer,
+// sehingga jika belum terdaftar di role merchant, sistem mengembalikan record not found (kredensial salah).
 func (s *authService) findAccountForLogin(identifier, targetRole string) (*models.Account, error) {
 	group := models.RoleGroupOf(targetRole)
-	account, err := s.repo.FindByIdentifier(identifier, group)
-	if err == nil {
-		return account, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+	if group != "" {
+		account, err := s.repo.FindByIdentifier(identifier, group)
+		if err == nil {
+			return account, nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+
+		// Fallback silang antar role merchant (owner <-> admin) untuk memandu user dengan RoleMismatchError
+		if group == models.RoleGroupOwner {
+			if adminAcc, errAdmin := s.repo.FindByIdentifier(identifier, models.RoleGroupAdmin); errAdmin == nil && adminAcc != nil {
+				return adminAcc, nil
+			}
+		} else if group == models.RoleGroupAdmin {
+			if ownerAcc, errOwner := s.repo.FindByIdentifier(identifier, models.RoleGroupOwner); errOwner == nil && ownerAcc != nil {
+				return ownerAcc, nil
+			}
+		}
+
+		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Jika targetRole adalah merchant group (owner atau business_admin), fallback cek di dalam merchant group
-	if group == models.RoleGroupMerchant {
-		return s.repo.FindByIdentifier(identifier, models.RoleGroupMerchant)
-	}
-
-	return nil, gorm.ErrRecordNotFound
+	return s.repo.FindByIdentifier(identifier, "")
 }
 
 func (s *authService) sendOTP(identifier string, group string, email *string, phoneNumber *string, redisPrefix string, customSubject ...string) error {
@@ -407,12 +417,6 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	// Cek duplikasi hanya di dalam kelompok role yang sama.
 	existingAccount, err := s.repo.FindByIdentifier(input.Identifier, group)
 	if err == nil {
-		if group == models.RoleGroupMerchant && existingAccount.Role != input.Role {
-			if existingAccount.Role == "business_admin" {
-				return errors.New("Email/nomor ini sudah digunakan sebagai akun Admin Toko. Akun Owner dan Admin Toko tidak boleh menggunakan email/nomor yang sama.")
-			}
-			return errors.New("Email/nomor ini sudah digunakan sebagai akun Pemilik Toko (Owner). Akun Owner dan Admin Toko tidak boleh menggunakan email/nomor yang sama.")
-		}
 		switch existingAccount.AccountStatus {
 		case "active":
 			if isEmail(input.Identifier) {
@@ -882,9 +886,7 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 	// Cari akun pada matched group jika ada, atau target role
 	lookupRole := targetRole
 	if matchedGroup != "" && targetRole == "" {
-		if matchedGroup == models.RoleGroupCustomer {
-			lookupRole = "customer"
-		}
+		lookupRole = matchedGroup
 	}
 
 	account, err := s.findAccountInGroup(input.Identifier, lookupRole)
@@ -1230,12 +1232,9 @@ func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPho
 }
 
 func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {
-	// Pastikan identitas tidak dipakai oleh akun lain di kelompok merchant (owner atau admin)
+	// Pastikan identitas belum dipakai oleh akun Admin Toko lain
 	cleanIdent := cleanIdentifier(input.Identifier)
-	if exists, err := s.repo.FindByIdentifier(cleanIdent, models.RoleGroupMerchant); err == nil && exists != nil {
-		if exists.Role == "owner" {
-			return nil, errors.New("Email/nomor ini sudah digunakan sebagai akun Pemilik Toko (Owner). Akun Owner dan Admin Toko tidak boleh menggunakan identitas yang sama.")
-		}
+	if exists, err := s.repo.FindByIdentifier(cleanIdent, models.RoleGroupAdmin); err == nil && exists != nil {
 		return nil, errors.New("Email/nomor ini sudah terdaftar sebagai Admin Toko lain.")
 	}
 

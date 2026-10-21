@@ -11,8 +11,8 @@ import (
 )
 
 // ErrAmbiguousAccount dikembalikan ketika identifier yang sama terdaftar di lebih dari
-// satu kelompok role (customer & merchant) dan request tidak menyertakan role.
-var ErrAmbiguousAccount = errors.New("Email/nomor ini terdaftar sebagai akun Pelanggan dan akun Toko. Sertakan parameter role (customer, owner, atau business_admin) untuk melanjutkan.")
+// satu role (customer, owner, business_admin) dan request tidak menyertakan role spesifik.
+var ErrAmbiguousAccount = errors.New("Email/nomor ini terdaftar di lebih dari satu akun (Pelanggan, Pemilik Toko, atau Admin). Sertakan parameter role (customer, owner, atau business_admin) untuk melanjutkan.")
 
 type AuthRepository interface {
 	CreateAccountWithProfile(account *models.Account, role string, ownerID ...string) error

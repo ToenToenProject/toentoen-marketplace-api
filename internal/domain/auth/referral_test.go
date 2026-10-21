@@ -398,11 +398,19 @@ func TestSharedEmailBetweenCustomerAndMerchant(t *testing.T) {
 		PasswordHash:  &hashStr,
 		AccountStatus: "active",
 	}
+	adminAcc := &models.Account{
+		AccountID:     "ACC_ADMIN_1",
+		Email:         &sharedEmail,
+		Role:          "business_admin",
+		PasswordHash:  &hashStr,
+		AccountStatus: "active",
+	}
 
 	mockRepo := &mockAuthRepo{
 		accounts: map[string]*models.Account{
-			sharedEmail + ":owner":    ownerAcc,
-			sharedEmail + ":customer": custAcc,
+			sharedEmail + ":owner":          ownerAcc,
+			sharedEmail + ":customer":       custAcc,
+			sharedEmail + ":business_admin": adminAcc,
 		},
 	}
 	svc := NewAuthService(mockRepo)
@@ -429,11 +437,21 @@ func TestSharedEmailBetweenCustomerAndMerchant(t *testing.T) {
 		}
 	})
 
-	t.Run("register customer allows email already used by owner", func(t *testing.T) {
-		// Repo hanya punya akun owner dengan email ini
+	t.Run("login as admin with shared email succeeds and targets admin account", func(t *testing.T) {
+		err := svc.Login(models.LoginUnifiedInput{
+			Identifier:   sharedEmail,
+			Password:     password,
+			ExpectedRole: "business_admin",
+		})
+		if err != nil {
+			t.Fatalf("expected admin login to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("register customer allows email already used by owner and admin", func(t *testing.T) {
 		repoOwnerOnly := &mockAuthRepo{
 			accounts: map[string]*models.Account{
-				sharedEmail: ownerAcc,
+				sharedEmail + ":owner": ownerAcc,
 			},
 		}
 		svcOwnerOnly := NewAuthService(repoOwnerOnly)
@@ -447,10 +465,10 @@ func TestSharedEmailBetweenCustomerAndMerchant(t *testing.T) {
 		}
 	})
 
-	t.Run("register owner allows email already used by customer", func(t *testing.T) {
+	t.Run("register owner allows email already used by customer and admin", func(t *testing.T) {
 		repoCustOnly := &mockAuthRepo{
 			accounts: map[string]*models.Account{
-				sharedEmail: custAcc,
+				sharedEmail + ":customer": custAcc,
 			},
 		}
 		svcCustOnly := NewAuthService(repoCustOnly)
@@ -464,10 +482,10 @@ func TestSharedEmailBetweenCustomerAndMerchant(t *testing.T) {
 		}
 	})
 
-	t.Run("register admin rejects email already used by owner", func(t *testing.T) {
+	t.Run("register admin allows email already used by owner and customer", func(t *testing.T) {
 		repoOwnerOnly := &mockAuthRepo{
 			accounts: map[string]*models.Account{
-				sharedEmail: ownerAcc,
+				sharedEmail + ":owner": ownerAcc,
 			},
 		}
 		svcOwnerOnly := NewAuthService(repoOwnerOnly)
@@ -476,8 +494,25 @@ func TestSharedEmailBetweenCustomerAndMerchant(t *testing.T) {
 			Password:   "passwordBaru123",
 			Role:       "business_admin",
 		})
-		if err == nil || !strings.Contains(err.Error(), "tidak boleh") {
-			t.Fatalf("expected owner vs admin collision rejection, got: %v", err)
+		if err != nil {
+			t.Fatalf("expected register admin to be allowed for email owned by owner, got: %v", err)
+		}
+	})
+
+	t.Run("register same role with active account rejects duplicate", func(t *testing.T) {
+		repoOwnerOnly := &mockAuthRepo{
+			accounts: map[string]*models.Account{
+				sharedEmail + ":owner": ownerAcc,
+			},
+		}
+		svcOwnerOnly := NewAuthService(repoOwnerOnly)
+		err := svcOwnerOnly.Register(models.RegisterUnifiedInput{
+			Identifier: sharedEmail,
+			Password:   "passwordBaru123",
+			Role:       "owner",
+		})
+		if err == nil || !strings.Contains(err.Error(), "sudah terdaftar dan aktif") {
+			t.Fatalf("expected rejection for duplicate owner registration, got: %v", err)
 		}
 	})
 

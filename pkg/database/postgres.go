@@ -265,8 +265,12 @@ func ConnectDB() {
 			DROP INDEX IF EXISTS uq_accounts_email;
 			DROP INDEX IF EXISTS uq_accounts_phone;
 
-			-- Buat Partial Unique Index per kelompok role:
-			-- 1) Kelompok Customer: 1 email unik hanya untuk akun customer
+			-- Hapus indeks merchant yang menggabungkan owner & business_admin
+			DROP INDEX IF EXISTS uq_accounts_merchant_email;
+			DROP INDEX IF EXISTS uq_accounts_merchant_phone;
+
+			-- Buat Partial Unique Index terpisah untuk setiap peran (customer, owner, business_admin):
+			-- 1) Role Customer: 1 email/nomor unik untuk customer
 			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_customer_email 
 				ON accounts (LOWER(email)) 
 				WHERE role = 'customer' AND email IS NOT NULL AND email != '';
@@ -275,14 +279,23 @@ func ConnectDB() {
 				ON accounts (phone_number) 
 				WHERE role = 'customer' AND phone_number IS NOT NULL AND phone_number != '';
 
-			-- 2) Kelompok Merchant: 1 email unik untuk owner & business_admin (owner & admin tetap tidak boleh berbagi email)
-			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_merchant_email 
+			-- 2) Role Owner: 1 email/nomor unik untuk owner
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_owner_email 
 				ON accounts (LOWER(email)) 
-				WHERE role IN ('owner', 'business_admin') AND email IS NOT NULL AND email != '';
+				WHERE role = 'owner' AND email IS NOT NULL AND email != '';
 
-			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_merchant_phone 
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_owner_phone 
 				ON accounts (phone_number) 
-				WHERE role IN ('owner', 'business_admin') AND phone_number IS NOT NULL AND phone_number != '';
+				WHERE role = 'owner' AND phone_number IS NOT NULL AND phone_number != '';
+
+			-- 3) Role Business Admin: 1 email/nomor unik untuk admin toko
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_admin_email 
+				ON accounts (LOWER(email)) 
+				WHERE role = 'business_admin' AND email IS NOT NULL AND email != '';
+
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_admin_phone 
+				ON accounts (phone_number) 
+				WHERE role = 'business_admin' AND phone_number IS NOT NULL AND phone_number != '';
 		END $$;`,
 		`CREATE TABLE IF NOT EXISTS signal_categories (
 			signal_id VARCHAR(50) NOT NULL REFERENCES signals(signal_id) ON DELETE CASCADE,
