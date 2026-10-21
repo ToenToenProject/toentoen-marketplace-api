@@ -79,8 +79,8 @@ func (h *CustomerPromotionHandler) GetPromotionDetail(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "promotion_id wajib diisi", nil)
 	}
 
-	promo, err := h.repo.GetPromotionByID("", promotionID)
-	if err != nil || promo == nil {
+	detail, err := h.service.GetCustomerPromotionDetail(promotionID)
+	if err != nil {
 		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Promosi tidak ditemukan", nil)
 	}
 
@@ -94,7 +94,7 @@ func (h *CustomerPromotionHandler) GetPromotionDetail(c *fiber.Ctx) error {
 		_ = h.service.RecordPromotionEvents([]models.PromotionEvent{
 			{
 				EventID:     utils.GenerateUUID("PEV"),
-				PromotionID: promo.PromotionID,
+				PromotionID: detail.PromotionID,
 				AccountID:   accountIDPtr,
 				EventType:   models.PromotionEventClick,
 				Source:      models.PromotionEventSourceNotification,
@@ -102,10 +102,6 @@ func (h *CustomerPromotionHandler) GetPromotionDetail(c *fiber.Ctx) error {
 		})
 	}()
 
-	detail, err := h.service.GetPromotionDetail(promo.CreatedBy, "owner", promo.BusinessID, promotionID)
-	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-	}
-
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail promosi berhasil dimuat", detail)
 }
+

@@ -3,6 +3,7 @@ package promotion
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"toentoen-backend/internal/config"
@@ -258,12 +259,18 @@ func (r *promotionRepository) GetPromotions(businessID, tab, cursor string, limi
 
 func (r *promotionRepository) GetPromotionByID(businessID, promotionID string) (*models.Promotion, error) {
 	var promo models.Promotion
-	err := r.db.
+	query := r.db.
+		Preload("Business").
 		Preload("MainProduct").
 		Preload("Post").
 		Preload("Products.Product").
-		Where("business_id = ? AND promotion_id = ?", businessID, promotionID).
-		First(&promo).Error
+		Where("promotion_id = ?", strings.TrimSpace(promotionID))
+
+	if strings.TrimSpace(businessID) != "" {
+		query = query.Where("business_id = ?", strings.TrimSpace(businessID))
+	}
+
+	err := query.First(&promo).Error
 	if err != nil {
 		return nil, err
 	}

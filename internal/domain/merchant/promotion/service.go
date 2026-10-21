@@ -19,6 +19,7 @@ type PromotionService interface {
 	CreatePromotion(requesterID, role, businessID string, input models.CreatePromotionInput) (*models.PromotionDetailResponse, error)
 	GetPromotions(requesterID, role, businessID, tab, cursor string, limit int) (models.GetPromotionsResponse, error)
 	GetPromotionDetail(requesterID, role, businessID, promotionID string) (*models.PromotionDetailResponse, error)
+	GetCustomerPromotionDetail(promotionID string) (*models.PromotionDetailResponse, error)
 	ExtendPromotion(requesterID, role, businessID, promotionID string, input models.ExtendPromotionInput) error
 	StopPromotion(requesterID, role, businessID, promotionID string) error
 
@@ -390,16 +391,7 @@ func (s *promotionService) GetPromotions(
 	}, nil
 }
 
-func (s *promotionService) GetPromotionDetail(requesterID, role, businessID, promotionID string) (*models.PromotionDetailResponse, error) {
-	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
-		return nil, errors.New("anda tidak memiliki akses ke bisnis ini")
-	}
-
-	promo, err := s.repo.GetPromotionByID(businessID, promotionID)
-	if err != nil {
-		return nil, errors.New("promosi tidak ditemukan")
-	}
-
+func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion) *models.PromotionDetailResponse {
 	now := time.Now()
 	remainingDays := 0
 	if promo.EndAt.After(now) {
@@ -457,8 +449,31 @@ func (s *promotionService) GetPromotionDetail(requesterID, role, businessID, pro
 		ClickCount:      promo.ClickCount,
 		CreatedAt:       promo.CreatedAt,
 		Products:        productDetails,
-	}, nil
+	}
 }
+
+func (s *promotionService) GetPromotionDetail(requesterID, role, businessID, promotionID string) (*models.PromotionDetailResponse, error) {
+	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
+		return nil, errors.New("anda tidak memiliki akses ke bisnis ini")
+	}
+
+	promo, err := s.repo.GetPromotionByID(businessID, promotionID)
+	if err != nil {
+		return nil, errors.New("promosi tidak ditemukan")
+	}
+
+	return s.buildPromotionDetailResponse(promo), nil
+}
+
+func (s *promotionService) GetCustomerPromotionDetail(promotionID string) (*models.PromotionDetailResponse, error) {
+	promo, err := s.repo.GetPromotionByID("", promotionID)
+	if err != nil {
+		return nil, errors.New("promosi tidak ditemukan")
+	}
+
+	return s.buildPromotionDetailResponse(promo), nil
+}
+
 
 func (s *promotionService) ExtendPromotion(
 	requesterID, role, businessID, promotionID string,
