@@ -52,12 +52,18 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 		videoPtr = &input.VideoURL
 	}
 
+	isPromo := false
+	if input.IsPromotion != nil && *input.IsPromotion {
+		isPromo = true
+	}
+
 	post := models.BusinessPost{
-		PostID:     utils.GenerateUUID("PST"),
-		BusinessID: businessID,
-		Content:    input.Content,
-		Images:     input.Images,
-		VideoURL:   videoPtr,
+		PostID:      utils.GenerateUUID("PST"),
+		BusinessID:  businessID,
+		Content:     input.Content,
+		Images:      input.Images,
+		VideoURL:    videoPtr,
+		IsPromotion: isPromo,
 	}
 
 	if err := s.postRepo.CreatePost(&post); err != nil {
@@ -108,12 +114,16 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 			post.VideoURL = input.VideoURL
 		}
 	}
+	if input.IsPromotion != nil {
+		post.IsPromotion = *input.IsPromotion
+	}
 
 	if err := s.postRepo.UpdatePost(post); err != nil {
 		return nil, errors.New("gagal memperbarui postingan")
 	}
 	return post, nil
 }
+
 
 func (s *businessPostService) DeletePost(requesterID, role, businessID, postID string) error {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {

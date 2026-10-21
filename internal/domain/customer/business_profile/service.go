@@ -402,6 +402,17 @@ func (s *service) GetAllPosts(businessID string, accountID string) ([]models.Pos
 
 	var response []models.PostResponse
 	for _, p := range posts {
+		var badgeText *string
+		var targetAction *string
+		if p.IsPromotion {
+			badge := "Promosi"
+			badgeText = &badge
+			if p.PromotionID != nil && *p.PromotionID != "" {
+				action := "open_promotion_group"
+				targetAction = &action
+			}
+		}
+
 		response = append(response, models.PostResponse{
 			PostID:       p.PostID,
 			BusinessID:   p.BusinessID,
@@ -414,6 +425,10 @@ func (s *service) GetAllPosts(businessID string, accountID string) ([]models.Pos
 			UpdatedAt:    p.UpdatedAt,
 			IsLikedByMe:  likedMap[p.PostID],
 			Business:     p.Business,
+			IsPromotion:  p.IsPromotion,
+			PromotionID:  p.PromotionID,
+			BadgeText:    badgeText,
+			TargetAction: targetAction,
 		})
 	}
 	
@@ -422,4 +437,5 @@ func (s *service) GetAllPosts(businessID string, accountID string) ([]models.Pos
 	}
 
 	return response, nil
+
 }

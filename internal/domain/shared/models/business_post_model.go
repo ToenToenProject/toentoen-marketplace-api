@@ -21,15 +21,17 @@ type BusinessPost struct {
 
 // Input Struct
 type CreatePostInput struct {
-	Content  string   `json:"content"`
-	Images   []string `json:"images"`
-	VideoURL string   `json:"video_url"`
+	Content     string   `json:"content"`
+	Images      []string `json:"images"`
+	VideoURL    string   `json:"video_url"`
+	IsPromotion *bool    `json:"is_promotion,omitempty"`
 }
 
 type UpdatePostInput struct {
-	Content  *string   `json:"content"`
-	Images   *[]string `json:"images" validate:"omitempty,max=5"`
-	VideoURL *string   `json:"video_url"`
+	Content     *string   `json:"content"`
+	Images      *[]string `json:"images" validate:"omitempty,max=5"`
+	VideoURL    *string   `json:"video_url"`
+	IsPromotion *bool     `json:"is_promotion,omitempty"`
 }
 
 type PostResponse struct {
