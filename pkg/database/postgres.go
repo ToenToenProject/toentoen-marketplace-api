@@ -163,6 +163,10 @@ func ConnectDB() {
 		`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
 		`ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS is_promotion BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS promotion_id VARCHAR(50)`,
+		`ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS promotion_end_at TIMESTAMPTZ`,
+		`UPDATE business_posts bp SET promotion_end_at = p.end_at FROM promotions p WHERE bp.promotion_id = p.promotion_id AND bp.promotion_end_at IS NULL`,
+		`UPDATE business_posts SET promotion_end_at = created_at + INTERVAL '7 days' WHERE is_promotion = true AND promotion_end_at IS NULL`,
+		`UPDATE business_posts SET is_promotion = false, updated_at = NOW() WHERE is_promotion = true AND ((promotion_id IN (SELECT promotion_id FROM promotions WHERE status IN ('ended', 'stopped') OR end_at <= NOW())) OR (promotion_end_at IS NOT NULL AND promotion_end_at <= NOW()))`,
 		`DO $$
 		BEGIN
 			IF EXISTS (

@@ -3,7 +3,9 @@ package post
 import (
 	"errors"
 	"strings"
+	"time"
 	"toentoen-backend/internal/domain/merchant/catalog"
+	"toentoen-backend/internal/domain/merchant/promotion"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
@@ -17,16 +19,24 @@ type BusinessPostService interface {
 	DeletePost(requesterID, role, businessID, postID string) error
 	ToggleLike(accountID, postID string) (string, error)
 	GetPostByID(postID string) (*models.BusinessPost, error)
+	StopPostPromotion(requesterID, role, businessID, postID string) error
+	ExtendPostPromotion(requesterID, role, businessID, postID string, input models.ExtendPostPromotionInput) (*models.BusinessPost, error)
 }
 
 type businessPostService struct {
 	postRepo     BusinessPostRepository
 	productRepo  catalog.ProductRepository // Pinjam untuk cek otoritas bisnis
+	promoRepo    promotion.PromotionRepository
 	notifService notification.NotificationService
 }
 
-func NewBusinessPostService(postRepo BusinessPostRepository, productRepo catalog.ProductRepository, notifService notification.NotificationService) BusinessPostService {
-	return &businessPostService{postRepo, productRepo, notifService}
+func NewBusinessPostService(
+	postRepo BusinessPostRepository,
+	productRepo catalog.ProductRepository,
+	promoRepo promotion.PromotionRepository,
+	notifService notification.NotificationService,
+) BusinessPostService {
+	return &businessPostService{postRepo, productRepo, promoRepo, notifService}
 }
 
 func (s *businessPostService) CreatePost(requesterID, role, businessID string, input models.CreatePostInput) (*models.BusinessPost, error) {
@@ -57,13 +67,29 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 		isPromo = true
 	}
 
+	var promoEndAt *time.Time
+	if isPromo {
+		now := time.Now()
+		days := 7
+		if input.DurationDays != nil && *input.DurationDays > 0 {
+			days = *input.DurationDays
+		}
+		if input.PromotionEndAt != nil && input.PromotionEndAt.After(now) {
+			promoEndAt = input.PromotionEndAt
+		} else {
+			end := now.AddDate(0, 0, days)
+			promoEndAt = &end
+		}
+	}
+
 	post := models.BusinessPost{
-		PostID:      utils.GenerateUUID("PST"),
-		BusinessID:  businessID,
-		Content:     input.Content,
-		Images:      input.Images,
-		VideoURL:    videoPtr,
-		IsPromotion: isPromo,
+		PostID:         utils.GenerateUUID("PST"),
+		BusinessID:     businessID,
+		Content:        input.Content,
+		Images:         input.Images,
+		VideoURL:       videoPtr,
+		IsPromotion:    isPromo,
+		PromotionEndAt: promoEndAt,
 	}
 
 	if err := s.postRepo.CreatePost(&post); err != nil {
@@ -79,8 +105,19 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 }
 
 func (s *businessPostService) GetPosts(businessID string, page, limit int) ([]models.BusinessPost, int64, error) {
-	// Tidak perlu cek otoritas, karena Postigan (Feed) biasanya bersifat publik untuk dilihat pembeli
-	return s.postRepo.GetPostsByBusinessID(businessID, page, limit)
+	posts, totalRows, err := s.postRepo.GetPostsByBusinessID(businessID, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	now := time.Now()
+	for i := range posts {
+		if posts[i].IsPromotion && posts[i].PromotionEndAt != nil && posts[i].PromotionEndAt.Before(now) {
+			posts[i].IsPromotion = false
+		}
+	}
+
+	return posts, totalRows, nil
 }
 
 func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID string, input models.UpdatePostInput) (*models.BusinessPost, error) {
@@ -114,8 +151,37 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 			post.VideoURL = input.VideoURL
 		}
 	}
+
+	now := time.Now()
 	if input.IsPromotion != nil {
-		post.IsPromotion = *input.IsPromotion
+		if *input.IsPromotion {
+			post.IsPromotion = true
+			if input.PromotionEndAt != nil && input.PromotionEndAt.After(now) {
+				post.PromotionEndAt = input.PromotionEndAt
+			} else if input.DurationDays != nil && *input.DurationDays > 0 {
+				end := now.AddDate(0, 0, *input.DurationDays)
+				post.PromotionEndAt = &end
+			} else if post.PromotionEndAt == nil || post.PromotionEndAt.Before(now) {
+				end := now.AddDate(0, 0, 7)
+				post.PromotionEndAt = &end
+			}
+		} else {
+			post.IsPromotion = false
+			post.PromotionEndAt = nil
+			// Jika terhubung ke promosi katalog, hentikan promosi katalognya juga
+			if post.PromotionID != nil && *post.PromotionID != "" && s.promoRepo != nil {
+				if promo, err := s.promoRepo.GetPromotionByID(businessID, *post.PromotionID); err == nil && promo != nil {
+					_ = s.promoRepo.StopPromotion(businessID, promo.PromotionID, promo.Products, &post.PostID)
+				}
+			}
+		}
+	} else if post.IsPromotion {
+		if input.PromotionEndAt != nil && input.PromotionEndAt.After(now) {
+			post.PromotionEndAt = input.PromotionEndAt
+		} else if input.DurationDays != nil && *input.DurationDays > 0 {
+			end := now.AddDate(0, 0, *input.DurationDays)
+			post.PromotionEndAt = &end
+		}
 	}
 
 	if err := s.postRepo.UpdatePost(post); err != nil {
@@ -124,6 +190,92 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 	return post, nil
 }
 
+func (s *businessPostService) StopPostPromotion(requesterID, role, businessID, postID string) error {
+	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
+		return errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
+	}
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermManageBusinessPosts) {
+		return errors.New("forbidden: Anda tidak memiliki izin untuk mengelola postingan")
+	}
+
+	post, err := s.postRepo.GetPostByID(postID)
+	if err != nil || post == nil || post.BusinessID != businessID {
+		return errors.New("postingan tidak ditemukan di bisnis ini")
+	}
+
+	now := time.Now()
+	// Jika terhubung dengan promosi katalog, hentikan promosi dan rollback diskon produk
+	if post.PromotionID != nil && *post.PromotionID != "" && s.promoRepo != nil {
+		promo, err := s.promoRepo.GetPromotionByID(businessID, *post.PromotionID)
+		if err == nil && promo != nil && promo.Status == models.PromotionStatusActive {
+			_ = s.promoRepo.StopPromotion(businessID, promo.PromotionID, promo.Products, &post.PostID)
+		}
+	}
+
+	post.IsPromotion = false
+	post.PromotionEndAt = &now
+	post.UpdatedAt = now
+
+	if err := s.postRepo.UpdatePost(post); err != nil {
+		return errors.New("gagal menghentikan promosi postingan")
+	}
+
+	return nil
+}
+
+func (s *businessPostService) ExtendPostPromotion(requesterID, role, businessID, postID string, input models.ExtendPostPromotionInput) (*models.BusinessPost, error) {
+	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
+		return nil, errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
+	}
+	if role == "business_admin" && !s.productRepo.HasPermission(requesterID, businessID, models.PermManageBusinessPosts) {
+		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengelola postingan")
+	}
+
+	post, err := s.postRepo.GetPostByID(postID)
+	if err != nil || post == nil || post.BusinessID != businessID {
+		return nil, errors.New("postingan tidak ditemukan di bisnis ini")
+	}
+
+	now := time.Now()
+	var newEndAt time.Time
+
+	if input.EndAt != nil && input.EndAt.After(now) {
+		newEndAt = *input.EndAt
+	} else {
+		addDays := 7
+		if input.AddDays != nil && *input.AddDays > 0 {
+			addDays = *input.AddDays
+		}
+
+		baseTime := now
+		if post.PromotionEndAt != nil && post.PromotionEndAt.After(now) {
+			baseTime = *post.PromotionEndAt
+		}
+		newEndAt = baseTime.AddDate(0, 0, addDays)
+	}
+
+	// Jika terhubung dengan promosi katalog, perpanjang promosi katalognya juga
+	if post.PromotionID != nil && *post.PromotionID != "" && s.promoRepo != nil {
+		promo, err := s.promoRepo.GetPromotionByID(businessID, *post.PromotionID)
+		if err == nil && promo != nil {
+			productIDs := make([]string, 0, len(promo.Products))
+			for _, p := range promo.Products {
+				productIDs = append(productIDs, p.ProductID)
+			}
+			_ = s.promoRepo.ExtendPromotion(businessID, promo.PromotionID, newEndAt, productIDs)
+		}
+	}
+
+	post.IsPromotion = true
+	post.PromotionEndAt = &newEndAt
+	post.UpdatedAt = now
+
+	if err := s.postRepo.UpdatePost(post); err != nil {
+		return nil, errors.New("gagal memperpanjang promosi postingan")
+	}
+
+	return post, nil
+}
 
 func (s *businessPostService) DeletePost(requesterID, role, businessID, postID string) error {
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
@@ -144,5 +296,13 @@ func (s *businessPostService) ToggleLike(accountID, postID string) (string, erro
 }
 
 func (s *businessPostService) GetPostByID(postID string) (*models.BusinessPost, error) {
-	return s.postRepo.GetPostByID(postID)
+	post, err := s.postRepo.GetPostByID(postID)
+	if err != nil || post == nil {
+		return nil, err
+	}
+
+	if post.IsPromotion && post.PromotionEndAt != nil && post.PromotionEndAt.Before(time.Now()) {
+		post.IsPromotion = false
+	}
+	return post, nil
 }

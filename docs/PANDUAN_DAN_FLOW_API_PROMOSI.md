@@ -18,7 +18,12 @@ Dokumen ini menjelaskan arsitektur, siklus hidup (*lifecycle*), kontrak payload 
    - [4.1 Tracking Impresi & Klik Promosi](#41-tracking-impresi--klik-promosi)
    - [4.2 Detail Promosi untuk Customer](#42-detail-promosi-untuk-customer)
 5. [Integrasi Etalase Virtual "Promosi"](#5-integrasi-etalase-virtual-promosi)
-6. [Integrasi Postingan Feed Otomatis](#6-integrasi-postingan-feed-otomatis)
+6. [Integrasi Postingan Feed & Kontrol Promosi Postingan](#6-integrasi-postingan-feed--kontrol-promosi-postingan)
+   - [6.1 Atribut Respons Postingan Promosi](#61-atribut-respons-postingan-promosi)
+   - [6.2 Buat Postingan Promosi (Merchant)](#62-buat-postingan-promosi-merchant)
+   - [6.3 Hentikan Promosi Postingan (Stop Promotion)](#63-hentikan-promosi-postingan-stop-promotion)
+   - [6.4 Perpanjang Masa Promosi Postingan (Extend Promotion)](#64-perpanjang-masa-promosi-postingan-extend-promotion)
+   - [6.5 Mekanisme Auto-Berhenti / Auto-Expire Postingan](#65-mekanisme-auto-berhenti--auto-expire-postingan)
 7. [Mekanisme Notifikasi & Deduplikasi](#7-mekanisme-notifikasi--deduplikasi)
 8. [Background Scheduler & Worker](#8-background-scheduler--worker)
 
@@ -472,22 +477,107 @@ Backend akan mengeksekusi subquery internal untuk mengambil seluruh produk yang 
 
 ---
 
-## 6. Integrasi Postingan Feed Otomatis
+---
 
-Setiap kali promosi dibuat, sistem secara otomatis menerbitkan satu baris postingan di tabel `business_posts` dengan atribut khusus:
-- `is_promotion: true`
-- `promotion_id: "PRM-xxxx"`
-- `badge_text: "Promosi"`
-- `target_action: "open_promotion_group"`
-- `images`: Berisi foto preview dari `main_product` yang dipilih merchant.
-- `content`: Berisi teks `caption` promosi.
+## 6. Integrasi Postingan Feed & Kontrol Promosi Postingan
 
-Ketika customer mengklik postingan berlabel promosi di timeline/feed:
-1. Frontend memeriksa `is_promotion == true`.
-2. Frontend mengarahkan (*deep link*) customer ke halaman etalase toko dengan filter otomatis aktif pada tab grup `"Promosi"`.
-3. Frontend mengirimkan event klik ke `POST /customer/promotions/events` (`source: "post"`).
+Sistem mendukung 2 skenario postingan promosi:
+1. **Otomatis dari Promosi Katalog:** Dibuat otomatis saat merchant membuat promosi katalog dengan diskon produk (`promotion_id` terisi).
+2. **Postingan Promosi Bebas (Standalone):** Dibuat langsung oleh merchant melalui form *Create Post* dengan mencentang toggle *"Promote Post"* (`is_promotion: true`), dengan durasi hari (`duration_days`) atau tanggal berakhir (`promotion_end_at`).
+
+### 6.1 Atribut Respons Postingan Promosi
+Postingan feed (`/posts`, `/explore/feed`, `/customer/businesses/:id/posts`) mengembalikan:
+- `is_promotion: bool` (otomatis bernilai `false` jika masa promosi sudah habis).
+- `promotion_id: string | null` (terisi jika terhubung ke promosi katalog).
+- `promotion_end_at: string (ISO8601) | null` (waktu berakhirnya promosi postingan).
+- `remaining_days: int | null` (sisa hari promosi, misal `7`, `3`, `1`).
+- `badge_text: "Promosi" | null` (hanya muncul saat promosi aktif).
+- `target_action: "open_promotion_group" | null` (jika terhubung ke promosi katalog).
 
 ---
+
+### 6.2 Buat Postingan Promosi (Merchant)
+- **Method & URL:** `POST /api/v1/business/:business_id/posts`
+- **Headers:** `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "content": "Promo Spesial Gajian! Dapatkan penawaran menarik minggu ini.",
+    "images": [
+      "https://storage.toentoen.com/posts/banner1.jpg"
+    ],
+    "video_url": "",
+    "is_promotion": true,
+    "duration_days": 7, // opsional: durasi promosi dalam hari (default: 7 hari)
+    "promotion_end_at": "2026-10-28T23:59:59Z" // opsional: tanggal berakhir spesifik
+  }
+  ```
+
+---
+
+### 6.3 Hentikan Promosi Postingan (Stop Promotion)
+Merchant dapat menghentikan label/status promosi pada postingan sewaktu-waktu.
+- **Method & URL:** `PATCH /api/v1/business/:business_id/posts/:post_id/promotion/stop`
+  *(Tersedia juga alias: `POST /.../promotion/stop` dan `PATCH /.../stop-promotion`)*
+- **Headers:** `Authorization: Bearer <token>`
+- **Respons (200 OK):**
+  ```json
+  {
+    "responseCode": "00",
+    "message": "Promosi postingan berhasil dihentikan",
+    "data": null
+  }
+  ```
+> **Catatan Sistem:**
+> - Jika postingan terhubung dengan promosi katalog (`promotion_id != null`), sistem juga otomatis menghentikan promosi katalognya dan me-rollback diskon produk kembali ke normal.
+> - Postingan tetap ada di timeline toko sebagai postingan biasa, namun status `is_promotion` berubah menjadi `false` dan badge `"Promosi"` dicabut.
+
+---
+
+### 6.4 Perpanjang Masa Promosi Postingan (Extend Promotion)
+Merchant dapat memperpanjang masa berlaku promosi postingan.
+- **Method & URL:** `PATCH /api/v1/business/:business_id/posts/:post_id/promotion/extend`
+  *(Tersedia juga alias: `POST /.../promotion/extend` dan `PATCH /.../extend-promotion`)*
+- **Headers:** `Authorization: Bearer <token>`
+- **Request Body:**
+  ```json
+  {
+    "add_days": 7 // jumlah hari yang ingin ditambahkan (default: 7 hari jika kosong)
+  }
+  ```
+  *Atau menentukan tanggal baru:*
+  ```json
+  {
+    "end_at": "2026-11-05T23:59:59Z"
+  }
+  ```
+- **Respons (200 OK):**
+  ```json
+  {
+    "responseCode": "00",
+    "message": "Promosi postingan berhasil diperpanjang",
+    "data": {
+      "post_id": "PST-xxx",
+      "business_id": "BIZ-xxx",
+      "content": "...",
+      "is_promotion": true,
+      "promotion_end_at": "2026-11-05T23:59:59Z",
+      "updated_at": "2026-10-21T14:40:00Z"
+    }
+  }
+  ```
+
+---
+
+### 6.5 Mekanisme Auto-Berhenti / Auto-Expire Postingan
+Postingan promosi **TIDAK AKAN PERNAH** selamanya berlabel "Promosi":
+1. **Pengecekan Waktu Nyata (API Response Level):** Setiap kali feed atau detail postingan dipanggil, backend langsung membandingkan `promotion_end_at` dengan waktu saat ini (`NOW()`). Jika waktu sudah lewat, backend secara instan mengembalikan `is_promotion: false`, `badge_text: null`, dan `remaining_days: null`.
+2. **Background Cleaner (Database Level):** Worker berjalan di latar belakang setiap 1 menit untuk meng-update database:
+   ```sql
+   UPDATE business_posts SET is_promotion = false, updated_at = NOW() 
+   WHERE is_promotion = true AND promotion_end_at IS NOT NULL AND promotion_end_at <= NOW();
+   ```
+3. **Katalog Promo Sync:** Ketika promosi katalog kedaluwarsa (`ended`) atau dihentikan (`stopped`), postingan feed yang bertaut otomatis dimatikan status promosinya secara serentak.
 
 ## 7. Mekanisme Notifikasi & Deduplikasi
 

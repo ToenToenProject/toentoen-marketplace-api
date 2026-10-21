@@ -145,16 +145,16 @@ func main() {
 	postInteractionService := interaction.NewPostInteractionService(postInteractionRepo, businessRepo, notifService)
 	postInteractionHandler := interaction.NewPostInteractionHandler(postInteractionService)
 
-	businessPostRepo := post.NewBusinessPostRepository(database.DB)
-	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo, notifService)
-	businessPostHandler := post.NewBusinessPostHandler(businessPostService)
-
 	// 🎁 INIT PROMOTIONS
 	promotionRepo := merchant_promotion.NewPromotionRepository(database.DB)
 	promotionService := merchant_promotion.NewPromotionService(promotionRepo, notifService)
 	promotionHandler := merchant_promotion.NewPromotionHandler(promotionService)
 	customerPromotionHandler := customer_promotion.NewCustomerPromotionHandler(promotionService, promotionRepo)
 	merchant_promotion.StartPromotionWorker(database.DB, notifService)
+
+	businessPostRepo := post.NewBusinessPostRepository(database.DB)
+	businessPostService := post.NewBusinessPostService(businessPostRepo, productRepo, promotionRepo, notifService)
+	businessPostHandler := post.NewBusinessPostHandler(businessPostService)
 
 	// Signal V2 (menggantikan demand lama) — dengan Real-Time Hub & Notification Service
 	signalRepo := signal.NewSignalRepository(database.DB)
@@ -704,6 +704,12 @@ func main() {
 	postRoutes.Put("/:post_id", businessPostHandler.UpdatePost)
 	postRoutes.Patch("/:post_id", businessPostHandler.UpdatePost)
 	postRoutes.Delete("/:post_id", businessPostHandler.DeletePost)
+	postRoutes.Patch("/:post_id/promotion/stop", middlewares.RequireKYC, businessPostHandler.StopPostPromotion)
+	postRoutes.Post("/:post_id/promotion/stop", middlewares.RequireKYC, businessPostHandler.StopPostPromotion)
+	postRoutes.Patch("/:post_id/promotion/extend", middlewares.RequireKYC, businessPostHandler.ExtendPostPromotion)
+	postRoutes.Post("/:post_id/promotion/extend", middlewares.RequireKYC, businessPostHandler.ExtendPostPromotion)
+	postRoutes.Patch("/:post_id/stop-promotion", middlewares.RequireKYC, businessPostHandler.StopPostPromotion)
+	postRoutes.Patch("/:post_id/extend-promotion", middlewares.RequireKYC, businessPostHandler.ExtendPostPromotion)
 
 	// -> Promotions (Promosi Merchant)
 	promoRoutes := sharedBusinessScope.Group("/promotions")

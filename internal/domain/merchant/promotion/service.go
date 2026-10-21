@@ -275,16 +275,17 @@ func (s *promotionService) CreatePromotion(
 			images = append(images, mainProductItem.ImageURL)
 		}
 		autoPost = &models.BusinessPost{
-			PostID:       utils.GenerateUUID("POST"),
-			BusinessID:   businessID,
-			Content:      caption,
-			Images:       images,
-			IsPromotion:  true,
-			PromotionID:  &promotionID,
-			LikeCount:    0,
-			CommentCount: 0,
-			CreatedAt:    now,
-			UpdatedAt:    now,
+			PostID:         utils.GenerateUUID("POST"),
+			BusinessID:     businessID,
+			Content:        caption,
+			Images:         images,
+			IsPromotion:    true,
+			PromotionID:    &promotionID,
+			PromotionEndAt: &input.EndAt,
+			LikeCount:      0,
+			CommentCount:   0,
+			CreatedAt:      now,
+			UpdatedAt:      now,
 		}
 	}
 

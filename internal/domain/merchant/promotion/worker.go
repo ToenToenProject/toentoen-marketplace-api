@@ -31,6 +31,7 @@ func StartPromotionWorker(db *gorm.DB, notifService notification.NotificationSer
 			now := time.Now()
 			processScheduledPromotions(db, repo, notifService, now)
 			processExpiredPromotions(repo, now)
+			processExpiredPromotionalPosts(db, now)
 		}
 	}()
 }
@@ -71,16 +72,17 @@ func processScheduledPromotions(
 			}
 
 			autoPost := models.BusinessPost{
-				PostID:       utils.GenerateUUID("POST"),
-				BusinessID:   pCopy.BusinessID,
-				Content:      pCopy.Caption,
-				Images:       images,
-				IsPromotion:  true,
-				PromotionID:  &pCopy.PromotionID,
-				LikeCount:    0,
-				CommentCount: 0,
-				CreatedAt:    now,
-				UpdatedAt:    now,
+				PostID:         utils.GenerateUUID("POST"),
+				BusinessID:     pCopy.BusinessID,
+				Content:        pCopy.Caption,
+				Images:         images,
+				IsPromotion:    true,
+				PromotionID:    &pCopy.PromotionID,
+				PromotionEndAt: &pCopy.EndAt,
+				LikeCount:      0,
+				CommentCount:   0,
+				CreatedAt:      now,
+				UpdatedAt:      now,
 			}
 			if err := tx.Create(&autoPost).Error; err != nil {
 				return err
@@ -145,5 +147,17 @@ func processExpiredPromotions(repo PromotionRepository, now time.Time) {
 		}
 		log.Printf("⏱️ [PROMOTION-WORKER] Promosi %s telah berakhir secara otomatis", pCopy.PromotionID)
 		go meilisearch.SyncBusiness(database.DB, pCopy.BusinessID)
+	}
+}
+
+func processExpiredPromotionalPosts(db *gorm.DB, now time.Time) {
+	err := db.Model(&models.BusinessPost{}).
+		Where("is_promotion = true AND promotion_end_at IS NOT NULL AND promotion_end_at <= ?", now).
+		Updates(map[string]interface{}{
+			"is_promotion": false,
+			"updated_at":   now,
+		}).Error
+	if err != nil {
+		log.Printf("⚠️ [PROMOTION-WORKER] Gagal menghentikan postingan promosi yang expired: %v", err)
 	}
 }

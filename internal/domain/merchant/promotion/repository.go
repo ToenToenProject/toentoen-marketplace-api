@@ -301,6 +301,15 @@ func (r *promotionRepository) ExtendPromotion(businessID, promotionID string, ne
 			}
 		}
 
+		// Update postingan promosi terkait
+		_ = tx.Model(&models.BusinessPost{}).
+			Where("promotion_id = ?", promotionID).
+			Updates(map[string]interface{}{
+				"is_promotion":     true,
+				"promotion_end_at": newEndAt,
+				"updated_at":       time.Now(),
+			}).Error
+
 		return nil
 	})
 }
@@ -374,14 +383,14 @@ func (r *promotionRepository) StopPromotion(
 		}
 
 		// 3. Tandai post promosi tidak aktif lagi jika ada
+		postQuery := tx.Model(&models.BusinessPost{}).Where("promotion_id = ?", promotionID)
 		if postID != nil && *postID != "" {
-			_ = tx.Model(&models.BusinessPost{}).
-				Where("post_id = ? AND business_id = ?", *postID, businessID).
-				Updates(map[string]interface{}{
-					"is_promotion": false,
-					"updated_at":   now,
-				}).Error
+			postQuery = tx.Model(&models.BusinessPost{}).Where("promotion_id = ? OR (business_id = ? AND post_id = ?)", promotionID, businessID, *postID)
 		}
+		_ = postQuery.Updates(map[string]interface{}{
+			"is_promotion": false,
+			"updated_at":   now,
+		}).Error
 
 		return nil
 	})
@@ -556,6 +565,14 @@ func (r *promotionRepository) ExpirePromotionAndRestoreDiscounts(promo *models.P
 					}).Error
 			}
 		}
+
+		// Matikan status promosi pada postingan feed terkait
+		_ = tx.Model(&models.BusinessPost{}).
+			Where("promotion_id = ?", promo.PromotionID).
+			Updates(map[string]interface{}{
+				"is_promotion": false,
+				"updated_at":   now,
+			}).Error
 
 		return nil
 	})

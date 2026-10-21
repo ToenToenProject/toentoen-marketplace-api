@@ -128,3 +128,51 @@ func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Post berhasil dihapus", nil)
 }
+
+func (h *BusinessPostHandler) StopPostPromotion(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	postID := strings.TrimSpace(c.Params("post_id"))
+
+	requesterID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	if errSvc := h.service.StopPostPromotion(requesterID, role, businessID, postID); errSvc != nil {
+		if strings.Contains(errSvc.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
+		if strings.Contains(errSvc.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Promosi postingan berhasil dihentikan", nil)
+}
+
+func (h *BusinessPostHandler) ExtendPostPromotion(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	postID := strings.TrimSpace(c.Params("post_id"))
+
+	requesterID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	var input models.ExtendPostPromotionInput
+	_ = c.BodyParser(&input) // optional body, default 7 days if empty
+
+	updatedPost, errSvc := h.service.ExtendPostPromotion(requesterID, role, businessID, postID, input)
+	if errSvc != nil {
+		if strings.Contains(errSvc.Error(), "forbidden") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
+		}
+		if strings.Contains(errSvc.Error(), "tidak ditemukan") {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, errSvc.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Promosi postingan berhasil diperpanjang", updatedPost)
+}

@@ -1,6 +1,7 @@
 package business_profile
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -400,35 +401,48 @@ func (s *service) GetAllPosts(businessID string, accountID string) ([]models.Pos
 		likedMap, _ = s.repo.GetPostLikesByAccount(accountID, postIDs)
 	}
 
+	now := time.Now()
 	var response []models.PostResponse
 	for _, p := range posts {
+		isPromoActive := p.IsPromotion
+		if isPromoActive && p.PromotionEndAt != nil && p.PromotionEndAt.Before(now) {
+			isPromoActive = false
+		}
+
 		var badgeText *string
 		var targetAction *string
-		if p.IsPromotion {
+		var remainingDays *int
+		if isPromoActive {
 			badge := "Promosi"
 			badgeText = &badge
 			if p.PromotionID != nil && *p.PromotionID != "" {
 				action := "open_promotion_group"
 				targetAction = &action
 			}
+			if p.PromotionEndAt != nil && p.PromotionEndAt.After(now) {
+				rem := int(math.Ceil(p.PromotionEndAt.Sub(now).Hours() / 24.0))
+				remainingDays = &rem
+			}
 		}
 
 		response = append(response, models.PostResponse{
-			PostID:       p.PostID,
-			BusinessID:   p.BusinessID,
-			Content:      p.Content,
-			Images:       p.Images,
-			VideoURL:     p.VideoURL,
-			LikeCount:    p.LikeCount,
-			CommentCount: p.CommentCount,
-			CreatedAt:    p.CreatedAt,
-			UpdatedAt:    p.UpdatedAt,
-			IsLikedByMe:  likedMap[p.PostID],
-			Business:     p.Business,
-			IsPromotion:  p.IsPromotion,
-			PromotionID:  p.PromotionID,
-			BadgeText:    badgeText,
-			TargetAction: targetAction,
+			PostID:         p.PostID,
+			BusinessID:     p.BusinessID,
+			Content:        p.Content,
+			Images:         p.Images,
+			VideoURL:       p.VideoURL,
+			LikeCount:      p.LikeCount,
+			CommentCount:   p.CommentCount,
+			CreatedAt:      p.CreatedAt,
+			UpdatedAt:      p.UpdatedAt,
+			IsLikedByMe:    likedMap[p.PostID],
+			Business:       p.Business,
+			IsPromotion:    isPromoActive,
+			PromotionID:    p.PromotionID,
+			PromotionEndAt: p.PromotionEndAt,
+			RemainingDays:  remainingDays,
+			BadgeText:      badgeText,
+			TargetAction:   targetAction,
 		})
 	}
 	
