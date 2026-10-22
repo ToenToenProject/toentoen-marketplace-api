@@ -220,6 +220,9 @@ func (r *repository) HasActivePromotion(businessID string) bool {
 }
 
 func (r *repository) GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error) {
+	if !database.HasPromotionTypeColumn(r.db) || !database.HasBundleItemsTable(r.db) {
+		return []models.Promotion{}, nil
+	}
 	var promos []models.Promotion
 	err := r.db.
 		Preload("BundleItems.Product").

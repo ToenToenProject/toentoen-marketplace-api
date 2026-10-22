@@ -9,6 +9,7 @@ import (
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/shared/permissions"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 
 	"gorm.io/gorm"
@@ -81,7 +82,7 @@ func (r *promotionRepository) GetActivePromotionProductIDs(businessID string, pr
 		Joins("JOIN promotions p ON p.promotion_id = pp.promotion_id").
 		Where("p.business_id = ? AND p.status IN ('active', 'scheduled')", businessID)
 
-	if promoType != "" {
+	if promoType != "" && database.HasPromotionTypeColumn(r.db) {
 		query = query.Where("p.promotion_type = ?", promoType)
 	}
 
@@ -97,6 +98,10 @@ func (r *promotionRepository) GetActivePromotionProductIDs(businessID string, pr
 }
 
 func (r *promotionRepository) GetActiveBundlingPromotionProductIDs(businessID string) (map[string]string, error) {
+	if !database.HasBundleItemsTable(r.db) || !database.HasPromotionTypeColumn(r.db) {
+		return map[string]string{}, nil
+	}
+
 	type Row struct {
 		ProductID   string `gorm:"column:product_id"`
 		PromotionID string `gorm:"column:promotion_id"`
@@ -225,7 +230,11 @@ func (r *promotionRepository) CreatePromotion(
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		// 1. Simpan master promosi terlebih dahulu (tanpa PostID) agar baris promotions tersedia untuk FK business_posts
 		promo.PostID = nil
-		if err := tx.Create(promo).Error; err != nil {
+		promoQuery := tx
+		if !database.HasPromotionTypeColumn(tx) {
+			promoQuery = promoQuery.Omit("PromotionType", "PackageName", "PackagePrice", "PackageImage", "OriginalTotalPrice", "SavingsAmount", "SavingsPercentage")
+		}
+		if err := promoQuery.Create(promo).Error; err != nil {
 			return fmt.Errorf("gagal menyimpan promosi: %w", err)
 		}
 
@@ -279,6 +288,9 @@ func (r *promotionRepository) CreateBundlingPromotion(
 ) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		// 1. Simpan master promosi bundling (tanpa PostID)
+		if !database.HasPromotionTypeColumn(tx) || !database.HasBundleItemsTable(tx) {
+			return fmt.Errorf("skema database untuk promosi bundling belum siap. Mohon jalankan migrasi database terlebih dahulu")
+		}
 		promo.PostID = nil
 		promo.PromotionType = models.PromotionTypeBundling
 		if err := tx.Create(promo).Error; err != nil {
@@ -321,6 +333,10 @@ func (r *promotionRepository) GetProductsByIDs(businessID string, productIDs []s
 }
 
 func (r *promotionRepository) GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error) {
+	if !database.HasPromotionTypeColumn(r.db) || !database.HasBundleItemsTable(r.db) {
+		return []models.Promotion{}, nil
+	}
+
 	var promos []models.Promotion
 	err := r.db.
 		Preload("BundleItems.Product").
@@ -368,8 +384,11 @@ func (r *promotionRepository) GetPromotions(businessID, tab, cursor string, limi
 	query := r.db.Model(&models.Promotion{}).
 		Preload("MainProduct").
 		Preload("Products").
-		Preload("BundleItems.Product").
 		Where("business_id = ?", businessID)
+
+	if database.HasBundleItemsTable(r.db) {
+		query = query.Preload("BundleItems.Product")
+	}
 
 	switch tab {
 	case "popular":
@@ -413,8 +432,11 @@ func (r *promotionRepository) GetPromotionByID(businessID, promotionID string) (
 		Preload("MainProduct").
 		Preload("Post").
 		Preload("Products.Product").
-		Preload("BundleItems.Product").
 		Where("promotion_id = ?", strings.TrimSpace(promotionID))
+
+	if database.HasBundleItemsTable(r.db) {
+		query = query.Preload("BundleItems.Product")
+	}
 
 	if strings.TrimSpace(businessID) != "" {
 		query = query.Where("business_id = ?", strings.TrimSpace(businessID))
@@ -648,12 +670,16 @@ func (r *promotionRepository) RecordPromotionEvents(events []models.PromotionEve
 
 func (r *promotionRepository) GetScheduledPromotionsToActivate(now time.Time) ([]models.Promotion, error) {
 	var promos []models.Promotion
-	err := r.db.
+	query := r.db.
 		Preload("MainProduct").
 		Preload("Products.Product").
-		Preload("BundleItems.Product").
-		Where("status = ? AND start_at <= ?", models.PromotionStatusScheduled, now).
-		Find(&promos).Error
+		Where("status = ? AND start_at <= ?", models.PromotionStatusScheduled, now)
+
+	if database.HasBundleItemsTable(r.db) {
+		query = query.Preload("BundleItems.Product")
+	}
+
+	err := query.Find(&promos).Error
 	return promos, err
 }
 
