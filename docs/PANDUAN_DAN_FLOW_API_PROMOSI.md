@@ -197,14 +197,21 @@ Membuat promosi toko, menetapkan produk promosi, memilih produk utama untuk prev
 }
 ```
 
-#### Aturan Validasi:
-1. `caption`: Wajib diisi, minimal 3 karakter, **maksimal 150 karakter**.
-2. `main_product_id`: Wajib dipilih dan **harus termasuk** dalam daftar `products`.
-3. `start_at` & `end_at`: Rentang promosi tidak boleh melebihi **90 hari**.
-4. `products`: Minimal 1 produk, **maksimal 20 produk**.
-5. Diskon:
-   - Jika `keep_existing_discount: true`, sistem menggunakan nilai diskon yang sudah ada di produk tersebut.
-   - Jika `keep_existing_discount: false`, `discount_type` ("percentage" atau "nominal") dan `discount` wajib diisi valid.
+#### Aturan Validasi & Fleksibilitas Backend (Update v2.1):
+1. **Format Tanggal Fleksibel (`start_at` & `end_at`)**:
+   - Backend mendukung beragam format datetime:
+     - RFC3339 / ISO-8601 dengan offset zona waktu lokal (contoh: `"2026-10-22T20:01:00+07:00"`)
+     - UTC ISO-8601 (`"2026-10-22T13:01:00Z"`)
+     - Format SQL (`"2026-10-22 20:01:00"`)
+     - Datetime-local (`"2026-10-22T20:01"`)
+     - Date-only (`"2026-10-22"`)
+     - Unix Timestamp numerik (detik atau milidetik)
+   - Jika `end_at` tidak disertakan atau bernilai `<= start_at`, sistem secara otomatis menyetel durasi default **7 hari** dari `start_at`.
+2. **Auto-Fallback `main_product_id`**: Bersifat opsional. Jika FE tidak mengirimkan `main_product_id`, backend otomatis memilih produk pertama (`products[0].product_id`) sebagai produk utama/cover promo.
+3. **Auto-Fallback `caption`**: Bersifat opsional (maksimal 150 karakter). Jika kosong, backend otomatis memberikan caption default `"Promo Spesial Toko"`.
+4. **Auto-Inference `discount_type`**: Jika tidak dikirimkan saat `keep_existing_discount: false`, otomatis diasumsikan `"percentage"` jika nilai diskon `<= 100`, atau `"nominal"` jika `> 100`.
+5. **Keamanan Eksekusi Notifikasi**: Notifikasi push FCM dieksekusi secara asinkron (background goroutine) dilengkapi *panic recovery* & timeout protection, sehingga kegagalan FCM server tidak akan pernah menggagalkan respons HTTP ke aplikasi Merchant.
+6. **Batasan Maksimal**: Rentang promosi tidak boleh melebihi **90 hari**, dan daftar `products` antara 1 hingga 20 produk.
 
 ---
 
