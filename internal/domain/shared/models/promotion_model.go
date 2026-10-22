@@ -1,6 +1,12 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+)
 
 // ==========================================
 // 1. ENTITAS DATABASE (GORM MODELS)
@@ -162,12 +168,97 @@ type CreatePromotionItemInput struct {
 	KeepExistingDiscount *bool    `json:"keep_existing_discount"`
 }
 
+// Helper parser waktu fleksibel (RFC3339, +07:00, Z, format SQL, datetime-local, timestamp)
+func parseFlexibleTime(val string) (time.Time, error) {
+	val = strings.TrimSpace(val)
+	if val == "" || val == "null" {
+		return time.Time{}, nil
+	}
+
+	formats := []string{
+		time.RFC3339,
+		time.RFC3339Nano,
+		"2006-01-02T15:04:05.999999999Z07:00",
+		"2006-01-02T15:04:05.999Z07:00",
+		"2006-01-02T15:04:05.99Z07:00",
+		"2006-01-02T15:04:05.9Z07:00",
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02 15:04:05Z07:00",
+		"2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02 15:04:05.999Z07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05+07:00",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+
+	loc := time.FixedZone("WIB", 7*3600)
+	for _, layout := range formats {
+		if t, err := time.ParseInLocation(layout, val, loc); err == nil {
+			return t, nil
+		}
+	}
+
+	if epoch, err := strconv.ParseInt(val, 10, 64); err == nil {
+		if epoch > 1e11 {
+			return time.UnixMilli(epoch), nil
+		}
+		return time.Unix(epoch, 0), nil
+	}
+
+	return time.Parse(time.RFC3339, val)
+}
+
 type CreatePromotionInput struct {
-	Caption       string                     `json:"caption" validate:"required,min=3,max=150"`
-	MainProductID string                     `json:"main_product_id" validate:"required"`
-	StartAt       time.Time                  `json:"start_at" validate:"required"`
-	EndAt         time.Time                  `json:"end_at" validate:"required"`
+	Caption       string                     `json:"caption"`
+	MainProductID string                     `json:"main_product_id"`
+	StartAt       time.Time                  `json:"start_at"`
+	EndAt         time.Time                  `json:"end_at"`
 	Products      []CreatePromotionItemInput `json:"products" validate:"required,min=1,max=20"`
+}
+
+func (c *CreatePromotionInput) UnmarshalJSON(data []byte) error {
+	type Alias CreatePromotionInput
+	aux := &struct {
+		RawStartAt interface{} `json:"start_at"`
+		RawEndAt   interface{} `json:"end_at"`
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if aux.RawStartAt != nil {
+		startStr := strings.Trim(fmt.Sprintf("%v", aux.RawStartAt), "\"")
+		if parsed, err := parseFlexibleTime(startStr); err == nil {
+			c.StartAt = parsed
+		}
+	}
+
+	if aux.RawEndAt != nil {
+		endStr := strings.Trim(fmt.Sprintf("%v", aux.RawEndAt), "\"")
+		if parsed, err := parseFlexibleTime(endStr); err == nil {
+			c.EndAt = parsed
+		}
+	}
+
+	// Auto-fallback main_product_id jika kosong tapi ada produk yang dipilih
+	if strings.TrimSpace(c.MainProductID) == "" && len(c.Products) > 0 {
+		c.MainProductID = c.Products[0].ProductID
+	}
+
+	// Auto-fallback caption jika kosong
+	if strings.TrimSpace(c.Caption) == "" {
+		c.Caption = "Promo Spesial Toko"
+	}
+
+	return nil
 }
 
 type BundlingProductItemInput struct {
@@ -177,13 +268,53 @@ type BundlingProductItemInput struct {
 
 type CreateBundlingPromotionInput struct {
 	PackageName  string                     `json:"package_name" validate:"required,min=3,max=100"`
-	Caption      string                     `json:"caption" validate:"required,min=3,max=150"`
+	Caption      string                     `json:"caption"`
 	ImageURL     *string                    `json:"image_url"`
 	PackagePrice float64                    `json:"package_price" validate:"required,gt=0"`
-	StartAt      time.Time                  `json:"start_at" validate:"required"`
+	StartAt      time.Time                  `json:"start_at"`
 	EndAt        *time.Time                 `json:"end_at"`
 	DurationDays *int                       `json:"duration_days" validate:"omitempty,min=1,max=90"`
 	Products     []BundlingProductItemInput `json:"products" validate:"required,min=2,max=20"`
+}
+
+func (c *CreateBundlingPromotionInput) UnmarshalJSON(data []byte) error {
+	type Alias CreateBundlingPromotionInput
+	aux := &struct {
+		RawStartAt interface{} `json:"start_at"`
+		RawEndAt   interface{} `json:"end_at"`
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if aux.RawStartAt != nil {
+		startStr := strings.Trim(fmt.Sprintf("%v", aux.RawStartAt), "\"")
+		if parsed, err := parseFlexibleTime(startStr); err == nil {
+			c.StartAt = parsed
+		}
+	}
+
+	if aux.RawEndAt != nil {
+		endStr := strings.Trim(fmt.Sprintf("%v", aux.RawEndAt), "\"")
+		if parsed, err := parseFlexibleTime(endStr); err == nil {
+			c.EndAt = &parsed
+		}
+	}
+
+	// Auto-fallback caption jika kosong
+	if strings.TrimSpace(c.Caption) == "" {
+		pkgName := strings.TrimSpace(c.PackageName)
+		if pkgName == "" {
+			pkgName = "Paket Hemat"
+		}
+		c.Caption = fmt.Sprintf("Promo Paket: %s", pkgName)
+	}
+
+	return nil
 }
 
 type PromotionBundleItemDetail struct {

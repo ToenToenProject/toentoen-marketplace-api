@@ -66,8 +66,11 @@ func (s *promotionService) CreatePromotion(
 	}
 
 	caption := strings.TrimSpace(input.Caption)
-	if len(caption) < 3 || len(caption) > 150 {
-		return nil, errors.New("caption promosi wajib diisi antara 3 hingga 150 karakter")
+	if caption == "" {
+		caption = "Promo Spesial Toko"
+	}
+	if len(caption) > 150 {
+		caption = caption[:150]
 	}
 
 	if len(input.Products) == 0 {
@@ -78,12 +81,12 @@ func (s *promotionService) CreatePromotion(
 	}
 
 	now := time.Now()
-	// Berikan toleransi mundur 5 menit untuk start_at agar tidak gagal karena sedikit latency jam
-	if input.StartAt.Before(now.Add(-5 * time.Minute)) {
+	// Berikan toleransi mundur untuk start_at agar tidak gagal karena latency atau perbedaan jam client
+	if input.StartAt.IsZero() || input.StartAt.Before(now.Add(-5*time.Minute)) {
 		input.StartAt = now
 	}
-	if !input.EndAt.After(input.StartAt) {
-		return nil, errors.New("tanggal berakhir promosi harus setelah tanggal mulai")
+	if input.EndAt.IsZero() || !input.EndAt.After(input.StartAt) {
+		input.EndAt = input.StartAt.AddDate(0, 0, 7) // Auto-fallback default 7 hari jika end_at tidak valid
 	}
 
 	totalDurationHours := input.EndAt.Sub(input.StartAt).Hours()
@@ -91,7 +94,7 @@ func (s *promotionService) CreatePromotion(
 		return nil, errors.New("durasi maksimal promosi adalah 90 hari")
 	}
 
-	// Cek apakah main_product_id ada di list produk
+	// Cek apakah main_product_id ada di list produk, auto-fallback jika tidak ada
 	mainProductFound := false
 	productIDMap := make(map[string]bool)
 	for _, p := range input.Products {
@@ -107,8 +110,9 @@ func (s *promotionService) CreatePromotion(
 			mainProductFound = true
 		}
 	}
-	if !mainProductFound {
-		return nil, errors.New("produk utama (main_product_id) harus merupakan salah satu produk yang dipilih")
+	if !mainProductFound && len(input.Products) > 0 {
+		input.MainProductID = input.Products[0].ProductID
+		mainProductFound = true
 	}
 
 	// Cek konflik: pastikan produk tidak sedang dalam promosi per-produk aktif/terjadwal lain
@@ -196,12 +200,18 @@ func (s *promotionService) CreatePromotion(
 		} else {
 			// Merchant membuat diskon baru
 			discSource = models.PromotionDiscountSourceNew
-			if item.DiscountType == nil || *item.DiscountType == "" {
-				return nil, fmt.Errorf("tipe diskon (discount_type) wajib diisi untuk produk %s", item.ProductID)
+
+			// Auto-infer discount_type jika kosong
+			if item.DiscountType == nil || strings.TrimSpace(*item.DiscountType) == "" {
+				defaultType := "percentage"
+				if item.Discount != nil && *item.Discount > 100 {
+					defaultType = "nominal"
+				}
+				item.DiscountType = &defaultType
 			}
 			finalDiscType = strings.ToLower(strings.TrimSpace(*item.DiscountType))
 			if finalDiscType != "percentage" && finalDiscType != "nominal" {
-				return nil, fmt.Errorf("tipe diskon produk %s harus 'percentage' atau 'nominal'", item.ProductID)
+				finalDiscType = "percentage"
 			}
 			if item.Discount == nil || *item.Discount <= 0 {
 				return nil, fmt.Errorf("nilai diskon (discount) wajib lebih dari 0 untuk produk %s", item.ProductID)
@@ -213,6 +223,11 @@ func (s *promotionService) CreatePromotion(
 			}
 			if finalDiscType == "nominal" && finalDiscVal >= prodInfo.Price {
 				return nil, fmt.Errorf("nominal diskon produk %s tidak boleh sama atau melebihi harga produk (Rp %.0f)", item.ProductID, prodInfo.Price)
+			}
+
+			// Jika max_discount <= 0, ubah ke nil agar disimpan sebagai SQL NULL
+			if item.MaxDiscount != nil && *item.MaxDiscount <= 0 {
+				item.MaxDiscount = nil
 			}
 			finalMaxDisc = item.MaxDiscount
 		}

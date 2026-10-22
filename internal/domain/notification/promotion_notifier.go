@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"log"
 	"strings"
 	"time"
 
@@ -25,6 +26,12 @@ func NotifyPromotionCreated(
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("⚠️ [PROMOTION-NOTIF-PANIC] Terjadi panic saat mengirim notifikasi promosi: %v", r)
+			}
+		}()
+
 		// 1. Ambil nama toko
 		var biz models.Business
 		if err := db.Select("business_name").Where("business_id = ?", businessID).First(&biz).Error; err != nil {

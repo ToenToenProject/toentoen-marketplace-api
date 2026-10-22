@@ -110,4 +110,52 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 	}
 
 	return false
+}
+
+// ParseFlexibleTime mengurai string waktu ke time.Time dengan mendukung beragam format:
+// RFC3339 (ISO-8601 dengan offset timezone misal +07:00 atau Z), RFC3339Nano,
+// format SQL ("2006-01-02 15:04:05"), datetime-local ("2006-01-02T15:04"),
+// dan date-only ("2006-01-02").
+func ParseFlexibleTime(val string) (time.Time, error) {
+	val = strings.TrimSpace(val)
+	if val == "" || val == "null" {
+		return time.Time{}, nil
+	}
+
+	formats := []string{
+		time.RFC3339,
+		time.RFC3339Nano,
+		"2006-01-02T15:04:05.999999999Z07:00",
+		"2006-01-02T15:04:05.999Z07:00",
+		"2006-01-02T15:04:05.99Z07:00",
+		"2006-01-02T15:04:05.9Z07:00",
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02 15:04:05Z07:00",
+		"2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02 15:04:05.999Z07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05+07:00",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+
+	loc := GetWIBLocation()
+	for _, layout := range formats {
+		if t, err := time.ParseInLocation(layout, val, loc); err == nil {
+			return t, nil
+		}
+	}
+
+	// Coba parse jika dikirimkan sebagai unix timestamp numerik (detik atau milidetik)
+	if epoch, err := strconv.ParseInt(val, 10, 64); err == nil {
+		if epoch > 1e11 {
+			return time.UnixMilli(epoch), nil
+		}
+		return time.Unix(epoch, 0), nil
+	}
+
+	return time.Parse(time.RFC3339, val)
 }
