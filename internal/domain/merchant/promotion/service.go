@@ -16,7 +16,7 @@ import (
 )
 
 type PromotionService interface {
-	GetEligibleProducts(requesterID, role, businessID string) ([]models.EligibleProductItem, error)
+	GetEligibleProducts(requesterID, role, businessID, targetType string) ([]models.EligibleProductItem, error)
 	CreatePromotion(requesterID, role, businessID string, input models.CreatePromotionInput) (*models.PromotionDetailResponse, error)
 	CreateBundlingPromotion(requesterID, role, businessID string, input models.CreateBundlingPromotionInput) (*models.PromotionDetailResponse, error)
 	GetPromotions(requesterID, role, businessID, tab, cursor string, limit int) (models.GetPromotionsResponse, error)
@@ -50,11 +50,11 @@ func (s *promotionService) checkManageAccess(accountID, role, businessID string)
 	return nil
 }
 
-func (s *promotionService) GetEligibleProducts(requesterID, role, businessID string) ([]models.EligibleProductItem, error) {
+func (s *promotionService) GetEligibleProducts(requesterID, role, businessID, targetType string) ([]models.EligibleProductItem, error) {
 	if err := s.checkManageAccess(requesterID, role, businessID); err != nil {
 		return nil, err
 	}
-	return s.repo.GetEligibleProducts(businessID)
+	return s.repo.GetEligibleProducts(businessID, targetType)
 }
 
 func (s *promotionService) CreatePromotion(
@@ -111,19 +111,19 @@ func (s *promotionService) CreatePromotion(
 		return nil, errors.New("produk utama (main_product_id) harus merupakan salah satu produk yang dipilih")
 	}
 
-	// Cek konflik: pastikan produk tidak sedang dalam promosi aktif/terjadwal lain
-	activePromoMap, err := s.repo.GetActivePromotionProductIDs(businessID)
+	// Cek konflik: pastikan produk tidak sedang dalam promosi per-produk aktif/terjadwal lain
+	activePromoMap, err := s.repo.GetActivePromotionProductIDs(businessID, models.PromotionTypePerProduct)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memeriksa status promosi produk: %w", err)
 	}
 	for pID := range productIDMap {
 		if existingPromoID, conflict := activePromoMap[pID]; conflict {
-			return nil, fmt.Errorf("produk %s sudah terdaftar dalam promosi aktif/terjadwal (%s)", pID, existingPromoID)
+			return nil, fmt.Errorf("produk %s sudah terdaftar dalam promosi per-produk aktif/terjadwal (%s)", pID, existingPromoID)
 		}
 	}
 
 	// Ambil data produk dari DB untuk validasi dan snapshot harga
-	eligibleProducts, err := s.repo.GetEligibleProducts(businessID)
+	eligibleProducts, err := s.repo.GetEligibleProducts(businessID, models.PromotionTypePerProduct)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memuat data produk: %w", err)
 	}

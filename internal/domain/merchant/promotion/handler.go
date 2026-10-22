@@ -27,7 +27,8 @@ func (h *PromotionHandler) GetEligibleProducts(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
 	}
 
-	products, err := h.service.GetEligibleProducts(requesterID, requesterRole, businessID)
+	targetType := c.Query("target_type", c.Query("promotion_type", "per_product"))
+	products, err := h.service.GetEligibleProducts(requesterID, requesterRole, businessID, targetType)
 	if err != nil {
 		if strings.Contains(err.Error(), "tidak memiliki izin") || strings.Contains(err.Error(), "tidak memiliki akses") {
 			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)

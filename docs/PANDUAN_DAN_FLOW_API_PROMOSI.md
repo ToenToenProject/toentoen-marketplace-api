@@ -102,15 +102,19 @@ Semua endpoint merchant berada di bawah scope otorisasi bisnis:
 ---
 
 ### 3.1 Ambil Produk Eligible
-Mengambil daftar semua produk aktif milik toko yang **belum terikat** dalam promosi aktif atau terjadwal lain.
+Mengambil daftar semua produk aktif milik toko beserta status eligibilitasnya untuk promosi baru.
 
 - **Method:** `GET`
 - **URL:** `/business/:business_id/promotions/eligible-products`
+- **Query Params:**
+  - `target_type` *(Opsional)*: Tipe promosi yang hendak dibuat:
+    - `per_product` (Default): Evaluasi untuk promosi per-kategori / per-produk reguler. Produk yang sedang aktif di promosi per-produk lain akan berstatus `is_eligible: false`. Namun produk yang sedang ada di paket bundling **tetap `is_eligible: true`**.
+    - `bundling`: Evaluasi untuk promosi paket bundling. Produk yang sedang aktif di promosi per-produk **tetap `is_eligible: true`** dan dapat digabungkan ke paket bundling. Produk yang sudah ada di bundling lain juga tetap `is_eligible: true`.
 - **Response Success (200 OK):**
 ```json
 {
   "responseCode": "00",
-  "message": "Daftar produk eligible berhasil diambil",
+  "message": "Daftar produk yang dapat dipromosikan berhasil dimuat",
   "data": [
     {
       "product_id": "PRD-abc12345",
@@ -118,25 +122,45 @@ Mengambil daftar semua produk aktif milik toko yang **belum terikat** dalam prom
       "image_url": "https://s3.../preview.jpg",
       "price": 25000,
       "is_eligible": true,
+      "ineligible_reason": "",
       "has_existing_discount": true,
       "current_discount_type": "percentage",
       "current_discount": 10,
       "current_max_discount": null,
       "current_discount_start_at": "2026-10-01T00:00:00Z",
-      "current_discount_end_at": "2026-10-25T23:59:59Z"
+      "current_discount_end_at": "2026-10-25T23:59:59Z",
+      "in_per_product_promotion": false,
+      "in_bundling_promotion": true,
+      "active_promotions": [
+        {
+          "promotion_id": "PRM-BND-01",
+          "promotion_type": "bundling",
+          "status": "active"
+        }
+      ]
     },
     {
       "product_id": "PRD-xyz98765",
       "product_name": "Roti Bakar Cokelat Keju",
       "image_url": "https://s3.../roti.jpg",
       "price": 20000,
-      "is_eligible": true,
+      "is_eligible": false,
+      "ineligible_reason": "Produk sedang dalam promosi per-kategori/produk aktif (PRM-CAT-01)",
       "has_existing_discount": false,
       "current_discount_type": "",
       "current_discount": 0,
       "current_max_discount": null,
       "current_discount_start_at": null,
-      "current_discount_end_at": null
+      "current_discount_end_at": null,
+      "in_per_product_promotion": true,
+      "in_bundling_promotion": false,
+      "active_promotions": [
+        {
+          "promotion_id": "PRM-CAT-01",
+          "promotion_type": "per_product",
+          "status": "active"
+        }
+      ]
     }
   ]
 }

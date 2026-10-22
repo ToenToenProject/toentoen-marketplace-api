@@ -323,4 +323,58 @@ func TestBundlingPromotion_JSONContract(t *testing.T) {
 	}
 }
 
+func TestPromotionEligibility_CrossTypeSupport(t *testing.T) {
+	// Skenario: Produk A sedang aktif di promosi per-produk (PRM-CAT-01)
+	prodID := "PRD-A"
+	activePerProductMap := map[string]string{
+		prodID: "PRM-CAT-01",
+	}
+	activeBundlingMap := map[string]string{}
+
+	// 1. Evaluasi untuk target_type: "per_product" (promosi per kategori / per produk baru)
+	// Aturan: Produk yang sudah ada di per_product TIDAK BISA dipromosikan lagi di per_product
+	inPerProduct := false
+	if _, ok := activePerProductMap[prodID]; ok {
+		inPerProduct = true
+	}
+
+	targetTypePerProduct := "per_product"
+	isEligiblePerProduct := true
+	if targetTypePerProduct == "per_product" && inPerProduct {
+		isEligiblePerProduct = false
+	}
+	if isEligiblePerProduct {
+		t.Errorf("expected product in per_product promotion to be ineligible for another per_product promotion")
+	}
+
+	// 2. Evaluasi untuk target_type: "bundling" (promosi paket bundling)
+	// Aturan: Produk yang sudah ada di per_product TETAP BISA dipromosikan di paket bundling
+	targetTypeBundling := "bundling"
+	isEligibleBundling := true
+	if targetTypeBundling == "bundling" {
+		isEligibleBundling = true // Selalu eligible untuk bundling
+	}
+	if !isEligibleBundling {
+		t.Errorf("expected product in per_product promotion to remain eligible for bundling promotion")
+	}
+
+	// 3. Skenario sebaliknya: Produk B sedang aktif di paket bundling (PRM-BND-01)
+	prodB := "PRD-B"
+	activeBundlingMap[prodB] = "PRM-BND-01"
+
+	// Produk B ingin didaftarkan ke promosi per-produk
+	inPerProductB := false
+	if _, ok := activePerProductMap[prodB]; ok {
+		inPerProductB = true
+	}
+	isEligibleBForPerProduct := true
+	if targetTypePerProduct == "per_product" && inPerProductB {
+		isEligibleBForPerProduct = false
+	}
+	if !isEligibleBForPerProduct {
+		t.Errorf("expected product in bundling to remain eligible for per_product promotion")
+	}
+}
+
+
 

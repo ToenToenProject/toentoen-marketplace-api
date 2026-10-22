@@ -130,19 +130,28 @@ func (PromotionEvent) TableName() string {
 // 2. DTO UNTUK REQUEST & RESPONSE (MERCHANT)
 // ==========================================
 
+type ActivePromotionInfo struct {
+	PromotionID   string `json:"promotion_id"`
+	PromotionType string `json:"promotion_type"` // "per_product" | "bundling"
+	Status        string `json:"status"`         // "active" | "scheduled"
+}
+
 type EligibleProductItem struct {
-	ProductID              string     `json:"product_id"`
-	ProductName            string     `json:"product_name"`
-	ImageURL               string     `json:"image_url"`
-	Price                  float64    `json:"price"`
-	IsEligible             bool       `json:"is_eligible"`
-	IneligibleReason       string     `json:"ineligible_reason,omitempty"`
-	HasExistingDiscount    bool       `json:"has_existing_discount"`
-	CurrentDiscountType    string     `json:"current_discount_type,omitempty"`
-	CurrentDiscount        float64    `json:"current_discount,omitempty"`
-	CurrentMaxDiscount     *float64   `json:"current_max_discount,omitempty"`
-	CurrentDiscountStartAt *time.Time `json:"current_discount_start_at,omitempty"`
-	CurrentDiscountEndAt   *time.Time `json:"current_discount_end_at,omitempty"`
+	ProductID              string                `json:"product_id"`
+	ProductName            string                `json:"product_name"`
+	ImageURL               string                `json:"image_url"`
+	Price                  float64               `json:"price"`
+	IsEligible             bool                  `json:"is_eligible"`
+	IneligibleReason       string                `json:"ineligible_reason,omitempty"`
+	HasExistingDiscount    bool                  `json:"has_existing_discount"`
+	CurrentDiscountType    string                `json:"current_discount_type,omitempty"`
+	CurrentDiscount        float64               `json:"current_discount,omitempty"`
+	CurrentMaxDiscount     *float64              `json:"current_max_discount,omitempty"`
+	CurrentDiscountStartAt *time.Time            `json:"current_discount_start_at,omitempty"`
+	CurrentDiscountEndAt   *time.Time            `json:"current_discount_end_at,omitempty"`
+	InPerProductPromotion  bool                  `json:"in_per_product_promotion"`
+	InBundlingPromotion    bool                  `json:"in_bundling_promotion"`
+	ActivePromotions       []ActivePromotionInfo `json:"active_promotions,omitempty"`
 }
 
 type CreatePromotionItemInput struct {
