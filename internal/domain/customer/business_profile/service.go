@@ -24,6 +24,10 @@ type SimpleProductResponse struct {
 	AverageRating  float64  `json:"average_rating"`
 	ReviewCount    int      `json:"review_count"`
 	StockStatus    string   `json:"stock_status"`
+	// Bundling Promotion support
+	IsBundle         bool    `json:"is_bundle"`
+	PromotionID      *string `json:"promotion_id,omitempty"`
+	BundleItemsCount int     `json:"bundle_items_count,omitempty"`
 }
 
 type BusinessProfileResponse struct {
@@ -376,6 +380,62 @@ func (s *service) GetAllProducts(businessID string, groupID string) ([]SimplePro
 	}
 
 	var simpleProducts []SimpleProductResponse
+
+	// Jika melihat grup "Promosi" atau katalog umum, sertakan paket bundling aktif di paling atas
+	if groupID == "promotion" || groupID == "" {
+		bundlingPromos, _ := s.repo.GetActiveBundlingPromotions(businessID)
+		for _, bp := range bundlingPromos {
+			pkgName := ""
+			if bp.PackageName != nil {
+				pkgName = *bp.PackageName
+			}
+			previews := []string{}
+			if bp.PackageImage != nil && *bp.PackageImage != "" {
+				previews = []string{*bp.PackageImage}
+			}
+			stockStatus := "in_stock"
+			for _, item := range bp.BundleItems {
+				if item.Product != nil && len(previews) == 0 && len(item.Product.ProductPreview) > 0 {
+					previews = append(previews, item.Product.ProductPreview[0])
+				}
+				if item.Product != nil && item.Product.StockType == "out_of_stock" {
+					stockStatus = "out_of_stock"
+				}
+			}
+
+			var pkgPrice, origPrice, savAmt, savPct float64
+			if bp.PackagePrice != nil {
+				pkgPrice = *bp.PackagePrice
+			}
+			if bp.OriginalTotalPrice != nil {
+				origPrice = *bp.OriginalTotalPrice
+			}
+			if bp.SavingsAmount != nil {
+				savAmt = *bp.SavingsAmount
+			}
+			if bp.SavingsPercentage != nil {
+				savPct = *bp.SavingsPercentage
+			}
+
+			promoID := bp.PromotionID
+			simpleProducts = append(simpleProducts, SimpleProductResponse{
+				ProductID:        bp.PromotionID,
+				ProductName:      pkgName,
+				ProductPreview:   previews,
+				Price:            pkgPrice,
+				OriginalPrice:    &origPrice,
+				IsDiscounted:     true,
+				DiscountType:     "nominal",
+				DiscountAmount:   savAmt,
+				DiscountPct:      savPct,
+				StockStatus:      stockStatus,
+				IsBundle:         true,
+				PromotionID:      &promoID,
+				BundleItemsCount: len(bp.BundleItems),
+			})
+		}
+	}
+
 	for _, p := range products {
 		simpleProducts = append(simpleProducts, mapToSimpleProduct(p))
 	}

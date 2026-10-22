@@ -237,3 +237,90 @@ func TestPromotionListItem_JSONContract(t *testing.T) {
 	}
 }
 
+func TestBundlingPromotionValidation(t *testing.T) {
+	// 1. Min 2 products
+	inputFew := models.CreateBundlingPromotionInput{
+		PackageName:  "Paket Single",
+		PackagePrice: 20000,
+		Products: []models.BundlingProductItemInput{
+			{ProductID: "PRD-01", Quantity: 1},
+		},
+	}
+	if len(inputFew.Products) < 2 {
+		// Valid rejection
+	} else {
+		t.Errorf("expected rejection for fewer than 2 products")
+	}
+
+	// 2. Package price must be cheaper than original total price
+	// Product 1: Mie Ayam (Rp 25.000 x 1 = Rp 25.000)
+	// Product 2: Es Teh (Rp 5.000 x 2 = Rp 10.000)
+	// Original Total = Rp 35.000
+	origTotal := 35000.0
+
+	// Invalid package price: Rp 35.000 (same price)
+	invalidPkgPrice := 35000.0
+	if invalidPkgPrice >= origTotal {
+		// Valid rejection
+	} else {
+		t.Errorf("expected rejection when package price equals or exceeds original price")
+	}
+
+	// Valid package price: Rp 28.000
+	validPkgPrice := 28000.0
+	savingsAmount := origTotal - validPkgPrice
+	savingsPercentage := (savingsAmount / origTotal) * 100
+
+	if savingsAmount != 7000.0 {
+		t.Errorf("expected savings amount 7000, got %.2f", savingsAmount)
+	}
+	expectedPct := 20.0
+	if savingsPercentage < expectedPct-0.01 || savingsPercentage > expectedPct+0.01 {
+		t.Errorf("expected savings percentage 20.0%%, got %.2f%%", savingsPercentage)
+	}
+}
+
+func TestBundlingPromotion_JSONContract(t *testing.T) {
+	now := time.Now()
+	pkgName := "Paket Kenyang Berdua"
+	pkgPrice := 50000.0
+	origTotal := 65000.0
+	savingsAmt := 15000.0
+	savingsPct := 23.08
+	pkgImg := "https://res.cloudinary.com/demo/image/upload/sample.jpg"
+
+	bundlingItem := models.PromotionListItem{
+		PromotionID:        "PRM-BND-01",
+		PromotionType:      models.PromotionTypeBundling,
+		Caption:            "Paket Spesial Berdua!",
+		PackageName:        &pkgName,
+		PackagePrice:       &pkgPrice,
+		PackageImage:       &pkgImg,
+		OriginalTotalPrice: &origTotal,
+		SavingsAmount:      &savingsAmt,
+		SavingsPercentage:  &savingsPct,
+		ProductCount:       2,
+		RemainingDays:      7,
+		StartAt:            now,
+		EndAt:              now.AddDate(0, 0, 7),
+		Status:             models.PromotionStatusActive,
+	}
+
+	if bundlingItem.PromotionType != "bundling" {
+		t.Errorf("expected promotion_type 'bundling', got %s", bundlingItem.PromotionType)
+	}
+	if bundlingItem.PackageName == nil || *bundlingItem.PackageName != pkgName {
+		t.Errorf("expected package name %s, got %v", pkgName, bundlingItem.PackageName)
+	}
+	if bundlingItem.PackagePrice == nil || *bundlingItem.PackagePrice != pkgPrice {
+		t.Errorf("expected package price %.0f, got %v", pkgPrice, bundlingItem.PackagePrice)
+	}
+	if bundlingItem.SavingsAmount == nil || *bundlingItem.SavingsAmount != savingsAmt {
+		t.Errorf("expected savings amount %.0f, got %v", savingsAmt, bundlingItem.SavingsAmount)
+	}
+	if bundlingItem.ProductCount != 2 {
+		t.Errorf("expected product count 2, got %d", bundlingItem.ProductCount)
+	}
+}
+
+

@@ -72,9 +72,11 @@ func NotifyPromotionCreated(
 			recipients = append(recipients, id)
 		}
 
-		// 5. Tentukan image_url dari produk utama
+		// 5. Tentukan image_url dari produk utama / paket bundling
 		imageURL := ""
-		if mainProduct != nil && len(mainProduct.ProductPreview) > 0 {
+		if promo.PromotionType == models.PromotionTypeBundling && promo.PackageImage != nil && *promo.PackageImage != "" {
+			imageURL = *promo.PackageImage
+		} else if mainProduct != nil && len(mainProduct.ProductPreview) > 0 {
 			imageURL = mainProduct.ProductPreview[0]
 		}
 
@@ -86,6 +88,8 @@ func NotifyPromotionCreated(
 			"business_id":          businessID,
 			"business_name":        businessName,
 			"promotion_id":         promo.PromotionID,
+			"promotion_type":       promo.PromotionType,
+			"package_name":         promo.PackageName,
 			"caption":              promo.Caption,
 			"image_url":            imageURL,
 			"main_product_id":      promo.MainProductID,

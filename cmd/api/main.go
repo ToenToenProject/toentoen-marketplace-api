@@ -716,6 +716,7 @@ func main() {
 	promoRoutes.Get("/eligible-products", promotionHandler.GetEligibleProducts)
 	promoRoutes.Post("", middlewares.RequireKYC, promotionHandler.CreatePromotion)
 	promoRoutes.Post("/", middlewares.RequireKYC, promotionHandler.CreatePromotion)
+	promoRoutes.Post("/bundling", middlewares.RequireKYC, promotionHandler.CreateBundlingPromotion)
 	promoRoutes.Get("", promotionHandler.GetPromotions)
 	promoRoutes.Get("/", promotionHandler.GetPromotions)
 	promoRoutes.Get("/:promotion_id", promotionHandler.GetPromotionDetail)
@@ -808,6 +809,7 @@ func main() {
 	// Customer Promotion Tracking & Detail
 	api.Post("/customer/promotions/events", middlewares.OptionalAuth, customerPromotionHandler.RecordEvents)
 	api.Get("/customer/promotions/:promotion_id", middlewares.OptionalAuth, customerPromotionHandler.GetPromotionDetail)
+	api.Get("/customer/promotions/bundling/:promotion_id", middlewares.OptionalAuth, customerPromotionHandler.GetPromotionDetail)
 
 	// ==========================================
 	// ROUTES: LIVE LOCATION

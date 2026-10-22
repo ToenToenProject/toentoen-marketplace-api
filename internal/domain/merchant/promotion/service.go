@@ -18,6 +18,7 @@ import (
 type PromotionService interface {
 	GetEligibleProducts(requesterID, role, businessID string) ([]models.EligibleProductItem, error)
 	CreatePromotion(requesterID, role, businessID string, input models.CreatePromotionInput) (*models.PromotionDetailResponse, error)
+	CreateBundlingPromotion(requesterID, role, businessID string, input models.CreateBundlingPromotionInput) (*models.PromotionDetailResponse, error)
 	GetPromotions(requesterID, role, businessID, tab, cursor string, limit int) (models.GetPromotionsResponse, error)
 	GetPromotionDetail(requesterID, role, businessID, promotionID string) (*models.PromotionDetailResponse, error)
 	GetCustomerPromotionDetail(promotionID string) (*models.PromotionDetailResponse, error)
@@ -311,6 +312,203 @@ func (s *promotionService) CreatePromotion(
 	return s.GetPromotionDetail(requesterID, role, businessID, promotionID)
 }
 
+func (s *promotionService) CreateBundlingPromotion(
+	requesterID, role, businessID string,
+	input models.CreateBundlingPromotionInput,
+) (*models.PromotionDetailResponse, error) {
+	if err := s.checkManageAccess(requesterID, role, businessID); err != nil {
+		return nil, err
+	}
+
+	packageName := strings.TrimSpace(input.PackageName)
+	if len(packageName) < 3 || len(packageName) > 100 {
+		return nil, errors.New("nama paket bundling wajib diisi antara 3 hingga 100 karakter")
+	}
+
+	caption := strings.TrimSpace(input.Caption)
+	if caption == "" {
+		caption = fmt.Sprintf("Promo Paket Hemat: %s!", packageName)
+	}
+	if len(caption) > 150 {
+		return nil, errors.New("caption promosi maksimal 150 karakter")
+	}
+
+	if input.PackagePrice <= 0 {
+		return nil, errors.New("harga paket bundling harus lebih besar dari 0")
+	}
+
+	if len(input.Products) < 2 {
+		return nil, errors.New("minimal 2 produk yang harus dipilih untuk paket bundling")
+	}
+	if len(input.Products) > 20 {
+		return nil, errors.New("maksimal 20 produk yang dapat diikutsertakan dalam paket bundling")
+	}
+
+	// Deduplikasi produk ID & validasi kuantitas
+	productIDs := make([]string, 0, len(input.Products))
+	qtyMap := make(map[string]int)
+	for _, p := range input.Products {
+		cleanID := strings.TrimSpace(p.ProductID)
+		if cleanID == "" {
+			return nil, errors.New("product_id tidak boleh kosong")
+		}
+		if _, exists := qtyMap[cleanID]; exists {
+			return nil, fmt.Errorf("produk %s dimasukkan lebih dari satu kali, gunakan kuantitas untuk menambah porsi", cleanID)
+		}
+		qty := p.Quantity
+		if qty <= 0 {
+			qty = 1
+		}
+		qtyMap[cleanID] = qty
+		productIDs = append(productIDs, cleanID)
+	}
+
+	now := time.Now()
+	if input.StartAt.Before(now.Add(-5 * time.Minute)) {
+		input.StartAt = now
+	}
+
+	var endAt time.Time
+	if input.EndAt != nil && !input.EndAt.IsZero() {
+		endAt = *input.EndAt
+	} else if input.DurationDays != nil && *input.DurationDays > 0 {
+		endAt = input.StartAt.AddDate(0, 0, *input.DurationDays)
+	} else {
+		endAt = input.StartAt.AddDate(0, 0, 7) // Default 7 hari
+	}
+
+	if !endAt.After(input.StartAt) {
+		return nil, errors.New("tanggal berakhir promosi harus setelah tanggal mulai")
+	}
+
+	if endAt.Sub(input.StartAt).Hours() > 90*24 {
+		return nil, errors.New("durasi maksimal promosi adalah 90 hari")
+	}
+
+	// Ambil produk dari database
+	products, err := s.repo.GetProductsByIDs(businessID, productIDs)
+	if err != nil {
+		return nil, fmt.Errorf("gagal memeriksa produk: %w", err)
+	}
+
+	prodMap := make(map[string]models.Product)
+	for _, p := range products {
+		prodMap[p.ProductID] = p
+	}
+
+	var originalTotalPrice float64
+	promotionID := utils.GenerateUUID("PRM")
+	bundleItems := make([]models.PromotionBundleItem, 0, len(input.Products))
+
+	for _, pid := range productIDs {
+		prod, exists := prodMap[pid]
+		if !exists {
+			return nil, fmt.Errorf("produk dengan ID %s tidak ditemukan atau tidak aktif di bisnis ini", pid)
+		}
+		qty := qtyMap[pid]
+		originalTotalPrice += prod.Price * float64(qty)
+
+		bundleItems = append(bundleItems, models.PromotionBundleItem{
+			PromotionID:     promotionID,
+			ProductID:       pid,
+			Quantity:        qty,
+			ItemNormalPrice: prod.Price,
+		})
+	}
+
+	// Validasi: harga paket harus lebih murah dari total harga normal produk
+	if input.PackagePrice >= originalTotalPrice {
+		return nil, fmt.Errorf("harga paket (Rp %.0f) harus lebih murah dari total harga normal produk (Rp %.0f)", input.PackagePrice, originalTotalPrice)
+	}
+
+	savingsAmount := originalTotalPrice - input.PackagePrice
+	savingsPercentage := math.Round((savingsAmount/originalTotalPrice)*10000) / 100
+
+	// Penentuan foto paket
+	var packageImage *string
+	if input.ImageURL != nil && strings.TrimSpace(*input.ImageURL) != "" {
+		cleaned := strings.TrimSpace(*input.ImageURL)
+		packageImage = &cleaned
+	} else if firstProd, ok := prodMap[productIDs[0]]; ok && len(firstProd.ProductPreview) > 0 {
+		img := firstProd.ProductPreview[0]
+		packageImage = &img
+	}
+
+	isActiveNow := !input.StartAt.After(now)
+	status := models.PromotionStatusScheduled
+	var notifiedAt *time.Time
+	if isActiveNow {
+		status = models.PromotionStatusActive
+		notifiedAt = &now
+	}
+
+	mainProductID := productIDs[0]
+	promo := &models.Promotion{
+		PromotionID:        promotionID,
+		BusinessID:         businessID,
+		Caption:            caption,
+		MainProductID:      mainProductID,
+		StartAt:            input.StartAt,
+		EndAt:              endAt,
+		Status:             status,
+		NotifiedAt:         notifiedAt,
+		CreatedBy:          requesterID,
+		PromotionType:      models.PromotionTypeBundling,
+		PackageName:        &packageName,
+		PackagePrice:       &input.PackagePrice,
+		PackageImage:       packageImage,
+		OriginalTotalPrice: &originalTotalPrice,
+		SavingsAmount:      &savingsAmount,
+		SavingsPercentage:  &savingsPercentage,
+	}
+
+	// Buat auto-post di feed jika promosi langsung aktif
+	var autoPost *models.BusinessPost
+	if isActiveNow {
+		postImages := make([]string, 0)
+		if packageImage != nil && *packageImage != "" {
+			postImages = append(postImages, *packageImage)
+		}
+		autoPost = &models.BusinessPost{
+			PostID:         utils.GenerateUUID("PST"),
+			BusinessID:     businessID,
+			Content:        caption,
+			Images:         postImages,
+			IsPromotion:    true,
+			PromotionID:    &promotionID,
+			PromotionEndAt: &endAt,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}
+	}
+
+	if err := s.repo.CreateBundlingPromotion(promo, bundleItems, autoPost); err != nil {
+		return nil, fmt.Errorf("gagal membuat promosi bundling: %w", err)
+	}
+
+	// Jika langsung aktif, kirim notifikasi dan sync search
+	if isActiveNow && s.notifService != nil {
+		var mainProdModel *models.Product
+		if firstProd, ok := prodMap[productIDs[0]]; ok {
+			bundlePreview := []string{}
+			if packageImage != nil && *packageImage != "" {
+				bundlePreview = []string{*packageImage}
+			} else {
+				bundlePreview = firstProd.ProductPreview
+			}
+			mainProdModel = &models.Product{
+				ProductID:      firstProd.ProductID,
+				ProductName:    packageName,
+				ProductPreview: bundlePreview,
+			}
+		}
+		notification.NotifyPromotionCreated(database.DB, s.notifService, businessID, promo, mainProdModel, productIDs, requesterID)
+		go meilisearch.SyncBusiness(database.DB, businessID)
+	}
+
+	return s.GetPromotionDetail(requesterID, role, businessID, promotionID)
+}
+
 func (s *promotionService) GetPromotions(
 	requesterID, role, businessID, tab, cursor string,
 	limit int,
@@ -348,7 +546,47 @@ func (s *promotionService) GetPromotions(
 		}
 
 		var mainCard *models.PromotionMainProductCard
-		if p.MainProduct != nil {
+		pType := models.PromotionTypeCatalog
+		prodCount := len(p.Products)
+
+		if p.PromotionType == models.PromotionTypeBundling {
+			pType = models.PromotionTypeBundling
+			prodCount = len(p.BundleItems)
+			bundleImg := ""
+			if p.PackageImage != nil && *p.PackageImage != "" {
+				bundleImg = *p.PackageImage
+			} else if p.MainProduct != nil && len(p.MainProduct.ProductPreview) > 0 {
+				bundleImg = p.MainProduct.ProductPreview[0]
+			}
+			var pkgPrice, origTotal, savAmt, savPct float64
+			if p.PackagePrice != nil {
+				pkgPrice = *p.PackagePrice
+			}
+			if p.OriginalTotalPrice != nil {
+				origTotal = *p.OriginalTotalPrice
+			}
+			if p.SavingsAmount != nil {
+				savAmt = *p.SavingsAmount
+			}
+			if p.SavingsPercentage != nil {
+				savPct = *p.SavingsPercentage
+			}
+			pkgName := ""
+			if p.PackageName != nil {
+				pkgName = *p.PackageName
+			}
+			mainCard = &models.PromotionMainProductCard{
+				ProductID:      p.MainProductID,
+				ProductName:    pkgName,
+				ImageURL:       bundleImg,
+				OriginalPrice:  origTotal,
+				FinalPrice:     pkgPrice,
+				DiscountType:   "nominal",
+				Discount:       savAmt,
+				DiscountAmount: savAmt,
+				DiscountPct:    savPct,
+			}
+		} else if p.MainProduct != nil {
 			img := ""
 			if len(p.MainProduct.ProductPreview) > 0 {
 				img = p.MainProduct.ProductPreview[0]
@@ -367,21 +605,34 @@ func (s *promotionService) GetPromotions(
 			}
 		}
 
+		var bundleCount *int
+		if p.PromotionType == models.PromotionTypeBundling {
+			cnt := len(p.BundleItems)
+			bundleCount = &cnt
+		}
+
 		allItems = append(allItems, models.PromotionListItem{
-			PromotionID:     p.PromotionID,
-			PromotionType:   models.PromotionTypeCatalog,
-			PostID:          p.PostID,
-			Caption:         p.Caption,
-			MainProduct:     mainCard,
-			Post:            nil,
-			ProductCount:    len(p.Products),
-			RemainingDays:   remainingDays,
-			StartAt:         p.StartAt,
-			EndAt:           p.EndAt,
-			Status:          p.Status,
-			ImpressionCount: p.ImpressionCount,
-			ClickCount:      p.ClickCount,
-			CreatedAt:       p.CreatedAt,
+			PromotionID:        p.PromotionID,
+			PromotionType:      pType,
+			PostID:             p.PostID,
+			Caption:            p.Caption,
+			MainProduct:        mainCard,
+			Post:               nil,
+			PackageName:        p.PackageName,
+			PackagePrice:       p.PackagePrice,
+			PackageImage:       p.PackageImage,
+			OriginalTotalPrice: p.OriginalTotalPrice,
+			SavingsAmount:      p.SavingsAmount,
+			SavingsPercentage:  p.SavingsPercentage,
+			BundleItemCount:    bundleCount,
+			ProductCount:       prodCount,
+			RemainingDays:      remainingDays,
+			StartAt:            p.StartAt,
+			EndAt:              p.EndAt,
+			Status:             p.Status,
+			ImpressionCount:    p.ImpressionCount,
+			ClickCount:         p.ClickCount,
+			CreatedAt:          p.CreatedAt,
 		})
 	}
 
@@ -501,6 +752,75 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 		remainingDays = int(math.Ceil(promo.EndAt.Sub(now).Hours() / 24.0))
 	}
 
+	var postCard *models.PromotionPostCard
+	if promo.Post != nil {
+		postCard = &models.PromotionPostCard{
+			PostID:       promo.Post.PostID,
+			Content:      promo.Post.Content,
+			Images:       promo.Post.Images,
+			VideoURL:     promo.Post.VideoURL,
+			LikeCount:    promo.Post.LikeCount,
+			CommentCount: promo.Post.CommentCount,
+		}
+	}
+
+	mainProdID := promo.MainProductID
+
+	if promo.PromotionType == models.PromotionTypeBundling {
+		bundleItemDetails := make([]models.PromotionBundleItemDetail, 0, len(promo.BundleItems))
+		for _, bi := range promo.BundleItems {
+			name := ""
+			img := ""
+			normPrice := bi.ItemNormalPrice
+			if bi.Product != nil {
+				name = bi.Product.ProductName
+				if len(bi.Product.ProductPreview) > 0 {
+					img = bi.Product.ProductPreview[0]
+				}
+				if normPrice == 0 {
+					normPrice = bi.Product.Price
+				}
+			}
+			qty := bi.Quantity
+			if qty <= 0 {
+				qty = 1
+			}
+			bundleItemDetails = append(bundleItemDetails, models.PromotionBundleItemDetail{
+				ProductID:           bi.ProductID,
+				ProductName:         name,
+				ImageURL:            img,
+				Quantity:            qty,
+				NormalPrice:         normPrice,
+				SubtotalNormalPrice: normPrice * float64(qty),
+			})
+		}
+
+		return &models.PromotionDetailResponse{
+			PromotionID:        promo.PromotionID,
+			PromotionType:      models.PromotionTypeBundling,
+			BusinessID:         promo.BusinessID,
+			Caption:            promo.Caption,
+			MainProductID:      &mainProdID,
+			PostID:             promo.PostID,
+			Post:               postCard,
+			PackageName:        promo.PackageName,
+			PackagePrice:       promo.PackagePrice,
+			PackageImage:       promo.PackageImage,
+			OriginalTotalPrice: promo.OriginalTotalPrice,
+			SavingsAmount:      promo.SavingsAmount,
+			SavingsPercentage:  promo.SavingsPercentage,
+			StartAt:            promo.StartAt,
+			EndAt:              promo.EndAt,
+			Status:             promo.Status,
+			RemainingDays:      remainingDays,
+			ImpressionCount:    promo.ImpressionCount,
+			ClickCount:         promo.ClickCount,
+			CreatedAt:          promo.CreatedAt,
+			Products:           []models.PromotionProductDetailItem{},
+			BundleItems:        bundleItemDetails,
+		}
+	}
+
 	productDetails := make([]models.PromotionProductDetailItem, 0, len(promo.Products))
 	for _, pp := range promo.Products {
 		name := ""
@@ -538,7 +858,6 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 		})
 	}
 
-	mainProdID := promo.MainProductID
 	return &models.PromotionDetailResponse{
 		PromotionID:     promo.PromotionID,
 		PromotionType:   models.PromotionTypeCatalog,
@@ -546,7 +865,7 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 		Caption:         promo.Caption,
 		MainProductID:   &mainProdID,
 		PostID:          promo.PostID,
-		Post:            nil,
+		Post:            postCard,
 		StartAt:         promo.StartAt,
 		EndAt:           promo.EndAt,
 		Status:          promo.Status,
@@ -555,6 +874,7 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 		ClickCount:      promo.ClickCount,
 		CreatedAt:       promo.CreatedAt,
 		Products:        productDetails,
+		BundleItems:     []models.PromotionBundleItemDetail{},
 	}
 }
 

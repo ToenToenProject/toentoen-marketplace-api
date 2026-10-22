@@ -23,36 +23,64 @@ const (
 	PromotionEventSourceNotification    = "notification"
 	PromotionEventSourceProductGroup    = "product_group"
 
-	PromotionTypeCatalog = "catalog"
-	PromotionTypePost    = "post"
+	PromotionTypeCatalog    = "catalog"
+	PromotionTypePost       = "post"
+	PromotionTypePerProduct = "per_product"
+	PromotionTypeBundling   = "bundling"
 )
 
 type Promotion struct {
-	PromotionID     string     `gorm:"primaryKey;column:promotion_id" json:"promotion_id"`
-	BusinessID      string     `gorm:"column:business_id;index" json:"business_id"`
-	Caption         string     `gorm:"column:caption;size:150" json:"caption"`
-	MainProductID   string     `gorm:"column:main_product_id" json:"main_product_id"`
-	PostID          *string    `gorm:"column:post_id" json:"post_id,omitempty"`
-	StartAt         time.Time  `gorm:"column:start_at" json:"start_at"`
-	EndAt           time.Time  `gorm:"column:end_at" json:"end_at"`
-	Status          string     `gorm:"column:status;default:'scheduled'" json:"status"`
-	NotifiedAt      *time.Time `gorm:"column:notified_at" json:"notified_at,omitempty"`
-	StoppedAt       *time.Time `gorm:"column:stopped_at" json:"stopped_at,omitempty"`
-	ImpressionCount int        `gorm:"column:impression_count;default:0" json:"impression_count"`
-	ClickCount      int        `gorm:"column:click_count;default:0" json:"click_count"`
-	CreatedBy       string     `gorm:"column:created_by" json:"created_by"`
-	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt       time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	PromotionID        string     `gorm:"primaryKey;column:promotion_id" json:"promotion_id"`
+	BusinessID         string     `gorm:"column:business_id;index" json:"business_id"`
+	Caption            string     `gorm:"column:caption;size:150" json:"caption"`
+	MainProductID      string     `gorm:"column:main_product_id" json:"main_product_id"`
+	PostID             *string    `gorm:"column:post_id" json:"post_id,omitempty"`
+	StartAt            time.Time  `gorm:"column:start_at" json:"start_at"`
+	EndAt              time.Time  `gorm:"column:end_at" json:"end_at"`
+	Status             string     `gorm:"column:status;default:'scheduled'" json:"status"`
+	NotifiedAt         *time.Time `gorm:"column:notified_at" json:"notified_at,omitempty"`
+	StoppedAt          *time.Time `gorm:"column:stopped_at" json:"stopped_at,omitempty"`
+	ImpressionCount    int        `gorm:"column:impression_count;default:0" json:"impression_count"`
+	ClickCount         int        `gorm:"column:click_count;default:0" json:"click_count"`
+	CreatedBy          string     `gorm:"column:created_by" json:"created_by"`
+	CreatedAt          time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt          time.Time  `gorm:"column:updated_at" json:"updated_at"`
+
+	// Kolom khusus tipe Bundling
+	PromotionType      string   `gorm:"column:promotion_type;default:'per_product'" json:"promotion_type"`
+	PackageName        *string  `gorm:"column:package_name" json:"package_name,omitempty"`
+	PackagePrice       *float64 `gorm:"column:package_price" json:"package_price,omitempty"`
+	PackageImage       *string  `gorm:"column:package_image" json:"package_image,omitempty"`
+	OriginalTotalPrice *float64 `gorm:"column:original_total_price" json:"original_total_price,omitempty"`
+	SavingsAmount      *float64 `gorm:"column:savings_amount" json:"savings_amount,omitempty"`
+	SavingsPercentage  *float64 `gorm:"column:savings_percentage" json:"savings_percentage,omitempty"`
 
 	// Relasi
-	Business    *Business          `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
-	MainProduct *Product           `gorm:"foreignKey:MainProductID;references:ProductID" json:"main_product,omitempty"`
-	Post        *BusinessPost      `gorm:"foreignKey:PostID;references:PostID" json:"post,omitempty"`
-	Products    []PromotionProduct `gorm:"foreignKey:PromotionID;references:PromotionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"products,omitempty"`
+	Business    *Business              `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	MainProduct *Product               `gorm:"foreignKey:MainProductID;references:ProductID" json:"main_product,omitempty"`
+	Post        *BusinessPost          `gorm:"foreignKey:PostID;references:PostID" json:"post,omitempty"`
+	Products    []PromotionProduct     `gorm:"foreignKey:PromotionID;references:PromotionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"products,omitempty"`
+	BundleItems []PromotionBundleItem `gorm:"foreignKey:PromotionID;references:PromotionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"bundle_items,omitempty"`
 }
 
 func (Promotion) TableName() string {
 	return "promotions"
+}
+
+type PromotionBundleItem struct {
+	PromotionID     string    `gorm:"primaryKey;column:promotion_id" json:"promotion_id"`
+	ProductID       string    `gorm:"primaryKey;column:product_id" json:"product_id"`
+	Quantity        int       `gorm:"column:quantity;default:1" json:"quantity"`
+	ItemNormalPrice float64   `gorm:"column:item_normal_price;default:0" json:"item_normal_price"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
+
+	// Relasi
+	Promotion *Promotion `gorm:"foreignKey:PromotionID;references:PromotionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"promotion,omitempty"`
+	Product   *Product   `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
+}
+
+func (PromotionBundleItem) TableName() string {
+	return "promotion_bundle_items"
 }
 
 type PromotionProduct struct {
@@ -133,6 +161,31 @@ type CreatePromotionInput struct {
 	Products      []CreatePromotionItemInput `json:"products" validate:"required,min=1,max=20"`
 }
 
+type BundlingProductItemInput struct {
+	ProductID string `json:"product_id" validate:"required"`
+	Quantity  int    `json:"quantity" validate:"omitempty,min=1"`
+}
+
+type CreateBundlingPromotionInput struct {
+	PackageName  string                     `json:"package_name" validate:"required,min=3,max=100"`
+	Caption      string                     `json:"caption" validate:"required,min=3,max=150"`
+	ImageURL     *string                    `json:"image_url"`
+	PackagePrice float64                    `json:"package_price" validate:"required,gt=0"`
+	StartAt      time.Time                  `json:"start_at" validate:"required"`
+	EndAt        *time.Time                 `json:"end_at"`
+	DurationDays *int                       `json:"duration_days" validate:"omitempty,min=1,max=90"`
+	Products     []BundlingProductItemInput `json:"products" validate:"required,min=2,max=20"`
+}
+
+type PromotionBundleItemDetail struct {
+	ProductID           string  `json:"product_id"`
+	ProductName         string  `json:"product_name"`
+	ImageURL            string  `json:"image_url"`
+	Quantity            int     `json:"quantity"`
+	NormalPrice         float64 `json:"normal_price"`
+	SubtotalNormalPrice float64 `json:"subtotal_normal_price"`
+}
+
 type ExtendPromotionInput struct {
 	AddDays *int       `json:"add_days" validate:"omitempty,min=1,max=90"`
 	EndAt   *time.Time `json:"end_at"`
@@ -166,20 +219,27 @@ type PromotionPostCard struct {
 }
 
 type PromotionListItem struct {
-	PromotionID     string                    `json:"promotion_id"`
-	PromotionType   string                    `json:"promotion_type"` // "catalog" | "post"
-	PostID          *string                   `json:"post_id"`
-	Caption         string                    `json:"caption"`
-	MainProduct     *PromotionMainProductCard `json:"main_product"`
-	Post            *PromotionPostCard        `json:"post"`
-	ProductCount    int                       `json:"product_count"`
-	RemainingDays   int                       `json:"remaining_days"` // Dibulatkan ke atas
-	StartAt         time.Time                 `json:"start_at"`
-	EndAt           time.Time                 `json:"end_at"`
-	Status          string                    `json:"status"`
-	ImpressionCount int                       `json:"impression_count"`
-	ClickCount      int                       `json:"click_count"`
-	CreatedAt       time.Time                 `json:"created_at"`
+	PromotionID        string                    `json:"promotion_id"`
+	PromotionType      string                    `json:"promotion_type"` // "catalog" | "post" | "bundling" | "per_product"
+	PostID             *string                   `json:"post_id"`
+	Caption            string                    `json:"caption"`
+	MainProduct        *PromotionMainProductCard `json:"main_product,omitempty"`
+	Post               *PromotionPostCard        `json:"post,omitempty"`
+	PackageName        *string                   `json:"package_name,omitempty"`
+	PackagePrice       *float64                  `json:"package_price,omitempty"`
+	PackageImage       *string                   `json:"package_image,omitempty"`
+	OriginalTotalPrice *float64                  `json:"original_total_price,omitempty"`
+	SavingsAmount      *float64                  `json:"savings_amount,omitempty"`
+	SavingsPercentage  *float64                  `json:"savings_percentage,omitempty"`
+	BundleItemCount    *int                      `json:"bundle_item_count,omitempty"`
+	ProductCount       int                       `json:"product_count"`
+	RemainingDays      int                       `json:"remaining_days"` // Dibulatkan ke atas
+	StartAt            time.Time                 `json:"start_at"`
+	EndAt              time.Time                 `json:"end_at"`
+	Status             string                    `json:"status"`
+	ImpressionCount    int                       `json:"impression_count"`
+	ClickCount         int                       `json:"click_count"`
+	CreatedAt          time.Time                 `json:"created_at"`
 }
 
 type PromotionProductDetailItem struct {
@@ -198,21 +258,28 @@ type PromotionProductDetailItem struct {
 }
 
 type PromotionDetailResponse struct {
-	PromotionID     string                       `json:"promotion_id"`
-	PromotionType   string                       `json:"promotion_type"` // "catalog" | "post"
-	BusinessID      string                       `json:"business_id"`
-	Caption         string                       `json:"caption"`
-	MainProductID   *string                      `json:"main_product_id,omitempty"`
-	PostID          *string                      `json:"post_id,omitempty"`
-	Post            *PromotionPostCard           `json:"post,omitempty"`
-	StartAt         time.Time                    `json:"start_at"`
-	EndAt           time.Time                    `json:"end_at"`
-	Status          string                       `json:"status"`
-	RemainingDays   int                          `json:"remaining_days"`
-	ImpressionCount int                          `json:"impression_count"`
-	ClickCount      int                          `json:"click_count"`
-	CreatedAt       time.Time                    `json:"created_at"`
-	Products        []PromotionProductDetailItem `json:"products"`
+	PromotionID        string                       `json:"promotion_id"`
+	PromotionType      string                       `json:"promotion_type"` // "catalog" | "post" | "bundling" | "per_product"
+	BusinessID         string                       `json:"business_id"`
+	Caption            string                       `json:"caption"`
+	MainProductID      *string                      `json:"main_product_id,omitempty"`
+	PostID             *string                      `json:"post_id,omitempty"`
+	Post               *PromotionPostCard           `json:"post,omitempty"`
+	PackageName        *string                      `json:"package_name,omitempty"`
+	PackagePrice       *float64                     `json:"package_price,omitempty"`
+	PackageImage       *string                      `json:"package_image,omitempty"`
+	OriginalTotalPrice *float64                     `json:"original_total_price,omitempty"`
+	SavingsAmount      *float64                     `json:"savings_amount,omitempty"`
+	SavingsPercentage  *float64                     `json:"savings_percentage,omitempty"`
+	StartAt            time.Time                    `json:"start_at"`
+	EndAt              time.Time                    `json:"end_at"`
+	Status             string                       `json:"status"`
+	RemainingDays      int                          `json:"remaining_days"`
+	ImpressionCount    int                          `json:"impression_count"`
+	ClickCount         int                          `json:"click_count"`
+	CreatedAt          time.Time                    `json:"created_at"`
+	Products           []PromotionProductDetailItem `json:"products,omitempty"`
+	BundleItems        []PromotionBundleItemDetail  `json:"bundle_items,omitempty"`
 }
 
 type GetPromotionsResponse struct {

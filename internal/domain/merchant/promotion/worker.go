@@ -63,8 +63,16 @@ func processScheduledPromotions(
 
 			// 2. Buat auto-post feed promosi
 			img := ""
-			if pCopy.MainProduct != nil && len(pCopy.MainProduct.ProductPreview) > 0 {
-				img = pCopy.MainProduct.ProductPreview[0]
+			if pCopy.PromotionType == models.PromotionTypeBundling {
+				if pCopy.PackageImage != nil && *pCopy.PackageImage != "" {
+					img = *pCopy.PackageImage
+				} else if len(pCopy.BundleItems) > 0 && pCopy.BundleItems[0].Product != nil && len(pCopy.BundleItems[0].Product.ProductPreview) > 0 {
+					img = pCopy.BundleItems[0].Product.ProductPreview[0]
+				}
+			} else {
+				if pCopy.MainProduct != nil && len(pCopy.MainProduct.ProductPreview) > 0 {
+					img = pCopy.MainProduct.ProductPreview[0]
+				}
 			}
 			images := []string{}
 			if img != "" {
@@ -95,19 +103,21 @@ func processScheduledPromotions(
 				return err
 			}
 
-			// 3. Tulis diskon ke tabel products
-			for _, pp := range pCopy.Products {
-				if err := tx.Model(&models.Product{}).
-					Where("product_id = ? AND business_id = ?", pp.ProductID, pCopy.BusinessID).
-					Updates(map[string]interface{}{
-						"discount_type":     pp.DiscountType,
-						"discount":          pp.Discount,
-						"max_discount":      pp.MaxDiscount,
-						"discount_start_at": &pCopy.StartAt,
-						"discount_end_at":   &pCopy.EndAt,
-						"updated_at":        now,
-					}).Error; err != nil {
-					return err
+			// 3. Tulis diskon ke tabel products jika per_product
+			if pCopy.PromotionType != models.PromotionTypeBundling {
+				for _, pp := range pCopy.Products {
+					if err := tx.Model(&models.Product{}).
+						Where("product_id = ? AND business_id = ?", pp.ProductID, pCopy.BusinessID).
+						Updates(map[string]interface{}{
+							"discount_type":     pp.DiscountType,
+							"discount":          pp.Discount,
+							"max_discount":      pp.MaxDiscount,
+							"discount_start_at": &pCopy.StartAt,
+							"discount_end_at":   &pCopy.EndAt,
+							"updated_at":        now,
+						}).Error; err != nil {
+						return err
+					}
 				}
 			}
 
@@ -123,11 +133,22 @@ func processScheduledPromotions(
 
 		// 4. Kirim notifikasi broadcast & sync search
 		if notifService != nil {
-			productIDs := make([]string, 0, len(pCopy.Products))
-			for _, pp := range pCopy.Products {
-				productIDs = append(productIDs, pp.ProductID)
+			productIDs := make([]string, 0)
+			var mainProd *models.Product
+			if pCopy.PromotionType == models.PromotionTypeBundling {
+				for _, bi := range pCopy.BundleItems {
+					productIDs = append(productIDs, bi.ProductID)
+				}
+				if len(pCopy.BundleItems) > 0 {
+					mainProd = pCopy.BundleItems[0].Product
+				}
+			} else {
+				for _, pp := range pCopy.Products {
+					productIDs = append(productIDs, pp.ProductID)
+				}
+				mainProd = pCopy.MainProduct
 			}
-			notification.NotifyPromotionCreated(database.DB, notifService, pCopy.BusinessID, &pCopy, pCopy.MainProduct, productIDs, pCopy.CreatedBy)
+			notification.NotifyPromotionCreated(database.DB, notifService, pCopy.BusinessID, &pCopy, mainProd, productIDs, pCopy.CreatedBy)
 		}
 		go meilisearch.SyncBusiness(database.DB, pCopy.BusinessID)
 	}

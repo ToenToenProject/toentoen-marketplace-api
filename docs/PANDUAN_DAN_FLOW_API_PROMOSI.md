@@ -182,28 +182,86 @@ Membuat promosi toko, menetapkan produk promosi, memilih produk utama untuk prev
    - Jika `keep_existing_discount: true`, sistem menggunakan nilai diskon yang sudah ada di produk tersebut.
    - Jika `keep_existing_discount: false`, `discount_type` ("percentage" atau "nominal") dan `discount` wajib diisi valid.
 
+---
+
+### 3.2.2 Buat Promosi Paket Bundling (Bundling Promotion)
+Menggabungkan **minimal 2 produk** menjadi **1 paket promosi utuh** dengan harga khusus paket (`package_price`) yang lebih murah daripada total harga normal gabungan produk.
+
+- **Method:** `POST`
+- **URL:** `/business/:business_id/promotions/bundling`
+- **Middleware:** `RequireAuth`, `RequireKYC`, `BusinessAccessGuard`
+- **Payload Request:**
+```json
+{
+  "package_name": "Paket Kenyang Power Duo",
+  "caption": "Hemat 20%! Paket Mie Ayam Komplit + Es Teh Manis Segar.",
+  "package_price": 28000,
+  "image_url": "https://res.cloudinary.com/demo/image/upload/sample.jpg",
+  "start_at": "2026-10-22T10:00:00+07:00",
+  "duration_days": 7,
+  "products": [
+    {
+      "product_id": "PRD-mie-ayam",
+      "quantity": 1
+    },
+    {
+      "product_id": "PRD-es-teh",
+      "quantity": 2
+    }
+  ]
+}
+```
+
+#### Aturan & Validasi Bundling:
+1. `package_name`: Wajib diisi, antara **3 hingga 100 karakter**.
+2. `package_price`: Wajib lebih besar dari 0, dan **wajib lebih murah** dari total akumulasi harga normal produk (`original_total_price`).
+3. `products`: **Minimal 2 jenis produk**, maksimal 20 produk.
+4. `quantity`: Kuantitas per item produk dalam paket (default: 1 jika tidak diisi atau <= 0).
+5. `image_url` *(Opsional)*: Foto representasi paket bundling. Jika kosong, sistem otomatis menggunakan foto dari produk pertama.
+6. `duration_days` *(Opsional)*: Durasi paket (misal 3, 7, 14 hari). Jika memilih tanggal kustom, gunakan field `end_at`.
+7. `start_at` *(Opsional)*: Jika tidak diisi atau <= saat ini, promosi langsung `active`. Jika di masa depan, berstatus `scheduled`.
+
 - **Response Success (201 Created):**
 ```json
 {
   "responseCode": "00",
-  "message": "Promosi berhasil dibuat",
+  "message": "Promosi paket bundling berhasil dibuat",
   "data": {
-    "promotion_id": "PRM-1a2b3c4d",
+    "promotion_id": "PRM-98765432",
+    "promotion_type": "bundling",
     "business_id": "BIZ-001",
-    "caption": "Promo Gajian Spesial! Nikmati diskon hingga 30% untuk menu favorit Anda.",
-    "status": "scheduled",
-    "start_at": "2026-10-20T08:00:00+07:00",
-    "end_at": "2026-10-27T23:59:59+07:00",
-    "days_remaining": 7,
-    "main_product": {
-      "product_id": "PRD-abc12345",
-      "product_name": "Kopi Susu Gula Aren",
-      "image_url": "https://s3.../preview.jpg"
-    },
-    "products_count": 2,
+    "caption": "Hemat 20%! Paket Mie Ayam Komplit + Es Teh Manis Segar.",
+    "package_name": "Paket Kenyang Power Duo",
+    "package_price": 28000,
+    "package_image": "https://res.cloudinary.com/demo/image/upload/sample.jpg",
+    "original_total_price": 35000,
+    "savings_amount": 7000,
+    "savings_percentage": 20,
+    "status": "active",
+    "start_at": "2026-10-22T10:00:00+07:00",
+    "end_at": "2026-10-29T10:00:00+07:00",
+    "remaining_days": 7,
+    "bundle_items": [
+      {
+        "product_id": "PRD-mie-ayam",
+        "product_name": "Mie Ayam Komplit",
+        "image_url": "https://s3.../mie.jpg",
+        "quantity": 1,
+        "normal_price": 25000,
+        "subtotal_normal_price": 25000
+      },
+      {
+        "product_id": "PRD-es-teh",
+        "product_name": "Es Teh Manis",
+        "image_url": "https://s3.../teh.jpg",
+        "quantity": 2,
+        "normal_price": 5000,
+        "subtotal_normal_price": 10000
+      }
+    ],
     "impression_count": 0,
     "click_count": 0,
-    "created_at": "2026-10-19T18:00:00+07:00"
+    "created_at": "2026-10-22T10:00:00+07:00"
   }
 }
 ```

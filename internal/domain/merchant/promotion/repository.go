@@ -21,6 +21,9 @@ type PromotionRepository interface {
 	GetEligibleProducts(businessID string) ([]models.EligibleProductItem, error)
 	GetActivePromotionProductIDs(businessID string) (map[string]string, error) // product_id -> promotion_id
 	CreatePromotion(promo *models.Promotion, promoProducts []models.PromotionProduct, productsToUpdate []models.Product, autoPost *models.BusinessPost) error
+	CreateBundlingPromotion(promo *models.Promotion, bundleItems []models.PromotionBundleItem, autoPost *models.BusinessPost) error
+	GetProductsByIDs(businessID string, productIDs []string) ([]models.Product, error)
+	GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error)
 
 	GetPromotionSummary(businessID string) (models.PromotionSummary, error)
 	GetPromotions(businessID, tab, cursor string, limit int) ([]models.Promotion, error)
@@ -194,6 +197,64 @@ func (r *promotionRepository) CreatePromotion(
 	})
 }
 
+func (r *promotionRepository) CreateBundlingPromotion(
+	promo *models.Promotion,
+	bundleItems []models.PromotionBundleItem,
+	autoPost *models.BusinessPost,
+) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 1. Simpan master promosi bundling (tanpa PostID)
+		promo.PostID = nil
+		promo.PromotionType = models.PromotionTypeBundling
+		if err := tx.Create(promo).Error; err != nil {
+			return fmt.Errorf("gagal menyimpan promosi bundling: %w", err)
+		}
+
+		// 2. Simpan auto-post feed jika ada
+		if autoPost != nil {
+			if err := tx.Create(autoPost).Error; err != nil {
+				return fmt.Errorf("gagal membuat postingan feed promosi bundling: %w", err)
+			}
+			promo.PostID = &autoPost.PostID
+
+			// Tautkan post_id kembali ke promosi
+			if err := tx.Model(&models.Promotion{}).
+				Where("promotion_id = ?", promo.PromotionID).
+				Update("post_id", autoPost.PostID).Error; err != nil {
+				return fmt.Errorf("gagal menautkan postingan ke promosi: %w", err)
+			}
+		}
+
+		// 3. Simpan item-item bundling
+		if len(bundleItems) > 0 {
+			if err := tx.Create(&bundleItems).Error; err != nil {
+				return fmt.Errorf("gagal menyimpan item bundling: %w", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+func (r *promotionRepository) GetProductsByIDs(businessID string, productIDs []string) ([]models.Product, error) {
+	var products []models.Product
+	if len(productIDs) == 0 {
+		return products, nil
+	}
+	err := r.db.Where("business_id = ? AND product_id IN ? AND is_active = true", businessID, productIDs).Find(&products).Error
+	return products, err
+}
+
+func (r *promotionRepository) GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error) {
+	var promos []models.Promotion
+	err := r.db.
+		Preload("BundleItems.Product").
+		Where("business_id = ? AND promotion_type = ? AND status = ?", businessID, models.PromotionTypeBundling, models.PromotionStatusActive).
+		Order("created_at DESC").
+		Find(&promos).Error
+	return promos, err
+}
+
 func (r *promotionRepository) GetPromotionSummary(businessID string) (models.PromotionSummary, error) {
 	var summary models.PromotionSummary
 	type Row struct {
@@ -232,6 +293,7 @@ func (r *promotionRepository) GetPromotions(businessID, tab, cursor string, limi
 	query := r.db.Model(&models.Promotion{}).
 		Preload("MainProduct").
 		Preload("Products").
+		Preload("BundleItems.Product").
 		Where("business_id = ?", businessID)
 
 	switch tab {
@@ -276,6 +338,7 @@ func (r *promotionRepository) GetPromotionByID(businessID, promotionID string) (
 		Preload("MainProduct").
 		Preload("Post").
 		Preload("Products.Product").
+		Preload("BundleItems.Product").
 		Where("promotion_id = ?", strings.TrimSpace(promotionID))
 
 	if strings.TrimSpace(businessID) != "" {
@@ -513,6 +576,7 @@ func (r *promotionRepository) GetScheduledPromotionsToActivate(now time.Time) ([
 	err := r.db.
 		Preload("MainProduct").
 		Preload("Products.Product").
+		Preload("BundleItems.Product").
 		Where("status = ? AND start_at <= ?", models.PromotionStatusScheduled, now).
 		Find(&promos).Error
 	return promos, err

@@ -22,6 +22,7 @@ type Repository interface {
 
 	GetAllProductGroups(businessID string) ([]models.ProductGroup, error)
 	HasActivePromotion(businessID string) bool
+	GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error)
 	GetAllProducts(businessID string, groupID string) ([]models.Product, error)
 	GetAllPosts(businessID string) ([]models.BusinessPost, error)
 	GetPostLikesByAccount(accountID string, postIDs []string) (map[string]bool, error)
@@ -216,6 +217,16 @@ func (r *repository) HasActivePromotion(businessID string) bool {
 		Where("business_id = ? AND status = ?", businessID, models.PromotionStatusActive).
 		Count(&count)
 	return count > 0
+}
+
+func (r *repository) GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error) {
+	var promos []models.Promotion
+	err := r.db.
+		Preload("BundleItems.Product").
+		Where("business_id = ? AND promotion_type = ? AND status = ?", businessID, models.PromotionTypeBundling, models.PromotionStatusActive).
+		Order("created_at DESC").
+		Find(&promos).Error
+	return promos, err
 }
 
 func (r *repository) GetAllProducts(businessID string, groupID string) ([]models.Product, error) {
