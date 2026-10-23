@@ -27,18 +27,27 @@ type MatchedProductPreview struct {
 	StockType      string   `json:"stock_type"`
 }
 
+type MeiliBusinessHour struct {
+	DayOfWeek int    `json:"day_of_week"`
+	OpenTime  string `json:"open_time"`
+	CloseTime string `json:"close_time"`
+	IsClosed  bool   `json:"is_closed"`
+}
+
 type MeiliBusinessDocument struct {
-	ID             string      `json:"id"`
-	Name           string      `json:"name"`
-	Products       []string    `json:"products"`
-	Rating         float64     `json:"rating"`
-	ReviewCount    int64       `json:"review_count"`
-	PreviewImages  []string    `json:"preview_images"`
-	IsOpen         bool        `json:"is_open"`
-	CloseTime      string      `json:"close_time"`
-	Geo            GeoLocation `json:"_geo"`
-	Distance       float64     `json:"_geoDistance,omitempty"`
-	IsWithinRadius bool        `json:"is_within_radius,omitempty"`
+	ID               string              `json:"id"`
+	Name             string              `json:"name"`
+	Products         []string            `json:"products"`
+	Rating           float64             `json:"rating"`
+	ReviewCount      int64               `json:"review_count"`
+	PreviewImages    []string            `json:"preview_images"`
+	IsOpen           bool                `json:"is_open"`
+	IsManuallyClosed bool                `json:"is_manually_closed"`
+	CloseTime        string              `json:"close_time"`
+	Hours            []MeiliBusinessHour `json:"hours"`
+	Geo              GeoLocation         `json:"_geo"`
+	Distance         float64             `json:"_geoDistance,omitempty"`
+	IsWithinRadius   bool                `json:"is_within_radius"`
 
 	// Category fields
 	CategoryID    int64    `json:"category_id,omitempty"`
@@ -113,6 +122,7 @@ func InitMeilisearchIndices() {
 		"_geo",
 		"rating",
 		"is_open",
+		"is_manually_closed",
 		"category_id",
 		"category_ids",
 		"category_names",
@@ -330,10 +340,35 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 		}
 	}
 
+	// Hours
+	hours := b.Hours
+	if len(hours) == 0 && db != nil {
+		db.Where("business_id = ?", b.BusinessID).Order("day_of_week ASC").Find(&hours)
+	}
+
+	meiliHours := make([]MeiliBusinessHour, 0, len(hours))
+	for _, h := range hours {
+		openStr := ""
+		if h.OpenTime != nil {
+			openStr = *h.OpenTime
+		}
+		closeStr := ""
+		if h.CloseTime != nil {
+			closeStr = *h.CloseTime
+		}
+		isClosed := h.IsClosed || openStr == "" || closeStr == ""
+		meiliHours = append(meiliHours, MeiliBusinessHour{
+			DayOfWeek: h.DayOfWeek,
+			OpenTime:  openStr,
+			CloseTime: closeStr,
+			IsClosed:  isClosed,
+		})
+	}
+
 	// Calculate IsOpen and CloseTime
-	isOpen := utils.CalculateStoreStatus(b.IsManuallyClosed, b.Hours, b.ConfirmedOpenDate, b.ConfirmedOvertimeDate)
+	isOpen := utils.CalculateStoreStatus(b.IsManuallyClosed, hours, b.ConfirmedOpenDate, b.ConfirmedOvertimeDate)
 	closeTime := ""
-	for _, h := range b.Hours {
+	for _, h := range hours {
 		if h.DayOfWeek == currentDayInt && h.CloseTime != nil {
 			closeTime = *h.CloseTime
 			break
@@ -371,14 +406,16 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 	}
 
 	doc := MeiliBusinessDocument{
-		ID:              b.BusinessID,
-		Name:            name,
-		Products:        productNames,
-		Rating:          b.AverageRating,
-		ReviewCount:     b.ReviewCount,
-		PreviewImages:   previewImages,
-		IsOpen:          isOpen,
-		CloseTime:       closeTime,
+		ID:               b.BusinessID,
+		Name:             name,
+		Products:         productNames,
+		Rating:           b.AverageRating,
+		ReviewCount:      b.ReviewCount,
+		PreviewImages:    previewImages,
+		IsOpen:           isOpen,
+		IsManuallyClosed: b.IsManuallyClosed,
+		CloseTime:        closeTime,
+		Hours:            meiliHours,
 		CategoryID:      primaryCatID,
 		CategoryIDs:     categoryIDs,
 		CategoryNames:   categoryNames,
@@ -770,3 +807,78 @@ func SyncAllProducts(db *gorm.DB) (int, error) {
 	log.Printf("✅ Selesai sync! %d produk telah disinkronkan ke Meilisearch 'products'", len(prodDocs))
 	return len(prodDocs), nil
 }
+
+// UpdateBusinessStatus sends an immediate partial update to Meilisearch for is_open, is_manually_closed, and close_time
+func UpdateBusinessStatus(db *gorm.DB, businessID string) error {
+	if Client == nil || db == nil || businessID == "" {
+		return nil
+	}
+
+	var b models.Business
+	if err := db.Preload("Hours").Where("business_id = ?", businessID).First(&b).Error; err != nil {
+		return err
+	}
+
+	loc := utils.GetWIBLocation()
+	now := time.Now().In(loc)
+	currentDayInt := int(now.Weekday())
+
+	isOpen := utils.CalculateStoreStatus(b.IsManuallyClosed, b.Hours, b.ConfirmedOpenDate, b.ConfirmedOvertimeDate)
+	closeTime := ""
+	for _, h := range b.Hours {
+		if h.DayOfWeek == currentDayInt && h.CloseTime != nil {
+			closeTime = *h.CloseTime
+			break
+		}
+	}
+
+	primaryKey := "id"
+	// 1. Partial update index "businesses"
+	bizIndex := Client.Index("businesses")
+	updateDoc := map[string]interface{}{
+		"id":                 b.BusinessID,
+		"is_open":            isOpen,
+		"is_manually_closed": b.IsManuallyClosed,
+		"close_time":         closeTime,
+	}
+	_, err := bizIndex.UpdateDocuments([]map[string]interface{}{updateDoc}, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
+	if err != nil {
+		log.Printf("⚠️ Gagal update status bisnis %s di Meilisearch: %v", businessID, err)
+	}
+
+	// 2. Partial update seluruh produk milik toko ini di index "products"
+	var productIDs []string
+	if errProd := db.Model(&models.Product{}).Where("business_id = ? AND is_active = ?", businessID, true).Pluck("product_id", &productIDs).Error; errProd == nil && len(productIDs) > 0 {
+		prodUpdates := make([]map[string]interface{}, 0, len(productIDs))
+		for _, pid := range productIDs {
+			prodUpdates = append(prodUpdates, map[string]interface{}{
+				"id":      pid,
+				"is_open": isOpen,
+			})
+		}
+		prodIndex := Client.Index("products")
+		_, _ = prodIndex.UpdateDocuments(prodUpdates, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
+	}
+
+	log.Printf("⏰ [RealTimeStatus] Status bisnis %s diperbarui di Meilisearch (is_open=%v, is_manually_closed=%v, close_time=%s)", businessID, isOpen, b.IsManuallyClosed, closeTime)
+	return err
+}
+
+type BusinessStatusBatchUpdate struct {
+	ID               string `json:"id"`
+	IsOpen           bool   `json:"is_open"`
+	IsManuallyClosed bool   `json:"is_manually_closed"`
+	CloseTime        string `json:"close_time"`
+}
+
+// BatchUpdateBusinessStatuses updates multiple businesses' status in Meilisearch
+func BatchUpdateBusinessStatuses(updates []BusinessStatusBatchUpdate) error {
+	if Client == nil || len(updates) == 0 {
+		return nil
+	}
+	primaryKey := "id"
+	bizIndex := Client.Index("businesses")
+	_, err := bizIndex.UpdateDocuments(updates, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
+	return err
+}
+

@@ -5,12 +5,111 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"gorm.io/gorm"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/utils"
 )
+
+var (
+	storeStatusCacheMu   sync.RWMutex
+	lastKnownStoreStatus = make(map[string]bool)
+)
+
+// SetLastKnownStoreStatus updates the in-memory cache of store open status
+func SetLastKnownStoreStatus(businessID string, isOpen bool) {
+	storeStatusCacheMu.Lock()
+	defer storeStatusCacheMu.Unlock()
+	lastKnownStoreStatus[businessID] = isOpen
+}
+
+// StartStoreStatusSyncWorker menjalankan background scheduler setiap 1 menit (sesuai zona waktu WIB)
+// untuk mengevaluasi status operasional (buka/tutup) seluruh toko secara real-time berdasarkan jam operasional toko,
+// serta menyinkronkan status tersebut ke Meilisearch jika terjadi perubahan status.
+func StartStoreStatusSyncWorker(db *gorm.DB) {
+	if db == nil {
+		return
+	}
+
+	go func() {
+		// Evaluasi langsung saat worker pertama kali dijalankan
+		EvaluateAndSyncAllStoreStatuses(db)
+
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			EvaluateAndSyncAllStoreStatuses(db)
+		}
+	}()
+}
+
+// EvaluateAndSyncAllStoreStatuses memeriksa semua bisnis aktif dan jam operasionalnya saat ini di WIB.
+// Jika status buka/tutup toko berubah (atau belum tersinkron), otomatis update dokumen Meilisearch.
+func EvaluateAndSyncAllStoreStatuses(db *gorm.DB) {
+	if meilisearch.Client == nil || db == nil {
+		return
+	}
+
+	var businesses []models.Business
+	err := db.Preload("Hours").Where("is_active = ? AND status != ?", true, "deleted").Find(&businesses).Error
+	if err != nil || len(businesses) == 0 {
+		return
+	}
+
+	loc := utils.GetWIBLocation()
+	now := time.Now().In(loc)
+	currentDayInt := int(now.Weekday())
+
+	bizUpdates := make([]meilisearch.BusinessStatusBatchUpdate, 0)
+	var changedBizIDs []string
+
+	storeStatusCacheMu.Lock()
+	for i := range businesses {
+		b := &businesses[i]
+		isOpen := utils.CalculateStoreStatus(b.IsManuallyClosed, b.Hours, b.ConfirmedOpenDate, b.ConfirmedOvertimeDate)
+
+		lastOpen, tracked := lastKnownStoreStatus[b.BusinessID]
+		if !tracked || lastOpen != isOpen {
+			lastKnownStoreStatus[b.BusinessID] = isOpen
+			changedBizIDs = append(changedBizIDs, b.BusinessID)
+
+			closeTime := ""
+			for _, h := range b.Hours {
+				if h.DayOfWeek == currentDayInt && h.CloseTime != nil {
+					closeTime = *h.CloseTime
+					break
+				}
+			}
+
+			bizUpdates = append(bizUpdates, meilisearch.BusinessStatusBatchUpdate{
+				ID:               b.BusinessID,
+				IsOpen:           isOpen,
+				IsManuallyClosed: b.IsManuallyClosed,
+				CloseTime:        closeTime,
+			})
+		}
+	}
+	storeStatusCacheMu.Unlock()
+
+	if len(bizUpdates) > 0 {
+		if err := meilisearch.BatchUpdateBusinessStatuses(bizUpdates); err != nil {
+			log.Printf("⚠️ [StoreStatusWorker] Gagal sync status %d bisnis ke Meilisearch: %v", len(bizUpdates), err)
+		} else {
+			log.Printf("⏰ [StoreStatusWorker] Berhasil memperbarui status buka/tutup %d bisnis ke Meilisearch", len(bizUpdates))
+		}
+
+		// Update juga status is_open produk milik toko-toko yang berubah
+		for _, bid := range changedBizIDs {
+			_ = meilisearch.UpdateBusinessStatus(db, bid)
+		}
+	}
+}
 
 // StartScheduleReminderWorker menjalankan scheduler berkala setiap pergantian jam (menit ke-00 WIB)
 // untuk mengirimkan notifikasi konfirmasi buka, bersambung/24 jam, dan tutup kepada merchant.
@@ -34,6 +133,7 @@ func StartScheduleReminderWorker(businessRepo BusinessRepository, notifService n
 				log.Println("[CRON-MIDNIGHT] Menutup otomatis toko yang lupa dimatikan dan mereset status live...")
 				_ = businessRepo.ResetManualCloseStatus()
 				_ = businessRepo.ResetLiveStatus()
+				EvaluateAndSyncAllStoreStatuses(database.DB)
 			}
 
 			// 2. Periksa jadwal toko dan kirim pengingat konfirmasi 1 jam sebelumnya

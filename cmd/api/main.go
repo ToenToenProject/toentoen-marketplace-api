@@ -127,6 +127,7 @@ func main() {
 
 	businessRepo := business.NewBusinessRepository(database.DB)
 	business.StartScheduleReminderWorker(businessRepo, notifService) // Jalankan worker pengingat jadwal & auto-close
+	business.StartStoreStatusSyncWorker(database.DB)                 // Jalankan worker evaluasi buka/tutup toko per menit ke Meilisearch
 	businessService := business.NewBusinessService(businessRepo, notifService)
 	businessHandler := business.NewBusinessHandler(businessService)
 

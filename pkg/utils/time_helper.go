@@ -52,6 +52,9 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 	hasScheduleToday := false
 	for _, h := range hours {
 		if h.DayOfWeek == currentDay {
+			if h.IsClosed {
+				return false
+			}
 			// Parse OpenTime dan CloseTime (Format dari DB bisa "08:00:00" atau "08:00")
 			if h.OpenTime != nil && h.CloseTime != nil {
 				hasScheduleToday = true

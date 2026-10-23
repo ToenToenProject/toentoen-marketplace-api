@@ -136,6 +136,7 @@ type BusinessHour struct {
 	DayOfWeek  int     `gorm:"primaryKey;column:day_of_week" json:"day_of_week"`
 	OpenTime   *string `gorm:"column:open_time" json:"open_time"`
 	CloseTime  *string `gorm:"column:close_time" json:"close_time"`
+	IsClosed   bool    `gorm:"column:is_closed;default:false" json:"is_closed"`
 
 	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 }
@@ -190,6 +191,7 @@ type BusinessHourInput struct {
 	DayOfWeek int    `json:"day_of_week"`
 	OpenTime  string `json:"open_time"`
 	CloseTime string `json:"close_time"`
+	IsClosed  bool   `json:"is_closed"`
 }
 
 type UpdateBusinessInput struct {

@@ -268,7 +268,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 			DayOfWeek: h.DayOfWeek,
 			OpenTime:  toPointerOrNil(h.OpenTime),
 			CloseTime: toPointerOrNil(h.CloseTime),
-			// IsClosed diabaikan, diasumsikan open jika masuk list
+			IsClosed:  h.IsClosed,
 		}
 		hours = append(hours, hour)
 	}
@@ -763,6 +763,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 				DayOfWeek: h.DayOfWeek,
 				OpenTime:  toPointerOrNil(h.OpenTime),
 				CloseTime: toPointerOrNil(h.CloseTime),
+				IsClosed:  h.IsClosed,
 			}
 			mappedHours = append(mappedHours, hour)
 		}
@@ -823,6 +824,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		)
 	}
 
+	_ = meilisearch.UpdateBusinessStatus(database.DB, businessID)
 	go meilisearch.SyncBusiness(database.DB, businessID)
 
 	return nil
@@ -903,6 +905,7 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
 	}
 
+	_ = meilisearch.UpdateBusinessStatus(database.DB, businessID)
 	go meilisearch.SyncBusiness(database.DB, businessID)
 
 	// 🔔 Notifikasi ke Owner jika dilakukan oleh staf admin
@@ -973,6 +976,7 @@ func (s *businessService) ConfirmScheduleAction(requesterID, businessID string, 
 		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
 	}
 
+	_ = meilisearch.UpdateBusinessStatus(database.DB, businessID)
 	go meilisearch.SyncBusiness(database.DB, businessID)
 
 	return nil

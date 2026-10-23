@@ -415,6 +415,9 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 			for _, hit := range res.Hits {
 				var doc MeiliBusinessDocument
 				if err := hit.DecodeInto(&doc); err == nil {
+					if doc.Hours == nil {
+						doc.Hours = []myMeili.MeiliBusinessHour{}
+					}
 					doc.Distance = doc.Distance / 1000 // Convert meters to km
 					docs = append(docs, doc)
 				}
