@@ -171,7 +171,10 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
 	}
 
-	go meilisearch.SyncBusiness(database.DB, businessID)
+	go func() {
+		_ = meilisearch.SyncProduct(database.DB, product.ProductID)
+		_ = meilisearch.SyncBusiness(database.DB, businessID)
+	}()
 
 	return nil
 }
@@ -332,7 +335,10 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
 	}
 
-	go meilisearch.SyncBusiness(database.DB, businessID)
+	go func() {
+		_ = meilisearch.SyncProduct(database.DB, productID)
+		_ = meilisearch.SyncBusiness(database.DB, businessID)
+	}()
 
 	return nil
 }
@@ -367,7 +373,10 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 		)
 	}
 
-	go meilisearch.SyncBusiness(database.DB, businessID)
+	go func() {
+		_ = meilisearch.DeleteProductDoc(productID)
+		_ = meilisearch.SyncBusiness(database.DB, businessID)
+	}()
 
 	return nil
 }
@@ -575,7 +584,14 @@ func (s *productService) BulkUpdateStatus(requesterID, role, businessID string, 
 	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermEditProduct) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah status produk")
 	}
-	return s.repo.BulkUpdateStatus(businessID, productIDs, isActive)
+	if err := s.repo.BulkUpdateStatus(businessID, productIDs, isActive); err != nil {
+		return err
+	}
+	go func() {
+		_ = meilisearch.SyncBusinessProducts(database.DB, businessID)
+		_ = meilisearch.SyncBusiness(database.DB, businessID)
+	}()
+	return nil
 }
 
 // 7. BULK DELETE
@@ -606,7 +622,12 @@ func (s *productService) BulkDelete(requesterID, role, businessID string, produc
 		)
 	}
 
-	go meilisearch.SyncBusiness(database.DB, businessID)
+	go func() {
+		for _, pid := range productIDs {
+			_ = meilisearch.DeleteProductDoc(pid)
+		}
+		_ = meilisearch.SyncBusiness(database.DB, businessID)
+	}()
 
 	return nil
 }

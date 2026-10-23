@@ -229,7 +229,11 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 
 	res, err := h.service.GetExploreBusinesses(req)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Gagal mencari bisnis", nil)
+		errMsg := "Gagal mencari bisnis"
+		if req.Scope == "product" {
+			errMsg = "Gagal mencari produk"
+		}
+		return utils.SendResponse(c, 500, "99", errMsg, nil)
 	}
 
 	return utils.SendResponse(c, 200, "00", "Berhasil memuat eksplorasi bisnis", res)

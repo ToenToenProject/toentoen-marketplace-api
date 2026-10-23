@@ -33,7 +33,7 @@ type ExploreSummary struct {
 type ExploreResponse struct {
 	Scope      string                  `json:"scope"`
 	Businesses []MeiliBusinessDocument `json:"businesses"`
-	Products   []MeiliProductDocument  `json:"products,omitempty"`
+	Products   []MeiliProductDocument  `json:"products"`
 	Summary    ExploreSummary          `json:"summary"`
 	Pagination PaginationMeta          `json:"pagination"`
 }
@@ -122,6 +122,7 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 	return ExploreResponse{
 		Scope:      req.Scope,
 		Businesses: docs,
+		Products:   []MeiliProductDocument{},
 		Summary: ExploreSummary{
 			WithinRadiusCount:  summary.WithinRadiusCount,
 			OutsideRadiusCount: summary.OutsideRadiusCount,

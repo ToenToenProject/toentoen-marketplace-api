@@ -66,7 +66,7 @@ type MeiliBusinessDocument struct {
 }
 
 type MeiliProductDocument struct {
-	ID             string      `json:"id"`
+	ID             string      `json:"id,omitempty"`
 	ProductID      string      `json:"product_id"`
 	ProductName    string      `json:"product_name"`
 	ProductPreview []string    `json:"product_preview"`
@@ -74,7 +74,7 @@ type MeiliProductDocument struct {
 	FinalPrice     float64     `json:"final_price"`
 	IsDiscounted   bool        `json:"is_discounted"`
 	DiscountPct    float64     `json:"discount_pct"`
-	DiscountAmount float64     `json:"discount_amount"`
+	DiscountAmount float64     `json:"discount_amount,omitempty"`
 	StockType      string      `json:"stock_type"`
 	BusinessID     string      `json:"business_id"`
 	BusinessName   string      `json:"business_name"`
@@ -84,12 +84,12 @@ type MeiliProductDocument struct {
 	Rating         float64     `json:"rating"`
 	ReviewCount    int64       `json:"review_count"`
 	Hashtags       []string    `json:"hashtags"`
-	CategoryIDs    []int64     `json:"category_ids"`
-	CategoryNames  []string    `json:"category_names"`
+	CategoryIDs    []int64     `json:"category_ids,omitempty"`
+	CategoryNames  []string    `json:"category_names,omitempty"`
 	Geo            GeoLocation `json:"_geo"`
 	Distance       float64     `json:"_geoDistance,omitempty"`
-	IsWithinRadius bool        `json:"is_within_radius,omitempty"`
-	CreatedAt      int64       `json:"created_at"`
+	IsWithinRadius bool        `json:"is_within_radius"`
+	CreatedAt      int64       `json:"created_at,omitempty"`
 }
 
 // InitMeilisearchIndices sets filterable, sortable, searchable attributes, synonyms, and typo tolerance
@@ -156,6 +156,18 @@ func InitMeilisearchIndices() {
 	}
 
 	// 2. Indeks "products"
+	primaryKey := "id"
+	if _, err := Client.GetIndex("products"); err != nil {
+		_, _ = Client.CreateIndex(&meilisearch.IndexConfig{
+			Uid:        "products",
+			PrimaryKey: primaryKey,
+		})
+	} else {
+		idx, _ := Client.GetIndex("products")
+		if idx != nil && idx.PrimaryKey == "" {
+			_, _ = idx.UpdateIndex(&meilisearch.UpdateIndexRequestParams{PrimaryKey: primaryKey})
+		}
+	}
 	prodIndex := Client.Index("products")
 	prodFilterable := &[]interface{}{
 		"_geo",
@@ -464,6 +476,11 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 		}
 	}
 
+	preview := p.ProductPreview
+	if preview == nil {
+		preview = []string{}
+	}
+
 	hashtags := p.Tags
 	if hashtags == nil {
 		hashtags = []string{}
@@ -473,7 +490,7 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 		ID:             p.ProductID,
 		ProductID:      p.ProductID,
 		ProductName:    p.ProductName,
-		ProductPreview: p.ProductPreview,
+		ProductPreview: preview,
 		Price:          p.Price,
 		FinalPrice:     currentPrice,
 		IsDiscounted:   isDiscounted,
@@ -562,7 +579,8 @@ func SyncProduct(db *gorm.DB, productID string) error {
 
 	doc := BuildProductDocument(db, &p, &b)
 	prodIndex := Client.Index("products")
-	_, err := prodIndex.AddDocuments([]MeiliProductDocument{doc}, nil)
+	primaryKey := "id"
+	_, err := prodIndex.AddDocuments([]MeiliProductDocument{doc}, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
 	return err
 }
 
@@ -604,8 +622,9 @@ func SyncBusinessProducts(db *gorm.DB, businessID string) error {
 		}
 	}
 
+	primaryKey := "id"
 	if len(docs) > 0 {
-		_, _ = prodIndex.AddDocuments(docs, nil)
+		_, _ = prodIndex.AddDocuments(docs, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
 	}
 	if len(deletedIDs) > 0 {
 		_, _ = prodIndex.DeleteDocuments(deletedIDs, nil)
@@ -696,7 +715,8 @@ func SyncAllBusinesses(db *gorm.DB) (int, error) {
 
 	if len(prodDocs) > 0 {
 		prodIndex := Client.Index("products")
-		_, err = prodIndex.AddDocuments(prodDocs, nil)
+		primaryKey := "id"
+		_, err = prodIndex.AddDocuments(prodDocs, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
 		if err != nil {
 			log.Printf("⚠️ Gagal upload batch products ke Meilisearch: %v", err)
 		}
@@ -704,4 +724,49 @@ func SyncAllBusinesses(db *gorm.DB) (int, error) {
 
 	log.Printf("✅ Selesai sync! %d bisnis & %d produk telah disinkronkan ke Meilisearch", len(bizDocs), len(prodDocs))
 	return len(bizDocs), nil
+}
+
+// SyncAllProducts synchronizes all active products from PostgreSQL to Meilisearch
+func SyncAllProducts(db *gorm.DB) (int, error) {
+	if Client == nil || db == nil {
+		return 0, nil
+	}
+
+	var businesses []models.Business
+	err := db.Preload("Hours").Preload("Categories").Where("is_active = ? AND status != ?", true, "deleted").Find(&businesses).Error
+	if err != nil {
+		log.Printf("⚠️ Gagal query businesses untuk SyncAllProducts: %v", err)
+		return 0, err
+	}
+
+	bizMap := make(map[string]*models.Business, len(businesses))
+	for i := range businesses {
+		bizMap[businesses[i].BusinessID] = &businesses[i]
+	}
+
+	var products []models.Product
+	if err := db.Where("is_active = ?", true).Find(&products).Error; err != nil {
+		log.Printf("⚠️ Gagal query products untuk SyncAllProducts: %v", err)
+		return 0, err
+	}
+
+	prodDocs := make([]MeiliProductDocument, 0, len(products))
+	for i := range products {
+		if b, ok := bizMap[products[i].BusinessID]; ok {
+			prodDocs = append(prodDocs, BuildProductDocument(db, &products[i], b))
+		}
+	}
+
+	if len(prodDocs) > 0 {
+		prodIndex := Client.Index("products")
+		primaryKey := "id"
+		_, err = prodIndex.AddDocuments(prodDocs, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
+		if err != nil {
+			log.Printf("⚠️ Gagal sync all products ke Meilisearch: %v", err)
+			return 0, err
+		}
+	}
+
+	log.Printf("✅ Selesai sync! %d produk telah disinkronkan ke Meilisearch 'products'", len(prodDocs))
+	return len(prodDocs), nil
 }

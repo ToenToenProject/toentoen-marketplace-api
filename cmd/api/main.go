@@ -74,14 +74,21 @@ func main() {
 	storage.InitS3Client()
 	config.InitFirebase()
 
-	// 🔍 Auto-sync PostgreSQL businesses to Meilisearch on startup
+	// 🔍 Auto-sync PostgreSQL businesses & products to Meilisearch on startup
 	go func() {
 		meilisearch.InitMeilisearchIndices()
-		count, err := meilisearch.SyncAllBusinesses(database.DB)
+		countBiz, err := meilisearch.SyncAllBusinesses(database.DB)
 		if err != nil {
-			log.Printf("⚠️ Meilisearch auto-sync error: %v", err)
+			log.Printf("⚠️ Meilisearch auto-sync businesses error: %v", err)
 		} else {
-			log.Printf("🔍 Meilisearch auto-synced %d businesses successfully", count)
+			log.Printf("🔍 Meilisearch auto-synced %d businesses successfully", countBiz)
+		}
+
+		countProd, errProd := meilisearch.SyncAllProducts(database.DB)
+		if errProd != nil {
+			log.Printf("⚠️ Meilisearch auto-sync products error: %v", errProd)
+		} else {
+			log.Printf("🔍 Meilisearch auto-synced %d products successfully", countProd)
 		}
 	}()
 

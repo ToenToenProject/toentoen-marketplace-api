@@ -259,9 +259,9 @@ func rankProductDocuments(docs []MeiliProductDocument, req SearchRequest, radius
 					return items[i].Rating > items[j].Rating
 				}
 				return items[i].ReviewCount > items[j].ReviewCount
-			case "price_asc":
+			case "price_asc", "min_price", "price_low", "cheapest":
 				return items[i].FinalPrice < items[j].FinalPrice
-			case "price_desc":
+			case "price_desc", "max_price", "price_high", "expensive":
 				return items[i].FinalPrice > items[j].FinalPrice
 			case "latest":
 				return items[i].CreatedAt > items[j].CreatedAt
@@ -712,8 +712,18 @@ func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]M
 	}, nil
 }
 
-func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) ([]MeiliProductDocument, SearchSummary, error) {
+func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resultDocs []MeiliProductDocument, resultSummary SearchSummary, errResult error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("⚠️ [PANIC-RECOVER] searchProductsFromPostgres: %v", rec)
+			resultDocs = []MeiliProductDocument{}
+			resultSummary = SearchSummary{}
+			errResult = nil
+		}
+	}()
+
 	query := r.db.Model(&models.Product{}).
+		Select("products.*").
 		Joins("JOIN businesses ON businesses.business_id = products.business_id").
 		Where("products.is_active = ? AND businesses.is_active = ? AND businesses.status != ?", true, true, "deleted")
 
@@ -767,7 +777,8 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) ([]Mei
 
 	var products []models.Product
 	if err := query.Find(&products).Error; err != nil {
-		return nil, SearchSummary{}, err
+		log.Printf("⚠️ Gagal query fallback searchProductsFromPostgres: %v", err)
+		return []MeiliProductDocument{}, SearchSummary{}, nil
 	}
 
 	bizMap := make(map[string]*models.Business)
