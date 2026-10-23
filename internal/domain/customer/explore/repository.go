@@ -9,6 +9,7 @@ import (
 
 	"toentoen-backend/internal/domain/shared/models"
 	myMeili "toentoen-backend/pkg/meilisearch"
+	"toentoen-backend/pkg/utils"
 
 	"github.com/meilisearch/meilisearch-go"
 	"gorm.io/gorm"
@@ -752,9 +753,12 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resul
 		query = query.Where("businesses.store_type IN (?)", normTypes)
 	}
 
+	loc := utils.GetWIBLocation()
+	now := time.Now().In(loc)
+
 	if req.IsPromo != nil {
 		if *req.IsPromo {
-			query = query.Where("products.discount > 0")
+			query = query.Where("(products.discount > 0 OR products.product_id IN (SELECT pp.product_id FROM promotion_products pp JOIN promotions prm ON prm.promotion_id = pp.promotion_id WHERE prm.status = 'active' AND prm.start_at <= ? AND prm.end_at >= ?))", now, now)
 		}
 	}
 
@@ -784,12 +788,65 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resul
 		return []MeiliProductDocument{}, SearchSummary{}, nil
 	}
 
-	bizMap := make(map[string]*models.Business)
-	if len(products) > 0 {
-		bizIDs := make([]string, 0, len(products))
-		for _, p := range products {
-			bizIDs = append(bizIDs, p.BusinessID)
+	// Query active bundling promotions as products
+	var bundlingPromos []models.Promotion
+	canIncludeBundling := len(req.StockTypes) == 0 || containsStringCaseInsensitive(req.StockTypes, "in_stock")
+	if canIncludeBundling {
+		bndQuery := r.db.Model(&models.Promotion{}).
+			Preload("BundleItems.Product").
+			Joins("JOIN businesses ON businesses.business_id = promotions.business_id").
+			Where("promotions.promotion_type = 'bundling' AND promotions.status = 'active' AND promotions.start_at <= ? AND promotions.end_at >= ? AND businesses.is_active = ? AND businesses.status != ?", now, now, true, "deleted")
+
+		if strings.TrimSpace(req.Keyword) != "" {
+			expandedTerms := myMeili.ExpandKeywordWithSynonyms(req.Keyword)
+			var conds []string
+			var args []interface{}
+			for _, term := range expandedTerms {
+				kw := "%" + strings.TrimSpace(term) + "%"
+				conds = append(conds, "(promotions.package_name ILIKE ? OR promotions.caption ILIKE ? OR businesses.business_name ILIKE ?)")
+				args = append(args, kw, kw, kw)
+			}
+			if len(conds) > 0 {
+				bndQuery = bndQuery.Where("("+strings.Join(conds, " OR ")+")", args...)
+			}
 		}
+
+		if len(req.StoreTypes) > 0 {
+			var normTypes []string
+			for _, st := range req.StoreTypes {
+				normTypes = append(normTypes, models.NormalizeStoreType(st))
+			}
+			bndQuery = bndQuery.Where("businesses.store_type IN (?)", normTypes)
+		}
+
+		if req.MinPrice != nil {
+			bndQuery = bndQuery.Where("promotions.package_price >= ?", *req.MinPrice)
+		}
+		if req.MaxPrice != nil {
+			bndQuery = bndQuery.Where("promotions.package_price <= ?", *req.MaxPrice)
+		}
+
+		if len(req.CategoryIDs) > 0 || req.Category != "" {
+			if len(req.CategoryIDs) > 0 {
+				bndQuery = bndQuery.Where("businesses.business_id IN (SELECT business_id FROM business_has_categories WHERE category_id IN (?))", req.CategoryIDs)
+			}
+			if req.Category != "" {
+				bndQuery = bndQuery.Where("(businesses.business_id IN (SELECT bhc.business_id FROM business_has_categories bhc JOIN business_categories bc ON bc.category_id = bhc.category_id WHERE LOWER(bc.name) = LOWER(?)) OR LOWER(businesses.custom_category) = LOWER(?))", strings.TrimSpace(req.Category), strings.TrimSpace(req.Category))
+			}
+		}
+
+		_ = bndQuery.Find(&bundlingPromos).Error
+	}
+
+	bizMap := make(map[string]*models.Business)
+	bizIDs := make([]string, 0, len(products)+len(bundlingPromos))
+	for _, p := range products {
+		bizIDs = append(bizIDs, p.BusinessID)
+	}
+	for _, bp := range bundlingPromos {
+		bizIDs = append(bizIDs, bp.BusinessID)
+	}
+	if len(bizIDs) > 0 {
 		var bizList []models.Business
 		r.db.Preload("Hours").Preload("Categories").Where("business_id IN (?)", bizIDs).Find(&bizList)
 		for i := range bizList {
@@ -802,6 +859,19 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resul
 		p := &products[i]
 		b := bizMap[p.BusinessID]
 		doc := myMeili.BuildProductDocument(r.db, p, b)
+		if req.IsOpenNow != nil && doc.IsOpen != *req.IsOpenNow {
+			continue
+		}
+		if req.Lat != 0 && req.Lng != 0 && b != nil && b.Latitude != nil && b.Longitude != nil {
+			doc.Distance = haversineDistance(req.Lat, req.Lng, *b.Latitude, *b.Longitude)
+		}
+		allDocs = append(allDocs, doc)
+	}
+
+	for i := range bundlingPromos {
+		bp := &bundlingPromos[i]
+		b := bizMap[bp.BusinessID]
+		doc := myMeili.BuildBundlingDocument(r.db, bp, b)
 		if req.IsOpenNow != nil && doc.IsOpen != *req.IsOpenNow {
 			continue
 		}

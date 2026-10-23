@@ -151,6 +151,7 @@ func processScheduledPromotions(
 			notification.NotifyPromotionCreated(database.DB, notifService, pCopy.BusinessID, &pCopy, mainProd, productIDs, pCopy.CreatedBy)
 		}
 		go meilisearch.SyncBusiness(database.DB, pCopy.BusinessID)
+		go meilisearch.SyncPromotion(database.DB, pCopy.PromotionID)
 	}
 }
 
@@ -168,6 +169,7 @@ func processExpiredPromotions(repo PromotionRepository, now time.Time) {
 		}
 		log.Printf("⏱️ [PROMOTION-WORKER] Promosi %s telah berakhir secara otomatis", pCopy.PromotionID)
 		go meilisearch.SyncBusiness(database.DB, pCopy.BusinessID)
+		go meilisearch.SyncPromotion(database.DB, pCopy.PromotionID)
 	}
 }
 

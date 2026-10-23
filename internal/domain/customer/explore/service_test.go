@@ -312,3 +312,99 @@ func TestExploreServiceScopes(t *testing.T) {
 		t.Errorf("Expected businesses array to be empty in scope 'product', got %d", len(resProd.Businesses))
 	}
 }
+
+func TestBundlingPromotionDocumentMapping(t *testing.T) {
+	pkgName := "Paket Duo Mantap"
+	pkgImg := "https://example.com/duo.jpg"
+	origPrice := 100000.0
+	pkgPrice := 75000.0
+	savingsAmount := 25000.0
+	savingsPct := 25.0
+
+	prm := &models.Promotion{
+		PromotionID:        "PRM-TEST-BUNDLING",
+		BusinessID:         "BUS-TEST",
+		Caption:            "Paket Spesial",
+		PromotionType:      models.PromotionTypeBundling,
+		PackageName:        &pkgName,
+		PackageImage:       &pkgImg,
+		OriginalTotalPrice: &origPrice,
+		PackagePrice:       &pkgPrice,
+		SavingsAmount:      &savingsAmount,
+		SavingsPercentage:  &savingsPct,
+		CreatedAt:          time.Now(),
+	}
+
+	bizName := "Toko Enak"
+	storeType := "toko"
+	biz := &models.Business{
+		BusinessID:   "BUS-TEST",
+		BusinessName: &bizName,
+		StoreType:    &storeType,
+	}
+
+	doc := myMeili.BuildBundlingDocument(nil, prm, biz)
+
+	if doc.ID != "PRM-TEST-BUNDLING" || doc.ProductID != "PRM-TEST-BUNDLING" {
+		t.Errorf("Expected ID and ProductID to be 'PRM-TEST-BUNDLING', got %s / %s", doc.ID, doc.ProductID)
+	}
+	if doc.ProductName != pkgName || doc.PackageName != pkgName {
+		t.Errorf("Expected ProductName and PackageName to be %q, got %q / %q", pkgName, doc.ProductName, doc.PackageName)
+	}
+	if doc.Price != origPrice {
+		t.Errorf("Expected Price to be %f, got %f", origPrice, doc.Price)
+	}
+	if doc.FinalPrice != pkgPrice {
+		t.Errorf("Expected FinalPrice to be %f, got %f", pkgPrice, doc.FinalPrice)
+	}
+	if doc.DiscountPct != savingsPct {
+		t.Errorf("Expected DiscountPct to be %f, got %f", savingsPct, doc.DiscountPct)
+	}
+	if !doc.IsDiscounted || !doc.HasPromo || !doc.IsPackage {
+		t.Errorf("Expected IsDiscounted=true, HasPromo=true, IsPackage=true; got %v, %v, %v", doc.IsDiscounted, doc.HasPromo, doc.IsPackage)
+	}
+	if doc.PromotionType != "bundling" || doc.PromotionID != "PRM-TEST-BUNDLING" {
+		t.Errorf("Expected PromotionType='bundling' and PromotionID='PRM-TEST-BUNDLING', got %s / %s", doc.PromotionType, doc.PromotionID)
+	}
+	if len(doc.ProductPreview) != 1 || doc.ProductPreview[0] != pkgImg {
+		t.Errorf("Expected ProductPreview to contain package image, got %v", doc.ProductPreview)
+	}
+	if doc.BusinessName != bizName {
+		t.Errorf("Expected BusinessName %q, got %q", bizName, doc.BusinessName)
+	}
+}
+
+func TestProductDocumentActivePromotionMapping(t *testing.T) {
+	now := time.Now()
+	start := now.Add(-1 * time.Hour)
+	end := now.Add(24 * time.Hour)
+
+	prod := &models.Product{
+		ProductID:       "PROD-DISCOUNT-1",
+		BusinessID:      "BUS-TEST",
+		ProductName:     "Ayam Geprek Diskon",
+		Price:           50000.0,
+		Discount:        20.0,
+		DiscountType:    "percentage",
+		DiscountStartAt: &start,
+		DiscountEndAt:   &end,
+		StockType:       "in_stock",
+		CreatedAt:       now,
+	}
+
+	doc := myMeili.BuildProductDocument(nil, prod, nil)
+
+	if !doc.IsDiscounted || !doc.HasPromo {
+		t.Errorf("Expected IsDiscounted=true and HasPromo=true, got %v / %v", doc.IsDiscounted, doc.HasPromo)
+	}
+	if doc.FinalPrice != 40000.0 {
+		t.Errorf("Expected FinalPrice=40000.0, got %f", doc.FinalPrice)
+	}
+	if doc.DiscountPct != 20.0 {
+		t.Errorf("Expected DiscountPct=20.0, got %f", doc.DiscountPct)
+	}
+	if doc.IsPackage {
+		t.Errorf("Expected IsPackage=false for regular product, got true")
+	}
+}
+

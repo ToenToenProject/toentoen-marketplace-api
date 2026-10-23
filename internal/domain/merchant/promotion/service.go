@@ -323,6 +323,9 @@ func (s *promotionService) CreatePromotion(
 		notification.NotifyPromotionCreated(database.DB, s.notifService, businessID, promo, mainProdModel, productIDsList, requesterID)
 		go meilisearch.SyncBusiness(database.DB, businessID)
 	}
+	if isActiveNow {
+		go meilisearch.SyncPromotion(database.DB, promotionID)
+	}
 
 	return s.GetPromotionDetail(requesterID, role, businessID, promotionID)
 }
@@ -519,6 +522,9 @@ func (s *promotionService) CreateBundlingPromotion(
 		}
 		notification.NotifyPromotionCreated(database.DB, s.notifService, businessID, promo, mainProdModel, productIDs, requesterID)
 		go meilisearch.SyncBusiness(database.DB, businessID)
+	}
+	if isActiveNow {
+		go meilisearch.SyncPromotion(database.DB, promotionID)
 	}
 
 	return s.GetPromotionDetail(requesterID, role, businessID, promotionID)
@@ -1052,6 +1058,7 @@ func (s *promotionService) ExtendPromotion(
 	}
 
 	go meilisearch.SyncBusiness(database.DB, businessID)
+	go meilisearch.SyncPromotion(database.DB, promotionID)
 	return nil
 }
 
@@ -1092,6 +1099,7 @@ func (s *promotionService) StopPromotion(requesterID, role, businessID, promotio
 	}
 
 	go meilisearch.SyncBusiness(database.DB, businessID)
+	go meilisearch.SyncPromotion(database.DB, promotionID)
 	return nil
 }
 
