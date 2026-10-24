@@ -118,10 +118,24 @@ func (h *PostInteractionHandler) GetPostComments(c *fiber.Ctx) error {
 
 	comments, err := h.service.GetPostComments(postID, currentAccountID)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"status":       "success",
+			"responseCode": constants.Success,
+			"message":      "Komentar berhasil diambil",
+			"data":         []models.CommentResponse{},
+		})
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Komentar berhasil diambil", comments)
+	if comments == nil {
+		comments = []models.CommentResponse{}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":       "success",
+		"responseCode": constants.Success,
+		"message":      "Komentar berhasil diambil",
+		"data":         comments,
+	})
 }
 
 // 6. TOGGLE LIKE KOMENTAR POSTINGAN

@@ -3,6 +3,7 @@ package interaction
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/notification"
 	"toentoen-backend/internal/domain/shared/models"
@@ -184,7 +185,13 @@ func (s *postInteractionService) DeletePostComment(postID, commentID, requesterI
 
 // 5. GET KOMENTAR POSTINGAN (TREE + BADGES)
 func (s *postInteractionService) GetPostComments(postID, currentAccountID string) ([]models.CommentResponse, error) {
-	rawComments, err := s.repo.GetCommentsByPostID(postID)
+	cleanPostID := strings.TrimSpace(postID)
+	// Guard fallback mock IDs used by Flutter frontend when business has no active posts
+	if cleanPostID == "" || strings.EqualFold(cleanPostID, "PST-1") || strings.EqualFold(cleanPostID, "PST-2") {
+		return []models.CommentResponse{}, nil
+	}
+
+	rawComments, err := s.repo.GetCommentsByPostID(cleanPostID)
 	if err != nil {
 		return nil, errors.New("gagal mengambil data komentar")
 	}
@@ -193,7 +200,7 @@ func (s *postInteractionService) GetPostComments(postID, currentAccountID string
 		return []models.CommentResponse{}, nil
 	}
 
-	businessID, _ := s.repo.GetBusinessIDByPostID(postID)
+	businessID, _ := s.repo.GetBusinessIDByPostID(cleanPostID)
 	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
 	staffMap := make(map[string]bool)
 	for _, sid := range staffIDs {
@@ -215,7 +222,7 @@ func (s *postInteractionService) GetPostComments(postID, currentAccountID string
 	}
 
 	commentMap := make(map[string]*models.CommentResponse)
-	var finalComments []models.CommentResponse
+	finalComments := make([]models.CommentResponse, 0)
 
 	for _, rc := range rawComments {
 		accName := "Pengguna"
@@ -266,6 +273,9 @@ func (s *postInteractionService) GetPostComments(postID, currentAccountID string
 
 	for _, rc := range rawComments {
 		if rc.ReplyToCommentID == nil {
+			finalComments = append(finalComments, *commentMap[rc.CommentID])
+		} else if _, parentExists := commentMap[*rc.ReplyToCommentID]; !parentExists {
+			// Orphaned reply whose parent comment was deleted: promote to top-level so it is not lost
 			finalComments = append(finalComments, *commentMap[rc.CommentID])
 		}
 	}

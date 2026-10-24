@@ -76,8 +76,12 @@ func (r *postInteractionRepository) CreatePostComment(comment *models.BusinessPo
 		if err := tx.Create(comment).Error; err != nil {
 			return err
 		}
+		var actualCount int64
+		if err := tx.Model(&models.BusinessPostComment{}).Where("post_id = ?", comment.PostID).Count(&actualCount).Error; err != nil {
+			return err
+		}
 		return tx.Model(&models.BusinessPost{}).Where("post_id = ?", comment.PostID).
-			UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+			UpdateColumn("comment_count", actualCount).Error
 	})
 }
 
@@ -104,8 +108,12 @@ func (r *postInteractionRepository) DeletePostComment(commentID string) error {
 			return err
 		}
 
+		var actualCount int64
+		if err := tx.Model(&models.BusinessPostComment{}).Where("post_id = ?", comment.PostID).Count(&actualCount).Error; err != nil {
+			return err
+		}
 		return tx.Model(&models.BusinessPost{}).Where("post_id = ?", comment.PostID).
-			UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
+			UpdateColumn("comment_count", actualCount).Error
 	})
 }
 
