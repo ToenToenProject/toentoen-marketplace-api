@@ -585,6 +585,8 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 			s.category AS signal_category,
 			s.status AS signal_status,
 			s.is_urgent,
+			s.min_budget,
+			s.max_budget,
 			s.customer_id AS peer_id,
 			TRIM(CONCAT(ca.first_name, ' ', ca.last_name)) AS peer_name,
 			ca.profile_picture_url AS peer_avatar,
@@ -622,6 +624,7 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 	if err != nil {
 		return nil, err
 	}
+	r.populatePostReferencesForItems(items)
 	return items, nil
 }
 
@@ -643,6 +646,8 @@ func (r *signalRepository) GetCustomerConversations(customerAccountID string) ([
 			s.category AS signal_category,
 			s.status AS signal_status,
 			s.is_urgent,
+			s.min_budget,
+			s.max_budget,
 			sc.merchant_id AS peer_id,
 			COALESCE(b.business_name, TRIM(CONCAT(ma.first_name, ' ', ma.last_name)), 'Merchant') AS peer_name,
 			COALESCE(b.logo_url, ma.profile_picture_url) AS peer_avatar,
@@ -678,7 +683,69 @@ func (r *signalRepository) GetCustomerConversations(customerAccountID string) ([
 	if err != nil {
 		return nil, err
 	}
+	r.populatePostReferencesForItems(items)
 	return items, nil
+}
+
+func (r *signalRepository) populatePostReferencesForItems(items []models.ConversationListItem) {
+	if len(items) == 0 {
+		return
+	}
+	signalIDs := make([]string, 0, len(items))
+	seen := make(map[string]bool)
+	for _, it := range items {
+		if it.SignalID != "" && !seen[it.SignalID] {
+			seen[it.SignalID] = true
+			signalIDs = append(signalIDs, it.SignalID)
+		}
+	}
+
+	imgMap := make(map[string][]string)
+	if len(signalIDs) > 0 {
+		type imgRow struct {
+			SignalID string `gorm:"column:signal_id"`
+			ImageURL string `gorm:"column:image_url"`
+		}
+		var imgs []imgRow
+		if err := r.db.Raw("SELECT signal_id, image_url FROM signal_images WHERE signal_id IN ?", signalIDs).Scan(&imgs).Error; err == nil {
+			for _, img := range imgs {
+				if img.ImageURL != "" {
+					imgMap[img.SignalID] = append(imgMap[img.SignalID], img.ImageURL)
+				}
+			}
+		}
+	}
+
+	for i := range items {
+		items[i].SignalTitle = items[i].SignalDescription
+		var budgetStr string
+		if items[i].MinBudget != nil && items[i].MaxBudget != nil {
+			budgetStr = fmt.Sprintf("Rp %s - Rp %s", models.FormatRupiah(*items[i].MinBudget), models.FormatRupiah(*items[i].MaxBudget))
+		} else if items[i].MinBudget != nil {
+			budgetStr = fmt.Sprintf(">= Rp %s", models.FormatRupiah(*items[i].MinBudget))
+		} else if items[i].MaxBudget != nil {
+			budgetStr = fmt.Sprintf("<= Rp %s", models.FormatRupiah(*items[i].MaxBudget))
+		} else {
+			budgetStr = "-"
+		}
+
+		imgs := imgMap[items[i].SignalID]
+		if imgs == nil {
+			imgs = []string{}
+		}
+
+		items[i].SignalPostReference = &models.SignalPostReference{
+			SignalID:    items[i].SignalID,
+			Title:       items[i].SignalDescription,
+			Description: items[i].SignalDescription,
+			Category:    items[i].SignalCategory,
+			Budget:      budgetStr,
+			MinBudget:   items[i].MinBudget,
+			MaxBudget:   items[i].MaxBudget,
+			IsUrgent:    items[i].IsUrgent,
+			Images:      imgs,
+		}
+	}
 }
 
 // ================================================================

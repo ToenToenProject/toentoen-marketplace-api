@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"strconv"
+	"time"
+)
 
 // ================================================================
 // DEMAND SIGNAL V1 (LEGACY — Tidak digunakan lagi, tabel tetap ada)
@@ -150,6 +154,77 @@ func (s *Signal) PopulateCategories() {
 	}
 }
 
+// SignalPostReference adalah objek referensi postingan sinyal kebutuhan untuk ruang chat
+type SignalPostReference struct {
+	SignalID    string   `json:"signal_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Category    string   `json:"category"`
+	Budget      string   `json:"budget"`
+	MinBudget   *float64 `json:"min_budget,omitempty"`
+	MaxBudget   *float64 `json:"max_budget,omitempty"`
+	IsUrgent    bool     `json:"is_urgent"`
+	Images      []string `json:"images"`
+}
+
+// ToPostReference mengubah model Signal menjadi SignalPostReference yang ringkas dan terformat
+func (s *Signal) ToPostReference() *SignalPostReference {
+	if s == nil {
+		return nil
+	}
+	var budgetStr string
+	if s.MinBudget != nil && s.MaxBudget != nil {
+		budgetStr = fmt.Sprintf("Rp %s - Rp %s", FormatRupiah(*s.MinBudget), FormatRupiah(*s.MaxBudget))
+	} else if s.MinBudget != nil {
+		budgetStr = fmt.Sprintf(">= Rp %s", FormatRupiah(*s.MinBudget))
+	} else if s.MaxBudget != nil {
+		budgetStr = fmt.Sprintf("<= Rp %s", FormatRupiah(*s.MaxBudget))
+	} else {
+		budgetStr = "-"
+	}
+
+	imgs := make([]string, 0, len(s.Images))
+	for _, img := range s.Images {
+		if img.ImageURL != "" {
+			imgs = append(imgs, img.ImageURL)
+		}
+	}
+
+	cat := s.Category
+	if cat == "" && len(s.Categories) > 0 {
+		cat = s.Categories[0]
+	} else if cat == "" && s.CategoryObj != nil {
+		cat = s.CategoryObj.Name
+	}
+
+	return &SignalPostReference{
+		SignalID:    s.SignalID,
+		Title:       s.Description,
+		Description: s.Description,
+		Category:    cat,
+		Budget:      budgetStr,
+		MinBudget:   s.MinBudget,
+		MaxBudget:   s.MaxBudget,
+		IsUrgent:    s.IsUrgent,
+		Images:      imgs,
+	}
+}
+
+// FormatRupiah memformat nominal float ke representasi ribuan bertitik (e.g. 150000 -> 150.000)
+func FormatRupiah(val float64) string {
+	n := int64(val)
+	str := strconv.FormatInt(n, 10)
+	var res []byte
+	l := len(str)
+	for i, c := range str {
+		if i > 0 && (l-i)%3 == 0 {
+			res = append(res, '.')
+		}
+		res = append(res, byte(c))
+	}
+	return string(res)
+}
+
 // SignalCategory adalah relasi many-to-many antara signal dan kategori bisnis (maks 5 kategori)
 type SignalCategory struct {
 	SignalID   string    `gorm:"primaryKey;column:signal_id" json:"signal_id"`
@@ -296,31 +371,36 @@ type CustomerSignalDetailResponse struct {
 
 // ConversationListItem untuk daftar roomchat (Merchant / Customer)
 type ConversationListItem struct {
-	ConversationID    string    `json:"conversation_id"`
-	SignalID          string    `json:"signal_id"`
-	SignalDescription string    `json:"signal_description"`
-	CategoryID        *int64    `json:"category_id,omitempty"`
-	SignalCategory    string    `json:"signal_category"`
-	SignalStatus      string    `json:"signal_status"`
-	IsUrgent          bool      `json:"is_urgent"`
+	ConversationID    string               `json:"conversation_id"`
+	SignalID          string               `json:"signal_id"`
+	SignalTitle       string               `json:"signal_title,omitempty"`
+	SignalDescription string               `json:"signal_description"`
+	CategoryID        *int64               `json:"category_id,omitempty"`
+	SignalCategory    string               `json:"signal_category"`
+	SignalStatus        string               `json:"signal_status"`
+	IsUrgent            bool                 `json:"is_urgent"`
+	MinBudget           *float64             `json:"min_budget,omitempty"`
+	MaxBudget           *float64             `json:"max_budget,omitempty"`
 	
 	// Lawan bicara
-	PeerID            string    `json:"peer_id"`
-	PeerName          string    `json:"peer_name"`
-	PeerAvatar        *string   `json:"peer_avatar"`
+	PeerID            string               `json:"peer_id"`
+	PeerName          string               `json:"peer_name"`
+	PeerAvatar        *string              `json:"peer_avatar"`
 	
 	// Bisnis (Toko)
-	BusinessID        string    `json:"business_id"`
-	BusinessName      string    `json:"business_name"`
-	BusinessLogo      *string   `json:"business_logo"`
+	BusinessID        string               `json:"business_id"`
+	BusinessName      string               `json:"business_name"`
+	BusinessLogo      *string              `json:"business_logo"`
 	
 	// Pesan terakhir & status
-	LastMessage       *string   `json:"last_message"`
-	LastMessageSender string    `json:"last_message_sender"` // "customer" | "merchant"
-	LastMessageAt     time.Time `json:"last_message_at"`
-	UnreadCount       int64     `json:"unread_count"`
-	Status            string    `json:"status"` // "open" | "locked"
-	CreatedAt         time.Time `json:"created_at"`
+	LastMessage       *string              `json:"last_message"`
+	LastMessageSender string               `json:"last_message_sender"` // "customer" | "merchant"
+	LastMessageAt     time.Time            `json:"last_message_at"`
+	UnreadCount       int64                `json:"unread_count"`
+	Status            string               `json:"status"` // "open" | "locked"
+	CreatedAt         time.Time            `json:"created_at"`
+
+	SignalPostReference *SignalPostReference `json:"signal_post_reference,omitempty"`
 }
 
 // MerchantSignalDetailResponse menyertakan status balasan merchant yang sedang login

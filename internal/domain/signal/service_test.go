@@ -85,3 +85,42 @@ func TestCategoryDeduplicationAndMaxLimit(t *testing.T) {
 		t.Errorf("expected more than 5 IDs")
 	}
 }
+
+func TestSignal_ToPostReference(t *testing.T) {
+	minBudget := 150000.0
+	maxBudget := 250000.0
+	signal := models.Signal{
+		SignalID:    "SIG-20261024-001",
+		Description: "Mencari Kemeja Flanel Pria L",
+		Category:    "Pakaian Pria",
+		MinBudget:   &minBudget,
+		MaxBudget:   &maxBudget,
+		IsUrgent:    false,
+		Images: []models.SignalImage{
+			{ImageID: "IMG-1", SignalID: "SIG-20261024-001", ImageURL: "https://example.com/img1.jpg"},
+		},
+	}
+
+	ref := signal.ToPostReference()
+	if ref == nil {
+		t.Fatalf("expected ref not nil")
+	}
+	if ref.SignalID != "SIG-20261024-001" {
+		t.Errorf("expected signal_id 'SIG-20261024-001', got '%s'", ref.SignalID)
+	}
+	if ref.Title != "Mencari Kemeja Flanel Pria L" {
+		t.Errorf("expected title 'Mencari Kemeja Flanel Pria L', got '%s'", ref.Title)
+	}
+	if ref.Description != "Mencari Kemeja Flanel Pria L" {
+		t.Errorf("expected description 'Mencari Kemeja Flanel Pria L', got '%s'", ref.Description)
+	}
+	if ref.Category != "Pakaian Pria" {
+		t.Errorf("expected category 'Pakaian Pria', got '%s'", ref.Category)
+	}
+	if ref.Budget != "Rp 150.000 - Rp 250.000" {
+		t.Errorf("expected budget 'Rp 150.000 - Rp 250.000', got '%s'", ref.Budget)
+	}
+	if len(ref.Images) != 1 || ref.Images[0] != "https://example.com/img1.jpg" {
+		t.Errorf("unexpected images: %v", ref.Images)
+	}
+}

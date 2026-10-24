@@ -9,6 +9,7 @@ type DirectBusinessConversation struct {
 	ConversationID     string    `gorm:"primaryKey;column:conversation_id;type:varchar(50)" json:"conversation_id"`
 	BusinessID         string    `gorm:"column:business_id;type:varchar(50);not null;index" json:"business_id"`
 	CustomerID         string    `gorm:"column:customer_id;type:varchar(50);not null;index" json:"customer_id"`
+	SignalID           *string   `gorm:"column:signal_id;type:varchar(50);index" json:"signal_id,omitempty"`
 	LastMessagePreview string    `gorm:"column:last_message_preview;type:text" json:"last_message_preview"`
 	LastMessageAt      time.Time `gorm:"column:last_message_at;index" json:"last_message_at"`
 	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
@@ -17,6 +18,7 @@ type DirectBusinessConversation struct {
 	// Relasi
 	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
 	Customer *Account                `gorm:"foreignKey:CustomerID;references:AccountID" json:"customer,omitempty"`
+	Signal   *Signal                 `gorm:"foreignKey:SignalID;references:SignalID" json:"signal,omitempty"`
 	Messages []DirectBusinessMessage `gorm:"foreignKey:ConversationID;references:ConversationID" json:"messages,omitempty"`
 }
 
@@ -51,6 +53,7 @@ func (DirectBusinessMessage) TableName() string {
 type InitiateBusinessChatInput struct {
 	Message   string  `json:"message"`
 	ProductID *string `json:"product_id,omitempty"`
+	SignalID  *string `json:"signal_id,omitempty"`
 }
 
 type SendBusinessChatMessageInput struct {
@@ -62,22 +65,30 @@ type SendBusinessChatMessageInput struct {
 
 // Response List Item
 type CustomerBusinessConversationListItem struct {
-	ConversationID     string    `json:"conversation_id"`
-	BusinessID         string    `json:"business_id"`
-	BusinessName       string    `json:"business_name"`
-	BusinessLogo       *string   `json:"business_logo,omitempty"`
-	LastMessagePreview string    `json:"last_message_preview"`
-	LastMessageAt      time.Time `json:"last_message_at"`
-	UnreadCount        int64     `json:"unread_count"`
+	ConversationID      string               `json:"conversation_id"`
+	BusinessID          string               `json:"business_id"`
+	BusinessName        string               `json:"business_name"`
+	BusinessLogo        *string              `json:"business_logo,omitempty"`
+	LastMessagePreview  string               `json:"last_message_preview"`
+	LastMessageAt       time.Time            `json:"last_message_at"`
+	UnreadCount         int64                `json:"unread_count"`
+	SignalID            string               `json:"signal_id,omitempty"`
+	SignalTitle         string               `json:"signal_title,omitempty"`
+	SignalDescription   string               `json:"signal_description,omitempty"`
+	SignalPostReference *SignalPostReference `json:"signal_post_reference,omitempty"`
 }
 
 type MerchantBusinessConversationListItem struct {
-	ConversationID     string    `json:"conversation_id"`
-	BusinessID         string    `json:"business_id"`
-	CustomerID         string    `json:"customer_id"`
-	CustomerName       string    `json:"customer_name"`
-	CustomerAvatar     *string   `json:"customer_avatar,omitempty"`
-	LastMessagePreview string    `json:"last_message_preview"`
-	LastMessageAt      time.Time `json:"last_message_at"`
-	UnreadCount        int64     `json:"unread_count"`
+	ConversationID      string               `json:"conversation_id"`
+	BusinessID          string               `json:"business_id"`
+	CustomerID          string               `json:"customer_id"`
+	CustomerName        string               `json:"customer_name"`
+	CustomerAvatar      *string              `json:"customer_avatar,omitempty"`
+	LastMessagePreview  string               `json:"last_message_preview"`
+	LastMessageAt       time.Time            `json:"last_message_at"`
+	UnreadCount         int64                `json:"unread_count"`
+	SignalID            string               `json:"signal_id,omitempty"`
+	SignalTitle         string               `json:"signal_title,omitempty"`
+	SignalDescription   string               `json:"signal_description,omitempty"`
+	SignalPostReference *SignalPostReference `json:"signal_post_reference,omitempty"`
 }

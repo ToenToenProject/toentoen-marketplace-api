@@ -1,6 +1,7 @@
 package business_chat
 
 import (
+	"sync"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 
@@ -22,6 +23,9 @@ type BusinessChatRepository interface {
 	GetAccountByID(accountID string) (*models.Account, error)
 	GetBusinessByID(businessID string) (*models.Business, error)
 	GetProductByID(productID string) (*models.Product, error)
+	FindSignalForConversation(businessID, customerID string) *models.SignalPostReference
+	GetSignalPostReferenceByID(signalID string) *models.SignalPostReference
+	UpdateConversationSignalID(conversationID, signalID string) error
 }
 
 type businessChatRepository struct {
@@ -32,13 +36,84 @@ func NewBusinessChatRepository(db *gorm.DB) BusinessChatRepository {
 	return &businessChatRepository{db: db}
 }
 
+var (
+	hasSignalIDColTable     bool
+	hasSignalIDColLastCheck time.Time
+	hasSignalIDColMu        sync.RWMutex
+)
+
+func (r *businessChatRepository) hasSignalIDColumn() bool {
+	hasSignalIDColMu.RLock()
+	if time.Since(hasSignalIDColLastCheck) < 30*time.Second {
+		defer hasSignalIDColMu.RUnlock()
+		return hasSignalIDColTable
+	}
+	hasSignalIDColMu.RUnlock()
+
+	hasSignalIDColMu.Lock()
+	defer hasSignalIDColMu.Unlock()
+	if time.Since(hasSignalIDColLastCheck) < 30*time.Second {
+		return hasSignalIDColTable
+	}
+
+	var exists bool
+	err := r.db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'direct_business_conversations' AND column_name = 'signal_id')").Scan(&exists).Error
+	hasSignalIDColTable = (err == nil && exists)
+	hasSignalIDColLastCheck = time.Now()
+	return hasSignalIDColTable
+}
+
+func (r *businessChatRepository) FindSignalForConversation(businessID, customerID string) *models.SignalPostReference {
+	// 1. Cek apakah ada record di signal_conversations untuk business & customer ini
+	var sig models.Signal
+	err := r.db.Preload("Images").
+		Joins("JOIN signal_conversations sc ON sc.signal_id = signals.signal_id").
+		Where("sc.business_id = ? AND signals.customer_id = ?", businessID, customerID).
+		Order("sc.created_at DESC").
+		First(&sig).Error
+	if err == nil && sig.SignalID != "" {
+		return sig.ToPostReference()
+	}
+
+	// 2. Fallback: ambil sinyal aktif atau terbaru milik customer ini
+	err = r.db.Preload("Images").
+		Where("customer_id = ?", customerID).
+		Order("created_at DESC").
+		First(&sig).Error
+	if err == nil && sig.SignalID != "" {
+		return sig.ToPostReference()
+	}
+
+	return nil
+}
+
+func (r *businessChatRepository) GetSignalPostReferenceByID(signalID string) *models.SignalPostReference {
+	if signalID == "" {
+		return nil
+	}
+	var sig models.Signal
+	if err := r.db.Preload("Images").Where("signal_id = ?", signalID).First(&sig).Error; err == nil && sig.SignalID != "" {
+		return sig.ToPostReference()
+	}
+	return nil
+}
+
+func (r *businessChatRepository) UpdateConversationSignalID(conversationID, signalID string) error {
+	if !r.hasSignalIDColumn() {
+		return nil
+	}
+	return r.db.Model(&models.DirectBusinessConversation{}).
+		Where("conversation_id = ?", conversationID).
+		Update("signal_id", signalID).Error
+}
+
 func (r *businessChatRepository) FindConversation(businessID, customerID string) (*models.DirectBusinessConversation, error) {
 	var conv models.DirectBusinessConversation
-	err := r.db.
-		Preload("Business").
-		Preload("Customer").
-		Where("business_id = ? AND customer_id = ?", businessID, customerID).
-		First(&conv).Error
+	q := r.db.Preload("Business").Preload("Customer")
+	if !r.hasSignalIDColumn() {
+		q = q.Omit("signal_id", "SignalID")
+	}
+	err := q.Where("business_id = ? AND customer_id = ?", businessID, customerID).First(&conv).Error
 	if err != nil {
 		return nil, err
 	}
@@ -47,20 +122,49 @@ func (r *businessChatRepository) FindConversation(businessID, customerID string)
 
 func (r *businessChatRepository) GetConversationByID(conversationID string) (*models.DirectBusinessConversation, error) {
 	var conv models.DirectBusinessConversation
-	err := r.db.
-		Preload("Business").
-		Preload("Customer").
-		Where("conversation_id = ?", conversationID).
-		First(&conv).Error
-	if err != nil {
-		return nil, err
+	q := r.db.Preload("Business").Preload("Customer")
+	if !r.hasSignalIDColumn() {
+		q = q.Omit("signal_id", "SignalID")
 	}
-	return &conv, nil
+	err := q.Where("conversation_id = ?", conversationID).First(&conv).Error
+	if err == nil {
+		return &conv, nil
+	}
+
+	// Fallback jika conversationID berasal dari signal_conversations (e.g. CONV-xxx)
+	var sigConv models.SignalConversation
+	if errSig := r.db.Preload("Business").Where("conversation_id = ?", conversationID).First(&sigConv).Error; errSig == nil {
+		var sig models.Signal
+		custID := ""
+		if errS := r.db.Select("customer_id").Where("signal_id = ?", sigConv.SignalID).First(&sig).Error; errS == nil {
+			custID = sig.CustomerID
+		}
+		var cust models.Account
+		if custID != "" {
+			_ = r.db.Where("account_id = ?", custID).First(&cust).Error
+		}
+		return &models.DirectBusinessConversation{
+			ConversationID: sigConv.ConversationID,
+			BusinessID:     sigConv.BusinessID,
+			CustomerID:     custID,
+			SignalID:       &sigConv.SignalID,
+			Business:       sigConv.Business,
+			Customer:       &cust,
+			CreatedAt:      sigConv.CreatedAt,
+			UpdatedAt:      sigConv.CreatedAt,
+		}, nil
+	}
+
+	return nil, err
 }
 
 func (r *businessChatRepository) CreateConversation(conv *models.DirectBusinessConversation, firstMsg *models.DirectBusinessMessage) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(conv).Error; err != nil {
+		txConv := tx
+		if !r.hasSignalIDColumn() {
+			txConv = txConv.Omit("signal_id", "SignalID")
+		}
+		if err := txConv.Create(conv).Error; err != nil {
 			return err
 		}
 		if firstMsg != nil {
@@ -77,6 +181,10 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 	query := r.db.
 		Preload("Business").
 		Where("customer_id = ?", customerID)
+
+	if !r.hasSignalIDColumn() {
+		query = query.Omit("signal_id", "SignalID")
+	}
 
 	if cursor != "" {
 		var cursorConv models.DirectBusinessConversation
@@ -106,14 +214,33 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 			bizLogo = c.Business.LogoURL
 		}
 
+		var signalRef *models.SignalPostReference
+		if c.SignalID != nil && *c.SignalID != "" {
+			signalRef = r.GetSignalPostReferenceByID(*c.SignalID)
+		}
+		if signalRef == nil {
+			signalRef = r.FindSignalForConversation(c.BusinessID, c.CustomerID)
+		}
+
+		var sigID, sigTitle, sigDesc string
+		if signalRef != nil {
+			sigID = signalRef.SignalID
+			sigTitle = signalRef.Title
+			sigDesc = signalRef.Description
+		}
+
 		results = append(results, models.CustomerBusinessConversationListItem{
-			ConversationID:     c.ConversationID,
-			BusinessID:         c.BusinessID,
-			BusinessName:       bizName,
-			BusinessLogo:       bizLogo,
-			LastMessagePreview: c.LastMessagePreview,
-			LastMessageAt:      c.LastMessageAt,
-			UnreadCount:        unread,
+			ConversationID:      c.ConversationID,
+			BusinessID:          c.BusinessID,
+			BusinessName:        bizName,
+			BusinessLogo:        bizLogo,
+			LastMessagePreview:  c.LastMessagePreview,
+			LastMessageAt:       c.LastMessageAt,
+			UnreadCount:         unread,
+			SignalID:            sigID,
+			SignalTitle:         sigTitle,
+			SignalDescription:   sigDesc,
+			SignalPostReference: signalRef,
 		})
 	}
 
@@ -125,6 +252,10 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 	query := r.db.
 		Preload("Customer").
 		Where("business_id = ?", businessID)
+
+	if !r.hasSignalIDColumn() {
+		query = query.Omit("signal_id", "SignalID")
+	}
 
 	if cursor != "" {
 		var cursorConv models.DirectBusinessConversation
@@ -159,15 +290,34 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 			custAvatar = c.Customer.ProfilePictureUrl
 		}
 
+		var signalRef *models.SignalPostReference
+		if c.SignalID != nil && *c.SignalID != "" {
+			signalRef = r.GetSignalPostReferenceByID(*c.SignalID)
+		}
+		if signalRef == nil {
+			signalRef = r.FindSignalForConversation(c.BusinessID, c.CustomerID)
+		}
+
+		var sigID, sigTitle, sigDesc string
+		if signalRef != nil {
+			sigID = signalRef.SignalID
+			sigTitle = signalRef.Title
+			sigDesc = signalRef.Description
+		}
+
 		results = append(results, models.MerchantBusinessConversationListItem{
-			ConversationID:     c.ConversationID,
-			BusinessID:         c.BusinessID,
-			CustomerID:         c.CustomerID,
-			CustomerName:       custName,
-			CustomerAvatar:     custAvatar,
-			LastMessagePreview: c.LastMessagePreview,
-			LastMessageAt:      c.LastMessageAt,
-			UnreadCount:        unread,
+			ConversationID:      c.ConversationID,
+			BusinessID:          c.BusinessID,
+			CustomerID:          c.CustomerID,
+			CustomerName:        custName,
+			CustomerAvatar:      custAvatar,
+			LastMessagePreview:  c.LastMessagePreview,
+			LastMessageAt:       c.LastMessageAt,
+			UnreadCount:         unread,
+			SignalID:            sigID,
+			SignalTitle:         sigTitle,
+			SignalDescription:   sigDesc,
+			SignalPostReference: signalRef,
 		})
 	}
 
@@ -225,6 +375,37 @@ func (r *businessChatRepository) GetMessagesByConversationID(conversationID stri
 	for i := len(reverseMessages) - 1; i >= 0; i-- {
 		messages = append(messages, reverseMessages[i])
 	}
+
+	// Fallback jika tidak ada pesan di direct_business_messages tapi percakapan berasal dari signal_conversations
+	if len(messages) == 0 {
+		var sigMsgs []models.SignalMessage
+		q := r.db.Where("conversation_id = ?", conversationID).Order("created_at ASC")
+		if limit > 0 {
+			q = q.Limit(limit)
+		}
+		if err := q.Find(&sigMsgs).Error; err == nil && len(sigMsgs) > 0 {
+			for _, sm := range sigMsgs {
+				senderName := "Pelanggan"
+				if sm.SenderType == "merchant" {
+					senderName = "Penjual"
+				}
+				mediaURL := sm.AttachmentURL
+				messages = append(messages, models.DirectBusinessMessage{
+					MessageID:      sm.MessageID,
+					ConversationID: sm.ConversationID,
+					SenderID:       sm.SenderID,
+					SenderType:     sm.SenderType,
+					SenderName:     senderName,
+					MessageType:    "text",
+					Content:        sm.MessageText,
+					MediaURL:       mediaURL,
+					IsRead:         sm.IsRead,
+					CreatedAt:      sm.CreatedAt,
+				})
+			}
+		}
+	}
+
 	return messages, nil
 }
 

@@ -17,7 +17,7 @@ type BusinessChatService interface {
 	InitiateChat(customerID string, businessID string, input models.InitiateBusinessChatInput) (*models.DirectBusinessConversation, *models.DirectBusinessMessage, bool, error)
 	GetCustomerConversations(customerID string, limit int, cursor string) ([]models.CustomerBusinessConversationListItem, error)
 	GetMerchantConversations(businessID string, requesterID string, limit int, cursor string) ([]models.MerchantBusinessConversationListItem, error)
-	GetMessages(conversationID string, requesterID string, limit int, cursor string) ([]models.DirectBusinessMessage, error)
+	GetMessages(conversationID string, requesterID string, limit int, cursor string) ([]models.DirectBusinessMessage, *models.SignalPostReference, error)
 	SendMessage(conversationID string, requesterID string, input models.SendBusinessChatMessageInput) (*models.DirectBusinessMessage, error)
 }
 
@@ -70,6 +70,10 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 			}
 			lastMsg, _ = s.SendMessage(existingConv.ConversationID, customerID, sendInput)
 		}
+		if input.SignalID != nil && *input.SignalID != "" {
+			_ = s.repo.UpdateConversationSignalID(existingConv.ConversationID, *input.SignalID)
+			existingConv.SignalID = input.SignalID
+		}
 		existingConv.LastMessagePreview, _ = crypto.Decrypt(existingConv.LastMessagePreview)
 		return existingConv, lastMsg, false, nil
 	}
@@ -87,6 +91,7 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		ConversationID:     convID,
 		BusinessID:         businessID,
 		CustomerID:         customerID,
+		SignalID:           input.SignalID,
 		LastMessagePreview: preview,
 		LastMessageAt:      now,
 		CreatedAt:          now,
@@ -232,10 +237,10 @@ func (s *businessChatService) GetMerchantConversations(businessID string, reques
 	return items, nil
 }
 
-func (s *businessChatService) GetMessages(conversationID string, requesterID string, limit int, cursor string) ([]models.DirectBusinessMessage, error) {
+func (s *businessChatService) GetMessages(conversationID string, requesterID string, limit int, cursor string) ([]models.DirectBusinessMessage, *models.SignalPostReference, error) {
 	conv, err := s.repo.GetConversationByID(conversationID)
 	if err != nil || conv == nil {
-		return nil, errors.New("Percakapan tidak ditemukan")
+		return nil, nil, errors.New("Percakapan tidak ditemukan")
 	}
 
 	isCustomer := conv.CustomerID == requesterID
@@ -244,14 +249,14 @@ func (s *businessChatService) GetMessages(conversationID string, requesterID str
 		hasAccess, _ := s.repo.VerifyMerchantAccess(conv.BusinessID, requesterID)
 		if hasAccess {
 			if !permissions.HasPermission(database.DB, requesterID, conv.BusinessID, models.PermManageBusinessChat) {
-				return nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengelola chat pelanggan")
+				return nil, nil, errors.New("forbidden: Anda tidak memiliki izin untuk mengelola chat pelanggan")
 			}
 			isMerchant = true
 		}
 	}
 
 	if !isCustomer && !isMerchant {
-		return nil, errors.New("Anda tidak memiliki akses ke percakapan ini")
+		return nil, nil, errors.New("Anda tidak memiliki akses ke percakapan ini")
 	}
 
 	readerType := "customer"
@@ -266,7 +271,7 @@ func (s *businessChatService) GetMessages(conversationID string, requesterID str
 
 	messages, err := s.repo.GetMessagesByConversationID(conversationID, limit, cursor)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for i := range messages {
@@ -274,7 +279,15 @@ func (s *businessChatService) GetMessages(conversationID string, requesterID str
 		messages[i].MediaURL, _ = crypto.DecryptPointer(messages[i].MediaURL)
 	}
 
-	return messages, nil
+	var signalRef *models.SignalPostReference
+	if conv.SignalID != nil && *conv.SignalID != "" {
+		signalRef = s.repo.GetSignalPostReferenceByID(*conv.SignalID)
+	}
+	if signalRef == nil {
+		signalRef = s.repo.FindSignalForConversation(conv.BusinessID, conv.CustomerID)
+	}
+
+	return messages, signalRef, nil
 }
 
 func (s *businessChatService) SendMessage(conversationID string, requesterID string, input models.SendBusinessChatMessageInput) (*models.DirectBusinessMessage, error) {

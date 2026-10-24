@@ -128,17 +128,25 @@ func (h *MerchantHandler) GetMessages(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 50)
 
-	messages, total, errSvc := h.service.GetMessages(accID, role, convID, page, limit)
+	messages, total, signalRef, errSvc := h.service.GetMessages(accID, role, convID, page, limit)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil pesan", fiber.Map{
+	respData := fiber.Map{
 		"messages": messages,
 		"total":    total,
 		"page":     page,
 		"limit":    limit,
-	})
+	}
+	if signalRef != nil {
+		respData["signal_post_reference"] = signalRef
+		respData["signal_id"] = signalRef.SignalID
+		respData["signal_title"] = signalRef.Title
+		respData["signal_description"] = signalRef.Description
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil pesan", respData)
 }
 
 // SendMessage mengirim pesan balasan dari merchant

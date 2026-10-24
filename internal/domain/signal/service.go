@@ -33,7 +33,7 @@ type SignalService interface {
 	GetProductSuggestions(businessID, signalID string) ([]models.Product, error)
 
 	// Shared (Customer & Merchant)
-	GetMessages(accountID, role, conversationID string, page, limit int) ([]models.SignalMessage, int64, error)
+	GetMessages(accountID, role, conversationID string, page, limit int) ([]models.SignalMessage, int64, *models.SignalPostReference, error)
 	SendMessage(accountID, role, conversationID string, input models.SendMessageInput) (*models.SignalMessage, error)
 }
 
@@ -822,22 +822,22 @@ func (s *signalService) notifyNewConversation(customerID, merchantAccountID stri
 // SHARED (CUSTOMER & MERCHANT)
 // ================================================================
 
-func (s *signalService) GetMessages(accountID, role, conversationID string, page, limit int) ([]models.SignalMessage, int64, error) {
+func (s *signalService) GetMessages(accountID, role, conversationID string, page, limit int) ([]models.SignalMessage, int64, *models.SignalPostReference, error) {
 	conv, err := s.signalRepo.GetConversationByID(conversationID)
 	if err != nil {
-		return nil, 0, errors.New("percakapan tidak ditemukan")
+		return nil, 0, nil, errors.New("percakapan tidak ditemukan")
 	}
 
 	signal, err := s.signalRepo.GetSignalByID(conv.SignalID)
 	if err != nil {
-		return nil, 0, errors.New("signal tidak ditemukan")
+		return nil, 0, nil, errors.New("signal tidak ditemukan")
 	}
 
 	isCustomer := signal.CustomerID == accountID
 	isMerchant := conv.MerchantID == accountID || s.signalRepo.VerifyBusinessAccess(accountID, role, conv.BusinessID)
 
 	if !isCustomer && !isMerchant {
-		return nil, 0, errors.New("anda tidak memiliki akses ke percakapan ini")
+		return nil, 0, nil, errors.New("anda tidak memiliki akses ke percakapan ini")
 	}
 
 	if page <= 0 {
@@ -854,7 +854,7 @@ func (s *signalService) GetMessages(accountID, role, conversationID string, page
 
 	messages, total, err := s.signalRepo.GetMessagesByConversation(conversationID, page, limit)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
 	for i := range messages {
@@ -862,7 +862,9 @@ func (s *signalService) GetMessages(accountID, role, conversationID string, page
 		messages[i].AttachmentURL, _ = crypto.DecryptPointer(messages[i].AttachmentURL)
 	}
 
-	return messages, total, nil
+	signalRef := signal.ToPostReference()
+
+	return messages, total, signalRef, nil
 }
 
 func (s *signalService) SendMessage(accountID, role, conversationID string, input models.SendMessageInput) (*models.SignalMessage, error) {

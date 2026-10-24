@@ -106,12 +106,22 @@ func (h *BusinessChatHandler) GetMessages(c *fiber.Ctx) error {
 	limit := c.QueryInt("limit", 50)
 	cursor := strings.TrimSpace(c.Query("cursor", ""))
 
-	messages, errSvc := h.service.GetMessages(conversationID, accountID, limit, cursor)
+	messages, signalRef, errSvc := h.service.GetMessages(conversationID, accountID, limit, cursor)
 	if errSvc != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan berhasil dimuat", messages)
+	respData := fiber.Map{
+		"messages": messages,
+	}
+	if signalRef != nil {
+		respData["signal_post_reference"] = signalRef
+		respData["signal_id"] = signalRef.SignalID
+		respData["signal_title"] = signalRef.Title
+		respData["signal_description"] = signalRef.Description
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan berhasil dimuat", respData)
 }
 
 // SendMessage mengirim pesan baru ke dalam percakapan toko
