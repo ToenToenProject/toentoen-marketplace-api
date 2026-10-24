@@ -117,6 +117,12 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 			cleaned[i].MatchedProducts = nil
 		}
 		docs = cleaned
+	} else if req.MinPrice != nil || req.MaxPrice != nil {
+		for i := range docs {
+			if len(docs[i].MatchedProducts) > 0 {
+				docs[i].MatchedProducts = filterMatchedProductsByPrice(docs[i].MatchedProducts, req.MinPrice, req.MaxPrice)
+			}
+		}
 	}
 
 	return ExploreResponse{
@@ -134,6 +140,32 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 			TotalItems:  summary.TotalHits,
 		},
 	}, nil
+}
+
+// filterMatchedProductsByPrice memfilter item pada matched_products agar produk yang harga efektifnya
+// (final_price atau price) berada di bawah min_price atau di atas max_price tidak disertakan.
+func filterMatchedProductsByPrice(products []MatchedProductPreview, minPrice, maxPrice *float64) []MatchedProductPreview {
+	if (minPrice == nil && maxPrice == nil) || len(products) == 0 {
+		return products
+	}
+
+	filtered := make([]MatchedProductPreview, 0, len(products))
+	for _, p := range products {
+		effectivePrice := p.FinalPrice
+		if effectivePrice <= 0 {
+			effectivePrice = p.Price
+		}
+
+		if minPrice != nil && effectivePrice < *minPrice {
+			continue
+		}
+		if maxPrice != nil && effectivePrice > *maxPrice {
+			continue
+		}
+
+		filtered = append(filtered, p)
+	}
+	return filtered
 }
 
 type scoredPost struct {

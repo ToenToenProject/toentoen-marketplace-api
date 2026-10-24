@@ -420,6 +420,9 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 						doc.Hours = []myMeili.MeiliBusinessHour{}
 					}
 					doc.Distance = doc.Distance / 1000 // Convert meters to km
+					if req.MinPrice != nil || req.MaxPrice != nil {
+						doc.MatchedProducts = filterMatchedProductsByPrice(doc.MatchedProducts, req.MinPrice, req.MaxPrice)
+					}
 					docs = append(docs, doc)
 				}
 			}
@@ -684,6 +687,9 @@ func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]M
 		}
 		if req.Lat != 0 && req.Lng != 0 && b.Latitude != nil && b.Longitude != nil {
 			doc.Distance = haversineDistance(req.Lat, req.Lng, *b.Latitude, *b.Longitude)
+		}
+		if req.MinPrice != nil || req.MaxPrice != nil {
+			doc.MatchedProducts = filterMatchedProductsByPrice(doc.MatchedProducts, req.MinPrice, req.MaxPrice)
 		}
 		allDocs = append(allDocs, doc)
 	}

@@ -408,3 +408,104 @@ func TestProductDocumentActivePromotionMapping(t *testing.T) {
 	}
 }
 
+func TestExploreServiceMatchedProductsPriceFilter(t *testing.T) {
+	mockRepo := &mockExploreRepo{
+		businesses: []MeiliBusinessDocument{
+			{
+				ID:   "BIZ-PRICE-TEST",
+				Name: "Toko Menu Lengkap",
+				MatchedProducts: []MatchedProductPreview{
+					{ProductID: "P1", ProductName: "Murah", Price: 10000, FinalPrice: 10000},
+					{ProductID: "P2", ProductName: "Diskon Menengah", Price: 30000, FinalPrice: 20000, IsDiscounted: true},
+					{ProductID: "P3", ProductName: "Reguler Sedang", Price: 25000, FinalPrice: 0}, // Fallback ke Price: 25000
+					{ProductID: "P4", ProductName: "Mahal", Price: 50000, FinalPrice: 50000},
+				},
+			},
+		},
+	}
+
+	svc := NewExploreService(mockRepo)
+
+	// Test 1: min_price = 15000, max_price = 30000 -> P2 (20000) & P3 (25000) harus masuk, P1 & P4 dieliminasi
+	min15 := 15000.0
+	max30 := 30000.0
+	res1, err := svc.GetExploreBusinesses(SearchRequest{
+		Scope:    "all",
+		Limit:    10,
+		MinPrice: &min15,
+		MaxPrice: &max30,
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if len(res1.Businesses) != 1 {
+		t.Fatalf("Expected 1 business, got %d", len(res1.Businesses))
+	}
+	matched1 := res1.Businesses[0].MatchedProducts
+	if len(matched1) != 2 {
+		t.Fatalf("Expected 2 matched products, got %d", len(matched1))
+	}
+	if matched1[0].ProductID != "P2" || matched1[1].ProductID != "P3" {
+		t.Errorf("Expected products [P2, P3], got [%s, %s]", matched1[0].ProductID, matched1[1].ProductID)
+	}
+
+	// Test 2: min_price = 26000 -> Hanya P4 (50000) yang memenuhi
+	min26 := 26000.0
+	res2, err := svc.GetExploreBusinesses(SearchRequest{
+		Scope:    "all",
+		Limit:    10,
+		MinPrice: &min26,
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	matched2 := res2.Businesses[0].MatchedProducts
+	if len(matched2) != 1 || matched2[0].ProductID != "P4" {
+		t.Errorf("Expected only P4, got %v", matched2)
+	}
+
+	// Test 3: max_price = 15000 -> Hanya P1 (10000) yang memenuhi
+	max15 := 15000.0
+	res3, err := svc.GetExploreBusinesses(SearchRequest{
+		Scope:    "all",
+		Limit:    10,
+		MaxPrice: &max15,
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	matched3 := res3.Businesses[0].MatchedProducts
+	if len(matched3) != 1 || matched3[0].ProductID != "P1" {
+		t.Errorf("Expected only P1, got %v", matched3)
+	}
+
+	// Test 4: min_price = 100000 -> Tidak ada produk yang cocok, array matched_products kosong
+	min100 := 100000.0
+	res4, err := svc.GetExploreBusinesses(SearchRequest{
+		Scope:    "all",
+		Limit:    10,
+		MinPrice: &min100,
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	matched4 := res4.Businesses[0].MatchedProducts
+	if len(matched4) != 0 {
+		t.Errorf("Expected 0 matched products, got %d", len(matched4))
+	}
+
+	// Test 5: Tanpa filter harga -> Seluruh 4 produk tetap terjaga
+	res5, err := svc.GetExploreBusinesses(SearchRequest{
+		Scope: "all",
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	matched5 := res5.Businesses[0].MatchedProducts
+	if len(matched5) != 4 {
+		t.Errorf("Expected all 4 products preserved, got %d", len(matched5))
+	}
+}
+
+

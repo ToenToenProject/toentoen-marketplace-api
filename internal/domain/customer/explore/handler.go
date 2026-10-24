@@ -153,12 +153,21 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 
 	// Gatekeeping: min_price & max_price
 	var minPrice, maxPrice *float64
-	if rawMin := c.Query("min_price"); rawMin != "" {
+	rawMin := c.Query("min_price")
+	if rawMin == "" {
+		rawMin = c.Query("minPrice")
+	}
+	if rawMin != "" {
 		if val, err := strconv.ParseFloat(rawMin, 64); err == nil {
 			minPrice = &val
 		}
 	}
-	if rawMax := c.Query("max_price"); rawMax != "" {
+
+	rawMax := c.Query("max_price")
+	if rawMax == "" {
+		rawMax = c.Query("maxPrice")
+	}
+	if rawMax != "" {
 		if val, err := strconv.ParseFloat(rawMax, 64); err == nil {
 			maxPrice = &val
 		}
