@@ -2,6 +2,7 @@ package profile
 
 import (
 	"errors"
+	"strings"
 	"toentoen-backend/internal/domain/shared/models"
 )
 
@@ -28,31 +29,41 @@ func (s *publicProfileService) GetPublicProfileSummary(accountID string) (*model
 		totalCommentsReviews = 0
 	}
 
-	recentReviews, err := s.repo.GetRecentReviews(accountID, 2) // As per UI, show 2 recent reviews
-	if err != nil {
-		recentReviews = []models.RecentActivityResponse{}
-	}
-	if recentReviews == nil {
+	recentReviews, err := s.repo.GetRecentReviews(accountID, 2) // Show 2 recent reviews
+	if err != nil || recentReviews == nil {
 		recentReviews = []models.RecentActivityResponse{}
 	}
 
 	var avatarUrl *string
-	if account.ProfilePictureUrl != nil {
-		avatarUrl = account.ProfilePictureUrl
+	if account.ProfilePictureUrl != nil && strings.TrimSpace(*account.ProfilePictureUrl) != "" {
+		cleaned := strings.TrimSpace(*account.ProfilePictureUrl)
+		avatarUrl = &cleaned
 	}
-	
-	// If the user's fullname is empty, use username or a default
-	name := account.FirstName + " " + account.LastName
-	if name == "" {
-		name = account.Username
+
+	fullName := strings.TrimSpace(account.FirstName + " " + account.LastName)
+	if fullName == "" {
+		if account.Username != "" {
+			fullName = account.Username
+		} else {
+			fullName = "Pengguna ToenToen"
+		}
 	}
-	if name == "" {
-		name = "User Name"
+
+	username := strings.TrimSpace(account.Username)
+	if username == "" {
+		username = fullName
+	}
+
+	gender := ""
+	if account.Gender != nil {
+		gender = strings.ToLower(strings.TrimSpace(*account.Gender))
 	}
 
 	response := &models.PublicProfileSummaryResponse{
 		AccountID:            account.AccountID,
-		Username:             name,
+		Username:             username,
+		FullName:             fullName,
+		Gender:               gender,
 		ProfilePictureURL:    avatarUrl,
 		TotalCommentsReviews: totalCommentsReviews,
 		RecentReviews:        recentReviews,

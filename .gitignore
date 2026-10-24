@@ -90,3 +90,6 @@ server
 
 # Documentation
 docs/
+
+# Codebase Memory MCP
+.codebase-memory/

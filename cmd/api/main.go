@@ -830,7 +830,8 @@ func main() {
 	// ==========================================
 	// ROUTES: CUSTOMER PROFILE
 	// ==========================================
-	api.Get("/customer/profile/:account_id/summary", middlewares.RequireAuth, publicProfileHandler.GetPublicProfileSummary)
+	api.Get("/customer/profile/:account_id/summary", middlewares.OptionalAuth, publicProfileHandler.GetPublicProfileSummary)
+	api.Get("/customer/profile/:accountId/summary", middlewares.OptionalAuth, publicProfileHandler.GetPublicProfileSummary)
 
 	// ==========================================
 	// ROUTES: SUPPORT LIVE CHAT (Customer Service)

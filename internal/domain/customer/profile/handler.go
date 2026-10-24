@@ -1,8 +1,8 @@
 package profile
 
 import (
+	"strings"
 	"toentoen-backend/internal/constants"
-	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -16,12 +16,25 @@ func NewPublicProfileHandler(service PublicProfileService) *PublicProfileHandler
 }
 
 func (h *PublicProfileHandler) GetPublicProfileSummary(c *fiber.Ctx) error {
-	accountID := c.Params("account_id")
+	accountID := strings.TrimSpace(c.Params("account_id"))
+	if accountID == "" {
+		accountID = strings.TrimSpace(c.Params("accountId"))
+	}
 
 	summary, err := h.service.GetPublicProfileSummary(accountID)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusNotFound, constants.FailedValidation, err.Error(), nil)
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"status":       "error",
+			"responseCode": constants.FailedValidation,
+			"message":      err.Error(),
+			"data":         nil,
+		})
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ringkasan profil publik berhasil diambil", summary)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":       "success",
+		"responseCode": constants.Success,
+		"message":      "Ringkasan profil publik berhasil diambil",
+		"data":         summary,
+	})
 }
