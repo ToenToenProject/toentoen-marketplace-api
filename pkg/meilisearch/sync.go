@@ -46,6 +46,10 @@ type MeiliBusinessDocument struct {
 	CloseTime        string              `json:"close_time"`
 	Hours            []MeiliBusinessHour `json:"hours"`
 	Geo              GeoLocation         `json:"_geo"`
+	Latitude         *float64            `json:"latitude"`
+	Longitude        *float64            `json:"longitude"`
+	Lat              *float64            `json:"lat,omitempty"`
+	Lng              *float64            `json:"lng,omitempty"`
 	Distance         float64             `json:"_geoDistance,omitempty"`
 	IsWithinRadius   bool                `json:"is_within_radius"`
 
@@ -97,6 +101,10 @@ type MeiliProductDocument struct {
 	CategoryIDs    []int64     `json:"category_ids,omitempty"`
 	CategoryNames  []string    `json:"category_names,omitempty"`
 	Geo            GeoLocation `json:"_geo"`
+	Latitude       *float64    `json:"latitude"`
+	Longitude      *float64    `json:"longitude"`
+	Lat            *float64    `json:"lat,omitempty"`
+	Lng            *float64    `json:"lng,omitempty"`
 	Distance       float64     `json:"_geoDistance,omitempty"`
 	IsWithinRadius bool        `json:"is_within_radius"`
 	CreatedAt      int64       `json:"created_at,omitempty"`
@@ -452,6 +460,10 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 			Lat: *b.Latitude,
 			Lng: *b.Longitude,
 		}
+		doc.Latitude = b.Latitude
+		doc.Longitude = b.Longitude
+		doc.Lat = b.Latitude
+		doc.Lng = b.Longitude
 	}
 
 	return doc
@@ -530,6 +542,7 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 	var categoryIDs []int64
 	var categoryNames []string
 	var geo GeoLocation
+	var latPtr, lngPtr *float64
 
 	if b != nil {
 		if b.BusinessName != nil {
@@ -558,6 +571,8 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 				Lat: *b.Latitude,
 				Lng: *b.Longitude,
 			}
+			latPtr = b.Latitude
+			lngPtr = b.Longitude
 		}
 	}
 
@@ -593,6 +608,10 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 		CategoryIDs:    categoryIDs,
 		CategoryNames:  categoryNames,
 		Geo:            geo,
+		Latitude:       latPtr,
+		Longitude:      lngPtr,
+		Lat:            latPtr,
+		Lng:            lngPtr,
 		CreatedAt:      p.CreatedAt.Unix(),
 		IsPackage:      false,
 		PromotionType:  promotionType,
@@ -669,6 +688,7 @@ func BuildBundlingDocument(db *gorm.DB, prm *models.Promotion, b *models.Busines
 	var categoryIDs []int64
 	var categoryNames []string
 	var geo GeoLocation
+	var latPtr, lngPtr *float64
 
 	if b != nil {
 		if b.BusinessName != nil {
@@ -697,6 +717,8 @@ func BuildBundlingDocument(db *gorm.DB, prm *models.Promotion, b *models.Busines
 				Lat: *b.Latitude,
 				Lng: *b.Longitude,
 			}
+			latPtr = b.Latitude
+			lngPtr = b.Longitude
 		}
 	}
 
@@ -732,6 +754,10 @@ func BuildBundlingDocument(db *gorm.DB, prm *models.Promotion, b *models.Busines
 		CategoryIDs:    categoryIDs,
 		CategoryNames:  categoryNames,
 		Geo:            geo,
+		Latitude:       latPtr,
+		Longitude:      lngPtr,
+		Lat:            latPtr,
+		Lng:            lngPtr,
 		CreatedAt:      prm.CreatedAt.Unix(),
 		IsPackage:      true,
 		PromotionType:  "bundling",

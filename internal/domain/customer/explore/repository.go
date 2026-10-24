@@ -420,6 +420,14 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 						doc.Hours = []myMeili.MeiliBusinessHour{}
 					}
 					doc.Distance = doc.Distance / 1000 // Convert meters to km
+					if doc.Latitude == nil && (doc.Geo.Lat != 0 || doc.Geo.Lng != 0) {
+						latVal := doc.Geo.Lat
+						lngVal := doc.Geo.Lng
+						doc.Latitude = &latVal
+						doc.Longitude = &lngVal
+						doc.Lat = &latVal
+						doc.Lng = &lngVal
+					}
 					if req.MinPrice != nil || req.MaxPrice != nil {
 						doc.MatchedProducts = filterMatchedProductsByPrice(doc.MatchedProducts, req.MinPrice, req.MaxPrice)
 					}
@@ -552,6 +560,14 @@ func (r *exploreRepository) SearchProducts(req SearchRequest) ([]MeiliProductDoc
 				var doc MeiliProductDocument
 				if err := hit.DecodeInto(&doc); err == nil {
 					doc.Distance = doc.Distance / 1000 // Convert meters to km
+					if doc.Latitude == nil && (doc.Geo.Lat != 0 || doc.Geo.Lng != 0) {
+						latVal := doc.Geo.Lat
+						lngVal := doc.Geo.Lng
+						doc.Latitude = &latVal
+						doc.Longitude = &lngVal
+						doc.Lat = &latVal
+						doc.Lng = &lngVal
+					}
 					docs = append(docs, doc)
 				}
 			}
@@ -687,6 +703,12 @@ func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]M
 		}
 		if req.Lat != 0 && req.Lng != 0 && b.Latitude != nil && b.Longitude != nil {
 			doc.Distance = haversineDistance(req.Lat, req.Lng, *b.Latitude, *b.Longitude)
+		}
+		if doc.Latitude == nil && b.Latitude != nil {
+			doc.Latitude = b.Latitude
+			doc.Longitude = b.Longitude
+			doc.Lat = b.Latitude
+			doc.Lng = b.Longitude
 		}
 		if req.MinPrice != nil || req.MaxPrice != nil {
 			doc.MatchedProducts = filterMatchedProductsByPrice(doc.MatchedProducts, req.MinPrice, req.MaxPrice)
@@ -871,6 +893,12 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resul
 		if req.Lat != 0 && req.Lng != 0 && b != nil && b.Latitude != nil && b.Longitude != nil {
 			doc.Distance = haversineDistance(req.Lat, req.Lng, *b.Latitude, *b.Longitude)
 		}
+		if doc.Latitude == nil && b != nil && b.Latitude != nil {
+			doc.Latitude = b.Latitude
+			doc.Longitude = b.Longitude
+			doc.Lat = b.Latitude
+			doc.Lng = b.Longitude
+		}
 		allDocs = append(allDocs, doc)
 	}
 
@@ -883,6 +911,12 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resul
 		}
 		if req.Lat != 0 && req.Lng != 0 && b != nil && b.Latitude != nil && b.Longitude != nil {
 			doc.Distance = haversineDistance(req.Lat, req.Lng, *b.Latitude, *b.Longitude)
+		}
+		if doc.Latitude == nil && b != nil && b.Latitude != nil {
+			doc.Latitude = b.Latitude
+			doc.Longitude = b.Longitude
+			doc.Lat = b.Latitude
+			doc.Lng = b.Longitude
 		}
 		allDocs = append(allDocs, doc)
 	}

@@ -79,6 +79,17 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 			docs = []MeiliProductDocument{}
 		}
 
+		for i := range docs {
+			if docs[i].Latitude == nil && (docs[i].Geo.Lat != 0 || docs[i].Geo.Lng != 0) {
+				latVal := docs[i].Geo.Lat
+				lngVal := docs[i].Geo.Lng
+				docs[i].Latitude = &latVal
+				docs[i].Longitude = &lngVal
+				docs[i].Lat = &latVal
+				docs[i].Lng = &lngVal
+			}
+		}
+
 		return ExploreResponse{
 			Scope:      "product",
 			Businesses: []MeiliBusinessDocument{},
@@ -108,6 +119,18 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 	}
 	if docs == nil {
 		docs = []MeiliBusinessDocument{}
+	}
+
+	// Pastikan original koordinat Latitude, Longitude, Lat, Lng berpresisi tinggi terisi
+	for i := range docs {
+		if docs[i].Latitude == nil && (docs[i].Geo.Lat != 0 || docs[i].Geo.Lng != 0) {
+			latVal := docs[i].Geo.Lat
+			lngVal := docs[i].Geo.Lng
+			docs[i].Latitude = &latVal
+			docs[i].Longitude = &lngVal
+			docs[i].Lat = &latVal
+			docs[i].Lng = &lngVal
+		}
 	}
 
 	if req.Scope == "store" {

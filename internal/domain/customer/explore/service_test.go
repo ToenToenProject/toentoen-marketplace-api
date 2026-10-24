@@ -508,4 +508,54 @@ func TestExploreServiceMatchedProductsPriceFilter(t *testing.T) {
 	}
 }
 
+func TestExploreServiceHighPrecisionCoordinates(t *testing.T) {
+	origLat := -6.18384212
+	origLng := 106.74381545
+
+	mockRepo := &mockExploreRepo{
+		businesses: []MeiliBusinessDocument{
+			{
+				ID:   "BIZ-GEO-TEST",
+				Name: "Toko Presisi Tinggi",
+				Geo: GeoLocation{
+					Lat: origLat,
+					Lng: origLng,
+				},
+			},
+		},
+	}
+
+	svc := NewExploreService(mockRepo)
+
+	// Uji berbagai perluasan radius: 5km, 10km, 20km
+	radii := []int{5000, 10000, 20000}
+	for _, radius := range radii {
+		res, err := svc.GetExploreBusinesses(SearchRequest{
+			Scope:  "all",
+			Lat:    -6.180000,
+			Lng:    106.740000,
+			Radius: radius,
+			Limit:  10,
+		})
+		if err != nil {
+			t.Fatalf("Radius %d failed: %v", radius, err)
+		}
+		if len(res.Businesses) != 1 {
+			t.Fatalf("Expected 1 business for radius %d, got %d", radius, len(res.Businesses))
+		}
+
+		b := res.Businesses[0]
+		if b.Latitude == nil || *b.Latitude != origLat {
+			t.Errorf("Radius %d: Expected Latitude %f, got %v", radius, origLat, b.Latitude)
+		}
+		if b.Longitude == nil || *b.Longitude != origLng {
+			t.Errorf("Radius %d: Expected Longitude %f, got %v", radius, origLng, b.Longitude)
+		}
+		if b.Geo.Lat != origLat || b.Geo.Lng != origLng {
+			t.Errorf("Radius %d: Expected Geo LatLng (%f, %f), got (%f, %f)", radius, origLat, origLng, b.Geo.Lat, b.Geo.Lng)
+		}
+	}
+}
+
+
 
