@@ -105,6 +105,7 @@ func ConnectDB() {
 		&models.BusinessNameHistory{},
 		&models.DeviceToken{},
 		&models.BusinessPost{},
+		&models.BusinessLike{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {
@@ -169,6 +170,16 @@ func ConnectDB() {
 		`UPDATE business_posts bp SET promotion_end_at = p.end_at FROM promotions p WHERE bp.promotion_id = p.promotion_id AND bp.promotion_end_at IS NULL`,
 		`UPDATE business_posts SET promotion_end_at = created_at + INTERVAL '7 days' WHERE is_promotion = true AND promotion_end_at IS NULL`,
 		`UPDATE business_posts SET is_promotion = false, updated_at = NOW() WHERE is_promotion = true AND ((promotion_id IN (SELECT promotion_id FROM promotions WHERE status IN ('ended', 'stopped') OR end_at <= NOW())) OR (promotion_end_at IS NOT NULL AND promotion_end_at <= NOW()))`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS like_count INT DEFAULT 0`,
+		`CREATE TABLE IF NOT EXISTS business_likes (
+			account_id VARCHAR NOT NULL,
+			business_id VARCHAR NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			PRIMARY KEY (account_id, business_id),
+			FOREIGN KEY (account_id) REFERENCES accounts (account_id) ON DELETE CASCADE,
+			FOREIGN KEY (business_id) REFERENCES businesses (business_id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_business_likes_business_id ON business_likes (business_id)`,
 		`DO $$
 		BEGIN
 			IF EXISTS (

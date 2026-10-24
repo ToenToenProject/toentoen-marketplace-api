@@ -20,6 +20,9 @@ func NewPostInteractionHandler(service PostInteractionService) *PostInteractionH
 // 1. HANDLER TOGGLE LIKE POSTINGAN
 func (h *PostInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 	postID := strings.TrimSpace(c.Params("post_id"))
+	if postID == "" {
+		postID = strings.TrimSpace(c.Params("postId"))
+	}
 
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {

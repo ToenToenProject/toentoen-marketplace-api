@@ -1,6 +1,7 @@
 package business_profile
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"time"
@@ -41,6 +42,9 @@ type BusinessProfileResponse struct {
 	IsOpenNow        bool     `json:"is_open_now"`
 	IsManuallyClosed bool     `json:"is_manually_closed"`
 	IsBookmarked     bool     `json:"is_bookmarked"`
+	IsLikedByMe      bool     `json:"is_liked_by_me"`
+	LikeCount        int      `json:"like_count"`
+	TotalLikes       int      `json:"total_likes"`
 	IsLive          bool     `json:"is_live"`
 	LivePlatform    *string  `json:"live_platform,omitempty"`
 	LiveStartedAt   *time.Time `json:"live_started_at,omitempty"`
@@ -72,6 +76,7 @@ type Service interface {
 	GetBusinessProfile(businessID string, accountID string, sourceType string, searchedTag string, productID string) (BusinessProfileResponse, error)
 	ToggleBookmark(accountID, businessID string) (bool, error)
 	GetBookmarks(accountID string) ([]BusinessProfileResponse, error)
+	ToggleLike(accountID, businessID string) (bool, int64, error)
 
 	GetAllProductGroups(businessID string) ([]models.ProductGroup, error)
 	GetAllProducts(businessID string, groupID string) ([]SimpleProductResponse, error)
@@ -107,8 +112,15 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 	}
 
 	var isBookmarked bool
+	var isLikedByMe bool
 	if accountID != "" {
 		isBookmarked, _ = s.repo.CheckBookmark(accountID, businessID)
+		isLikedByMe, _ = s.repo.CheckBusinessLike(accountID, businessID)
+	}
+
+	likeCount, errLikeCount := s.repo.GetBusinessLikeCount(businessID)
+	if errLikeCount != nil {
+		likeCount = int64(business.LikeCount)
 	}
 
 	// Tentukan Kategori Utama (Ambil yang pertama jika ada)
@@ -185,6 +197,9 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		IsOpenNow:        isOpenNow,
 		IsManuallyClosed: business.IsManuallyClosed,
 		IsBookmarked:     isBookmarked,
+		IsLikedByMe:      isLikedByMe,
+		LikeCount:        int(likeCount),
+		TotalLikes:       int(likeCount),
 		IsLive:          isLive,
 		LivePlatform:    livePlatform,
 		LiveStartedAt:   liveStartedAt,
@@ -239,6 +254,15 @@ func (s *service) ToggleBookmark(accountID, businessID string) (bool, error) {
 		return false, err
 	}
 	return s.repo.ToggleBookmark(accountID, businessID)
+}
+
+func (s *service) ToggleLike(accountID, businessID string) (bool, int64, error) {
+	businessID = strings.TrimSpace(businessID)
+	accountID = strings.TrimSpace(accountID)
+	if businessID == "" {
+		return false, 0, errors.New("business not found")
+	}
+	return s.repo.ToggleBusinessLike(accountID, businessID)
 }
 
 func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, error) {

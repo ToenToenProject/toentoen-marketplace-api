@@ -27,3 +27,17 @@ type ProductWishlist struct {
 func (ProductWishlist) TableName() string {
 	return "product_wishlists"
 }
+
+type BusinessLike struct {
+	AccountID  string    `gorm:"primaryKey;column:account_id" json:"account_id"`
+	BusinessID string    `gorm:"primaryKey;column:business_id" json:"business_id"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
+
+	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
+	Account  *Account  `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
+}
+
+func (BusinessLike) TableName() string {
+	return "business_likes"
+}
+

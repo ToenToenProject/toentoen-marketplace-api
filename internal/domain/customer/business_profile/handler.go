@@ -1,7 +1,9 @@
 package business_profile
 
 import (
+	"strings"
 	"toentoen-backend/internal/constants"
+	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,22 +21,33 @@ func NewHandler(s Service) *Handler {
 
 // GetProfile Handler untuk menarik detail profile Business
 func (h *Handler) GetProfile(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("businessId"))
+	}
 	if businessID == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "ID bisnis wajib diisi", nil)
 	}
 
 	// Ambil account_id (opsional) dari middleware auth (jika dipasang)
 	var accountID string
-	if id, ok := c.Locals("account_id").(string); ok {
+	if id, ok := c.Locals("account_id").(string); ok && id != "" {
 		accountID = id
+	}
+	if accountID == "" {
+		authID, _, errAuth := utils.GetRequesterInfo(c)
+		if errAuth == nil && authID != "" {
+			accountID = authID
+		}
 	}
 
 	// Baca konteks sumber kunjungan (dikirim dari Flutter untuk analytics)
-	// Contoh: ?source=tag_search&tag=Bengkel&product_id=PRD-xxx
-	sourceType := c.Query("source")   // explore | tag_search | product_search | post_feed | direct | signal_match
-	searchedTag := c.Query("tag")     // diisi jika source=tag_search
-	productID := c.Query("product_id") // diisi jika source=product_search
+	sourceType := c.Query("source")
+	searchedTag := c.Query("tag")
+	productID := c.Query("product_id")
 
 	profile, err := h.service.GetBusinessProfile(businessID, accountID, sourceType, searchedTag, productID)
 	if err != nil {
@@ -44,7 +57,66 @@ func (h *Handler) GetProfile(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil toko berhasil diambil", profile)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":       "success",
+		"responseCode": constants.Success,
+		"message":      "Profil toko berhasil diambil",
+		"data":         profile,
+	})
+}
+
+// ToggleLike Handler untuk aksi Like/Unlike profil bisnis
+func (h *Handler) ToggleLike(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("businessId"))
+	}
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "ID bisnis wajib diisi", nil)
+	}
+
+	// Wajib login
+	var accountID string
+	if id, ok := c.Locals("account_id").(string); ok && id != "" {
+		accountID = id
+	}
+	if accountID == "" {
+		authID, _, errAuth := utils.GetRequesterInfo(c)
+		if errAuth == nil && authID != "" {
+			accountID = authID
+		}
+	}
+	if accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+
+	isLiked, totalLikes, err := h.service.ToggleLike(accountID, businessID)
+	if err != nil {
+		if err.Error() == "business not found" || err.Error() == "bisnis tidak ditemukan" {
+			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Toko tidak ditemukan", nil)
+		}
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+	}
+
+	message := "Profil bisnis berhasil batal disukai"
+	if isLiked {
+		message = "Profil bisnis berhasil disukai"
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":       "success",
+		"responseCode": constants.Success,
+		"message":      message,
+		"data": fiber.Map{
+			"business_id": businessID,
+			"is_liked":    isLiked,
+			"total_likes": totalLikes,
+			"like_count":  totalLikes,
+		},
+	})
 }
 
 // ToggleBookmark Handler untuk menyimpan/menghapus toko favorit
@@ -124,20 +196,40 @@ func (h *Handler) GetProducts(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetPosts(c *fiber.Ctx) error {
-	businessID := c.Params("business_id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("businessId"))
+	}
 	if businessID == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "ID bisnis wajib diisi", nil)
 	}
 
 	var accountID string
-	if id, ok := c.Locals("account_id").(string); ok {
+	if id, ok := c.Locals("account_id").(string); ok && id != "" {
 		accountID = id
+	}
+	if accountID == "" {
+		authID, _, errAuth := utils.GetRequesterInfo(c)
+		if errAuth == nil && authID != "" {
+			accountID = authID
+		}
 	}
 
 	posts, err := h.service.GetAllPosts(businessID, accountID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
+	if posts == nil {
+		posts = []models.PostResponse{}
+	}
 
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar postingan berhasil diambil", posts)
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":       "success",
+		"responseCode": constants.Success,
+		"message":      "Daftar postingan berhasil diambil",
+		"data":         posts,
+	})
 }

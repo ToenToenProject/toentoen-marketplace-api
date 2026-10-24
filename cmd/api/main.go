@@ -430,7 +430,9 @@ func main() {
 	customerBusinessGroup := api.Group("/customer/businesses")
 	customerBusinessGroup.Get("/bookmarks", middlewares.RequireAuth, businessProfileHandler.GetBookmarks)
 	customerBusinessGroup.Get("/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	customerBusinessGroup.Get("/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerBusinessGroup.Post("/:business_id/bookmark", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleBookmark)
+	customerBusinessGroup.Post("/:business_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleLike)
 	customerBusinessGroup.Post("/:business_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	// Products
@@ -438,6 +440,12 @@ func main() {
 	customerBusinessGroup.Get("/:business_id/products", businessProfileHandler.GetProducts)
 	customerBusinessGroup.Get("/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)
 	customerBusinessGroup.Get("/:business_id/posts", middlewares.OptionalAuth, businessProfileHandler.GetPosts)
+
+	// Business Like endpoints & alias routes
+	api.Post("/business/:id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleLike)
+	api.Post("/business/:business_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleLike)
+	api.Post("/customer/business/:id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleLike)
+	api.Post("/customer/business/:business_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleLike)
 
 	// ==========================================
 	// ROUTES: USER PROFILE
@@ -589,13 +597,22 @@ func main() {
 	publicProductRoutes.Post("/comments/:comment_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	publicPostRoutes := api.Group("/posts")
+	publicPostRoutes.Get("/business/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetPosts)
+	publicPostRoutes.Get("/business/:id", middlewares.OptionalAuth, businessProfileHandler.GetPosts)
+	publicPostRoutes.Get("/business/:businessId", middlewares.OptionalAuth, businessProfileHandler.GetPosts)
 	publicPostRoutes.Post("/:post_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.ToggleLike)
+	publicPostRoutes.Post("/:postId/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.ToggleLike)
 	publicPostRoutes.Post("/:post_id/comments", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.AddPostComment)
+	publicPostRoutes.Post("/:postId/comments", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.AddPostComment)
 	publicPostRoutes.Put("/:post_id/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.EditPostComment)
+	publicPostRoutes.Put("/:postId/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.EditPostComment)
 	publicPostRoutes.Delete("/:post_id/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.DeletePostComment)
+	publicPostRoutes.Delete("/:postId/comments/:comment_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, postInteractionHandler.DeletePostComment)
 	publicPostRoutes.Get("/:post_id/comments", middlewares.OptionalAuth, postInteractionHandler.GetPostComments)
+	publicPostRoutes.Get("/:postId/comments", middlewares.OptionalAuth, postInteractionHandler.GetPostComments)
 	publicPostRoutes.Post("/comments/:comment_id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.ToggleUnifiedCommentLike)
 	publicPostRoutes.Post("/:post_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
+	publicPostRoutes.Post("/:postId/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	// ==========================================
 	// ROUTES: BUSINESS OWNER / ADMIN ACTIONS
@@ -788,8 +805,18 @@ func main() {
 	// ROUTES: CUSTOMER EXPLORE & ANALYTICS
 	// ==========================================
 	customerExploreGroup := api.Group("/customer/explore")
+	customerExploreGroup.Get("/business/:id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	customerExploreGroup.Get("/business/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	customerExploreGroup.Get("/businesses/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	customerExploreGroup.Get("/businesses/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
 	customerExploreGroup.Get("/search", exploreHandler.SearchBusinesses)
+
+	// Direct business aliases
+	api.Get("/customer/business/:id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	api.Get("/customer/business/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	api.Get("/business/:id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
+	api.Get("/business/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/products", func(c *fiber.Ctx) error {
 		if c.Query("scope") == "" {
 			c.Request().URI().QueryArgs().Set("scope", "product")

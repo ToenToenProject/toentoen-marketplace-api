@@ -14,6 +14,10 @@ type Repository interface {
 	ToggleBookmark(accountID, businessID string) (bool, error)
 	GetBookmarkedBusinesses(accountID string) ([]models.Business, error)
 
+	CheckBusinessLike(accountID, businessID string) (bool, error)
+	ToggleBusinessLike(accountID, businessID string) (bool, int64, error)
+	GetBusinessLikeCount(businessID string) (int64, error)
+
 	GetRecentProducts(businessID string, limit int) ([]models.Product, error)
 	GetRecentPosts(businessID string, limit int) ([]models.BusinessPost, error)
 	GetSimilarBusinesses(category string, city string, currentBusinessID string, limit int) ([]models.Business, error)
@@ -93,6 +97,75 @@ func (r *repository) ToggleBookmark(accountID, businessID string) (bool, error) 
 	}
 
 	return false, nil // Sudah tidak di-bookmark
+}
+
+func (r *repository) CheckBusinessLike(accountID, businessID string) (bool, error) {
+	if accountID == "" || businessID == "" {
+		return false, nil
+	}
+	var count int64
+	err := r.db.Model(&models.BusinessLike{}).
+		Where("account_id = ? AND business_id = ?", accountID, businessID).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *repository) GetBusinessLikeCount(businessID string) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.BusinessLike{}).
+		Where("business_id = ?", businessID).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *repository) ToggleBusinessLike(accountID, businessID string) (bool, int64, error) {
+	var isLiked bool
+	var totalLikes int64
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var b models.Business
+		if err := tx.Select("business_id").Where("business_id = ?", businessID).First(&b).Error; err != nil {
+			return err
+		}
+
+		var existing models.BusinessLike
+		errFind := tx.Where("account_id = ? AND business_id = ?", accountID, businessID).First(&existing).Error
+
+		if errFind != nil {
+			if errors.Is(errFind, gorm.ErrRecordNotFound) {
+				newLike := models.BusinessLike{
+					AccountID:  accountID,
+					BusinessID: businessID,
+				}
+				if err := tx.Create(&newLike).Error; err != nil {
+					return err
+				}
+				isLiked = true
+			} else {
+				return errFind
+			}
+		} else {
+			if err := tx.Delete(&existing).Error; err != nil {
+				return err
+			}
+			isLiked = false
+		}
+
+		if err := tx.Model(&models.BusinessLike{}).Where("business_id = ?", businessID).Count(&totalLikes).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&models.Business{}).Where("business_id = ?", businessID).UpdateColumn("like_count", totalLikes).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	return isLiked, totalLikes, err
 }
 
 func (r *repository) GetBookmarkedBusinesses(accountID string) ([]models.Business, error) {

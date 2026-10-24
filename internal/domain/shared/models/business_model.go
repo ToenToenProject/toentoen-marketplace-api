@@ -119,6 +119,7 @@ type Business struct {
 
 	AverageRating float64   `gorm:"default:0;column:average_rating" json:"average_rating"`
 	ReviewCount   int64     `gorm:"default:0;column:review_count" json:"review_count"`
+	LikeCount     int       `gorm:"default:0;column:like_count" json:"like_count"`
 	IsActive      bool      `gorm:"default:true;column:is_active" json:"is_active"`	
 	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
