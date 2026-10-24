@@ -496,7 +496,7 @@ func main() {
 	api.Post("/account/device-token", middlewares.RequireAuth, profileHandler.RegisterDeviceToken)
 	api.Delete("/account/device-token", middlewares.RequireAuth, profileHandler.DeleteDeviceToken)
 
-	// Notifications
+	// Notifications (/account/notifications and alias /notifications)
 	notifGroup := protected.Group("/notifications")
 	notifGroup.Get("/", notifHandler.GetMyNotifications)
 	notifGroup.Get("/unread-count", notifHandler.GetUnreadCount)
@@ -505,6 +505,15 @@ func main() {
 	notifGroup.Delete("/clear-all", notifHandler.DeleteAllNotifications)
 	notifGroup.Delete("/:id", notifHandler.DeleteNotification)
 	notifGroup.Delete("/", notifHandler.DeleteAllNotifications)
+
+	directNotifGroup := api.Group("/notifications", middlewares.RequireAuth)
+	directNotifGroup.Get("/", notifHandler.GetMyNotifications)
+	directNotifGroup.Get("/unread-count", notifHandler.GetUnreadCount)
+	directNotifGroup.Put("/read-all", notifHandler.MarkAllAsRead)
+	directNotifGroup.Put("/:id/read", notifHandler.MarkAsRead)
+	directNotifGroup.Delete("/clear-all", notifHandler.DeleteAllNotifications)
+	directNotifGroup.Delete("/:id", notifHandler.DeleteNotification)
+	directNotifGroup.Delete("/", notifHandler.DeleteAllNotifications)
 
 
 	// Endpoint Internal untuk Service toentoen-internal-operations (Trigger WebSocket & Push Notification)

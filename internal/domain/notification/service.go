@@ -38,6 +38,43 @@ func NewNotificationService(repo NotificationRepository, hub *realtime.Hub) Noti
 }
 
 func (s *notificationService) SendNotification(recipientIDs []string, triggerActorID string, notifType, referenceID, defaultTitle, defaultBody string, data map[string]interface{}, fcmTokensMap map[string][]string) {
+	if data == nil {
+		data = make(map[string]interface{})
+	}
+
+	// Normalisasi tipe sinyal dan pastikan target ID (signal_id, post_id, offer_id) selalu lengkap
+	switch notifType {
+	case "new_demand_signal", "signal":
+		notifType = "signal"
+		data["type"] = "signal"
+		if referenceID != "" && data["signal_id"] == nil {
+			data["signal_id"] = referenceID
+		}
+		if sigID, ok := data["signal_id"]; ok && sigID != nil {
+			data["post_id"] = sigID
+		}
+	case "signal_reply", "signal_offer", "respond_demand_signal":
+		notifType = "signal_offer"
+		data["type"] = "signal_offer"
+		if sigID, ok := data["signal_id"]; ok && sigID != nil {
+			data["post_id"] = sigID
+		}
+		if convID, ok := data["conversation_id"]; ok && convID != nil {
+			if data["offer_id"] == nil {
+				data["offer_id"] = convID
+			}
+		}
+	case "signal_message":
+		if sigID, ok := data["signal_id"]; ok && sigID != nil {
+			data["post_id"] = sigID
+		}
+		if convID, ok := data["conversation_id"]; ok && convID != nil {
+			if data["offer_id"] == nil {
+				data["offer_id"] = convID
+			}
+		}
+	}
+
 	dataBytes, _ := json.Marshal(data)
 
 	for _, recipientID := range recipientIDs {
@@ -178,13 +215,51 @@ func (s *notificationService) GetMyNotifications(accountID string, page, limit i
 	for _, n := range notifs {
 		var dataMap map[string]interface{}
 		_ = json.Unmarshal(n.Data, &dataMap)
+		if dataMap == nil {
+			dataMap = make(map[string]interface{})
+		}
 		
 		var actors []string
 		_ = json.Unmarshal(n.ActorIDs, &actors)
 
+		notifType := n.Type
+
+		// Normalisasi tipe sinyal dan pastikan target ID (signal_id, post_id, offer_id) selalu ada di data
+		switch notifType {
+		case "new_demand_signal", "signal":
+			notifType = "signal"
+			dataMap["type"] = "signal"
+			if n.ReferenceID != nil && *n.ReferenceID != "" && dataMap["signal_id"] == nil {
+				dataMap["signal_id"] = *n.ReferenceID
+			}
+			if sigID, ok := dataMap["signal_id"]; ok && sigID != nil {
+				dataMap["post_id"] = sigID
+			}
+		case "signal_reply", "signal_offer", "respond_demand_signal":
+			notifType = "signal_offer"
+			dataMap["type"] = "signal_offer"
+			if sigID, ok := dataMap["signal_id"]; ok && sigID != nil {
+				dataMap["post_id"] = sigID
+			}
+			if convID, ok := dataMap["conversation_id"]; ok && convID != nil {
+				if dataMap["offer_id"] == nil {
+					dataMap["offer_id"] = convID
+				}
+			}
+		case "signal_message":
+			if sigID, ok := dataMap["signal_id"]; ok && sigID != nil {
+				dataMap["post_id"] = sigID
+			}
+			if convID, ok := dataMap["conversation_id"]; ok && convID != nil {
+				if dataMap["offer_id"] == nil {
+					dataMap["offer_id"] = convID
+				}
+			}
+		}
+
 		resp := models.NotificationResponse{
 			NotificationID: n.ID,
-			Type:           n.Type,
+			Type:           notifType,
 			Title:          n.Title,
 			Body:           n.Body,
 			IsRead:         n.IsRead,
@@ -294,6 +369,23 @@ func (s *notificationService) SendPushToAccount(accountID string, title, body st
 	tokens, err := s.repo.GetFCMTokensByAccountID(cleanID)
 	if err != nil || len(tokens) == 0 {
 		return nil
+	}
+	if data != nil {
+		if t, ok := data["type"]; ok {
+			if t == "new_demand_signal" || t == "signal" {
+				data["type"] = "signal"
+			} else if t == "signal_reply" || t == "signal_offer" {
+				data["type"] = "signal_offer"
+			}
+		}
+		if sigID, ok := data["signal_id"]; ok && sigID != "" {
+			data["post_id"] = sigID
+		}
+		if convID, ok := data["conversation_id"]; ok && convID != "" {
+			if data["offer_id"] == "" {
+				data["offer_id"] = convID
+			}
+		}
 	}
 	return config.SendPushNotification(tokens, title, body, data)
 }

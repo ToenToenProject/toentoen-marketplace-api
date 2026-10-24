@@ -68,8 +68,9 @@ func (s *demandService) CreateSignal(accountID string, input models.CreateSignal
         title := "🚨 Sinyal Bantuan Masuk!"
         body := "Seseorang membutuhkan bantuan " + input.Category + " di sekitar Anda!"
         data := map[string]string{
-            "type":      "new_demand_signal",
+            "type":      "signal",
             "signal_id": signal.SignalID,
+            "post_id":   signal.SignalID,
         }
 
         err := config.SendPushNotification(tokens, title, body, data)

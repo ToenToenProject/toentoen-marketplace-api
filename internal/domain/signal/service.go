@@ -503,7 +503,9 @@ func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, category
 	event := realtime.WSEvent{
 		Type: "NEW_DEMAND_SIGNAL",
 		Data: map[string]interface{}{
+			"type":         "signal",
 			"signal_id":    signalID,
+			"post_id":      signalID,
 			"category_id":  primaryCatID,
 			"category":     primaryCatName,
 			"category_ids": categoryIDs,
@@ -521,13 +523,14 @@ func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, category
 		s.notifService.SendNotification(
 			accountIDs,
 			"SYSTEM",
-			"new_demand_signal",
+			"signal",
 			signalID,
 			title,
 			body,
 			map[string]interface{}{
-				"type":         "new_demand_signal",
+				"type":         "signal",
 				"signal_id":    signalID,
+				"post_id":      signalID,
 				"category":     primaryCatName,
 				"category_ids": categoryIDs,
 				"categories":   categoryNames,
@@ -561,13 +564,14 @@ func (s *signalService) notifySignalCompleted(signalID, customerID string) {
 		s.notifService.SendNotification(
 			merchantIDs,
 			customerID,
-			"signal_completed",
+			"signal",
 			signalID,
 			"✅ Sinyal Kebutuhan Selesai",
 			"Customer telah menyelesaikan sinyal kebutuhan. Percakapan telah ditutup.",
 			map[string]interface{}{
-				"type":      "signal_completed",
+				"type":      "signal",
 				"signal_id": signalID,
+				"post_id":   signalID,
 			},
 			nil,
 		)
@@ -768,8 +772,11 @@ func (s *signalService) notifyNewConversation(customerID, merchantAccountID stri
 	event := realtime.WSEvent{
 		Type: "new_conversation",
 		Data: map[string]interface{}{
+			"type":            "signal_offer",
 			"conversation_id": conv.ConversationID,
+			"offer_id":        conv.ConversationID,
 			"signal_id":       conv.SignalID,
+			"post_id":         conv.SignalID,
 			"merchant_id":     conv.MerchantID,
 			"business_id":     conv.BusinessID,
 		},
@@ -793,14 +800,16 @@ func (s *signalService) notifyNewConversation(customerID, merchantAccountID stri
 		s.notifService.SendNotification(
 			[]string{customerID},
 			merchantAccountID,
-			"signal_reply",
+			"signal_offer",
 			conv.ConversationID,
 			"💬 Ada Tanggapan Baru!",
 			body,
 			map[string]interface{}{
-				"type":            "signal_reply",
+				"type":            "signal_offer",
 				"conversation_id": conv.ConversationID,
+				"offer_id":        conv.ConversationID,
 				"signal_id":       conv.SignalID,
+				"post_id":         conv.SignalID,
 				"business_id":     conv.BusinessID,
 				"business_name":   bizName,
 			},
@@ -973,7 +982,9 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 			map[string]interface{}{
 				"type":            "signal_message",
 				"conversation_id": conv.ConversationID,
+				"offer_id":        conv.ConversationID,
 				"signal_id":       conv.SignalID,
+				"post_id":         conv.SignalID,
 				"message_id":      msg.MessageID,
 				"sender_id":       senderID,
 			},
