@@ -69,6 +69,8 @@ type CustomerBusinessConversationListItem struct {
 	BusinessID          string               `json:"business_id"`
 	BusinessName        string               `json:"business_name"`
 	BusinessLogo        *string              `json:"business_logo,omitempty"`
+	IsVerified          bool                 `json:"is_verified"`
+	HasNIB              bool                 `json:"has_nib"`
 	LastMessagePreview  string               `json:"last_message_preview"`
 	LastMessageAt       time.Time            `json:"last_message_at"`
 	UnreadCount         int64                `json:"unread_count"`
@@ -84,6 +86,8 @@ type MerchantBusinessConversationListItem struct {
 	CustomerID          string               `json:"customer_id"`
 	CustomerName        string               `json:"customer_name"`
 	CustomerAvatar      *string              `json:"customer_avatar,omitempty"`
+	IsVerified          bool                 `json:"is_verified"`
+	HasNIB              bool                 `json:"has_nib"`
 	LastMessagePreview  string               `json:"last_message_preview"`
 	LastMessageAt       time.Time            `json:"last_message_at"`
 	UnreadCount         int64                `json:"unread_count"`

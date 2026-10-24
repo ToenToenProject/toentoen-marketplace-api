@@ -45,6 +45,8 @@ type BusinessProfileResponse struct {
 	IsLikedByMe      bool     `json:"is_liked_by_me"`
 	LikeCount        int      `json:"like_count"`
 	TotalLikes       int      `json:"total_likes"`
+	IsVerified       bool     `json:"is_verified"`
+	HasNIB           bool     `json:"has_nib"`
 	IsLive          bool     `json:"is_live"`
 	LivePlatform    *string  `json:"live_platform,omitempty"`
 	LiveStartedAt   *time.Time `json:"live_started_at,omitempty"`
@@ -123,6 +125,8 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		likeCount = int64(business.LikeCount)
 	}
 
+	isVerified, hasNIB, _ := s.repo.GetVerificationStatus(businessID)
+
 	// Tentukan Kategori Utama (Ambil yang pertama jika ada)
 	category := "General"
 	if len(business.Categories) > 0 {
@@ -200,6 +204,8 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		IsLikedByMe:      isLikedByMe,
 		LikeCount:        int(likeCount),
 		TotalLikes:       int(likeCount),
+		IsVerified:       isVerified,
+		HasNIB:           hasNIB,
 		IsLive:          isLive,
 		LivePlatform:    livePlatform,
 		LiveStartedAt:   liveStartedAt,
@@ -271,6 +277,12 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 		return nil, err
 	}
 
+	var bizIDs []string
+	for _, b := range businesses {
+		bizIDs = append(bizIDs, b.BusinessID)
+	}
+	verifMap, _ := s.repo.BatchGetVerificationStatus(bizIDs)
+
 	var responses []BusinessProfileResponse
 	for _, business := range businesses {
 		// Tentukan Kategori Utama (Ambil yang pertama jika ada)
@@ -287,6 +299,12 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 		bName := ""
 		if business.BusinessName != nil {
 			bName = *business.BusinessName
+		}
+
+		var isVerif, hasNIB bool
+		if v, ok := verifMap[business.BusinessID]; ok {
+			isVerif = v.IsVerified
+			hasNIB = v.HasNIB
 		}
 
 		isLive := business.IsLive
@@ -312,6 +330,8 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			IsOpenNow:        isOpenNow,
 			IsManuallyClosed: business.IsManuallyClosed,
 			IsBookmarked:     true, // always true if fetched from bookmarks
+			IsVerified:       isVerif,
+			HasNIB:           hasNIB,
 			IsLive:          isLive,
 			LivePlatform:    livePlatform,
 			LiveStartedAt:   liveStartedAt,

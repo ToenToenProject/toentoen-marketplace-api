@@ -24,6 +24,9 @@ type Repository interface {
 	GetRecentTopReviews(businessID string, limit int) ([]models.Review, error)
 	GetReviewSummary(businessID string) (*models.ReviewSummary, error)
 
+	GetVerificationStatus(businessID string) (isVerified bool, hasNIB bool, err error)
+	BatchGetVerificationStatus(businessIDs []string) (map[string]BusinessVerificationInfo, error)
+
 	GetAllProductGroups(businessID string) ([]models.ProductGroup, error)
 	HasActivePromotion(businessID string) bool
 	GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error)
@@ -347,4 +350,76 @@ func (r *repository) GetPostLikesByAccount(accountID string, postIDs []string) (
 		likedMap[like.PostID] = true
 	}
 	return likedMap, nil
+}
+
+type BusinessVerificationInfo struct {
+	IsVerified bool `gorm:"column:is_verified"`
+	HasNIB     bool `gorm:"column:has_nib"`
+}
+
+func (r *repository) GetVerificationStatus(businessID string) (bool, bool, error) {
+	var res BusinessVerificationInfo
+	query := `
+		SELECT 
+			COALESCE(
+				o.kyc_status = 'verified' OR EXISTS (
+					SELECT 1 
+					FROM business_has_tags bht 
+					JOIN business_tags bt ON bt.tag_id = bht.tag_id 
+					WHERE bht.business_id = b.business_id 
+					  AND (LOWER(bt.name) LIKE '%verif%' OR LOWER(bt.name) LIKE '%(nib)%')
+				),
+				false
+			) AS is_verified,
+			COALESCE(b.nib IS NOT NULL AND TRIM(b.nib) != '', false) AS has_nib
+		FROM businesses b
+		LEFT JOIN owners o ON o.account_id = b.account_id
+		WHERE b.business_id = ?
+		LIMIT 1
+	`
+	if err := r.db.Raw(query, businessID).Scan(&res).Error; err != nil {
+		return false, false, err
+	}
+	return res.IsVerified, res.HasNIB, nil
+}
+
+func (r *repository) BatchGetVerificationStatus(businessIDs []string) (map[string]BusinessVerificationInfo, error) {
+	resMap := make(map[string]BusinessVerificationInfo)
+	if len(businessIDs) == 0 {
+		return resMap, nil
+	}
+	type Row struct {
+		BusinessID string `gorm:"column:business_id"`
+		IsVerified bool   `gorm:"column:is_verified"`
+		HasNIB     bool   `gorm:"column:has_nib"`
+	}
+	var rows []Row
+	query := `
+		SELECT 
+			b.business_id,
+			COALESCE(
+				o.kyc_status = 'verified' OR EXISTS (
+					SELECT 1 
+					FROM business_has_tags bht 
+					JOIN business_tags bt ON bt.tag_id = bht.tag_id 
+					WHERE bht.business_id = b.business_id 
+					  AND (LOWER(bt.name) LIKE '%verif%' OR LOWER(bt.name) LIKE '%(nib)%')
+				),
+				false
+			) AS is_verified,
+			COALESCE(b.nib IS NOT NULL AND TRIM(b.nib) != '', false) AS has_nib
+		FROM businesses b
+		LEFT JOIN owners o ON o.account_id = b.account_id
+		WHERE b.business_id IN (?)
+	`
+	if err := r.db.Raw(query, businessIDs).Scan(&rows).Error; err != nil {
+		return resMap, err
+	}
+	for _, row := range rows {
+		resMap[row.BusinessID] = BusinessVerificationInfo{
+			IsVerified: row.IsVerified,
+			HasNIB:     row.HasNIB,
+		}
+	}
+	return resMap, nil
 }

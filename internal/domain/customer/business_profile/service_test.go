@@ -70,6 +70,18 @@ func (m *mockBusinessProfileRepo) GetRecentTopReviews(businessID string, limit i
 	return []models.Review{}, nil
 }
 
+func (m *mockBusinessProfileRepo) GetVerificationStatus(businessID string) (bool, bool, error) {
+	return true, true, nil
+}
+
+func (m *mockBusinessProfileRepo) BatchGetVerificationStatus(businessIDs []string) (map[string]BusinessVerificationInfo, error) {
+	res := make(map[string]BusinessVerificationInfo)
+	for _, id := range businessIDs {
+		res[id] = BusinessVerificationInfo{IsVerified: true, HasNIB: true}
+	}
+	return res, nil
+}
+
 func TestGetBusinessProfile_LikeFields(t *testing.T) {
 	mockRepo := &mockBusinessProfileRepo{
 		checkBusinessLikeFunc: func(accountID, businessID string) (bool, error) {

@@ -199,6 +199,14 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 	}
 
 	var results []models.CustomerBusinessConversationListItem
+	var bizIDs []string
+	for _, c := range convs {
+		if c.BusinessID != "" {
+			bizIDs = append(bizIDs, c.BusinessID)
+		}
+	}
+	verifMap := r.getBusinessVerificationInfo(bizIDs)
+
 	for _, c := range convs {
 		var unread int64
 		r.db.Model(&models.DirectBusinessMessage{}).
@@ -212,6 +220,12 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 				bizName = *c.Business.BusinessName
 			}
 			bizLogo = c.Business.LogoURL
+		}
+
+		var isVerif, hasNIB bool
+		if v, ok := verifMap[c.BusinessID]; ok {
+			isVerif = v.IsVerified
+			hasNIB = v.HasNIB
 		}
 
 		var signalRef *models.SignalPostReference
@@ -234,6 +248,8 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 			BusinessID:          c.BusinessID,
 			BusinessName:        bizName,
 			BusinessLogo:        bizLogo,
+			IsVerified:          isVerif,
+			HasNIB:              hasNIB,
 			LastMessagePreview:  c.LastMessagePreview,
 			LastMessageAt:       c.LastMessageAt,
 			UnreadCount:         unread,
@@ -268,6 +284,10 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 	if err != nil {
 		return nil, err
 	}
+
+	verifMap := r.getBusinessVerificationInfo([]string{businessID})
+	isVerif := verifMap[businessID].IsVerified
+	hasNIB := verifMap[businessID].HasNIB
 
 	var results []models.MerchantBusinessConversationListItem
 	for _, c := range convs {
@@ -311,6 +331,8 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 			CustomerID:          c.CustomerID,
 			CustomerName:        custName,
 			CustomerAvatar:      custAvatar,
+			IsVerified:          isVerif,
+			HasNIB:              hasNIB,
 			LastMessagePreview:  c.LastMessagePreview,
 			LastMessageAt:       c.LastMessageAt,
 			UnreadCount:         unread,
@@ -322,6 +344,46 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 	}
 
 	return results, nil
+}
+
+func (r *businessChatRepository) getBusinessVerificationInfo(businessIDs []string) map[string]struct{ IsVerified, HasNIB bool } {
+	resMap := make(map[string]struct{ IsVerified, HasNIB bool })
+	if len(businessIDs) == 0 {
+		return resMap
+	}
+	type Row struct {
+		BusinessID string `gorm:"column:business_id"`
+		IsVerified bool   `gorm:"column:is_verified"`
+		HasNIB     bool   `gorm:"column:has_nib"`
+	}
+	var rows []Row
+	query := `
+		SELECT 
+			b.business_id,
+			COALESCE(
+				o.kyc_status = 'verified' OR EXISTS (
+					SELECT 1 
+					FROM business_has_tags bht 
+					JOIN business_tags bt ON bt.tag_id = bht.tag_id 
+					WHERE bht.business_id = b.business_id 
+					  AND (LOWER(bt.name) LIKE '%verif%' OR LOWER(bt.name) LIKE '%(nib)%')
+				),
+				false
+			) AS is_verified,
+			COALESCE(b.nib IS NOT NULL AND TRIM(b.nib) != '', false) AS has_nib
+		FROM businesses b
+		LEFT JOIN owners o ON o.account_id = b.account_id
+		WHERE b.business_id IN (?)
+	`
+	if err := r.db.Raw(query, businessIDs).Scan(&rows).Error; err == nil {
+		for _, row := range rows {
+			resMap[row.BusinessID] = struct{ IsVerified, HasNIB bool }{
+				IsVerified: row.IsVerified,
+				HasNIB:     row.HasNIB,
+			}
+		}
+	}
+	return resMap
 }
 
 func (r *businessChatRepository) SaveMessage(message *models.DirectBusinessMessage) error {

@@ -391,6 +391,8 @@ type ConversationListItem struct {
 	BusinessID        string               `json:"business_id"`
 	BusinessName      string               `json:"business_name"`
 	BusinessLogo      *string              `json:"business_logo"`
+	IsVerified        bool                 `json:"is_verified"`
+	HasNIB            bool                 `json:"has_nib"`
 	
 	// Pesan terakhir & status
 	LastMessage       *string              `json:"last_message"`

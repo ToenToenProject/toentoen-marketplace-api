@@ -592,6 +592,17 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 			ca.profile_picture_url AS peer_avatar,
 			COALESCE(b.business_name, '') AS business_name,
 			b.logo_url AS business_logo,
+			COALESCE(
+				o.kyc_status = 'verified' OR EXISTS (
+					SELECT 1 
+					FROM business_has_tags bht 
+					JOIN business_tags bt ON bt.tag_id = bht.tag_id 
+					WHERE bht.business_id = b.business_id 
+					  AND (LOWER(bt.name) LIKE '%verif%' OR LOWER(bt.name) LIKE '%(nib)%')
+				),
+				false
+			) AS is_verified,
+			COALESCE(b.nib IS NOT NULL AND TRIM(b.nib) != '', false) AS has_nib,
 			lm.message_text AS last_message,
 			lm.sender_type AS last_message_sender,
 			COALESCE(lm.created_at, sc.created_at) AS last_message_at,
@@ -600,6 +611,7 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 		JOIN signals s ON sc.signal_id = s.signal_id
 		LEFT JOIN accounts ca ON s.customer_id = ca.account_id
 		LEFT JOIN businesses b ON sc.business_id = b.business_id
+		LEFT JOIN owners o ON o.account_id = b.account_id
 		LEFT JOIN LATERAL (
 			SELECT message_text, sender_type, created_at
 			FROM signal_messages
@@ -653,6 +665,17 @@ func (r *signalRepository) GetCustomerConversations(customerAccountID string) ([
 			COALESCE(b.logo_url, ma.profile_picture_url) AS peer_avatar,
 			COALESCE(b.business_name, '') AS business_name,
 			b.logo_url AS business_logo,
+			COALESCE(
+				o.kyc_status = 'verified' OR EXISTS (
+					SELECT 1 
+					FROM business_has_tags bht 
+					JOIN business_tags bt ON bt.tag_id = bht.tag_id 
+					WHERE bht.business_id = b.business_id 
+					  AND (LOWER(bt.name) LIKE '%verif%' OR LOWER(bt.name) LIKE '%(nib)%')
+				),
+				false
+			) AS is_verified,
+			COALESCE(b.nib IS NOT NULL AND TRIM(b.nib) != '', false) AS has_nib,
 			lm.message_text AS last_message,
 			lm.sender_type AS last_message_sender,
 			COALESCE(lm.created_at, sc.created_at) AS last_message_at,
@@ -661,6 +684,7 @@ func (r *signalRepository) GetCustomerConversations(customerAccountID string) ([
 		JOIN signals s ON sc.signal_id = s.signal_id
 		LEFT JOIN accounts ma ON sc.merchant_id = ma.account_id
 		LEFT JOIN businesses b ON sc.business_id = b.business_id
+		LEFT JOIN owners o ON o.account_id = b.account_id
 		LEFT JOIN LATERAL (
 			SELECT message_text, sender_type, created_at
 			FROM signal_messages
