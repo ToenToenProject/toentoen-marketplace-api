@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/meilisearch"
 )
 
 type Repository interface {
@@ -167,6 +168,10 @@ func (r *repository) ToggleBusinessLike(accountID, businessID string) (bool, int
 
 		return nil
 	})
+
+	if err == nil {
+		go meilisearch.SyncBusiness(database.DB, businessID)
+	}
 
 	return isLiked, totalLikes, err
 }

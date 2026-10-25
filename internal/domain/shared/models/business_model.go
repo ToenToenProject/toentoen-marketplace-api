@@ -119,7 +119,9 @@ type Business struct {
 
 	AverageRating float64   `gorm:"default:0;column:average_rating" json:"average_rating"`
 	ReviewCount   int64     `gorm:"default:0;column:review_count" json:"review_count"`
+	TotalReviews  int64     `gorm:"-" json:"total_reviews"`
 	LikeCount     int       `gorm:"default:0;column:like_count" json:"like_count"`
+	TotalLikes    int       `gorm:"-" json:"total_likes"`
 	IsActive      bool      `gorm:"default:true;column:is_active" json:"is_active"`	
 	IsVerified    bool      `gorm:"-" json:"is_verified"`
 	HasNIB        bool      `gorm:"-" json:"has_nib"`
@@ -253,6 +255,9 @@ type BusinessListItem struct {
 	Address             string  `json:"address"` // Gabungan AddressDetail, City, Province
 	AverageRating       float64 `json:"average_rating"`
 	TotalProductReviews int64   `json:"total_product_reviews"`
+	TotalReviews        int64   `json:"total_reviews"`
+	LikeCount           int     `json:"like_count"`
+	TotalLikes          int     `json:"total_likes"`
 	IsOpenNow           bool    `json:"is_open_now"`
 	IsManuallyClosed    bool    `json:"is_manually_closed"`
 }

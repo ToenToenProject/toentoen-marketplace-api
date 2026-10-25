@@ -344,6 +344,9 @@ func (s *businessService) GetMyBusinesses(accountID, userRole, search string, ca
 			Address:             fullAddress,
 			AverageRating:       b.AverageRating,
 			TotalProductReviews: b.TotalProductReviews,
+			TotalReviews:        b.TotalProductReviews,
+			LikeCount:           b.LikeCount,
+			TotalLikes:          b.LikeCount,
 			IsOpenNow:           isOpenNow,
 			IsManuallyClosed:    b.IsManuallyClosed,
 		}
@@ -378,6 +381,8 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	// Set alias field agar backward-compatible dan konsisten
 	business.BusinessNameAlias = business.BusinessName
 	business.SocialWebsitesAlias = business.SocialWebsites
+	business.TotalLikes = business.LikeCount
+	business.TotalReviews = business.ReviewCount
 
 	// Inisialisasi slice sertifikat agar tidak mengembalikan null ke FE dan set alias
 	if business.Certificates == nil {

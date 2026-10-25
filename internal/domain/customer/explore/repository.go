@@ -190,10 +190,28 @@ func rankBusinessDocuments(docs []MeiliBusinessDocument, req SearchRequest, radi
 					return items[i].Rating > items[j].Rating
 				}
 				return items[i].ReviewCount > items[j].ReviewCount
+			case "likes_desc", "most_likes", "like_desc", "likes":
+				iLikes := items[i].TotalLikes
+				if iLikes == 0 {
+					iLikes = items[i].LikeCount
+				}
+				jLikes := items[j].TotalLikes
+				if jLikes == 0 {
+					jLikes = items[j].LikeCount
+				}
+				if iLikes != jLikes {
+					return iLikes > jLikes
+				}
+				if items[i].Rating != items[j].Rating {
+					return items[i].Rating > items[j].Rating
+				}
+				return items[i].ReviewCount > items[j].ReviewCount
 			case "price_asc":
 				return items[i].MinPrice < items[j].MinPrice
 			case "price_desc":
 				return items[i].MaxPrice > items[j].MaxPrice
+			case "latest":
+				return items[i].CreatedAt > items[j].CreatedAt
 			default:
 				if req.Lat != 0 && req.Lng != 0 {
 					return items[i].Distance < items[j].Distance
@@ -266,6 +284,11 @@ func rankProductDocuments(docs []MeiliProductDocument, req SearchRequest, radius
 				return items[i].FinalPrice > items[j].FinalPrice
 			case "latest":
 				return items[i].CreatedAt > items[j].CreatedAt
+			case "likes_desc", "most_likes", "like_desc", "likes":
+				if items[i].Rating != items[j].Rating {
+					return items[i].Rating > items[j].Rating
+				}
+				return items[i].ReviewCount > items[j].ReviewCount
 			default:
 				if req.Lat != 0 && req.Lng != 0 {
 					return items[i].Distance < items[j].Distance
@@ -406,8 +429,29 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 			searchReq.Filter = strings.Join(filters, " AND ")
 		}
 
-		if req.Lat != 0 && req.Lng != 0 {
-			searchReq.Sort = []string{"_geoPoint(" + formatFloat(req.Lat) + ", " + formatFloat(req.Lng) + "):asc"}
+		var sortParams []string
+		switch req.Sort {
+		case "likes_desc", "most_likes", "like_desc", "likes":
+			sortParams = append(sortParams, "total_likes:desc")
+		case "rating":
+			sortParams = append(sortParams, "rating:desc")
+		case "latest":
+			sortParams = append(sortParams, "created_at:desc")
+		case "price_asc":
+			sortParams = append(sortParams, "min_price:asc")
+		case "price_desc":
+			sortParams = append(sortParams, "max_price:desc")
+		case "nearest":
+			if req.Lat != 0 && req.Lng != 0 {
+				sortParams = append(sortParams, "_geoPoint("+formatFloat(req.Lat)+", "+formatFloat(req.Lng)+"):asc")
+			}
+		default:
+			if req.Lat != 0 && req.Lng != 0 {
+				sortParams = append(sortParams, "_geoPoint("+formatFloat(req.Lat)+", "+formatFloat(req.Lng)+"):asc")
+			}
+		}
+		if len(sortParams) > 0 {
+			searchReq.Sort = sortParams
 		}
 
 		res, err := index.Search(req.Keyword, searchReq)
@@ -687,6 +731,15 @@ func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]M
 		if len(tagConds) > 0 {
 			query = query.Where("("+strings.Join(tagConds, " OR ")+")", tagArgs...)
 		}
+	}
+
+	switch req.Sort {
+	case "likes_desc", "most_likes", "like_desc", "likes":
+		query = query.Order("businesses.like_count DESC")
+	case "rating":
+		query = query.Order("businesses.average_rating DESC, businesses.review_count DESC")
+	case "latest":
+		query = query.Order("businesses.created_at DESC")
 	}
 
 	var businesses []models.Business

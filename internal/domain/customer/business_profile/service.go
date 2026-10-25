@@ -45,6 +45,9 @@ type BusinessProfileResponse struct {
 	IsLikedByMe      bool     `json:"is_liked_by_me"`
 	LikeCount        int      `json:"like_count"`
 	TotalLikes       int      `json:"total_likes"`
+	AverageRating    float64  `json:"average_rating"`
+	TotalReviews     int64    `json:"total_reviews"`
+	ReviewCount      int64    `json:"review_count"`
 	IsVerified       bool     `json:"is_verified"`
 	HasNIB           bool     `json:"has_nib"`
 	IsLive          bool     `json:"is_live"`
@@ -204,6 +207,9 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		IsLikedByMe:      isLikedByMe,
 		LikeCount:        int(likeCount),
 		TotalLikes:       int(likeCount),
+		AverageRating:    business.AverageRating,
+		TotalReviews:     business.ReviewCount,
+		ReviewCount:      business.ReviewCount,
 		IsVerified:       isVerified,
 		HasNIB:           hasNIB,
 		IsLive:          isLive,
@@ -330,6 +336,11 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			IsOpenNow:        isOpenNow,
 			IsManuallyClosed: business.IsManuallyClosed,
 			IsBookmarked:     true, // always true if fetched from bookmarks
+			LikeCount:        business.LikeCount,
+			TotalLikes:       business.LikeCount,
+			AverageRating:    business.AverageRating,
+			TotalReviews:     business.ReviewCount,
+			ReviewCount:      business.ReviewCount,
 			IsVerified:       isVerif,
 			HasNIB:           hasNIB,
 			IsLive:          isLive,

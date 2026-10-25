@@ -28,6 +28,9 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 	}
 
 	rawSort := strings.ToLower(strings.TrimSpace(c.Query("sort", "")))
+	if rawSort == "" {
+		rawSort = strings.ToLower(strings.TrimSpace(c.Query("sort_by", "")))
+	}
 	sort := rawSort
 	switch rawSort {
 	case "murah", "cheapest":
@@ -38,6 +41,8 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		sort = "nearest"
 	case "terbaru":
 		sort = "latest"
+	case "likes_desc", "most_likes", "like_desc", "likes":
+		sort = "likes_desc"
 	}
 
 	scope := strings.ToLower(strings.TrimSpace(c.Query("scope", "all")))

@@ -40,6 +40,10 @@ type MeiliBusinessDocument struct {
 	Products         []string            `json:"products"`
 	Rating           float64             `json:"rating"`
 	ReviewCount      int64               `json:"review_count"`
+	TotalReviews     int64               `json:"total_reviews"`
+	LikeCount        int                 `json:"like_count"`
+	TotalLikes       int                 `json:"total_likes"`
+	CreatedAt        int64               `json:"created_at,omitempty"`
 	PreviewImages    []string            `json:"preview_images"`
 	IsOpen           bool                `json:"is_open"`
 	IsManuallyClosed bool                `json:"is_manually_closed"`
@@ -149,8 +153,10 @@ func InitMeilisearchIndices() {
 		"min_price",
 		"max_price",
 		"stock_types",
+		"total_likes",
+		"like_count",
 	}
-	bizSortable := &[]string{"_geo", "rating", "review_count", "min_price"}
+	bizSortable := &[]string{"_geo", "rating", "review_count", "min_price", "total_likes", "like_count", "created_at"}
 	bizSearchable := &[]string{
 		"name",
 		"products",
@@ -430,6 +436,10 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 		Products:         productNames,
 		Rating:           b.AverageRating,
 		ReviewCount:      b.ReviewCount,
+		TotalReviews:     b.ReviewCount,
+		LikeCount:        b.LikeCount,
+		TotalLikes:       b.LikeCount,
+		CreatedAt:        b.CreatedAt.Unix(),
 		PreviewImages:    previewImages,
 		IsOpen:           isOpen,
 		IsManuallyClosed: b.IsManuallyClosed,

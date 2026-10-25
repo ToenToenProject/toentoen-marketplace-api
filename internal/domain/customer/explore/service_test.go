@@ -557,5 +557,45 @@ func TestExploreServiceHighPrecisionCoordinates(t *testing.T) {
 	}
 }
 
+func TestBusinessLikesDescSorting(t *testing.T) {
+	docs := []MeiliBusinessDocument{
+		{
+			ID:         "BUS-LOW",
+			Name:       "Toko Sedikit Like",
+			TotalLikes: 5,
+			LikeCount:  5,
+			Rating:     4.5,
+		},
+		{
+			ID:         "BUS-HIGH",
+			Name:       "Toko Banyak Like",
+			TotalLikes: 120,
+			LikeCount:  120,
+			Rating:     4.0,
+		},
+		{
+			ID:         "BUS-MID",
+			Name:       "Toko Sedang Like",
+			TotalLikes: 45,
+			LikeCount:  45,
+			Rating:     4.8,
+		},
+	}
+
+	ranked, _, _ := rankBusinessDocuments(docs, SearchRequest{Sort: "likes_desc"}, 10.0)
+	if len(ranked) != 3 {
+		t.Fatalf("Expected 3 docs, got %d", len(ranked))
+	}
+	if ranked[0].ID != "BUS-HIGH" || ranked[0].TotalLikes != 120 {
+		t.Errorf("Expected first item to be BUS-HIGH with 120 likes, got %s with %d likes", ranked[0].ID, ranked[0].TotalLikes)
+	}
+	if ranked[1].ID != "BUS-MID" || ranked[1].TotalLikes != 45 {
+		t.Errorf("Expected second item to be BUS-MID with 45 likes, got %s with %d likes", ranked[1].ID, ranked[1].TotalLikes)
+	}
+	if ranked[2].ID != "BUS-LOW" || ranked[2].TotalLikes != 5 {
+		t.Errorf("Expected third item to be BUS-LOW with 5 likes, got %s with %d likes", ranked[2].ID, ranked[2].TotalLikes)
+	}
+}
+
 
 
