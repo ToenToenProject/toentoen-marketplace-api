@@ -5,6 +5,21 @@ import (
 	"strings"
 )
 
+// MultiRoleRequiredError represents when an identifier is associated with multiple roles
+// having matching credentials, requiring the user to explicitly select which role to log in with.
+type MultiRoleRequiredError struct {
+	Roles []string `json:"roles"`
+	Email string   `json:"email"`
+}
+
+func (e *MultiRoleRequiredError) Error() string {
+	return "Akun ini memiliki lebih dari satu peran. Silakan pilih peran untuk masuk."
+}
+
+func (e *MultiRoleRequiredError) Is(target error) bool {
+	return target == ErrAmbiguousAccount
+}
+
 // RoleMismatchError represents an error when a user attempts to log in via a portal meant for a different role.
 type RoleMismatchError struct {
 	ActualRole     string `json:"actual_role"`

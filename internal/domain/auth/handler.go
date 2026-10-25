@@ -47,6 +47,9 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
+	if input.Role == "" {
+		input.Role = c.Query("role")
+	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errors), errors)
@@ -63,6 +66,9 @@ func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
 	var input models.VerifyRegisterOTPInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
+	}
+	if input.Role == "" {
+		input.Role = c.Query("role")
 	}
 
 	if errors := utils.ValidateStruct(&input); errors != nil {
@@ -183,6 +189,18 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.Login(input); err != nil {
+		var mrErr *MultiRoleRequiredError
+		if errors.As(err, &mrErr) {
+			return c.Status(fiber.StatusOK).JSON(fiber.Map{
+				"responseCode": "MR",
+				"status":       "multi_role",
+				"message":      mrErr.Error(),
+				"data": fiber.Map{
+					"roles": mrErr.Roles,
+					"email": mrErr.Email,
+				},
+			})
+		}
 		var roleErr *RoleMismatchError
 		if errors.As(err, &roleErr) {
 			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, roleErr.Error(), fiber.Map{
@@ -246,7 +264,11 @@ func (h *AuthHandler) VerifyLoginOTP(c *fiber.Ctx) error {
 	}
 	if account != nil {
 		data["account_id"] = account.AccountID
+		data["accountId"] = account.AccountID
 		data["role"] = account.Role
+		if account.Email != nil {
+			data["email"] = *account.Email
+		}
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Login berhasil", data)

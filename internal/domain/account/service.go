@@ -273,6 +273,9 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 		return nil, err
 	}
 
+	account.AccountIDAlias = account.AccountID
+
+	// Load profil untuk role akun saat ini
 	if account.Role == "customer" {
 		customer, _ := s.repo.GetCustomerByAccountID(accountID)
 		account.Customer = customer
@@ -285,6 +288,57 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 		decryptBusinessAdminKTP(admin)
 		account.BusinessAdmin = admin
 	}
+
+	// Deteksi multi-role: cari seluruh akun terkait dengan email atau nomor telepon yang sama
+	var identifier string
+	if account.Email != nil && strings.TrimSpace(*account.Email) != "" {
+		identifier = strings.TrimSpace(*account.Email)
+	} else if account.PhoneNumber != nil && strings.TrimSpace(*account.PhoneNumber) != "" {
+		identifier = strings.TrimSpace(*account.PhoneNumber)
+	}
+
+	roleSet := make(map[string]bool)
+	var availableRoles []string
+	if account.Role != "" {
+		roleSet[account.Role] = true
+		availableRoles = append(availableRoles, account.Role)
+	}
+
+	if identifier != "" {
+		if siblings, err := s.repo.FindAccountsByIdentifier(identifier); err == nil {
+			for _, sib := range siblings {
+				if sib == nil || sib.Role == "" {
+					continue
+				}
+				if !roleSet[sib.Role] {
+					roleSet[sib.Role] = true
+					availableRoles = append(availableRoles, sib.Role)
+				}
+				// Muat sub-profil peran lain yang tersedia
+				switch sib.Role {
+				case "customer":
+					if account.Customer == nil {
+						cust, _ := s.repo.GetCustomerByAccountID(sib.AccountID)
+						account.Customer = cust
+					}
+				case "owner":
+					if account.Owner == nil {
+						own, _ := s.repo.GetOwnerByAccountID(sib.AccountID)
+						decryptOwnerKTP(own)
+						account.Owner = own
+					}
+				case "business_admin":
+					if account.BusinessAdmin == nil {
+						adm, _ := s.repo.GetBusinessAdminByAccountID(sib.AccountID)
+						decryptBusinessAdminKTP(adm)
+						account.BusinessAdmin = adm
+					}
+				}
+			}
+		}
+	}
+
+	account.AvailableRoles = availableRoles
 
 	return account, nil
 }

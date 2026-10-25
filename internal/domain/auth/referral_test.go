@@ -62,6 +62,39 @@ func (m *mockAuthRepo) FindByIdentifier(identifier string, roleGroup string) (*m
 	}
 	return nil, gorm.ErrRecordNotFound
 }
+func (m *mockAuthRepo) FindAllByIdentifier(identifier string, roleGroup ...string) ([]*models.Account, error) {
+	if m.accounts != nil {
+		var matched []*models.Account
+		rg := ""
+		if len(roleGroup) > 0 {
+			rg = roleGroup[0]
+		}
+		for idKey, acc := range m.accounts {
+			matchesIdent := strings.EqualFold(idKey, identifier)
+			if !matchesIdent && acc != nil {
+				if acc.Email != nil && strings.EqualFold(*acc.Email, identifier) {
+					matchesIdent = true
+				} else if acc.PhoneNumber != nil && strings.EqualFold(*acc.PhoneNumber, identifier) {
+					matchesIdent = true
+				} else if strings.EqualFold(acc.Username, identifier) {
+					matchesIdent = true
+				}
+			}
+			if matchesIdent && acc != nil {
+				if rg == "" {
+					matched = append(matched, acc)
+				} else {
+					g := models.RoleGroupOf(acc.Role)
+					if g == rg {
+						matched = append(matched, acc)
+					}
+				}
+			}
+		}
+		return matched, nil
+	}
+	return nil, nil
+}
 func (m *mockAuthRepo) FindByID(id string) (*models.Account, error) {
 	return nil, nil
 }
@@ -516,13 +549,74 @@ func TestSharedEmailBetweenCustomerAndMerchant(t *testing.T) {
 		}
 	})
 
-	t.Run("login without role when ambiguous returns ErrAmbiguousAccount", func(t *testing.T) {
+	t.Run("login without role when ambiguous returns MultiRoleRequiredError and implements ErrAmbiguousAccount", func(t *testing.T) {
 		err := svc.Login(models.LoginUnifiedInput{
 			Identifier: sharedEmail,
 			Password:   password,
 		})
 		if err == nil || !errors.Is(err, ErrAmbiguousAccount) {
-			t.Fatalf("expected ErrAmbiguousAccount, got: %v", err)
+			t.Fatalf("expected ErrAmbiguousAccount compatibility, got: %v", err)
+		}
+		var mrErr *MultiRoleRequiredError
+		if !errors.As(err, &mrErr) {
+			t.Fatalf("expected MultiRoleRequiredError, got: %T (%v)", err, err)
+		}
+		if len(mrErr.Roles) != 3 {
+			t.Fatalf("expected 3 roles, got: %v", mrErr.Roles)
+		}
+		if mrErr.Email != sharedEmail {
+			t.Fatalf("expected email %s, got: %s", sharedEmail, mrErr.Email)
+		}
+	})
+
+	t.Run("Scenario A: email sama password beda per role succeeds directly without role parameter", func(t *testing.T) {
+		ownerDistinctPass := "OwnerPass123"
+		ownerHash, _ := bcrypt.GenerateFromPassword([]byte(ownerDistinctPass), bcrypt.DefaultCost)
+		ownerHashStr := string(ownerHash)
+
+		adminDistinctPass := "AdminPass456"
+		adminHash, _ := bcrypt.GenerateFromPassword([]byte(adminDistinctPass), bcrypt.DefaultCost)
+		adminHashStr := string(adminHash)
+
+		accOwner := &models.Account{
+			AccountID:     "ACC_OWNER_DISTINCT",
+			Email:         &sharedEmail,
+			PasswordHash:  &ownerHashStr,
+			Role:          "owner",
+			AccountStatus: "active",
+		}
+		accAdmin := &models.Account{
+			AccountID:     "ACC_ADMIN_DISTINCT",
+			Email:         &sharedEmail,
+			PasswordHash:  &adminHashStr,
+			Role:          "business_admin",
+			AccountStatus: "active",
+		}
+
+		repoDistinct := &mockAuthRepo{
+			accounts: map[string]*models.Account{
+				sharedEmail + ":owner":          accOwner,
+				sharedEmail + ":business_admin": accAdmin,
+			},
+		}
+		svcDistinct := NewAuthService(repoDistinct)
+
+		// Login with OwnerPass123 without role parameter -> should match owner automatically
+		errOwner := svcDistinct.Login(models.LoginUnifiedInput{
+			Identifier: sharedEmail,
+			Password:   ownerDistinctPass,
+		})
+		if errOwner != nil {
+			t.Fatalf("expected login with owner password to succeed automatically, got: %v", errOwner)
+		}
+
+		// Login with AdminPass456 without role parameter -> should match admin automatically
+		errAdmin := svcDistinct.Login(models.LoginUnifiedInput{
+			Identifier: sharedEmail,
+			Password:   adminDistinctPass,
+		})
+		if errAdmin != nil {
+			t.Fatalf("expected login with admin password to succeed automatically, got: %v", errAdmin)
 		}
 	})
 }

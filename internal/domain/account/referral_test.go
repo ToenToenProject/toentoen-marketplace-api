@@ -19,6 +19,12 @@ func (m *mockProfileRepo) GetAccountByID(accountID string) (*models.Account, err
 func (m *mockProfileRepo) GetAccountByIdentifier(identifier string) (*models.Account, error) {
 	return m.account, nil
 }
+func (m *mockProfileRepo) FindAccountsByIdentifier(identifier string) ([]*models.Account, error) {
+	if m.account != nil {
+		return []*models.Account{m.account}, nil
+	}
+	return nil, nil
+}
 func (m *mockProfileRepo) GetCustomerByAccountID(accountID string) (*models.Customer, error) {
 	return nil, nil
 }

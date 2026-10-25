@@ -15,6 +15,7 @@ import (
 type ProfileRepository interface {
 	GetAccountByID(accountID string) (*models.Account, error)
 	GetAccountByIdentifier(identifier string) (*models.Account, error)
+	FindAccountsByIdentifier(identifier string) ([]*models.Account, error)
 	GetCustomerByAccountID(accountID string) (*models.Customer, error)
 	GetOwnerByAccountID(accountID string) (*models.Owner, error)
 	GetBusinessAdminByAccountID(accountID string) (*models.BusinessAdmin, error)
@@ -92,6 +93,32 @@ func (r *profileRepository) GetAccountByIdentifier(identifier string) (*models.A
 		return nil, err
 	}
 	return &account, nil
+}
+
+func (r *profileRepository) FindAccountsByIdentifier(identifier string) ([]*models.Account, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return nil, nil
+	}
+
+	var accounts []*models.Account
+	if strings.Contains(identifier, "@") {
+		err := r.db.Where("LOWER(email) = LOWER(?)", identifier).Order("created_at ASC").Find(&accounts).Error
+		return accounts, err
+	}
+
+	clean := strings.TrimPrefix(identifier, "+")
+	var phones []string
+	if strings.HasPrefix(clean, "08") {
+		phones = []string{clean, "62" + clean[1:], "+62" + clean[1:]}
+	} else if strings.HasPrefix(clean, "628") {
+		phones = []string{clean, "0" + clean[2:], "+" + clean}
+	} else {
+		phones = []string{identifier, "+" + identifier, clean}
+	}
+
+	err := r.db.Where("phone_number IN ? OR LOWER(username) = LOWER(?)", phones, identifier).Order("created_at ASC").Find(&accounts).Error
+	return accounts, err
 }
 
 func (r *profileRepository) GetCustomerByAccountID(accountID string) (*models.Customer, error) {

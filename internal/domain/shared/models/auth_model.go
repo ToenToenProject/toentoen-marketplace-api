@@ -77,9 +77,11 @@ type Account struct {
 	CreatedAt         time.Time  `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt         time.Time  `gorm:"autoUpdateTime" json:"updatedAt"`
 
-	Customer      *Customer      `gorm:"foreignKey:AccountID;references:AccountID" json:"customer,omitempty"`
-	Owner         *Owner         `gorm:"foreignKey:AccountID;references:AccountID" json:"owner,omitempty"`
-	BusinessAdmin *BusinessAdmin `gorm:"foreignKey:AccountID;references:AccountID" json:"business_admin,omitempty"`
+	Customer       *Customer      `gorm:"foreignKey:AccountID;references:AccountID" json:"customer,omitempty"`
+	Owner          *Owner         `gorm:"foreignKey:AccountID;references:AccountID" json:"owner,omitempty"`
+	BusinessAdmin  *BusinessAdmin `gorm:"foreignKey:AccountID;references:AccountID" json:"business_admin,omitempty"`
+	AccountIDAlias string         `gorm:"-" json:"account_id,omitempty"`
+	AvailableRoles []string       `gorm:"-" json:"available_roles,omitempty"`
 }
 
 type Customer struct {

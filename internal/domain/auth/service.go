@@ -625,7 +625,11 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 			config.RDB.Del(config.Ctx, otpKey)
 
 			// Terbitkan sesi login otomatis
-			token, err := utils.GenerateToken(account.AccountID, account.Role)
+			var emailStr string
+			if account.Email != nil {
+				emailStr = *account.Email
+			}
+			token, err := utils.GenerateToken(account.AccountID, account.Role, emailStr)
 			if err != nil {
 				return "", errors.New("Akun berhasil dibuat, namun gagal membuat sesi login otomatis")
 			}
@@ -693,7 +697,11 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 	}
 	_ = s.repo.Update(account)
 
-	token, err := utils.GenerateToken(account.AccountID, account.Role)
+	var emailStr string
+	if account.Email != nil {
+		emailStr = *account.Email
+	}
+	token, err := utils.GenerateToken(account.AccountID, account.Role, emailStr)
 	if err != nil {
 		return "", errors.New("Akun berhasil diaktifkan, namun gagal membuat sesi login otomatis")
 	}
@@ -810,7 +818,73 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	}
 	targetRole := NormalizeExpectedRole(input.ExpectedRole)
 
-	// Cari akun yang sesuai target role atau deteksi keberadaan di role lain
+	// Jika role tidak ditentukan, periksa seluruh akun yang cocok dengan identifier ini
+	if targetRole == "" {
+		allAccounts, err := s.repo.FindAllByIdentifier(input.Identifier)
+		if err != nil {
+			return errors.New("Terjadi kesalahan sistem")
+		}
+		if len(allAccounts) == 0 {
+			return errors.New("Email atau password salah")
+		}
+
+		// Cek password ke semua akun yang ditemukan
+		var matchingAccounts []*models.Account
+		var suspendedOrBannedErr error
+		for _, acc := range allAccounts {
+			if acc.PasswordHash == nil {
+				continue
+			}
+			if err := bcrypt.CompareHashAndPassword([]byte(*acc.PasswordHash), []byte(input.Password)); err == nil {
+				if acc.AccountStatus == "suspended" {
+					suspendedOrBannedErr = errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+					continue
+				}
+				if acc.AccountStatus == "banned" {
+					suspendedOrBannedErr = errors.New("Akun anda telah diblokir dari platform")
+					continue
+				}
+				matchingAccounts = append(matchingAccounts, acc)
+			}
+		}
+
+		if len(matchingAccounts) == 0 {
+			if suspendedOrBannedErr != nil {
+				return suspendedOrBannedErr
+			}
+			return errors.New("Email atau password salah")
+		}
+
+		// Jika lebih dari 1 role memiliki password yang cocok, kembalikan MultiRoleRequiredError
+		if len(matchingAccounts) > 1 {
+			var roles []string
+			var emailStr string
+			for _, acc := range matchingAccounts {
+				roles = append(roles, acc.Role)
+				if emailStr == "" && acc.Email != nil && *acc.Email != "" {
+					emailStr = *acc.Email
+				}
+			}
+			if emailStr == "" && isEmail(input.Identifier) {
+				emailStr = input.Identifier
+			}
+			return &MultiRoleRequiredError{
+				Roles: roles,
+				Email: emailStr,
+			}
+		}
+
+		// Tepat 1 role yang passwordnya cocok -> lanjutkan login untuk akun tersebut
+		account := matchingAccounts[0]
+		group := models.RoleGroupOf(account.Role)
+		loginSubj := "Kode Verifikasi Login ToenToen"
+		if account.Role == "business_admin" {
+			loginSubj = "Kode Verifikasi Login Admin Toko ToenToen"
+		}
+		return s.sendOTP(input.Identifier, group, account.Email, account.PhoneNumber, "login_otp", loginSubj)
+	}
+
+	// Role ditentukan secara eksplisit
 	account, err := s.findAccountForLogin(input.Identifier, targetRole)
 	if err != nil {
 		if errors.Is(err, ErrAmbiguousAccount) {
@@ -902,7 +976,11 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 	account.LastLoginAt = &now
 	s.repo.Update(account)
 
-	token, err := utils.GenerateToken(account.AccountID, account.Role)
+	var emailStr string
+	if account.Email != nil {
+		emailStr = *account.Email
+	}
+	token, err := utils.GenerateToken(account.AccountID, account.Role, emailStr)
 	if err != nil {
 		return "", nil, errors.New("Gagal membuat sesi pengguna")
 	}

@@ -23,6 +23,8 @@ type AuthRepository interface {
 	// FindByIdentifier mencari akun berdasarkan email/telepon/username di dalam kelompok role.
 	// roleGroup kosong = cari di semua kelompok; jika ditemukan >1 akun, mengembalikan ErrAmbiguousAccount.
 	FindByIdentifier(identifier string, roleGroup string) (*models.Account, error)
+	// FindAllByIdentifier mencari seluruh akun berdasarkan email/telepon/username (opsional dibatasi roleGroup)
+	FindAllByIdentifier(identifier string, roleGroup ...string) ([]*models.Account, error)
 	FindByID(id string) (*models.Account, error)
 	Update(account *models.Account) error
 	UpdateEmail(accountID string, newEmail string) error
@@ -147,6 +149,32 @@ func (r *authRepository) FindByIdentifier(identifier string, roleGroup string) (
 		return nil, ErrAmbiguousAccount
 	}
 	return &accounts[0], nil
+}
+
+func (r *authRepository) FindAllByIdentifier(identifier string, roleGroup ...string) ([]*models.Account, error) {
+	identifier = strings.TrimSpace(identifier)
+	if identifier == "" {
+		return nil, nil
+	}
+
+	query := r.db.Model(&models.Account{})
+	if strings.Contains(identifier, "@") {
+		query = query.Where("LOWER(email) = LOWER(?)", identifier)
+	} else {
+		query = query.Where("(phone_number IN ? OR LOWER(username) = LOWER(?))", PhoneVariants(identifier), identifier)
+	}
+
+	if len(roleGroup) > 0 && roleGroup[0] != "" {
+		if roles := models.RolesInGroup(roleGroup[0]); len(roles) > 0 {
+			query = query.Where("role IN ?", roles)
+		}
+	}
+
+	var accounts []*models.Account
+	if err := query.Order("created_at ASC").Find(&accounts).Error; err != nil {
+		return nil, err
+	}
+	return accounts, nil
 }
 
 func (r *authRepository) FindByID(id string) (*models.Account, error) {
