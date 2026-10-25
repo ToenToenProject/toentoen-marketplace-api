@@ -882,10 +882,16 @@ func main() {
 	supportGroup.Get("/:session_id/messages", supportChatHandler.GetMessages)
 	supportGroup.Post("/:session_id/messages", supportChatHandler.SendMessage)
 	supportGroup.Post("/:session_id/end", supportChatHandler.EndChat)
+	supportGroup.Post("/:session_id/read", supportChatHandler.MarkAsRead)
+	supportGroup.Put("/:session_id/read", supportChatHandler.MarkAsRead)
+	supportGroup.Post("/:session_id/mark-read", supportChatHandler.MarkAsRead)
+	supportGroup.Put("/:session_id/mark-read", supportChatHandler.MarkAsRead)
 	// Backward-compatible aliases
 	supportGroup.Get("/:room_id/messages", supportChatHandler.GetMessages)
 	supportGroup.Post("/:room_id/messages", supportChatHandler.SendMessage)
 	supportGroup.Post("/:room_id/end", supportChatHandler.EndChat)
+	supportGroup.Post("/:room_id/read", supportChatHandler.MarkAsRead)
+	supportGroup.Post("/:room_id/mark-read", supportChatHandler.MarkAsRead)
 
 	// ==========================================
 	// ROUTES: SUPPORT TICKETS (Tiket Bantuan)

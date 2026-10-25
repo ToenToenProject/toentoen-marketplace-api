@@ -17,7 +17,40 @@ type SupportChatService interface {
 	GetActiveChat(accountID string) (*models.CSChatSession, error)
 	GetChatMessages(sessionID string, requesterID string, isCS bool, limit int, cursor string) ([]models.CSChatMessage, error)
 	SendMessage(sessionID string, senderID string, senderType string, senderName string, input models.SendCSMessageInput) (*models.CSChatMessage, error)
+	MarkAsRead(sessionID string, requesterID string, isCS bool) error
 	EndChat(sessionID string, requesterID string, isCS bool, input models.EndCSChatInput) error
+}
+
+func cleanGreetingContent(content string) string {
+	if strings.HasPrefix(content, "Halo New!") {
+		return strings.Replace(content, "Halo New!", "Halo!", 1)
+	}
+	if strings.HasPrefix(content, "Halo Kak New!") {
+		return strings.Replace(content, "Halo Kak New!", "Halo!", 1)
+	}
+	return content
+}
+
+func formatGreetingMessage(account *models.Account) string {
+	displayName := ""
+	if account != nil {
+		firstName := strings.TrimSpace(account.FirstName)
+		lastName := strings.TrimSpace(account.LastName)
+
+		// Cegah fallback ke placeholder register akun baru seperti "New", "New Account", atau "Kak"
+		if strings.EqualFold(firstName, "New") && (strings.EqualFold(lastName, "Account") || lastName == "") {
+			displayName = ""
+		} else if !strings.EqualFold(firstName, "New") && !strings.EqualFold(firstName, "Kak") && firstName != "" {
+			displayName = firstName
+		} else if account.Username != "" && !strings.EqualFold(account.Username, "New") && !strings.HasPrefix(strings.ToLower(account.Username), "new_") {
+			displayName = account.Username
+		}
+	}
+
+	if displayName != "" {
+		return fmt.Sprintf("Halo Kak %s! Selamat datang di Layanan Bantuan ToenToen. Ada yang bisa kami bantu hari ini?", displayName)
+	}
+	return "Halo! Selamat datang di Layanan Bantuan ToenToen. Ada yang bisa kami bantu hari ini?"
 }
 
 type supportChatService struct {
@@ -40,11 +73,13 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 	if err == nil && existingSession != nil {
 		// Sudah ada sesi aktif, kembalikan sesi tersebut (isNew = false)
 		existingSession.LastMessagePreview, _ = crypto.Decrypt(existingSession.LastMessagePreview)
+		existingSession.LastMessagePreview = cleanGreetingContent(existingSession.LastMessagePreview)
 		messages, _ := s.repo.GetMessagesBySessionID(existingSession.SessionID, 1, "")
 		var lastMsg *models.CSChatMessage
 		if len(messages) > 0 {
 			msg := messages[len(messages)-1]
 			msg.Content, _ = crypto.Decrypt(msg.Content)
+			msg.Content = cleanGreetingContent(msg.Content)
 			msg.MediaURL, _ = crypto.DecryptPointer(msg.MediaURL)
 			lastMsg = &msg
 		}
@@ -53,19 +88,11 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 
 	// 2. Ambil data akun user untuk mendapatkan nama tampilan
 	account, err := s.repo.GetAccountByID(accountID)
-	displayName := "Kak"
-	if err == nil && account != nil {
-		if account.FirstName != "" {
-			displayName = account.FirstName
-		} else if account.Username != "" {
-			displayName = account.Username
-		}
-	}
+	greetingContent := formatGreetingMessage(account)
 
 	now := time.Now()
 	// Prefix LCS: Live Chat Session
 	sessionID := utils.GenerateUUID("LCS")
-	greetingContent := fmt.Sprintf("Halo %s! Selamat datang di Layanan Bantuan ToenToen. Ada yang bisa kami bantu hari ini?", displayName)
 
 	// Prefix LCM: Live Chat Message
 	greetingMsg := &models.CSChatMessage{
@@ -129,6 +156,7 @@ func (s *supportChatService) GetActiveChat(accountID string) (*models.CSChatSess
 	}
 	if session != nil {
 		session.LastMessagePreview, _ = crypto.Decrypt(session.LastMessagePreview)
+		session.LastMessagePreview = cleanGreetingContent(session.LastMessagePreview)
 	}
 	return session, nil
 }
@@ -161,6 +189,7 @@ func (s *supportChatService) GetChatMessages(sessionID string, requesterID strin
 
 	for i := range messages {
 		messages[i].Content, _ = crypto.Decrypt(messages[i].Content)
+		messages[i].Content = cleanGreetingContent(messages[i].Content)
 		messages[i].MediaURL, _ = crypto.DecryptPointer(messages[i].MediaURL)
 	}
 
@@ -339,6 +368,48 @@ func (s *supportChatService) EndChat(sessionID string, requesterID string, isCS 
 		}
 		s.hub.SendToAccount(session.AccountID, event)
 		if session.CSAdminID != nil && *session.CSAdminID != "" {
+			s.hub.SendToAccount(*session.CSAdminID, event)
+		} else {
+			s.hub.BroadcastToRole("cs", event)
+		}
+	}
+
+	return nil
+}
+
+func (s *supportChatService) MarkAsRead(sessionID string, requesterID string, isCS bool) error {
+	session, err := s.repo.GetSessionByID(sessionID)
+	if err != nil {
+		return errors.New("Sesi live chat tidak ditemukan")
+	}
+
+	if !isCS && session.AccountID != requesterID {
+		return errors.New("Anda tidak memiliki akses ke percakapan ini")
+	}
+
+	readerType := "user"
+	if isCS {
+		readerType = "cs"
+	}
+
+	if err := s.repo.MarkMessagesAsRead(sessionID, readerType); err != nil {
+		return fmt.Errorf("Gagal menandai pesan sebagai telah dibaca: %w", err)
+	}
+
+	// Broadcast WS event agar pihak lawan mengetahui pesan telah dibaca
+	if s.hub != nil {
+		event := realtime.WSEvent{
+			Type: "CS_CHAT_MESSAGES_READ",
+			Data: map[string]interface{}{
+				"session_id": sessionID,
+				"read_by":    readerType,
+				"reader_id":  requesterID,
+				"read_at":    time.Now(),
+			},
+		}
+		if isCS {
+			s.hub.SendToAccount(session.AccountID, event)
+		} else if session.CSAdminID != nil && *session.CSAdminID != "" {
 			s.hub.SendToAccount(*session.CSAdminID, event)
 		} else {
 			s.hub.BroadcastToRole("cs", event)

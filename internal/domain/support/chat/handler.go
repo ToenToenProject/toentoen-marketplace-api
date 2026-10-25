@@ -20,7 +20,13 @@ func NewSupportChatHandler(service SupportChatService) *SupportChatHandler {
 func getSessionIDParam(c *fiber.Ctx) string {
 	sessionID := strings.TrimSpace(c.Params("session_id"))
 	if sessionID == "" {
+		sessionID = strings.TrimSpace(c.Params("sessionId"))
+	}
+	if sessionID == "" {
 		sessionID = strings.TrimSpace(c.Params("room_id"))
+	}
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(c.Params("roomId"))
 	}
 	return sessionID
 }
@@ -159,4 +165,29 @@ func (h *SupportChatHandler) EndChat(c *fiber.Ctx) error {
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sesi live chat telah berhasil diakhiri. Terima kasih atas masukan Anda!", nil)
+}
+
+// MarkAsRead menandai pesan dalam sesi live chat sebagai telah dibaca
+// POST /api/v1/support/chat/:session_id/read atau /api/v1/support/chat/:sessionId/read
+func (h *SupportChatHandler) MarkAsRead(c *fiber.Ctx) error {
+	accountID, role, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	sessionID := getSessionIDParam(c)
+	if sessionID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "session_id wajib diisi", nil)
+	}
+
+	isCS := role == "customer_service" || role == "cs" || role == "super_admin"
+	if errSvc := h.service.MarkAsRead(sessionID, accountID, isCS); errSvc != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan telah ditandai sebagai dibaca", fiber.Map{
+		"session_id":     sessionID,
+		"is_read":        true,
+		"is_new_session": false,
+	})
 }
