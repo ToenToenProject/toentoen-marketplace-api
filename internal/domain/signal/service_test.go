@@ -2,6 +2,7 @@ package signal_test
 
 import (
 	"testing"
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 )
 
@@ -124,3 +125,58 @@ func TestSignal_ToPostReference(t *testing.T) {
 		t.Errorf("unexpected images: %v", ref.Images)
 	}
 }
+
+func TestSignal_EvaluateStatus(t *testing.T) {
+	now := time.Now()
+
+	// 1. Sinyal active dengan expires_at di masa depan
+	sigActive := models.Signal{
+		Status:    "active",
+		ExpiresAt: now.Add(2 * time.Hour),
+	}
+	sigActive.EvaluateStatus()
+	if sigActive.Status != "active" || !sigActive.IsActive {
+		t.Errorf("expected active with is_active=true, got status=%s is_active=%v", sigActive.Status, sigActive.IsActive)
+	}
+
+	// 2. Sinyal active tapi expires_at sudah lewat (overdue/expired)
+	sigExpired := models.Signal{
+		Status:    "active",
+		ExpiresAt: now.Add(-5 * time.Minute),
+	}
+	sigExpired.EvaluateStatus()
+	if sigExpired.Status != "expired" || sigExpired.IsActive {
+		t.Errorf("expected expired with is_active=false, got status=%s is_active=%v", sigExpired.Status, sigExpired.IsActive)
+	}
+
+	// 3. Sinyal closed
+	sigClosed := models.Signal{
+		Status:    "closed",
+		ExpiresAt: now.Add(2 * time.Hour),
+	}
+	sigClosed.EvaluateStatus()
+	if sigClosed.Status != "closed" || sigClosed.IsActive {
+		t.Errorf("expected closed with is_active=false, got status=%s is_active=%v", sigClosed.Status, sigClosed.IsActive)
+	}
+
+	// 4. Sinyal inactive
+	sigInactive := models.Signal{
+		Status:    "inactive",
+		ExpiresAt: now.Add(2 * time.Hour),
+	}
+	sigInactive.EvaluateStatus()
+	if sigInactive.Status != "inactive" || sigInactive.IsActive {
+		t.Errorf("expected inactive with is_active=false, got status=%s is_active=%v", sigInactive.Status, sigInactive.IsActive)
+	}
+
+	// 5. Sinyal completed
+	sigCompleted := models.Signal{
+		Status:    "completed",
+		ExpiresAt: now.Add(2 * time.Hour),
+	}
+	sigCompleted.EvaluateStatus()
+	if sigCompleted.Status != "completed" || sigCompleted.IsActive {
+		t.Errorf("expected completed with is_active=false, got status=%s is_active=%v", sigCompleted.Status, sigCompleted.IsActive)
+	}
+}
+

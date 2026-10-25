@@ -20,6 +20,7 @@ type SignalService interface {
 	CreateSignal(customerID string, input models.CreateSignalInput) (*models.Signal, error)
 	UpdateSignal(customerID, signalID string, input models.UpdateSignalInput) (*models.Signal, error)
 	DeleteSignal(customerID, signalID string) error
+	CloseSignal(customerID, signalID string) error
 	GetMySignals(customerID string) ([]models.Signal, error)
 	GetSignalDetail(signalID, accountID, role string) (*models.Signal, error)
 	CompleteSignal(customerID, signalID string) error
@@ -409,11 +410,56 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 }
 
 func (s *signalService) DeleteSignal(customerID, signalID string) error {
-	return errors.New("fitur pembatalan sinyal telah dinonaktifkan. Silakan gunakan konfirmasi selesai jika kebutuhan Anda telah terpenuhi")
+	return s.CloseSignal(customerID, signalID)
+}
+
+func (s *signalService) CloseSignal(customerID, signalID string) error {
+	signal, err := s.signalRepo.GetSignalByID(signalID)
+	if err != nil {
+		return errors.New("signal tidak ditemukan")
+	}
+
+	if signal.CustomerID != customerID {
+		return errors.New("anda bukan pemilik signal ini")
+	}
+
+	if signal.Status == "completed" {
+		return errors.New("signal telah selesai dan tidak dapat ditutup/dibatalkan")
+	}
+
+	if signal.Status == "closed" {
+		return nil
+	}
+
+	if err := s.signalRepo.CloseSignal(signalID); err != nil {
+		return fmt.Errorf("gagal menutup signal: %w", err)
+	}
+
+	return nil
 }
 
 func (s *signalService) GetMySignals(customerID string) ([]models.Signal, error) {
-	return s.signalRepo.GetMySignals(customerID)
+	signals, err := s.signalRepo.GetMySignals(customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	var expiredIDs []string
+	for i := range signals {
+		wasActive := (signals[i].Status == "active")
+		signals[i].EvaluateStatus()
+		if wasActive && signals[i].Status == "expired" {
+			expiredIDs = append(expiredIDs, signals[i].SignalID)
+		}
+	}
+
+	if len(expiredIDs) > 0 {
+		go func(ids []string) {
+			_ = s.signalRepo.BatchExpireSignals(ids)
+		}(expiredIDs)
+	}
+
+	return signals, nil
 }
 
 func (s *signalService) GetCustomerConversations(customerID string) ([]models.ConversationListItem, error) {
@@ -436,6 +482,14 @@ func (s *signalService) GetSignalDetail(signalID, accountID, role string) (*mode
 	// Customer hanya boleh melihat signal miliknya sendiri
 	if role == "customer" && signal.CustomerID != accountID {
 		return nil, errors.New("anda tidak memiliki akses ke signal ini")
+	}
+
+	wasActive := (signal.Status == "active")
+	signal.EvaluateStatus()
+	if wasActive && signal.Status == "expired" {
+		go func(id string) {
+			_ = s.signalRepo.ExpireSignal(id)
+		}(signal.SignalID)
 	}
 
 	// Dekripsi pesan pada relasi percakapan
@@ -619,6 +673,14 @@ func (s *signalService) GetMerchantSignalDetail(signalID, merchantAccountID stri
 	signal, err := s.signalRepo.GetSignalByID(signalID)
 	if err != nil {
 		return nil, errors.New("signal tidak ditemukan")
+	}
+
+	wasActive := (signal.Status == "active")
+	signal.EvaluateStatus()
+	if wasActive && signal.Status == "expired" {
+		go func(id string) {
+			_ = s.signalRepo.ExpireSignal(id)
+		}(signal.SignalID)
 	}
 
 	existing, _ := s.signalRepo.FindExistingConversation(signalID, merchantAccountID)

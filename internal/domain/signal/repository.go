@@ -20,6 +20,10 @@ type SignalRepository interface {
 	GetMySignals(customerID string) ([]models.Signal, error)
 	GetSignalWithConversations(signalID string) (*models.Signal, error)
 	CompleteSignal(signalID string) error
+	CloseSignal(signalID string) error
+	ExpireSignal(signalID string) error
+	BatchExpireSignals(signalIDs []string) error
+	ExpireOverdueSignals() (int64, error)
 
 	// Signal Images
 	CreateSignalImages(images []models.SignalImage) error
@@ -213,6 +217,101 @@ func (r *signalRepository) CompleteSignal(signalID string) error {
 
 		return nil
 	})
+}
+
+// CloseSignal mengubah status signal ke 'closed' dan mengunci semua conversation terkait
+func (r *signalRepository) CloseSignal(signalID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Signal{}).
+			Where("signal_id = ?", signalID).
+			Update("status", "closed").Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&models.SignalConversation{}).
+			Where("signal_id = ?", signalID).
+			Update("status", "locked").Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// ExpireSignal mengubah status signal ke 'expired' jika masih 'active' dan mengunci semua conversation terkait
+func (r *signalRepository) ExpireSignal(signalID string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Signal{}).
+			Where("signal_id = ? AND status = ?", signalID, "active").
+			Update("status", "expired").Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&models.SignalConversation{}).
+			Where("signal_id = ?", signalID).
+			Update("status", "locked").Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// BatchExpireSignals mengubah status sekumpulan signal ke 'expired' jika masih 'active'
+func (r *signalRepository) BatchExpireSignals(signalIDs []string) error {
+	if len(signalIDs) == 0 {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Signal{}).
+			Where("signal_id IN ? AND status = ?", signalIDs, "active").
+			Update("status", "expired").Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&models.SignalConversation{}).
+			Where("signal_id IN ?", signalIDs).
+			Update("status", "locked").Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// ExpireOverdueSignals mencari semua signal dengan status 'active' dan expires_at <= NOW(),
+// lalu mengupdate statusnya menjadi 'expired' dan mengunci (locked) conversation terkait.
+func (r *signalRepository) ExpireOverdueSignals() (int64, error) {
+	var expiredCount int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var overdueIDs []string
+		if err := tx.Model(&models.Signal{}).
+			Where("status = ? AND expires_at <= NOW()", "active").
+			Pluck("signal_id", &overdueIDs).Error; err != nil {
+			return err
+		}
+
+		if len(overdueIDs) == 0 {
+			return nil
+		}
+
+		res := tx.Model(&models.Signal{}).
+			Where("signal_id IN ?", overdueIDs).
+			Update("status", "expired")
+		if res.Error != nil {
+			return res.Error
+		}
+		expiredCount = res.RowsAffected
+
+		if err := tx.Model(&models.SignalConversation{}).
+			Where("signal_id IN ?", overdueIDs).
+			Update("status", "locked").Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+	return expiredCount, err
 }
 
 // ================================================================
@@ -583,7 +682,10 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 			s.description AS signal_description,
 			s.category_id,
 			s.category AS signal_category,
-			s.status AS signal_status,
+			CASE 
+				WHEN s.status = 'active' AND s.expires_at <= NOW() THEN 'expired'
+				ELSE s.status 
+			END AS signal_status,
 			s.is_urgent,
 			s.min_budget,
 			s.max_budget,
@@ -656,7 +758,10 @@ func (r *signalRepository) GetCustomerConversations(customerAccountID string) ([
 			s.description AS signal_description,
 			s.category_id,
 			s.category AS signal_category,
-			s.status AS signal_status,
+			CASE 
+				WHEN s.status = 'active' AND s.expires_at <= NOW() THEN 'expired'
+				ELSE s.status 
+			END AS signal_status,
 			s.is_urgent,
 			s.min_budget,
 			s.max_budget,
@@ -758,11 +863,14 @@ func (r *signalRepository) populatePostReferencesForItems(items []models.Convers
 			imgs = []string{}
 		}
 
+		items[i].IsActive = (items[i].SignalStatus == "active")
 		items[i].SignalPostReference = &models.SignalPostReference{
 			SignalID:    items[i].SignalID,
 			Title:       items[i].SignalDescription,
 			Description: items[i].SignalDescription,
 			Category:    items[i].SignalCategory,
+			Status:      items[i].SignalStatus,
+			IsActive:    items[i].SignalStatus == "active",
 			Budget:      budgetStr,
 			MinBudget:   items[i].MinBudget,
 			MaxBudget:   items[i].MaxBudget,

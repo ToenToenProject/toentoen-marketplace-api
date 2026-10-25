@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -104,7 +105,8 @@ type Signal struct {
 	Longitude   float64   `gorm:"not null" json:"longitude"`
 	RadiusKm    int       `gorm:"default:5" json:"radius_km"`
 	IsUrgent    bool      `gorm:"default:false" json:"is_urgent"`
-	Status      string    `gorm:"default:'active'" json:"status"` // active, completed, expired
+	Status      string    `gorm:"default:'active'" json:"status"` // active, completed, expired, closed, inactive
+	IsActive    bool      `gorm:"-" json:"is_active"`
 	MinBudget   *float64  `gorm:"column:min_budget" json:"min_budget,omitempty"`
 	MaxBudget   *float64  `gorm:"column:max_budget" json:"max_budget,omitempty"`
 	MaxOffers   *int      `gorm:"column:max_offers;default:5" json:"max_offers,omitempty"`
@@ -154,6 +156,46 @@ func (s *Signal) PopulateCategories() {
 	}
 }
 
+// EvaluateStatus mengevaluasi dan menetapkan status serta field is_active terkini secara akurat.
+// Nilai status: "active", "closed", "inactive", "expired", "completed".
+func (s *Signal) EvaluateStatus() {
+	if s == nil {
+		return
+	}
+	now := time.Now()
+	cleanStatus := strings.ToLower(strings.TrimSpace(s.Status))
+
+	switch cleanStatus {
+	case "completed", "finished":
+		s.Status = "completed"
+		s.IsActive = false
+	case "closed":
+		s.Status = "closed"
+		s.IsActive = false
+	case "inactive":
+		s.Status = "inactive"
+		s.IsActive = false
+	case "expired":
+		s.Status = "expired"
+		s.IsActive = false
+	case "active", "":
+		if !s.ExpiresAt.IsZero() && (now.After(s.ExpiresAt) || now.Equal(s.ExpiresAt)) {
+			s.Status = "expired"
+			s.IsActive = false
+		} else {
+			s.Status = "active"
+			s.IsActive = true
+		}
+	default:
+		if !s.ExpiresAt.IsZero() && (now.After(s.ExpiresAt) || now.Equal(s.ExpiresAt)) {
+			s.Status = "expired"
+			s.IsActive = false
+		} else {
+			s.IsActive = (s.Status == "active")
+		}
+	}
+}
+
 // SignalPostReference adalah objek referensi postingan sinyal kebutuhan untuk ruang chat
 type SignalPostReference struct {
 	SignalID    string   `json:"signal_id"`
@@ -164,6 +206,8 @@ type SignalPostReference struct {
 	MinBudget   *float64 `json:"min_budget,omitempty"`
 	MaxBudget   *float64 `json:"max_budget,omitempty"`
 	IsUrgent    bool     `json:"is_urgent"`
+	Status      string   `json:"status,omitempty"`
+	IsActive    bool     `json:"is_active"`
 	Images      []string `json:"images"`
 }
 
@@ -197,6 +241,8 @@ func (s *Signal) ToPostReference() *SignalPostReference {
 		cat = s.CategoryObj.Name
 	}
 
+	s.EvaluateStatus()
+
 	return &SignalPostReference{
 		SignalID:    s.SignalID,
 		Title:       s.Description,
@@ -206,6 +252,8 @@ func (s *Signal) ToPostReference() *SignalPostReference {
 		MinBudget:   s.MinBudget,
 		MaxBudget:   s.MaxBudget,
 		IsUrgent:    s.IsUrgent,
+		Status:      s.Status,
+		IsActive:    s.IsActive,
 		Images:      imgs,
 	}
 }
@@ -315,6 +363,7 @@ type SignalListItem struct {
 	Categories        []string  `json:"categories"`
 	IsUrgent          bool      `json:"is_urgent"`
 	Status            string    `json:"status"`
+	IsActive          bool      `json:"is_active"`
 	MinBudget         *float64  `json:"min_budget,omitempty"`
 	MaxBudget         *float64  `json:"max_budget,omitempty"`
 	MaxOffers         *int      `json:"max_offers,omitempty"`
@@ -334,6 +383,8 @@ type SignalExploreItem struct {
 	CategoryIDs     []int64   `json:"category_ids"`
 	Categories      []string  `json:"categories"`
 	IsUrgent        bool      `json:"is_urgent"`
+	Status          string    `json:"status"`
+	IsActive        bool      `json:"is_active"`
 	RadiusKm        int       `json:"radius_km"`
 	DistanceKm      float64   `json:"distance_km"`
 	MinBudget       *float64  `json:"min_budget,omitempty"`
@@ -400,6 +451,7 @@ type ConversationListItem struct {
 	LastMessageAt     time.Time            `json:"last_message_at"`
 	UnreadCount       int64                `json:"unread_count"`
 	Status            string               `json:"status"` // "open" | "locked"
+	IsActive          bool                 `json:"is_active"`
 	CreatedAt         time.Time            `json:"created_at"`
 
 	SignalPostReference *SignalPostReference `json:"signal_post_reference,omitempty"`

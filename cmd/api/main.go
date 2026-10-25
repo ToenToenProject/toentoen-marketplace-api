@@ -166,6 +166,7 @@ func main() {
 
 	// Signal V2 (menggantikan demand lama) — dengan Real-Time Hub & Notification Service
 	signalRepo := signal.NewSignalRepository(database.DB)
+	signal.StartSignalExpiryWorker(signalRepo) // Background scheduler auto-expire overdue signals
 	signalService := signal.NewSignalService(signalRepo, businessRepo, notifService, wsHub)
 	customerSignalHandler := signal.NewCustomerHandler(signalService)
 	merchantSignalHandler := signal.NewMerchantHandler(signalService)
@@ -546,6 +547,9 @@ func main() {
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
 	customerSignalGroup.Put("/:signal_id", customerSignalHandler.UpdateSignal)
 	customerSignalGroup.Delete("/:signal_id", customerSignalHandler.DeleteSignal)
+	customerSignalGroup.Put("/:signal_id/close", customerSignalHandler.CloseSignal)
+	customerSignalGroup.Post("/:signal_id/close", customerSignalHandler.CloseSignal)
+	customerSignalGroup.Patch("/:signal_id/close", customerSignalHandler.CloseSignal)
 	customerSignalGroup.Put("/:signal_id/complete", customerSignalHandler.CompleteSignal)
 	customerSignalGroup.Post("/:signal_id/complete", customerSignalHandler.CompleteSignal)
 	customerSignalGroup.Patch("/:signal_id/complete", customerSignalHandler.CompleteSignal)
