@@ -276,6 +276,8 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 				"action":      "open_support_chat",
 				"sender_type": senderType,
 				"sender_name": senderName,
+				"target_type": "chat",
+				"target_id":   sessionID,
 			}
 			_ = s.notifService.SendPushToAccounts(offlineAccountIDs, title, body, pushData)
 		}()

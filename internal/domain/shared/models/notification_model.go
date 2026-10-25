@@ -35,6 +35,8 @@ type NotificationResponse struct {
 	Body           string                 `json:"body"`
 	IsRead         bool                   `json:"is_read"`
 	Data           map[string]interface{} `json:"data"`
+	TargetType     string                 `json:"target_type,omitempty"`
+	TargetID       string                 `json:"target_id,omitempty"`
 	ActorCount     int                    `json:"actor_count"`
 	CreatedAt      time.Time              `json:"created_at"`
 }

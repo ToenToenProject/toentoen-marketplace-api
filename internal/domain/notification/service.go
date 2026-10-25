@@ -42,36 +42,47 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 		data = make(map[string]interface{})
 	}
 
-	// Normalisasi tipe sinyal dan pastikan target ID (signal_id, post_id, offer_id) selalu lengkap
-	switch notifType {
-	case "new_demand_signal", "signal":
-		notifType = "signal"
+	standardType, targetType, targetID, bizID := StandardizeNotificationMetadata(notifType, referenceID, data)
+	notifType = standardType
+
+	data["target_type"] = targetType
+	data["target_id"] = targetID
+	if bizID != "" {
+		data["business_id"] = bizID
+	}
+
+	// Normalisasi alias keys agar backward-compatible
+	switch targetType {
+	case "signal":
 		data["type"] = "signal"
-		if referenceID != "" && data["signal_id"] == nil {
-			data["signal_id"] = referenceID
+		if data["signal_id"] == nil || data["signal_id"] == "" {
+			data["signal_id"] = targetID
 		}
-		if sigID, ok := data["signal_id"]; ok && sigID != nil {
-			data["post_id"] = sigID
+		if data["post_id"] == nil || data["post_id"] == "" {
+			data["post_id"] = targetID
 		}
-	case "signal_reply", "signal_offer", "respond_demand_signal":
-		notifType = "signal_offer"
-		data["type"] = "signal_offer"
-		if sigID, ok := data["signal_id"]; ok && sigID != nil {
-			data["post_id"] = sigID
+	case "chat":
+		if data["conversation_id"] == nil || data["conversation_id"] == "" {
+			data["conversation_id"] = targetID
 		}
-		if convID, ok := data["conversation_id"]; ok && convID != nil {
-			if data["offer_id"] == nil {
-				data["offer_id"] = convID
-			}
+		if data["offer_id"] == nil || data["offer_id"] == "" {
+			data["offer_id"] = targetID
 		}
-	case "signal_message":
-		if sigID, ok := data["signal_id"]; ok && sigID != nil {
-			data["post_id"] = sigID
+	case "review":
+		if data["review_id"] == nil || data["review_id"] == "" {
+			data["review_id"] = targetID
 		}
-		if convID, ok := data["conversation_id"]; ok && convID != nil {
-			if data["offer_id"] == nil {
-				data["offer_id"] = convID
-			}
+	case "post":
+		if data["post_id"] == nil || data["post_id"] == "" {
+			data["post_id"] = targetID
+		}
+	case "promotion":
+		if data["promotion_id"] == nil || data["promotion_id"] == "" {
+			data["promotion_id"] = targetID
+		}
+	case "invitation":
+		if data["assignment_id"] == nil || data["assignment_id"] == "" {
+			data["assignment_id"] = targetID
 		}
 	}
 
@@ -191,6 +202,11 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 				}
 				stringData["notification_id"] = notifToSave.ID
 				stringData["type"] = notifType
+				stringData["target_type"] = targetType
+				stringData["target_id"] = targetID
+				if bizID != "" {
+					stringData["business_id"] = bizID
+				}
 
 				_ = config.SendPushNotification(tokens, notifToSave.Title, notifToSave.Body, stringData)
 			}
@@ -222,48 +238,63 @@ func (s *notificationService) GetMyNotifications(accountID string, page, limit i
 		var actors []string
 		_ = json.Unmarshal(n.ActorIDs, &actors)
 
-		notifType := n.Type
+		refID := ""
+		if n.ReferenceID != nil {
+			refID = *n.ReferenceID
+		}
 
-		// Normalisasi tipe sinyal dan pastikan target ID (signal_id, post_id, offer_id) selalu ada di data
-		switch notifType {
-		case "new_demand_signal", "signal":
-			notifType = "signal"
+		standardType, targetType, targetID, bizID := StandardizeNotificationMetadata(n.Type, refID, dataMap)
+
+		dataMap["target_type"] = targetType
+		dataMap["target_id"] = targetID
+		if bizID != "" {
+			dataMap["business_id"] = bizID
+		}
+
+		// Pertahankan backward-compatible alias keys di dalam data
+		switch targetType {
+		case "signal":
 			dataMap["type"] = "signal"
-			if n.ReferenceID != nil && *n.ReferenceID != "" && dataMap["signal_id"] == nil {
-				dataMap["signal_id"] = *n.ReferenceID
+			if dataMap["signal_id"] == nil || dataMap["signal_id"] == "" {
+				dataMap["signal_id"] = targetID
 			}
-			if sigID, ok := dataMap["signal_id"]; ok && sigID != nil {
-				dataMap["post_id"] = sigID
+			if dataMap["post_id"] == nil || dataMap["post_id"] == "" {
+				dataMap["post_id"] = targetID
 			}
-		case "signal_reply", "signal_offer", "respond_demand_signal":
-			notifType = "signal_offer"
-			dataMap["type"] = "signal_offer"
-			if sigID, ok := dataMap["signal_id"]; ok && sigID != nil {
-				dataMap["post_id"] = sigID
+		case "chat":
+			if dataMap["conversation_id"] == nil || dataMap["conversation_id"] == "" {
+				dataMap["conversation_id"] = targetID
 			}
-			if convID, ok := dataMap["conversation_id"]; ok && convID != nil {
-				if dataMap["offer_id"] == nil {
-					dataMap["offer_id"] = convID
-				}
+			if dataMap["offer_id"] == nil || dataMap["offer_id"] == "" {
+				dataMap["offer_id"] = targetID
 			}
-		case "signal_message":
-			if sigID, ok := dataMap["signal_id"]; ok && sigID != nil {
-				dataMap["post_id"] = sigID
+		case "review":
+			if dataMap["review_id"] == nil || dataMap["review_id"] == "" {
+				dataMap["review_id"] = targetID
 			}
-			if convID, ok := dataMap["conversation_id"]; ok && convID != nil {
-				if dataMap["offer_id"] == nil {
-					dataMap["offer_id"] = convID
-				}
+		case "post":
+			if dataMap["post_id"] == nil || dataMap["post_id"] == "" {
+				dataMap["post_id"] = targetID
+			}
+		case "promotion":
+			if dataMap["promotion_id"] == nil || dataMap["promotion_id"] == "" {
+				dataMap["promotion_id"] = targetID
+			}
+		case "invitation":
+			if dataMap["assignment_id"] == nil || dataMap["assignment_id"] == "" {
+				dataMap["assignment_id"] = targetID
 			}
 		}
 
 		resp := models.NotificationResponse{
 			NotificationID: n.ID,
-			Type:           notifType,
+			Type:           standardType,
 			Title:          n.Title,
 			Body:           n.Body,
 			IsRead:         n.IsRead,
 			Data:           dataMap,
+			TargetType:     targetType,
+			TargetID:       targetID,
 			ActorCount:     len(actors),
 			CreatedAt:      n.CreatedAt,
 		}
@@ -314,9 +345,11 @@ func (s *notificationService) SendWelcomeMerchantNotification(accountID string) 
 	body := "Kembangkan bisnis kamu dengan Toentoen!\n\nSebagai tanda terimakasih karena sudah menjadi pengguna awal kami, kamu dapat menikmati Fitur Premium Toentoen Plus dalam paket Growth selama 3 bulan kedepan. (Detilnya dapat dilihat di Toentoen Plus)\n\nKami harap kamu dapat menikmati dan merasakan manfaat dari aplikasi kami.\n\nKami sangat terbuka untuk segala masukkan, sangat diharapkan kamu dapat memberikan saran - saran pada kami di fitur Feedback dalam aplikasi atau melalui saluran bantuan kami.\n\nTerima kasih!"
 
 	data := map[string]interface{}{
-		"type":     "welcome_merchant",
-		"logo_url": "/assets/logo/toentoen-logo.png",
-		"action":   "open_welcome_screen",
+		"type":        "welcome_merchant",
+		"logo_url":    "/assets/logo/toentoen-logo.png",
+		"action":      "open_welcome_screen",
+		"target_type": "welcome",
+		"target_id":   accountID,
 	}
 	dataBytes, _ := json.Marshal(data)
 	actorsBytes, _ := json.Marshal([]string{"SYSTEM"})
@@ -356,6 +389,8 @@ func (s *notificationService) SendWelcomeMerchantNotification(accountID string) 
 			"type":            "welcome_merchant",
 			"logo_url":        "/assets/logo/toentoen-logo.png",
 			"action":          "open_welcome_screen",
+			"target_type":     "welcome",
+			"target_id":       accountID,
 		}
 		_ = config.SendPushNotification(tokens, newNotif.Title, newNotif.Body, stringData)
 	}
@@ -380,10 +415,62 @@ func (s *notificationService) SendPushToAccount(accountID string, title, body st
 		}
 		if sigID, ok := data["signal_id"]; ok && sigID != "" {
 			data["post_id"] = sigID
+			if data["target_type"] == "" {
+				data["target_type"] = "signal"
+			}
+			if data["target_id"] == "" {
+				data["target_id"] = sigID
+			}
 		}
 		if convID, ok := data["conversation_id"]; ok && convID != "" {
 			if data["offer_id"] == "" {
 				data["offer_id"] = convID
+			}
+			if data["target_type"] == "" {
+				data["target_type"] = "chat"
+			}
+			if data["target_id"] == "" {
+				data["target_id"] = convID
+			}
+		}
+		if sessID, ok := data["session_id"]; ok && sessID != "" {
+			if data["target_type"] == "" {
+				data["target_type"] = "chat"
+			}
+			if data["target_id"] == "" {
+				data["target_id"] = sessID
+			}
+		}
+		if revID, ok := data["review_id"]; ok && revID != "" {
+			if data["target_type"] == "" {
+				data["target_type"] = "review"
+			}
+			if data["target_id"] == "" {
+				data["target_id"] = revID
+			}
+		}
+		if postID, ok := data["post_id"]; ok && postID != "" {
+			if data["target_type"] == "" {
+				data["target_type"] = "post"
+			}
+			if data["target_id"] == "" {
+				data["target_id"] = postID
+			}
+		}
+		if prmID, ok := data["promotion_id"]; ok && prmID != "" {
+			if data["target_type"] == "" {
+				data["target_type"] = "promotion"
+			}
+			if data["target_id"] == "" {
+				data["target_id"] = prmID
+			}
+		}
+		if asgnID, ok := data["assignment_id"]; ok && asgnID != "" {
+			if data["target_type"] == "" {
+				data["target_type"] = "invitation"
+			}
+			if data["target_id"] == "" {
+				data["target_id"] = asgnID
 			}
 		}
 	}

@@ -186,6 +186,8 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 					"business_id":     businessID,
 					"sender_type":     "customer",
 					"sender_name":     senderName,
+					"target_type":     "chat",
+					"target_id":       convID,
 				}
 				_ = s.notifService.SendPushToAccounts(offlineStaffIDs, title, body, pushData)
 			}()
@@ -412,6 +414,8 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 				"business_id":     conv.BusinessID,
 				"sender_type":     senderType,
 				"sender_name":     senderName,
+				"target_type":     "chat",
+				"target_id":       conversationID,
 			}
 			_ = s.notifService.SendPushToAccounts(offlineAccountIDs, title, body, pushData)
 		}()
