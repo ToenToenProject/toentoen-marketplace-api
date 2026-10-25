@@ -140,6 +140,22 @@ func (h *ReviewHandler) DeleteReviewComment(c *fiber.Ctx) error {
 // 6. Get Smart Display 5 Review Toko (Publik)
 func (h *ReviewHandler) GetSmartDisplayReviews(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Query("business_id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Query("id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Query("businessId"))
+	}
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
+	}
+
 	currentAccountID, _, _ := utils.GetRequesterInfo(c)
 
 	reviews, err := h.service.GetSmartDisplayReviews(businessID, currentAccountID)
@@ -158,6 +174,22 @@ func (h *ReviewHandler) GetSmartDisplayReviews(c *fiber.Ctx) error {
 // 7. Get All Reviews Toko (Paginated & Filterable)
 func (h *ReviewHandler) GetAllReviews(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Query("business_id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Query("id"))
+	}
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Query("businessId"))
+	}
+	if businessID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
+	}
+
 	currentAccountID, _, _ := utils.GetRequesterInfo(c)
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 10)
@@ -181,6 +213,16 @@ func (h *ReviewHandler) GetAllReviews(c *fiber.Ctx) error {
 // 8. Get Detail Review Toko beserta Balasannya (Publik)
 func (h *ReviewHandler) GetReviewDetail(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
+	if reviewID == "" {
+		reviewID = strings.TrimSpace(c.Params("id"))
+	}
+	if reviewID == "" {
+		reviewID = strings.TrimSpace(c.Params("reviewId"))
+	}
+	if reviewID == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Review ID wajib diisi", nil)
+	}
+
 	currentAccountID, _, _ := utils.GetRequesterInfo(c)
 
 	review, err := h.service.GetReviewDetail(reviewID, currentAccountID)

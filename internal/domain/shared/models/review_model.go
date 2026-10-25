@@ -179,12 +179,24 @@ type CreateProductReviewReplyInput struct {
 	RepliedToAccountName *string `json:"replied_to_account_name"`
 }
 
+type ReviewUserProfile struct {
+	AccountID string  `json:"account_id"`
+	Name      string  `json:"name"`
+	Username  string  `json:"username"`
+	AvatarURL *string `json:"avatar_url"`
+}
+
 // DTO Output Response
 type BusinessReviewResponse struct {
 	ReviewID               string                          `json:"review_id"`
 	BusinessID             string                          `json:"business_id"`
 	AccountID              string                          `json:"account_id"`
+	User                   *ReviewUserProfile              `json:"user,omitempty"`
+	Account                *Account                        `json:"account,omitempty"`
 	AccountName            string                          `json:"account_name"`
+	Name                   string                          `json:"name"`
+	Username               string                          `json:"username"`
+	AvatarURL              *string                         `json:"avatar_url,omitempty"`
 	AccountAvatar          *string                         `json:"account_avatar,omitempty"`
 	Rating                 int                             `json:"rating"`
 	Comment                string                          `json:"comment"`
@@ -205,7 +217,12 @@ type BusinessReviewCommentResponse struct {
 	CommentID              string                          `json:"comment_id"`
 	ReviewID               string                          `json:"review_id"`
 	AccountID              string                          `json:"account_id"`
+	User                   *ReviewUserProfile              `json:"user,omitempty"`
+	Account                *Account                        `json:"account,omitempty"`
 	AccountName            string                          `json:"account_name"`
+	Name                   string                          `json:"name"`
+	Username               string                          `json:"username"`
+	AvatarURL              *string                         `json:"avatar_url,omitempty"`
 	AccountAvatar          *string                         `json:"account_avatar,omitempty"`
 	Content                string                          `json:"content"`
 	LikeCount              int                             `json:"like_count"`
@@ -226,7 +243,12 @@ type ProductReviewResponse struct {
 	ProductID              string                         `json:"product_id"`
 	BusinessID             string                         `json:"business_id"`
 	AccountID              string                         `json:"account_id"`
+	User                   *ReviewUserProfile             `json:"user,omitempty"`
+	Account                *Account                       `json:"account,omitempty"`
 	AccountName            string                         `json:"account_name"`
+	Name                   string                         `json:"name"`
+	Username               string                         `json:"username"`
+	AvatarURL              *string                        `json:"avatar_url,omitempty"`
 	AccountAvatar          *string                        `json:"account_avatar,omitempty"`
 	Rating                 float64                        `json:"rating"`
 	Comment                string                         `json:"comment"`
@@ -247,7 +269,12 @@ type ProductReviewCommentResponse struct {
 	CommentID              string                         `json:"comment_id"`
 	ReviewID               string                         `json:"review_id"`
 	AccountID              string                         `json:"account_id"`
+	User                   *ReviewUserProfile             `json:"user,omitempty"`
+	Account                *Account                       `json:"account,omitempty"`
 	AccountName            string                         `json:"account_name"`
+	Name                   string                         `json:"name"`
+	Username               string                         `json:"username"`
+	AvatarURL              *string                        `json:"avatar_url,omitempty"`
 	AccountAvatar          *string                        `json:"account_avatar,omitempty"`
 	Content                string                         `json:"content"`
 	LikeCount              int                            `json:"like_count"`

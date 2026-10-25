@@ -28,6 +28,9 @@ type PublicProfileSummaryResponse struct {
 	FullName             string                   `json:"full_name"`
 	Gender               string                   `json:"gender"`
 	ProfilePictureURL    *string                  `json:"profile_picture_url"`
+	IsVerified           bool                     `json:"is_verified"`
+	IsEmailVerified      bool                     `json:"is_email_verified"`
+	IsPhoneVerified      bool                     `json:"is_phone_verified"`
 	TotalCommentsReviews int64                    `json:"total_comments_reviews"`
 	RecentReviews        []RecentActivityResponse `json:"recent_reviews"`
 }

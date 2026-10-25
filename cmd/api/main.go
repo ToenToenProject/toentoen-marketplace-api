@@ -800,8 +800,10 @@ func main() {
 	// Get Reviews Toko (Smart display 5 review, Paginated list, Detail)
 	reviewGroup.Get("/business/:business_id/smart", middlewares.OptionalAuth, reviewHandler.GetSmartDisplayReviews)
 	reviewGroup.Get("/business/:business_id", middlewares.OptionalAuth, reviewHandler.GetAllReviews)
+	reviewGroup.Get("/business", middlewares.OptionalAuth, reviewHandler.GetAllReviews)
 	reviewGroup.Get("/business/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)
 	reviewGroup.Get("/business/detail/:review_id", middlewares.OptionalAuth, reviewHandler.GetReviewDetail)
+	reviewGroup.Get("/business/detail/:id", middlewares.OptionalAuth, reviewHandler.GetReviewDetail)
 
 	// Direct alias
 	api.Get("/business/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)

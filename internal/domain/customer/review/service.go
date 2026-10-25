@@ -374,6 +374,31 @@ func (s *reviewService) GetReviewSummary(businessID string) (*models.ReviewSumma
 	return s.reviewRepo.GetReviewSummary(businessID)
 }
 
+func extractReviewUserProfile(account *models.Account, fallbackAccountID string) (name string, username string, avatarURL *string, userProfile *models.ReviewUserProfile) {
+	name = "Pengguna"
+	username = ""
+	if account != nil {
+		cleanName := strings.TrimSpace(account.FirstName + " " + account.LastName)
+		if cleanName != "" {
+			name = cleanName
+		} else if account.Username != "" {
+			name = account.Username
+		}
+		username = account.Username
+		if account.ProfilePictureUrl != nil && strings.TrimSpace(*account.ProfilePictureUrl) != "" {
+			cleaned := strings.TrimSpace(*account.ProfilePictureUrl)
+			avatarURL = &cleaned
+		}
+	}
+	userProfile = &models.ReviewUserProfile{
+		AccountID: fallbackAccountID,
+		Name:      name,
+		Username:  username,
+		AvatarURL: avatarURL,
+	}
+	return name, username, avatarURL, userProfile
+}
+
 // 9. Get Review Detail with Comments
 func (s *reviewService) GetReviewDetail(reviewID, currentAccountID string) (*models.BusinessReviewResponse, error) {
 	review, err := s.reviewRepo.GetReviewByID(reviewID)
@@ -421,18 +446,18 @@ func (s *reviewService) GetReviewDetail(reviewID, currentAccountID string) (*mod
 			}
 		}
 
-		accName := "Pengguna"
-		var accAvatar *string
-		if c.Account != nil {
-			accName = c.Account.FirstName + " " + c.Account.LastName
-			accAvatar = c.Account.ProfilePictureUrl
-		}
+		accName, username, accAvatar, userProfile := extractReviewUserProfile(c.Account, c.AccountID)
 
 		cResp := models.BusinessReviewCommentResponse{
 			CommentID:             c.CommentID,
 			ReviewID:              c.ReviewID,
 			AccountID:             c.AccountID,
+			User:                  userProfile,
+			Account:               c.Account,
 			AccountName:           accName,
+			Name:                  accName,
+			Username:              username,
+			AvatarURL:             accAvatar,
 			AccountAvatar:         accAvatar,
 			Content:               c.Content,
 			LikeCount:             c.LikeCount,
@@ -449,18 +474,18 @@ func (s *reviewService) GetReviewDetail(reviewID, currentAccountID string) (*mod
 		commentResponses = append(commentResponses, cResp)
 	}
 
-	accName := "Pengguna"
-	var accAvatar *string
-	if review.Account != nil {
-		accName = review.Account.FirstName + " " + review.Account.LastName
-		accAvatar = review.Account.ProfilePictureUrl
-	}
+	accName, username, accAvatar, userProfile := extractReviewUserProfile(review.Account, review.AccountID)
 
 	resp := &models.BusinessReviewResponse{
 		ReviewID:              review.ReviewID,
 		BusinessID:            review.BusinessID,
 		AccountID:             review.AccountID,
+		User:                  userProfile,
+		Account:               review.Account,
 		AccountName:           accName,
+		Name:                  accName,
+		Username:              username,
+		AvatarURL:             accAvatar,
 		AccountAvatar:         accAvatar,
 		Rating:                review.Rating,
 		Comment:               review.Comment,
@@ -644,18 +669,18 @@ func (s *reviewService) GetSmartDisplayReviews(businessID, currentAccountID stri
 			}
 		}
 
-		accName := "Pengguna"
-		var accAvatar *string
-		if r.Account != nil {
-			accName = r.Account.FirstName + " " + r.Account.LastName
-			accAvatar = r.Account.ProfilePictureUrl
-		}
+		accName, username, accAvatar, userProfile := extractReviewUserProfile(r.Account, r.AccountID)
 
 		resp := models.BusinessReviewResponse{
 			ReviewID:              r.ReviewID,
 			BusinessID:            r.BusinessID,
 			AccountID:             r.AccountID,
+			User:                  userProfile,
+			Account:               r.Account,
 			AccountName:           accName,
+			Name:                  accName,
+			Username:              username,
+			AvatarURL:             accAvatar,
 			AccountAvatar:         accAvatar,
 			Rating:                r.Rating,
 			Comment:               r.Comment,
@@ -719,18 +744,18 @@ func (s *reviewService) GetAllReviews(businessID, currentAccountID string, page,
 			}
 		}
 
-		accName := "Pengguna"
-		var accAvatar *string
-		if r.Account != nil {
-			accName = r.Account.FirstName + " " + r.Account.LastName
-			accAvatar = r.Account.ProfilePictureUrl
-		}
+		accName, username, accAvatar, userProfile := extractReviewUserProfile(r.Account, r.AccountID)
 
 		resp := models.BusinessReviewResponse{
 			ReviewID:              r.ReviewID,
 			BusinessID:            r.BusinessID,
 			AccountID:             r.AccountID,
+			User:                  userProfile,
+			Account:               r.Account,
 			AccountName:           accName,
+			Name:                  accName,
+			Username:              username,
+			AvatarURL:             accAvatar,
 			AccountAvatar:         accAvatar,
 			Rating:                r.Rating,
 			Comment:               r.Comment,

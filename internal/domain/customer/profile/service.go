@@ -59,12 +59,19 @@ func (s *publicProfileService) GetPublicProfileSummary(accountID string) (*model
 		gender = strings.ToLower(strings.TrimSpace(*account.Gender))
 	}
 
+	isEmailVerified := account.EmailVerifiedAt != nil
+	isPhoneVerified := account.PhoneVerifiedAt != nil && account.PhoneNumber != nil && strings.TrimSpace(*account.PhoneNumber) != ""
+	isVerified := isEmailVerified && isPhoneVerified
+
 	response := &models.PublicProfileSummaryResponse{
 		AccountID:            account.AccountID,
 		Username:             username,
 		FullName:             fullName,
 		Gender:               gender,
 		ProfilePictureURL:    avatarUrl,
+		IsVerified:           isVerified,
+		IsEmailVerified:      isEmailVerified,
+		IsPhoneVerified:      isPhoneVerified,
 		TotalCommentsReviews: totalCommentsReviews,
 		RecentReviews:        recentReviews,
 	}
