@@ -3,6 +3,7 @@ package business_profile
 import (
 	"errors"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +12,50 @@ import (
 	"toentoen-backend/pkg/crypto"
 	"toentoen-backend/pkg/utils"
 )
+
+type SavedShopItem struct {
+	BusinessID              string     `json:"business_id"`
+	ShopID                  string     `json:"shop_id"` // Alias untuk kemudahan FE
+	ID                      string     `json:"id"`      // Alias untuk kemudahan FE
+	BusinessName            string     `json:"business_name"`
+	Name                    string     `json:"name"` // Alias untuk kemudahan FE
+	LogoURL                 *string    `json:"logo_url"`
+	Category                string     `json:"category"`
+	CustomCategory          *string    `json:"custom_category,omitempty"`
+	City                    *string    `json:"city"`
+	Province                *string    `json:"province"`
+	AddressDetail           *string    `json:"address_detail,omitempty"`
+	Latitude                *float64   `json:"latitude,omitempty"`
+	Longitude               *float64   `json:"longitude,omitempty"`
+	AverageRating           float64    `json:"average_rating"`
+	Rating                  float64    `json:"rating"` // Alias
+	TotalReviews            int64      `json:"total_reviews"`
+	ReviewCount             int64      `json:"review_count"` // Alias
+	TotalLikes              int        `json:"total_likes"`
+	LikeCount               int        `json:"like_count"` // Alias
+	IsOpenNow               bool       `json:"is_open_now"`
+	IsManuallyClosed        bool       `json:"is_manually_closed"`
+	IsVerified              bool       `json:"is_verified"`
+	HasNIB                  bool       `json:"has_nib"`
+	IsLive                  bool       `json:"is_live"`
+	LivePlatform            *string    `json:"live_platform,omitempty"`
+	IsSaved                 bool       `json:"is_saved"`
+	IsBookmarked            bool       `json:"is_bookmarked"` // Alias
+	IsWishlisted            bool       `json:"is_wishlisted"`
+	WishlistedProductsCount int        `json:"wishlisted_products_count"`
+	SavedAt                 *time.Time `json:"saved_at,omitempty"`
+	Source                  string     `json:"source"` // "bookmark", "wishlist", or "both"
+}
+
+type SavedAndWishlistedShopsResponse struct {
+	SavedShopIDs      []string        `json:"saved_shop_ids"`
+	WishlistedShopIDs []string        `json:"wishlisted_shop_ids"`
+	AllShopIDs        []string        `json:"all_shop_ids"`
+	TotalSaved        int             `json:"total_saved"`
+	TotalWishlisted   int             `json:"total_wishlisted"`
+	TotalShops        int             `json:"total_shops"`
+	Shops             []SavedShopItem `json:"shops"`
+}
 
 type SimpleProductResponse struct {
 	ProductID      string   `json:"product_id"`
@@ -86,6 +131,7 @@ type Service interface {
 	GetAllProductGroups(businessID string) ([]models.ProductGroup, error)
 	GetAllProducts(businessID string, groupID string) ([]SimpleProductResponse, error)
 	GetAllPosts(businessID string, accountID string) ([]models.PostResponse, error)
+	GetSavedAndWishlistedShops(accountID string, filter string) (SavedAndWishlistedShopsResponse, error)
 }
 
 type service struct {
@@ -566,5 +612,201 @@ func (s *service) GetAllPosts(businessID string, accountID string) ([]models.Pos
 	}
 
 	return response, nil
-
 }
+
+func (s *service) GetSavedAndWishlistedShops(accountID string, filter string) (SavedAndWishlistedShopsResponse, error) {
+	emptyResp := SavedAndWishlistedShopsResponse{
+		SavedShopIDs:      []string{},
+		WishlistedShopIDs: []string{},
+		AllShopIDs:        []string{},
+		TotalSaved:        0,
+		TotalWishlisted:   0,
+		TotalShops:        0,
+		Shops:             []SavedShopItem{},
+	}
+
+	if accountID == "" {
+		return emptyResp, nil
+	}
+
+	raw, err := s.repo.GetSavedAndWishlistedBizIDs(accountID)
+	if err != nil {
+		return emptyResp, err
+	}
+
+	var savedShopIDs []string
+	for id := range raw.SavedBizMap {
+		savedShopIDs = append(savedShopIDs, id)
+	}
+	if savedShopIDs == nil {
+		savedShopIDs = []string{}
+	}
+
+	var wishlistedShopIDs []string
+	for id := range raw.WishlistedBizMap {
+		wishlistedShopIDs = append(wishlistedShopIDs, id)
+	}
+	if wishlistedShopIDs == nil {
+		wishlistedShopIDs = []string{}
+	}
+
+	// Filter logic: "all", "saved", "wishlisted"
+	targetBizIDMap := make(map[string]bool)
+	switch filter {
+	case "saved", "bookmark", "bookmarks":
+		for _, id := range savedShopIDs {
+			targetBizIDMap[id] = true
+		}
+	case "wishlisted", "wishlist", "wishlists":
+		for _, id := range wishlistedShopIDs {
+			targetBizIDMap[id] = true
+		}
+	default: // "all"
+		for _, id := range savedShopIDs {
+			targetBizIDMap[id] = true
+		}
+		for _, id := range wishlistedShopIDs {
+			targetBizIDMap[id] = true
+		}
+	}
+
+	var allBizIDs []string
+	for id := range targetBizIDMap {
+		allBizIDs = append(allBizIDs, id)
+	}
+	if allBizIDs == nil {
+		allBizIDs = []string{}
+	}
+
+	if len(allBizIDs) == 0 {
+		return SavedAndWishlistedShopsResponse{
+			SavedShopIDs:      savedShopIDs,
+			WishlistedShopIDs: wishlistedShopIDs,
+			AllShopIDs:        allBizIDs,
+			TotalSaved:        len(savedShopIDs),
+			TotalWishlisted:   len(wishlistedShopIDs),
+			TotalShops:        0,
+			Shops:             []SavedShopItem{},
+		}, nil
+	}
+
+	businesses, err := s.repo.GetBusinessesByIDs(allBizIDs)
+	if err != nil {
+		return emptyResp, err
+	}
+
+	verifMap, _ := s.repo.BatchGetVerificationStatus(allBizIDs)
+
+	var shops []SavedShopItem
+	for _, business := range businesses {
+		category := "General"
+		if len(business.Categories) > 0 {
+			category = business.Categories[0].Name
+		} else if business.CustomCategory != nil && strings.TrimSpace(*business.CustomCategory) != "" {
+			category = *business.CustomCategory
+		}
+
+		isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours, business.ConfirmedOpenDate, business.ConfirmedOvertimeDate)
+
+		bName := ""
+		if business.BusinessName != nil {
+			bName = *business.BusinessName
+		}
+
+		var isVerif, hasNIB bool
+		if v, ok := verifMap[business.BusinessID]; ok {
+			isVerif = v.IsVerified
+			hasNIB = v.HasNIB
+		}
+
+		isLive := business.IsLive
+		var livePlatform *string
+		if isLive {
+			if business.LiveStartedAt != nil && time.Since(*business.LiveStartedAt) > 4*time.Hour {
+				isLive = false
+			} else {
+				livePlatform = business.LivePlatform
+			}
+		}
+
+		savedTime, isSaved := raw.SavedBizMap[business.BusinessID]
+		wCount, isWishlisted := raw.WishlistedBizMap[business.BusinessID]
+
+		source := "bookmark"
+		if isSaved && isWishlisted {
+			source = "both"
+		} else if isWishlisted {
+			source = "wishlist"
+		}
+
+		var savedAtPtr *time.Time
+		if isSaved {
+			savedAtPtr = &savedTime
+		} else if latestW, ok := raw.WishlistLatestAt[business.BusinessID]; ok {
+			savedAtPtr = &latestW
+		}
+
+		shops = append(shops, SavedShopItem{
+			BusinessID:              business.BusinessID,
+			ShopID:                  business.BusinessID,
+			ID:                      business.BusinessID,
+			BusinessName:            bName,
+			Name:                    bName,
+			LogoURL:                 business.LogoURL,
+			Category:                category,
+			CustomCategory:          business.CustomCategory,
+			City:                    business.City,
+			Province:                business.Province,
+			AddressDetail:           business.AddressDetail,
+			Latitude:                business.Latitude,
+			Longitude:               business.Longitude,
+			AverageRating:           business.AverageRating,
+			Rating:                  business.AverageRating,
+			TotalReviews:            business.ReviewCount,
+			ReviewCount:             business.ReviewCount,
+			TotalLikes:              business.LikeCount,
+			LikeCount:               business.LikeCount,
+			IsOpenNow:               isOpenNow,
+			IsManuallyClosed:        business.IsManuallyClosed,
+			IsVerified:              isVerif,
+			HasNIB:                  hasNIB,
+			IsLive:                  isLive,
+			LivePlatform:            livePlatform,
+			IsSaved:                 isSaved,
+			IsBookmarked:            isSaved,
+			IsWishlisted:            isWishlisted,
+			WishlistedProductsCount: wCount,
+			SavedAt:                 savedAtPtr,
+			Source:                  source,
+		})
+	}
+
+	if shops == nil {
+		shops = []SavedShopItem{}
+	} else {
+		// Sort: toko yang memiliki SavedAt terbaru di urutan pertama
+		sort.Slice(shops, func(i, j int) bool {
+			if shops[i].SavedAt == nil && shops[j].SavedAt == nil {
+				return shops[i].AverageRating > shops[j].AverageRating
+			}
+			if shops[i].SavedAt == nil {
+				return false
+			}
+			if shops[j].SavedAt == nil {
+				return true
+			}
+			return shops[i].SavedAt.After(*shops[j].SavedAt)
+		})
+	}
+
+	return SavedAndWishlistedShopsResponse{
+		SavedShopIDs:      savedShopIDs,
+		WishlistedShopIDs: wishlistedShopIDs,
+		AllShopIDs:        allBizIDs,
+		TotalSaved:        len(savedShopIDs),
+		TotalWishlisted:   len(wishlistedShopIDs),
+		TotalShops:        len(shops),
+		Shops:             shops,
+	}, nil
+}
+

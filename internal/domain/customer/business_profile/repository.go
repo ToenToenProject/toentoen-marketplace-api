@@ -2,6 +2,7 @@ package business_profile
 
 import (
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 	"toentoen-backend/internal/domain/shared/models"
@@ -9,11 +10,20 @@ import (
 	"toentoen-backend/pkg/meilisearch"
 )
 
+type SavedShopData struct {
+	SavedBizMap      map[string]time.Time
+	WishlistedBizMap map[string]int
+	WishlistLatestAt map[string]time.Time
+}
+
 type Repository interface {
 	GetBusinessDetail(businessID string) (models.Business, error)
 	CheckBookmark(accountID, businessID string) (bool, error)
 	ToggleBookmark(accountID, businessID string) (bool, error)
 	GetBookmarkedBusinesses(accountID string) ([]models.Business, error)
+
+	GetSavedAndWishlistedBizIDs(accountID string) (SavedShopData, error)
+	GetBusinessesByIDs(businessIDs []string) ([]models.Business, error)
 
 	CheckBusinessLike(accountID, businessID string) (bool, error)
 	ToggleBusinessLike(accountID, businessID string) (bool, int64, error)
@@ -428,3 +438,69 @@ func (r *repository) BatchGetVerificationStatus(businessIDs []string) (map[strin
 	}
 	return resMap, nil
 }
+
+func (r *repository) GetSavedAndWishlistedBizIDs(accountID string) (SavedShopData, error) {
+	data := SavedShopData{
+		SavedBizMap:      make(map[string]time.Time),
+		WishlistedBizMap: make(map[string]int),
+		WishlistLatestAt: make(map[string]time.Time),
+	}
+
+	if accountID == "" {
+		return data, nil
+	}
+
+	// 1. Query bookmarked businesses
+	type bookmarkRow struct {
+		BusinessID string    `gorm:"column:business_id"`
+		CreatedAt  time.Time `gorm:"column:created_at"`
+	}
+	var bRows []bookmarkRow
+	err := r.db.Table("business_bookmarks").
+		Select("business_id, created_at").
+		Where("account_id = ?", accountID).
+		Find(&bRows).Error
+	if err != nil {
+		return data, err
+	}
+	for _, b := range bRows {
+		data.SavedBizMap[b.BusinessID] = b.CreatedAt
+	}
+
+	// 2. Query wishlisted products and their business_id
+	type wishlistRow struct {
+		BusinessID       string    `gorm:"column:business_id"`
+		Count            int       `gorm:"column:count"`
+		LatestWishlistAt time.Time `gorm:"column:latest_wishlist_at"`
+	}
+	var wRows []wishlistRow
+	err = r.db.Table("product_wishlists pw").
+		Select("p.business_id, count(pw.product_id) as count, max(pw.created_at) as latest_wishlist_at").
+		Joins("JOIN products p ON pw.product_id = p.product_id").
+		Where("pw.account_id = ? AND p.deleted_at IS NULL", accountID).
+		Group("p.business_id").
+		Find(&wRows).Error
+	if err != nil {
+		return data, err
+	}
+	for _, w := range wRows {
+		data.WishlistedBizMap[w.BusinessID] = w.Count
+		data.WishlistLatestAt[w.BusinessID] = w.LatestWishlistAt
+	}
+
+	return data, nil
+}
+
+func (r *repository) GetBusinessesByIDs(businessIDs []string) ([]models.Business, error) {
+	if len(businessIDs) == 0 {
+		return []models.Business{}, nil
+	}
+	var businesses []models.Business
+	err := r.db.
+		Preload("Categories").
+		Preload("Hours").
+		Where("business_id IN ?", businessIDs).
+		Find(&businesses).Error
+	return businesses, err
+}
+

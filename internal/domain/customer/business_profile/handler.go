@@ -165,6 +165,30 @@ func (h *Handler) GetBookmarks(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", bookmarks)
 }
 
+// GetSavedAndWishlistedShops Handler untuk menarik daftar toko yang disimpan (bookmark) dan/atau di-wishlist pengguna
+// GET /shops/saved_and_wishlisted
+// Query params:
+//   - filter: "all" (default), "saved", "wishlisted"
+//   - format: "object" (default, berisi shops + ID list), "array" / "list" (langsung slice shops)
+func (h *Handler) GetSavedAndWishlistedShops(c *fiber.Ctx) error {
+	accountID, _ := c.Locals("account_id").(string)
+
+	filter := strings.ToLower(strings.TrimSpace(c.Query("filter", "all")))
+	format := strings.ToLower(strings.TrimSpace(c.Query("format", "")))
+
+	res, err := h.service.GetSavedAndWishlistedShops(accountID, filter)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memuat daftar toko tersimpan dan wishlist", nil)
+	}
+
+	if format == "array" || format == "list" {
+		return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan dan wishlist berhasil diambil", res.Shops)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan dan wishlist berhasil diambil", res)
+}
+
+
 func (h *Handler) GetProductGroups(c *fiber.Ctx) error {
 	businessID := c.Params("business_id")
 	if businessID == "" {

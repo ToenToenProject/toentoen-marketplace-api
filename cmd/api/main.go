@@ -426,9 +426,19 @@ func main() {
 	authGroup.Post("/phone/verify-otp", authHandler.VerifyPhoneOTP)
 
 	// ==========================================
-	// ROUTES: CUSTOMER BUSINESS PROFILE
+	// ROUTES: CUSTOMER BUSINESS PROFILE & SHOPS
 	// ==========================================
+	// Direct routes for FE Explore/Search: GET /shops/saved_and_wishlisted
+	app.Get("/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	app.Get("/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	api.Get("/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	api.Get("/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	api.Get("/customer/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	api.Get("/customer/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+
 	customerBusinessGroup := api.Group("/customer/businesses")
+	customerBusinessGroup.Get("/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	customerBusinessGroup.Get("/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
 	customerBusinessGroup.Get("/bookmarks", middlewares.RequireAuth, businessProfileHandler.GetBookmarks)
 	customerBusinessGroup.Get("/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerBusinessGroup.Get("/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
@@ -820,6 +830,10 @@ func main() {
 	// ROUTES: CUSTOMER EXPLORE & ANALYTICS
 	// ==========================================
 	customerExploreGroup := api.Group("/customer/explore")
+	customerExploreGroup.Get("/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	customerExploreGroup.Get("/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	customerExploreGroup.Get("/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	customerExploreGroup.Get("/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
 	customerExploreGroup.Get("/business/:id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/business/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/businesses/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
