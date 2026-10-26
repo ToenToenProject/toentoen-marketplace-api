@@ -150,11 +150,50 @@ func (h *Handler) ToggleBookmark(c *fiber.Ctx) error {
 	})
 }
 
-// GetBookmarks Handler untuk menarik daftar toko yang disimpan pengguna
+// GetBookmarks Handler untuk menarik daftar toko yang disimpan pengguna (Bookmarks)
+// Mendukung query parameter untuk mode pencarian & integrasi wishlist:
+//   - include_wishlist: "true" (menggabungkan toko yang produknya di-wishlist pengguna)
+//   - filter: "all", "saved", "wishlisted" (filter tipe simpanan toko)
+//   - format: "object" (default jika include_wishlist/filter diisi, mengembalikan ID array + list merchant), "array" / "list" (langsung slice merchant)
 func (h *Handler) GetBookmarks(c *fiber.Ctx) error {
-	accountID, ok := c.Locals("account_id").(string)
-	if !ok || accountID == "" {
-		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	var accountID string
+	if id, ok := c.Locals("account_id").(string); ok && id != "" {
+		accountID = id
+	}
+	if accountID == "" {
+		authID, _, errAuth := utils.GetRequesterInfo(c)
+		if errAuth == nil && authID != "" {
+			accountID = authID
+		}
+	}
+
+	includeWishlist := strings.EqualFold(strings.TrimSpace(c.Query("include_wishlist", "")), "true")
+	filterQuery := strings.ToLower(strings.TrimSpace(c.Query("filter", "")))
+	format := strings.ToLower(strings.TrimSpace(c.Query("format", "")))
+
+	// Mode Terpadu: Jika meminta integrasi wishlist atau spesifik filter simpanan toko
+	if includeWishlist || filterQuery != "" {
+		filter := "all"
+		if filterQuery != "" {
+			filter = filterQuery
+		}
+
+		res, err := h.service.GetSavedAndWishlistedShops(accountID, filter)
+		if err != nil {
+			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memuat daftar toko tersimpan dan wishlist", nil)
+		}
+
+		if format == "array" || format == "list" {
+			return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", res.Merchants)
+		}
+
+		return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", res)
+	}
+
+	// Mode Standar (Default): Daftar toko yang dibookmark pengguna
+	if accountID == "" {
+		// Pengunjung tamu / belum login: kembalikan list kosong tanpa error 401
+		return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", []BusinessProfileResponse{})
 	}
 
 	bookmarks, err := h.service.GetBookmarks(accountID)

@@ -48,13 +48,18 @@ type SavedShopItem struct {
 }
 
 type SavedAndWishlistedShopsResponse struct {
-	SavedShopIDs      []string        `json:"saved_shop_ids"`
-	WishlistedShopIDs []string        `json:"wishlisted_shop_ids"`
-	AllShopIDs        []string        `json:"all_shop_ids"`
-	TotalSaved        int             `json:"total_saved"`
-	TotalWishlisted   int             `json:"total_wishlisted"`
-	TotalShops        int             `json:"total_shops"`
-	Shops             []SavedShopItem `json:"shops"`
+	SavedShopIDs          []string        `json:"saved_shop_ids"`
+	WishlistedShopIDs     []string        `json:"wishlisted_shop_ids"`
+	AllShopIDs            []string        `json:"all_shop_ids"`
+	SavedMerchantIDs      []string        `json:"saved_merchant_ids"`
+	WishlistedMerchantIDs []string        `json:"wishlisted_merchant_ids"`
+	AllMerchantIDs        []string        `json:"all_merchant_ids"`
+	TotalSaved            int             `json:"total_saved"`
+	TotalWishlisted       int             `json:"total_wishlisted"`
+	TotalShops            int             `json:"total_shops"`
+	TotalMerchants        int             `json:"total_merchants"`
+	Shops                 []SavedShopItem `json:"shops"`
+	Merchants             []SavedShopItem `json:"merchants"`
 }
 
 type SimpleProductResponse struct {
@@ -81,33 +86,33 @@ type SimpleProductResponse struct {
 }
 
 type BusinessProfileResponse struct {
-	BusinessID      string   `json:"business_id"`
-	BusinessName    string   `json:"business_name"`
-	LogoURL         *string  `json:"logo_url"`
-	Category        string   `json:"category"`
-	CustomCategory  *string  `json:"custom_category,omitempty"`
-	CustomTags      []string `json:"custom_tags,omitempty"`
-	Hashtags         []string `json:"hashtags,omitempty"`
-	IsOpenNow        bool     `json:"is_open_now"`
-	IsManuallyClosed bool     `json:"is_manually_closed"`
-	IsBookmarked     bool     `json:"is_bookmarked"`
-	IsLikedByMe      bool     `json:"is_liked_by_me"`
-	LikeCount        int      `json:"like_count"`
-	TotalLikes       int      `json:"total_likes"`
-	AverageRating    float64  `json:"average_rating"`
-	TotalReviews     int64    `json:"total_reviews"`
-	ReviewCount      int64    `json:"review_count"`
-	IsVerified       bool     `json:"is_verified"`
-	HasNIB           bool     `json:"has_nib"`
-	IsLive          bool     `json:"is_live"`
-	LivePlatform    *string  `json:"live_platform,omitempty"`
-	LiveStartedAt   *time.Time `json:"live_started_at,omitempty"`
-	
-	AddressDetail   *string  `json:"address_detail"`
-	City            *string  `json:"city"`
-	Province        *string  `json:"province"`
-	Latitude        *float64 `json:"latitude"`
-	Longitude       *float64 `json:"longitude"`
+	BusinessID       string     `json:"business_id"`
+	BusinessName     string     `json:"business_name"`
+	LogoURL          *string    `json:"logo_url"`
+	Category         string     `json:"category"`
+	CustomCategory   *string    `json:"custom_category,omitempty"`
+	CustomTags       []string   `json:"custom_tags,omitempty"`
+	Hashtags         []string   `json:"hashtags,omitempty"`
+	IsOpenNow        bool       `json:"is_open_now"`
+	IsManuallyClosed bool       `json:"is_manually_closed"`
+	IsBookmarked     bool       `json:"is_bookmarked"`
+	IsLikedByMe      bool       `json:"is_liked_by_me"`
+	LikeCount        int        `json:"like_count"`
+	TotalLikes       int        `json:"total_likes"`
+	AverageRating    float64    `json:"average_rating"`
+	TotalReviews     int64      `json:"total_reviews"`
+	ReviewCount      int64      `json:"review_count"`
+	IsVerified       bool       `json:"is_verified"`
+	HasNIB           bool       `json:"has_nib"`
+	IsLive           bool       `json:"is_live"`
+	LivePlatform     *string    `json:"live_platform,omitempty"`
+	LiveStartedAt    *time.Time `json:"live_started_at,omitempty"`
+
+	AddressDetail *string  `json:"address_detail"`
+	City          *string  `json:"city"`
+	Province      *string  `json:"province"`
+	Latitude      *float64 `json:"latitude"`
+	Longitude     *float64 `json:"longitude"`
 
 	PhoneContact    *string  `json:"phone_contact"`
 	WhatsappContact *string  `json:"whatsapp_contact"`
@@ -115,8 +120,8 @@ type BusinessProfileResponse struct {
 	SocialTiktok    *string  `json:"social_tiktok"`
 	SocialWebsites  []string `json:"social_websites"`
 
-	BusinessImages  []string `json:"business_images"`
-	Certificates    []models.BusinessCertificate `json:"certificates"`
+	BusinessImages []string                     `json:"business_images"`
+	Certificates   []models.BusinessCertificate `json:"certificates"`
 
 	Hours []models.BusinessHour `json:"hours"`
 
@@ -196,7 +201,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 	if business.BusinessName != nil {
 		bName = *business.BusinessName
 	}
-	
+
 	city := ""
 	if business.City != nil {
 		city = *business.City
@@ -254,41 +259,41 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 	}
 
 	return BusinessProfileResponse{
-		BusinessID:      business.BusinessID,
-		BusinessName:    bName,
-		LogoURL:         business.LogoURL,
-		Category:        category,
-		CustomCategory:  business.CustomCategory,
-		CustomTags:      business.CustomTags,
-		Hashtags:         business.Hashtags,
-		IsOpenNow:        isOpenNow,
-		IsManuallyClosed: business.IsManuallyClosed,
-		IsBookmarked:     isBookmarked,
-		IsLikedByMe:      isLikedByMe,
-		LikeCount:        int(likeCount),
-		TotalLikes:       int(likeCount),
-		AverageRating:    business.AverageRating,
-		TotalReviews:     business.ReviewCount,
-		ReviewCount:      business.ReviewCount,
-		IsVerified:       isVerified,
-		HasNIB:           hasNIB,
-		IsLive:          isLive,
-		LivePlatform:    livePlatform,
-		LiveStartedAt:   liveStartedAt,
-		AddressDetail:   business.AddressDetail,
-		City:            business.City,
-		Province:        business.Province,
-		Latitude:        business.Latitude,
-		Longitude:       business.Longitude,
-		PhoneContact:    business.PhoneContact,
-		WhatsappContact: business.WhatsappContact,
-		SocialInstagram: business.SocialInstagram,
-		SocialTiktok:    business.SocialTiktok,
-		SocialWebsites:  business.SocialWebsites,
-		BusinessImages:  business.BusinessImages,
-		Certificates:    decryptBusinessCertificates(business.Certificates),
-		Hours:           business.Hours,
-		ActivePromotions: activePromotionsList,
+		BusinessID:        business.BusinessID,
+		BusinessName:      bName,
+		LogoURL:           business.LogoURL,
+		Category:          category,
+		CustomCategory:    business.CustomCategory,
+		CustomTags:        business.CustomTags,
+		Hashtags:          business.Hashtags,
+		IsOpenNow:         isOpenNow,
+		IsManuallyClosed:  business.IsManuallyClosed,
+		IsBookmarked:      isBookmarked,
+		IsLikedByMe:       isLikedByMe,
+		LikeCount:         int(likeCount),
+		TotalLikes:        int(likeCount),
+		AverageRating:     business.AverageRating,
+		TotalReviews:      business.ReviewCount,
+		ReviewCount:       business.ReviewCount,
+		IsVerified:        isVerified,
+		HasNIB:            hasNIB,
+		IsLive:            isLive,
+		LivePlatform:      livePlatform,
+		LiveStartedAt:     liveStartedAt,
+		AddressDetail:     business.AddressDetail,
+		City:              business.City,
+		Province:          business.Province,
+		Latitude:          business.Latitude,
+		Longitude:         business.Longitude,
+		PhoneContact:      business.PhoneContact,
+		WhatsappContact:   business.WhatsappContact,
+		SocialInstagram:   business.SocialInstagram,
+		SocialTiktok:      business.SocialTiktok,
+		SocialWebsites:    business.SocialWebsites,
+		BusinessImages:    business.BusinessImages,
+		Certificates:      decryptBusinessCertificates(business.Certificates),
+		Hours:             business.Hours,
+		ActivePromotions:  activePromotionsList,
 		RecentProducts:    mappedRecentProducts,
 		RecentPosts:       recentPosts,
 		SimilarBusinesses: similarBusinesses,
@@ -386,12 +391,12 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 		}
 
 		responses = append(responses, BusinessProfileResponse{
-			BusinessID:      business.BusinessID,
-			BusinessName:    bName,
-			LogoURL:         business.LogoURL,
-			Category:        category,
-			CustomCategory:  business.CustomCategory,
-			CustomTags:      business.CustomTags,
+			BusinessID:       business.BusinessID,
+			BusinessName:     bName,
+			LogoURL:          business.LogoURL,
+			Category:         category,
+			CustomCategory:   business.CustomCategory,
+			CustomTags:       business.CustomTags,
 			Hashtags:         business.Hashtags,
 			IsOpenNow:        isOpenNow,
 			IsManuallyClosed: business.IsManuallyClosed,
@@ -403,22 +408,22 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			ReviewCount:      business.ReviewCount,
 			IsVerified:       isVerif,
 			HasNIB:           hasNIB,
-			IsLive:          isLive,
-			LivePlatform:    livePlatform,
-			LiveStartedAt:   liveStartedAt,
-			AddressDetail:   business.AddressDetail,
-			City:            business.City,
-			Province:        business.Province,
-			Latitude:        business.Latitude,
-			Longitude:       business.Longitude,
-			PhoneContact:    business.PhoneContact,
-			WhatsappContact: business.WhatsappContact,
-			SocialInstagram: business.SocialInstagram,
-			SocialTiktok:    business.SocialTiktok,
-			SocialWebsites:  business.SocialWebsites,
-			BusinessImages:  business.BusinessImages,
-			Certificates:    decryptBusinessCertificates(business.Certificates),
-			Hours:           business.Hours,
+			IsLive:           isLive,
+			LivePlatform:     livePlatform,
+			LiveStartedAt:    liveStartedAt,
+			AddressDetail:    business.AddressDetail,
+			City:             business.City,
+			Province:         business.Province,
+			Latitude:         business.Latitude,
+			Longitude:        business.Longitude,
+			PhoneContact:     business.PhoneContact,
+			WhatsappContact:  business.WhatsappContact,
+			SocialInstagram:  business.SocialInstagram,
+			SocialTiktok:     business.SocialTiktok,
+			SocialWebsites:   business.SocialWebsites,
+			BusinessImages:   business.BusinessImages,
+			Certificates:     decryptBusinessCertificates(business.Certificates),
+			Hours:            business.Hours,
 		})
 	}
 
@@ -800,7 +805,7 @@ func (s *service) GetAllPosts(businessID string, accountID string) ([]models.Pos
 			TargetAction:   targetAction,
 		})
 	}
-	
+
 	if response == nil {
 		response = []models.PostResponse{}
 	}
@@ -810,13 +815,18 @@ func (s *service) GetAllPosts(businessID string, accountID string) ([]models.Pos
 
 func (s *service) GetSavedAndWishlistedShops(accountID string, filter string) (SavedAndWishlistedShopsResponse, error) {
 	emptyResp := SavedAndWishlistedShopsResponse{
-		SavedShopIDs:      []string{},
-		WishlistedShopIDs: []string{},
-		AllShopIDs:        []string{},
-		TotalSaved:        0,
-		TotalWishlisted:   0,
-		TotalShops:        0,
-		Shops:             []SavedShopItem{},
+		SavedShopIDs:          []string{},
+		WishlistedShopIDs:     []string{},
+		AllShopIDs:            []string{},
+		SavedMerchantIDs:      []string{},
+		WishlistedMerchantIDs: []string{},
+		AllMerchantIDs:        []string{},
+		TotalSaved:            0,
+		TotalWishlisted:       0,
+		TotalShops:            0,
+		TotalMerchants:        0,
+		Shops:                 []SavedShopItem{},
+		Merchants:             []SavedShopItem{},
 	}
 
 	if accountID == "" {
@@ -874,13 +884,18 @@ func (s *service) GetSavedAndWishlistedShops(accountID string, filter string) (S
 
 	if len(allBizIDs) == 0 {
 		return SavedAndWishlistedShopsResponse{
-			SavedShopIDs:      savedShopIDs,
-			WishlistedShopIDs: wishlistedShopIDs,
-			AllShopIDs:        allBizIDs,
-			TotalSaved:        len(savedShopIDs),
-			TotalWishlisted:   len(wishlistedShopIDs),
-			TotalShops:        0,
-			Shops:             []SavedShopItem{},
+			SavedShopIDs:          savedShopIDs,
+			WishlistedShopIDs:     wishlistedShopIDs,
+			AllShopIDs:            allBizIDs,
+			SavedMerchantIDs:      savedShopIDs,
+			WishlistedMerchantIDs: wishlistedShopIDs,
+			AllMerchantIDs:        allBizIDs,
+			TotalSaved:            len(savedShopIDs),
+			TotalWishlisted:       len(wishlistedShopIDs),
+			TotalShops:            0,
+			TotalMerchants:        0,
+			Shops:                 []SavedShopItem{},
+			Merchants:             []SavedShopItem{},
 		}, nil
 	}
 
@@ -994,13 +1009,17 @@ func (s *service) GetSavedAndWishlistedShops(accountID string, filter string) (S
 	}
 
 	return SavedAndWishlistedShopsResponse{
-		SavedShopIDs:      savedShopIDs,
-		WishlistedShopIDs: wishlistedShopIDs,
-		AllShopIDs:        allBizIDs,
-		TotalSaved:        len(savedShopIDs),
-		TotalWishlisted:   len(wishlistedShopIDs),
-		TotalShops:        len(shops),
-		Shops:             shops,
+		SavedShopIDs:          savedShopIDs,
+		WishlistedShopIDs:     wishlistedShopIDs,
+		AllShopIDs:            allBizIDs,
+		SavedMerchantIDs:      savedShopIDs,
+		WishlistedMerchantIDs: wishlistedShopIDs,
+		AllMerchantIDs:        allBizIDs,
+		TotalSaved:            len(savedShopIDs),
+		TotalWishlisted:       len(wishlistedShopIDs),
+		TotalShops:            len(shops),
+		TotalMerchants:        len(shops),
+		Shops:                 shops,
+		Merchants:             shops,
 	}, nil
 }
-

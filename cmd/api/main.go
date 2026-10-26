@@ -19,25 +19,25 @@ import (
 	"toentoen-backend/internal/domain/signal"
 
 	"toentoen-backend/internal/constants"
-	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/internal/domain/business_chat"
 	"toentoen-backend/internal/domain/customer/product"
 	"toentoen-backend/internal/domain/customer/profile"
+	customer_promotion "toentoen-backend/internal/domain/customer/promotion"
 	"toentoen-backend/internal/domain/customer/report"
 	"toentoen-backend/internal/domain/customer/review"
-	customer_promotion "toentoen-backend/internal/domain/customer/promotion"
 	"toentoen-backend/internal/domain/merchant/admin"
 	"toentoen-backend/internal/domain/merchant/analytics"
 	"toentoen-backend/internal/domain/merchant/business"
 	"toentoen-backend/internal/domain/merchant/catalog"
 	"toentoen-backend/internal/domain/merchant/post"
 	merchant_promotion "toentoen-backend/internal/domain/merchant/promotion"
+	"toentoen-backend/internal/domain/merchant/transfer"
 	"toentoen-backend/internal/domain/meta"
 	"toentoen-backend/internal/domain/notification"
+	"toentoen-backend/internal/domain/shared/models"
 	support_chat "toentoen-backend/internal/domain/support/chat"
 	support_feedback "toentoen-backend/internal/domain/support/feedback"
 	support_ticket "toentoen-backend/internal/domain/support/ticket"
-	"toentoen-backend/internal/domain/business_chat"
-	"toentoen-backend/internal/domain/merchant/transfer"
 	"toentoen-backend/internal/domain/webhook"
 
 	"toentoen-backend/internal/config"
@@ -57,8 +57,6 @@ import (
 	"github.com/gofiber/websocket/v2"
 	"github.com/joho/godotenv"
 )
-
-
 
 func main() {
 	// ==========================================
@@ -427,20 +425,10 @@ func main() {
 	authGroup.Post("/phone/verify-otp", authHandler.VerifyPhoneOTP)
 
 	// ==========================================
-	// ROUTES: CUSTOMER BUSINESS PROFILE & SHOPS
+	// ROUTES: CUSTOMER BUSINESS PROFILE & BOOKMARKS
 	// ==========================================
-	// Direct routes for FE Explore/Search: GET /shops/saved_and_wishlisted
-	app.Get("/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	app.Get("/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	api.Get("/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	api.Get("/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	api.Get("/customer/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	api.Get("/customer/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-
 	customerBusinessGroup := api.Group("/customer/businesses")
-	customerBusinessGroup.Get("/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	customerBusinessGroup.Get("/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	customerBusinessGroup.Get("/bookmarks", middlewares.RequireAuth, businessProfileHandler.GetBookmarks)
+	customerBusinessGroup.Get("/bookmarks", middlewares.OptionalAuth, businessProfileHandler.GetBookmarks)
 	customerBusinessGroup.Get("/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerBusinessGroup.Get("/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerBusinessGroup.Post("/:business_id/bookmark", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleBookmark)
@@ -534,7 +522,6 @@ func main() {
 	directNotifGroup.Delete("/:id", notifHandler.DeleteNotification)
 	directNotifGroup.Delete("/", notifHandler.DeleteAllNotifications)
 
-
 	// Endpoint Internal untuk Service toentoen-internal-operations (Trigger WebSocket & Push Notification)
 	api.Post("/internal/notifications", notifHandler.SendInternalNotification)
 
@@ -554,7 +541,8 @@ func main() {
 	api.Post("/customer/wishlist/:product_id", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.ToggleWishlist)
 	api.Post("/customer/products/:product_id/wishlist", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.ToggleWishlist)
 	api.Get("/customer/wishlist", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.GetMyWishlists)
-	api.Get("/customer/bookmarks", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.GetBookmarks)
+	api.Get("/customer/bookmarks", middlewares.OptionalAuth, businessProfileHandler.GetBookmarks)
+	app.Get("/customer/bookmarks", middlewares.OptionalAuth, businessProfileHandler.GetBookmarks)
 
 	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - CUSTOMER
@@ -892,10 +880,7 @@ func main() {
 	// ROUTES: CUSTOMER EXPLORE & ANALYTICS
 	// ==========================================
 	customerExploreGroup := api.Group("/customer/explore")
-	customerExploreGroup.Get("/shops/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	customerExploreGroup.Get("/shops/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	customerExploreGroup.Get("/saved_and_wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
-	customerExploreGroup.Get("/saved-and-wishlisted", middlewares.OptionalAuth, businessProfileHandler.GetSavedAndWishlistedShops)
+	customerExploreGroup.Get("/bookmarks", middlewares.OptionalAuth, businessProfileHandler.GetBookmarks)
 	customerExploreGroup.Get("/business/:id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/business/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/businesses/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
