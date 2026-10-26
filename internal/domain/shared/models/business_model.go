@@ -125,6 +125,7 @@ type Business struct {
 	IsActive      bool      `gorm:"default:true;column:is_active" json:"is_active"`	
 	IsVerified    bool      `gorm:"-" json:"is_verified"`
 	HasNIB        bool      `gorm:"-" json:"has_nib"`
+	ActivePromotions []BusinessActivePromotionItem `gorm:"-" json:"active_promotions"`
 	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
 

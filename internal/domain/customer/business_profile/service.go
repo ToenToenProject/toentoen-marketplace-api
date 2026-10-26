@@ -70,9 +70,13 @@ type SimpleProductResponse struct {
 	AverageRating  float64  `json:"average_rating"`
 	ReviewCount    int      `json:"review_count"`
 	StockStatus    string   `json:"stock_status"`
-	// Bundling Promotion support
-	IsBundle         bool    `json:"is_bundle"`
+
+	// Promosi & Bundling
+	IsPromoted       bool    `json:"is_promoted"`
 	PromotionID      *string `json:"promotion_id,omitempty"`
+	PromotionName    *string `json:"promotion_name,omitempty"`
+	DiscountSource   string  `json:"discount_source,omitempty"`
+	IsBundle         bool    `json:"is_bundle"`
 	BundleItemsCount int     `json:"bundle_items_count,omitempty"`
 }
 
@@ -116,10 +120,11 @@ type BusinessProfileResponse struct {
 
 	Hours []models.BusinessHour `json:"hours"`
 
-	RecentProducts    []SimpleProductResponse    `json:"recent_products"`
-	RecentPosts       []models.BusinessPost      `json:"recent_posts"`
-	SimilarBusinesses []models.Business          `json:"similar_businesses"`
-	RecentReviews     []models.Review            `json:"recent_reviews"`
+	ActivePromotions  []models.BusinessActivePromotionItem `json:"active_promotions"`
+	RecentProducts    []SimpleProductResponse              `json:"recent_products"`
+	RecentPosts       []models.BusinessPost                `json:"recent_posts"`
+	SimilarBusinesses []models.Business                    `json:"similar_businesses"`
+	RecentReviews     []models.Review                      `json:"recent_reviews"`
 }
 
 type Service interface {
@@ -197,13 +202,22 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		city = *business.City
 	}
 
+	activePromos, _ := s.repo.GetActivePromotions(businessID)
+	activePromoPosts, _ := s.repo.GetActivePromotionPosts(businessID)
+	activePromotionsList := buildActivePromotionsList(activePromos, activePromoPosts)
+	promoMap := buildProductPromoMap(activePromos)
+
 	recentProducts, _ := s.repo.GetRecentProducts(businessID, 3)
 	var mappedRecentProducts []SimpleProductResponse
 	if recentProducts == nil {
 		mappedRecentProducts = []SimpleProductResponse{}
 	} else {
 		for _, rp := range recentProducts {
-			mappedRecentProducts = append(mappedRecentProducts, mapToSimpleProduct(rp))
+			var promoItem *productPromoItem
+			if p, ok := promoMap[rp.ProductID]; ok {
+				promoItem = &p
+			}
+			mappedRecentProducts = append(mappedRecentProducts, mapToSimpleProduct(rp, promoItem))
 		}
 	}
 
@@ -274,7 +288,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		BusinessImages:  business.BusinessImages,
 		Certificates:    decryptBusinessCertificates(business.Certificates),
 		Hours:           business.Hours,
-
+		ActivePromotions: activePromotionsList,
 		RecentProducts:    mappedRecentProducts,
 		RecentPosts:       recentPosts,
 		SimilarBusinesses: similarBusinesses,
@@ -434,14 +448,175 @@ func (s *service) GetAllProductGroups(businessID string) ([]models.ProductGroup,
 	return groups, nil
 }
 
-func mapToSimpleProduct(p models.Product) SimpleProductResponse {
+type productPromoItem struct {
+	PromotionID    string
+	PromotionName  string
+	DiscountSource string
+	DiscountType   string
+	Discount       float64
+	MaxDiscount    *float64
+}
+
+func buildProductPromoMap(promos []models.Promotion) map[string]productPromoItem {
+	promoMap := make(map[string]productPromoItem)
+	for _, promo := range promos {
+		promoTitle := "Promo Spesial Toko"
+		if promo.PackageName != nil && strings.TrimSpace(*promo.PackageName) != "" {
+			promoTitle = strings.TrimSpace(*promo.PackageName)
+		} else if strings.TrimSpace(promo.Caption) != "" {
+			promoTitle = strings.TrimSpace(promo.Caption)
+		} else if promo.Post != nil && strings.TrimSpace(promo.Post.Content) != "" {
+			promoTitle = strings.TrimSpace(promo.Post.Content)
+		}
+
+		for _, pp := range promo.Products {
+			if _, exists := promoMap[pp.ProductID]; !exists {
+				discSource := pp.DiscountSource
+				if discSource == "" {
+					discSource = "promotion"
+				}
+				promoMap[pp.ProductID] = productPromoItem{
+					PromotionID:    promo.PromotionID,
+					PromotionName:  promoTitle,
+					DiscountSource: discSource,
+					DiscountType:   pp.DiscountType,
+					Discount:       pp.Discount,
+					MaxDiscount:    pp.MaxDiscount,
+				}
+			}
+		}
+
+		if promo.MainProductID != "" {
+			if _, exists := promoMap[promo.MainProductID]; !exists {
+				promoMap[promo.MainProductID] = productPromoItem{
+					PromotionID:    promo.PromotionID,
+					PromotionName:  promoTitle,
+					DiscountSource: "promotion",
+				}
+			}
+		}
+	}
+	return promoMap
+}
+
+func buildActivePromotionsList(promos []models.Promotion, posts []models.BusinessPost) []models.BusinessActivePromotionItem {
+	var list []models.BusinessActivePromotionItem
+	seenPromoIDs := make(map[string]bool)
+
+	for _, p := range promos {
+		if seenPromoIDs[p.PromotionID] {
+			continue
+		}
+		seenPromoIDs[p.PromotionID] = true
+
+		title := "Promo Spesial Toko"
+		if p.PackageName != nil && strings.TrimSpace(*p.PackageName) != "" {
+			title = strings.TrimSpace(*p.PackageName)
+		} else if strings.TrimSpace(p.Caption) != "" {
+			title = strings.TrimSpace(p.Caption)
+		} else if p.Post != nil && strings.TrimSpace(p.Post.Content) != "" {
+			title = strings.TrimSpace(p.Post.Content)
+		}
+
+		var banner *string
+		if p.PackageImage != nil && *p.PackageImage != "" {
+			banner = p.PackageImage
+		} else if p.Post != nil && len(p.Post.Images) > 0 {
+			banner = &p.Post.Images[0]
+		} else if len(p.Products) > 0 && p.Products[0].Product != nil && len(p.Products[0].Product.ProductPreview) > 0 {
+			banner = &p.Products[0].Product.ProductPreview[0]
+		} else if len(p.BundleItems) > 0 && p.BundleItems[0].Product != nil && len(p.BundleItems[0].Product.ProductPreview) > 0 {
+			banner = &p.BundleItems[0].Product.ProductPreview[0]
+		}
+
+		list = append(list, models.BusinessActivePromotionItem{
+			PromotionID:   p.PromotionID,
+			Title:         title,
+			Caption:       p.Caption,
+			BannerURL:     banner,
+			PromotionType: p.PromotionType,
+			DiscountPct:   p.SavingsPercentage,
+			StartAt:       p.StartAt,
+			EndAt:         p.EndAt,
+		})
+	}
+
+	for _, post := range posts {
+		postPromoID := "POST-" + post.PostID
+		if seenPromoIDs[postPromoID] {
+			continue
+		}
+		seenPromoIDs[postPromoID] = true
+
+		title := "Promo Toko"
+		if strings.TrimSpace(post.Content) != "" {
+			title = strings.TrimSpace(post.Content)
+		}
+
+		var banner *string
+		if len(post.Images) > 0 {
+			banner = &post.Images[0]
+		}
+
+		endAt := time.Now().Add(24 * time.Hour)
+		if post.PromotionEndAt != nil {
+			endAt = *post.PromotionEndAt
+		}
+
+		list = append(list, models.BusinessActivePromotionItem{
+			PromotionID:   postPromoID,
+			Title:         title,
+			Caption:       post.Content,
+			BannerURL:     banner,
+			PromotionType: "post_promo",
+			StartAt:       post.CreatedAt,
+			EndAt:         endAt,
+		})
+	}
+
+	if list == nil {
+		list = []models.BusinessActivePromotionItem{}
+	}
+	return list
+}
+
+func mapToSimpleProduct(p models.Product, promo *productPromoItem) SimpleProductResponse {
 	var originalPrice *float64
 	currentPrice := p.Price
 	var discountAmount float64
 	var discountPct float64
 	isDiscounted := false
+	discountType := p.DiscountType
 
-	if utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, time.Now()) {
+	isPromoted := false
+	var promoID *string
+	var promoName *string
+	discountSource := ""
+
+	if promo != nil {
+		isPromoted = true
+		promoID = &promo.PromotionID
+		promoName = &promo.PromotionName
+		discountSource = promo.DiscountSource
+		if discountSource == "" {
+			discountSource = "promotion"
+		}
+
+		if promo.DiscountType != "" && promo.Discount > 0 {
+			cut, pct := utils.CalculateProductDiscount(p.Price, promo.DiscountType, promo.Discount, promo.MaxDiscount)
+			if cut > 0 {
+				isDiscounted = true
+				currentPrice = p.Price - cut
+				orig := p.Price
+				originalPrice = &orig
+				discountAmount = cut
+				discountPct = pct
+				discountType = promo.DiscountType
+			}
+		}
+	}
+
+	if !isDiscounted && utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, time.Now()) {
 		cut, pct := utils.CalculateProductDiscount(p.Price, p.DiscountType, p.Discount, p.MaxDiscount)
 		if cut > 0 {
 			isDiscounted = true
@@ -450,6 +625,7 @@ func mapToSimpleProduct(p models.Product) SimpleProductResponse {
 			originalPrice = &orig
 			discountAmount = cut
 			discountPct = pct
+			discountSource = "product"
 		}
 	}
 
@@ -465,12 +641,16 @@ func mapToSimpleProduct(p models.Product) SimpleProductResponse {
 		Price:          currentPrice,
 		OriginalPrice:  originalPrice,
 		IsDiscounted:   isDiscounted,
-		DiscountType:   p.DiscountType,
+		DiscountType:   discountType,
 		DiscountAmount: discountAmount,
 		DiscountPct:    discountPct,
 		AverageRating:  p.AverageRating,
 		ReviewCount:    p.ReviewCount,
 		StockStatus:    stockStatus,
+		IsPromoted:     isPromoted,
+		PromotionID:    promoID,
+		PromotionName:  promoName,
+		DiscountSource: discountSource,
 	}
 }
 
@@ -479,6 +659,9 @@ func (s *service) GetAllProducts(businessID string, groupID string) ([]SimplePro
 	if err != nil {
 		return nil, err
 	}
+
+	activePromos, _ := s.repo.GetActivePromotions(businessID)
+	promoMap := buildProductPromoMap(activePromos)
 
 	var simpleProducts []SimpleProductResponse
 
@@ -519,6 +702,10 @@ func (s *service) GetAllProducts(businessID string, groupID string) ([]SimplePro
 			}
 
 			promoID := bp.PromotionID
+			promoTitle := "Promo Bundling Hemat"
+			if bp.PackageName != nil && strings.TrimSpace(*bp.PackageName) != "" {
+				promoTitle = strings.TrimSpace(*bp.PackageName)
+			}
 			simpleProducts = append(simpleProducts, SimpleProductResponse{
 				ProductID:        bp.PromotionID,
 				ProductName:      pkgName,
@@ -530,15 +717,22 @@ func (s *service) GetAllProducts(businessID string, groupID string) ([]SimplePro
 				DiscountAmount:   savAmt,
 				DiscountPct:      savPct,
 				StockStatus:      stockStatus,
-				IsBundle:         true,
+				IsPromoted:       true,
 				PromotionID:      &promoID,
+				PromotionName:    &promoTitle,
+				DiscountSource:   "promotion",
+				IsBundle:         true,
 				BundleItemsCount: len(bp.BundleItems),
 			})
 		}
 	}
 
 	for _, p := range products {
-		simpleProducts = append(simpleProducts, mapToSimpleProduct(p))
+		var promoItem *productPromoItem
+		if promo, ok := promoMap[p.ProductID]; ok {
+			promoItem = &promo
+		}
+		simpleProducts = append(simpleProducts, mapToSimpleProduct(p, promoItem))
 	}
 	if simpleProducts == nil {
 		simpleProducts = []SimpleProductResponse{}

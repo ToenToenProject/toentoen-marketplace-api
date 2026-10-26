@@ -41,6 +41,8 @@ type Repository interface {
 	GetAllProductGroups(businessID string) ([]models.ProductGroup, error)
 	HasActivePromotion(businessID string) bool
 	GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error)
+	GetActivePromotions(businessID string) ([]models.Promotion, error)
+	GetActivePromotionPosts(businessID string) ([]models.BusinessPost, error)
 	GetAllProducts(businessID string, groupID string) ([]models.Product, error)
 	GetAllPosts(businessID string) ([]models.BusinessPost, error)
 	GetPostLikesByAccount(accountID string, postIDs []string) (map[string]bool, error)
@@ -321,6 +323,30 @@ func (r *repository) GetActiveBundlingPromotions(businessID string) ([]models.Pr
 		Order("created_at DESC").
 		Find(&promos).Error
 	return promos, err
+}
+
+func (r *repository) GetActivePromotions(businessID string) ([]models.Promotion, error) {
+	var promos []models.Promotion
+	now := time.Now()
+	err := r.db.
+		Preload("Products.Product").
+		Preload("BundleItems.Product").
+		Preload("Post").
+		Preload("MainProduct").
+		Where("business_id = ? AND status = ? AND start_at <= ? AND end_at >= ?", businessID, models.PromotionStatusActive, now, now).
+		Order("created_at DESC").
+		Find(&promos).Error
+	return promos, err
+}
+
+func (r *repository) GetActivePromotionPosts(businessID string) ([]models.BusinessPost, error) {
+	var posts []models.BusinessPost
+	now := time.Now()
+	err := r.db.
+		Where("business_id = ? AND is_promotion = ? AND (promotion_end_at IS NULL OR promotion_end_at >= ?)", businessID, true, now).
+		Order("created_at DESC").
+		Find(&posts).Error
+	return posts, err
 }
 
 func (r *repository) GetAllProducts(businessID string, groupID string) ([]models.Product, error) {

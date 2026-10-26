@@ -103,6 +103,50 @@ func (m *mockBusinessProfileRepo) GetBusinessesByIDs(businessIDs []string) ([]mo
 	return []models.Business{}, nil
 }
 
+func (m *mockBusinessProfileRepo) GetActivePromotions(businessID string) ([]models.Promotion, error) {
+	return []models.Promotion{}, nil
+}
+
+func (m *mockBusinessProfileRepo) GetActivePromotionPosts(businessID string) ([]models.BusinessPost, error) {
+	return []models.BusinessPost{}, nil
+}
+
+func (m *mockBusinessProfileRepo) GetAllProducts(businessID string, groupID string) ([]models.Product, error) {
+	return []models.Product{}, nil
+}
+
+func (m *mockBusinessProfileRepo) GetActiveBundlingPromotions(businessID string) ([]models.Promotion, error) {
+	return []models.Promotion{}, nil
+}
+
+func (m *mockBusinessProfileRepo) HasActivePromotion(businessID string) bool {
+	return false
+}
+
+func (m *mockBusinessProfileRepo) GetAllProductGroups(businessID string) ([]models.ProductGroup, error) {
+	return []models.ProductGroup{}, nil
+}
+
+func (m *mockBusinessProfileRepo) GetAllPosts(businessID string) ([]models.BusinessPost, error) {
+	return []models.BusinessPost{}, nil
+}
+
+func (m *mockBusinessProfileRepo) GetPostLikesByAccount(accountID string, postIDs []string) (map[string]bool, error) {
+	return map[string]bool{}, nil
+}
+
+func (m *mockBusinessProfileRepo) GetReviewSummary(businessID string) (*models.ReviewSummary, error) {
+	return &models.ReviewSummary{}, nil
+}
+
+func (m *mockBusinessProfileRepo) GetBookmarkedBusinesses(accountID string) ([]models.Business, error) {
+	return []models.Business{}, nil
+}
+
+func (m *mockBusinessProfileRepo) ToggleBookmark(accountID, businessID string) (bool, error) {
+	return true, nil
+}
+
 
 func TestGetBusinessProfile_LikeFields(t *testing.T) {
 	mockRepo := &mockBusinessProfileRepo{

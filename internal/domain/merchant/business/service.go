@@ -407,6 +407,89 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 		business.Tags = filteredTags
 	}
 
+	// Populate ActivePromotions
+	var activePromos []models.BusinessActivePromotionItem
+	if database.DB != nil {
+		now := time.Now()
+		var rawPromos []models.Promotion
+		if errPromo := database.DB.Preload("Products.Product").
+			Preload("BundleItems.Product").
+			Preload("Post").
+			Where("business_id = ? AND status = ? AND start_at <= ? AND end_at >= ?", businessID, models.PromotionStatusActive, now, now).
+			Order("created_at DESC").
+			Find(&rawPromos).Error; errPromo == nil {
+			for _, p := range rawPromos {
+				title := "Promo Spesial Toko"
+				if p.PackageName != nil && strings.TrimSpace(*p.PackageName) != "" {
+					title = strings.TrimSpace(*p.PackageName)
+				} else if strings.TrimSpace(p.Caption) != "" {
+					title = strings.TrimSpace(p.Caption)
+				} else if p.Post != nil && strings.TrimSpace(p.Post.Content) != "" {
+					title = strings.TrimSpace(p.Post.Content)
+				}
+
+				var banner *string
+				if p.PackageImage != nil && *p.PackageImage != "" {
+					banner = p.PackageImage
+				} else if p.Post != nil && len(p.Post.Images) > 0 {
+					banner = &p.Post.Images[0]
+				} else if len(p.Products) > 0 && p.Products[0].Product != nil && len(p.Products[0].Product.ProductPreview) > 0 {
+					banner = &p.Products[0].Product.ProductPreview[0]
+				} else if len(p.BundleItems) > 0 && p.BundleItems[0].Product != nil && len(p.BundleItems[0].Product.ProductPreview) > 0 {
+					banner = &p.BundleItems[0].Product.ProductPreview[0]
+				}
+
+				activePromos = append(activePromos, models.BusinessActivePromotionItem{
+					PromotionID:   p.PromotionID,
+					Title:         title,
+					Caption:       p.Caption,
+					BannerURL:     banner,
+					PromotionType: p.PromotionType,
+					DiscountPct:   p.SavingsPercentage,
+					StartAt:       p.StartAt,
+					EndAt:         p.EndAt,
+				})
+			}
+		}
+
+		var rawPosts []models.BusinessPost
+		if errPosts := database.DB.Where("business_id = ? AND is_promotion = ? AND (promotion_end_at IS NULL OR promotion_end_at >= ?)", businessID, true, now).
+			Order("created_at DESC").
+			Find(&rawPosts).Error; errPosts == nil {
+			for _, post := range rawPosts {
+				title := "Promo Toko"
+				if strings.TrimSpace(post.Content) != "" {
+					title = strings.TrimSpace(post.Content)
+				}
+
+				var banner *string
+				if len(post.Images) > 0 {
+					banner = &post.Images[0]
+				}
+
+				endAt := time.Now().Add(24 * time.Hour)
+				if post.PromotionEndAt != nil {
+					endAt = *post.PromotionEndAt
+				}
+
+				activePromos = append(activePromos, models.BusinessActivePromotionItem{
+					PromotionID:   "POST-" + post.PostID,
+					Title:         title,
+					Caption:       post.Content,
+					BannerURL:     banner,
+					PromotionType: "post_promo",
+					StartAt:       post.CreatedAt,
+					EndAt:         endAt,
+				})
+			}
+		}
+	}
+
+	if activePromos == nil {
+		activePromos = []models.BusinessActivePromotionItem{}
+	}
+	business.ActivePromotions = activePromos
+
 	return business, nil
 }
 

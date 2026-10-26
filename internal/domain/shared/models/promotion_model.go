@@ -133,8 +133,19 @@ func (PromotionEvent) TableName() string {
 }
 
 // ==========================================
-// 2. DTO UNTUK REQUEST & RESPONSE (MERCHANT)
+// 2. DTO UNTUK REQUEST & RESPONSE (MERCHANT & CUSTOMER)
 // ==========================================
+
+type BusinessActivePromotionItem struct {
+	PromotionID   string    `json:"promotion_id"`
+	Title         string    `json:"title"`
+	Caption       string    `json:"caption"`
+	BannerURL     *string   `json:"banner_url"`
+	PromotionType string    `json:"promotion_type,omitempty"`
+	DiscountPct   *float64  `json:"discount_pct,omitempty"`
+	StartAt       time.Time `json:"start_at"`
+	EndAt         time.Time `json:"end_at"`
+}
 
 type ActivePromotionInfo struct {
 	PromotionID   string `json:"promotion_id"`

@@ -2,6 +2,7 @@ package product
 
 import (
 	"errors"
+	"strings"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -29,6 +30,13 @@ type ProductDetailResponse struct {
 	BusinessAvatar     *string  `json:"business_avatar,omitempty"`
 	StockStatus        string   `json:"stock_status"`
 
+	// Informasi Promosi yang Berlaku
+	IsPromoted      bool                               `json:"is_promoted"`
+	PromotionID     *string                            `json:"promotion_id,omitempty"`
+	PromotionName   *string                            `json:"promotion_name,omitempty"`
+	DiscountSource  string                             `json:"discount_source,omitempty"`
+	ActivePromotion *models.BusinessActivePromotionItem `json:"active_promotion,omitempty"`
+
 	PremiumSimilarProducts []models.ProductListItem `json:"premium_similar_products"`
 	SimilarProducts        []models.ProductListItem `json:"similar_products"`
 }
@@ -51,14 +59,76 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		return nil, errors.New("produk tidak ditemukan")
 	}
 
-	// Calculate prices
+	// Calculate prices & promotions
 	finalPrice := prod.Price
 	var originalPrice *float64
 	var discountAmount float64
 	var discountPct float64
 	isDiscounted := false
+	discountType := prod.DiscountType
+	isPromoted := false
+	var promoID *string
+	var promoName *string
+	discountSource := ""
+	var activePromoItem *models.BusinessActivePromotionItem
 
-	if utils.IsDiscountActive(prod.Discount, prod.DiscountStartAt, prod.DiscountEndAt, time.Now()) {
+	promo, promoProd, _ := s.repo.GetActivePromotionForProduct(bus.BusinessID, prod.ProductID)
+	if promo != nil {
+		isPromoted = true
+		promoID = &promo.PromotionID
+		title := "Promo Spesial Toko"
+		if promo.PackageName != nil && strings.TrimSpace(*promo.PackageName) != "" {
+			title = strings.TrimSpace(*promo.PackageName)
+		} else if strings.TrimSpace(promo.Caption) != "" {
+			title = strings.TrimSpace(promo.Caption)
+		} else if promo.Post != nil && strings.TrimSpace(promo.Post.Content) != "" {
+			title = strings.TrimSpace(promo.Post.Content)
+		}
+		promoName = &title
+
+		var banner *string
+		if promo.PackageImage != nil && *promo.PackageImage != "" {
+			banner = promo.PackageImage
+		} else if promo.Post != nil && len(promo.Post.Images) > 0 {
+			banner = &promo.Post.Images[0]
+		} else if len(prod.ProductPreview) > 0 {
+			banner = &prod.ProductPreview[0]
+		}
+
+		activePromoItem = &models.BusinessActivePromotionItem{
+			PromotionID:   promo.PromotionID,
+			Title:         title,
+			Caption:       promo.Caption,
+			BannerURL:     banner,
+			PromotionType: promo.PromotionType,
+			DiscountPct:   promo.SavingsPercentage,
+			StartAt:       promo.StartAt,
+			EndAt:         promo.EndAt,
+		}
+
+		if promoProd != nil {
+			discountSource = promoProd.DiscountSource
+			if discountSource == "" {
+				discountSource = "promotion"
+			}
+			if promoProd.DiscountType != "" && promoProd.Discount > 0 {
+				origPrice := prod.Price
+				cut, pct := utils.CalculateProductDiscount(origPrice, promoProd.DiscountType, promoProd.Discount, promoProd.MaxDiscount)
+				if cut > 0 {
+					isDiscounted = true
+					finalPrice = origPrice - cut
+					originalPrice = &origPrice
+					discountAmount = cut
+					discountPct = pct
+					discountType = promoProd.DiscountType
+				}
+			}
+		} else {
+			discountSource = "promotion"
+		}
+	}
+
+	if !isDiscounted && utils.IsDiscountActive(prod.Discount, prod.DiscountStartAt, prod.DiscountEndAt, time.Now()) {
 		cut, pct := utils.CalculateProductDiscount(prod.Price, prod.DiscountType, prod.Discount, prod.MaxDiscount)
 		if cut > 0 {
 			isDiscounted = true
@@ -67,6 +137,10 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 			originalPrice = &original
 			discountAmount = cut
 			discountPct = pct
+			discountType = prod.DiscountType
+			if discountSource == "" {
+				discountSource = "product"
+			}
 		}
 	}
 
@@ -92,7 +166,7 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		Price:              finalPrice,
 		OriginalPrice:      originalPrice,
 		IsDiscounted:       isDiscounted,
-		DiscountType:       prod.DiscountType,
+		DiscountType:       discountType,
 		DiscountAmount:     discountAmount,
 		DiscountPct:        discountPct,
 		Tags:               prod.Tags,
@@ -101,6 +175,11 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		BusinessName:       bName,
 		BusinessAvatar:     bus.LogoURL,
 		StockStatus:        stockStatus,
+		IsPromoted:         isPromoted,
+		PromotionID:        promoID,
+		PromotionName:      promoName,
+		DiscountSource:     discountSource,
+		ActivePromotion:    activePromoItem,
 	}
 
 	// Fetch similar products

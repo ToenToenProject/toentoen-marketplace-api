@@ -19,6 +19,7 @@ import (
 	"toentoen-backend/internal/domain/signal"
 
 	"toentoen-backend/internal/constants"
+	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/customer/product"
 	"toentoen-backend/internal/domain/customer/profile"
 	"toentoen-backend/internal/domain/customer/report"
@@ -449,8 +450,15 @@ func main() {
 	// Products
 	customerBusinessGroup.Get("/:business_id/product-groups", businessProfileHandler.GetProductGroups)
 	customerBusinessGroup.Get("/:business_id/products", businessProfileHandler.GetProducts)
+	customerBusinessGroup.Get("/:business_id/products/", businessProfileHandler.GetProducts)
 	customerBusinessGroup.Get("/:business_id/product-reviews/summary", productInteractionHandler.GetBusinessProductReviewsSummary)
 	customerBusinessGroup.Get("/:business_id/posts", middlewares.OptionalAuth, businessProfileHandler.GetPosts)
+
+	// Direct aliases for customer business products
+	api.Get("/customer/businesses/:business_id/products", businessProfileHandler.GetProducts)
+	api.Get("/customer/businesses/:business_id/products/", businessProfileHandler.GetProducts)
+	app.Get("/customer/businesses/:business_id/products", businessProfileHandler.GetProducts)
+	app.Get("/customer/businesses/:business_id/products/", businessProfileHandler.GetProducts)
 
 	// Business Like endpoints & alias routes
 	api.Post("/business/:id/like", middlewares.RequireAuth, middlewares.RequireEmailVerified, businessProfileHandler.ToggleLike)
@@ -596,8 +604,24 @@ func main() {
 	businessReviewGroup.Post("/:review_id/report", middlewares.RequireAuth, middlewares.RequireEmailVerified, reportHandler.CreateReport)
 
 	publicProductRoutes := api.Group("/products")
-	// 1. Detail Produk
+	// 1. Detail Produk (dan variasi rute detail)
 	publicProductRoutes.Get("/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	publicProductRoutes.Get("/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	publicProductRoutes.Get("/:product_id/detail/", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+
+	// Aliases untuk customer product detail
+	api.Get("/customer/products/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	api.Get("/customer/products/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	api.Get("/customer/products/:product_id/", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	api.Get("/customer/products/:product_id/detail/", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	api.Get("/products/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	api.Get("/products/:product_id/detail/", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+
+	// Direct app aliases (tanpa /api/v1)
+	app.Get("/products/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	app.Get("/products/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	app.Get("/customer/products/:product_id", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
+	app.Get("/customer/products/:product_id/detail", middlewares.OptionalAuth, productDetailHandler.GetProductDetail)
 
 	// 2. Review Produk (Ulasan Berbintang 1-5 + Min 10 Kata)
 	publicProductRoutes.Post("/:product_id/reviews", middlewares.RequireAuth, middlewares.RequireEmailVerified, productInteractionHandler.AddProductReview)
@@ -679,6 +703,45 @@ func main() {
 
 	// Admin / Owner Shared Access (Products, Posts, Analytics, Business Detail) dengan BusinessAccessGuard
 	sharedAccess := middlewares.AllowRoles("owner", "business_admin")
+
+	// Smart Dispatcher: GET /api/v1/business/:business_id (Profil Toko & Promosi Aktif)
+	// Memungkinkan customer, guest, dan merchant mengakses data profil/detail toko beserta active_promotions tanpa terhalang 401/403.
+	businessProfileDispatcher := func(c *fiber.Ctx) error {
+		_ = middlewares.OptionalAuth(c)
+		role, _ := c.Locals("role").(string)
+		accountID, _ := c.Locals("account_id").(string)
+		businessID := strings.TrimSpace(c.Params("business_id"))
+		if businessID == "" {
+			businessID = strings.TrimSpace(c.Params("id"))
+		}
+
+		if (role == "owner" || role == "business_admin") && accountID != "" && businessID != "" {
+			var isOwner bool
+			var b models.Business
+			if err := database.DB.Select("account_id").Where("business_id = ?", businessID).First(&b).Error; err == nil {
+				if b.AccountID == accountID {
+					isOwner = true
+				}
+			}
+			if isOwner {
+				return businessHandler.GetBusinessDetail(c)
+			}
+			var adminCount int64
+			if err := database.DB.Table("business_admins").
+				Where("business_id = ? AND account_id = ? AND status = 'active'", businessID, accountID).
+				Count(&adminCount).Error; err == nil && adminCount > 0 {
+				return businessHandler.GetBusinessDetail(c)
+			}
+		}
+
+		// Fallback ke profil publik toko (dengan array active_promotions)
+		return businessProfileHandler.GetProfile(c)
+	}
+
+	api.Get("/business/:business_id", businessProfileDispatcher)
+	api.Get("/business/:business_id/", businessProfileDispatcher)
+	app.Get("/business/:business_id", businessProfileDispatcher)
+	app.Get("/business/:business_id/", businessProfileDispatcher)
 
 	// Business Root Group (RequireAuth)
 	businessGroup := api.Group("/business", middlewares.RequireAuth)

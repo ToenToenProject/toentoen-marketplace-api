@@ -1,6 +1,7 @@
 package product
 
 import (
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -9,6 +10,7 @@ import (
 type ProductDetailRepository interface {
 	GetProductWithBusiness(productID string) (*models.Product, *models.Business, error)
 	GetSimilarProducts(tags []string, limit int, excludeProductID string) ([]models.Product, error)
+	GetActivePromotionForProduct(businessID, productID string) (*models.Promotion, *models.PromotionProduct, error)
 }
 
 type productDetailRepository struct {
@@ -51,3 +53,41 @@ func (r *productDetailRepository) GetSimilarProducts(tags []string, limit int, e
 
 	return products, nil
 }
+
+func (r *productDetailRepository) GetActivePromotionForProduct(businessID, productID string) (*models.Promotion, *models.PromotionProduct, error) {
+	now := time.Now()
+
+	// 1. Cek dari tabel promotion_products & promotions
+	var pp models.PromotionProduct
+	err := r.db.
+		Preload("Product").
+		Joins("JOIN promotions p ON p.promotion_id = promotion_products.promotion_id").
+		Where("p.business_id = ? AND promotion_products.product_id = ? AND p.status = ? AND p.start_at <= ? AND p.end_at >= ?",
+			businessID, productID, models.PromotionStatusActive, now, now).
+		Order("p.created_at DESC").
+		First(&pp).Error
+
+	if err == nil {
+		var promo models.Promotion
+		if errPromo := r.db.Preload("Post").Preload("MainProduct").Where("promotion_id = ?", pp.PromotionID).First(&promo).Error; errPromo == nil {
+			return &promo, &pp, nil
+		}
+	}
+
+	// 2. Cek jika produk merupakan main_product_id dari promosi aktif
+	var promo models.Promotion
+	errMain := r.db.
+		Preload("Post").
+		Preload("MainProduct").
+		Where("business_id = ? AND main_product_id = ? AND status = ? AND start_at <= ? AND end_at >= ?",
+			businessID, productID, models.PromotionStatusActive, now, now).
+		Order("created_at DESC").
+		First(&promo).Error
+
+	if errMain == nil {
+		return &promo, nil, nil
+	}
+
+	return nil, nil, gorm.ErrRecordNotFound
+}
+
