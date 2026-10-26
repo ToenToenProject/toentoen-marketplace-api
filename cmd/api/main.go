@@ -707,7 +707,6 @@ func main() {
 	// Smart Dispatcher: GET /api/v1/business/:business_id (Profil Toko & Promosi Aktif)
 	// Memungkinkan customer, guest, dan merchant mengakses data profil/detail toko beserta active_promotions tanpa terhalang 401/403.
 	businessProfileDispatcher := func(c *fiber.Ctx) error {
-		_ = middlewares.OptionalAuth(c)
 		role, _ := c.Locals("role").(string)
 		accountID, _ := c.Locals("account_id").(string)
 		businessID := strings.TrimSpace(c.Params("business_id"))
@@ -738,10 +737,10 @@ func main() {
 		return businessProfileHandler.GetProfile(c)
 	}
 
-	api.Get("/business/:business_id", businessProfileDispatcher)
-	api.Get("/business/:business_id/", businessProfileDispatcher)
-	app.Get("/business/:business_id", businessProfileDispatcher)
-	app.Get("/business/:business_id/", businessProfileDispatcher)
+	api.Get("/business/:business_id", middlewares.OptionalAuth, businessProfileDispatcher)
+	api.Get("/business/:business_id/", middlewares.OptionalAuth, businessProfileDispatcher)
+	app.Get("/business/:business_id", middlewares.OptionalAuth, businessProfileDispatcher)
+	app.Get("/business/:business_id/", middlewares.OptionalAuth, businessProfileDispatcher)
 
 	// Business Root Group (RequireAuth)
 	businessGroup := api.Group("/business", middlewares.RequireAuth)
