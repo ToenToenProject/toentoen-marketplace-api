@@ -146,11 +146,23 @@ func (s *packageService) CalculatePackagePrice(
 		potentialSavings = 0
 	}
 
+	var packageImageURL string
+	var packagePreview []string
+	for _, pid := range productIDs {
+		if p, ok := prodMap[pid]; ok && len(p.ProductPreview) > 0 {
+			packageImageURL = p.ProductPreview[0]
+			packagePreview = p.ProductPreview
+			break
+		}
+	}
+
 	return &models.CalculatePackageResponse{
 		TotalNormalPrice:    totalNormalPrice,
 		TotalEffectivePrice: totalEffectivePrice,
 		DefaultPackagePrice: totalEffectivePrice,
 		PotentialSavings:    potentialSavings,
+		PackageImageURL:     packageImageURL,
+		PackagePreview:      packagePreview,
 		Items:               items,
 	}, nil
 }
@@ -261,12 +273,17 @@ func (s *packageService) CreatePackage(
 		savingsPercentage = math.Round((savingsAmount/totalEffectivePrice)*10000) / 100
 	}
 
-	// Gambar paket
-	previews := input.ProductPreview
-	if len(previews) == 0 {
-		if firstProd, ok := prodMap[productIDs[0]]; ok && len(firstProd.ProductPreview) > 0 {
-			previews = []string{firstProd.ProductPreview[0]}
+	// Gambar paket: otomatis mengambil foto dari item pertama dari produk yang dipilih
+	var previews []string
+	for _, pid := range productIDs {
+		if p, ok := prodMap[pid]; ok && len(p.ProductPreview) > 0 {
+			previews = p.ProductPreview
+			break
 		}
+	}
+	// Jika merchant secara eksplisit menyertakan custom preview, gunakan sebagai override
+	if len(input.ProductPreview) > 0 {
+		previews = input.ProductPreview
 	}
 
 	stockType := strings.TrimSpace(input.StockType)
@@ -425,6 +442,16 @@ func (s *packageService) UpdatePackage(
 
 		existing.OriginalPackagePrice = &totalNormalPrice
 		existing.BaseEffectivePrice = &totalEffectivePrice
+
+		// Jika merchant tidak mengirimkan custom ProductPreview, sinkronkan gambar ke produk pertama yang baru
+		if input.ProductPreview == nil {
+			for _, pid := range productIDs {
+				if p, ok := prodMap[pid]; ok && len(p.ProductPreview) > 0 {
+					existing.ProductPreview = p.ProductPreview
+					break
+				}
+			}
+		}
 	}
 
 	// Update harga paket

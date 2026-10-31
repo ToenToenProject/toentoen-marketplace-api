@@ -270,6 +270,8 @@ type CalculatePackageResponse struct {
 	TotalEffectivePrice float64                      `json:"total_effective_price"`
 	DefaultPackagePrice float64                      `json:"default_package_price"`
 	PotentialSavings    float64                      `json:"potential_savings"`
+	PackageImageURL     string                       `json:"package_image_url,omitempty"`
+	PackagePreview      []string                     `json:"package_preview,omitempty"`
 	Items               []CalculatePackageItemDetail `json:"items"`
 }
 

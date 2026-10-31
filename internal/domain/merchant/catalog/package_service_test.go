@@ -104,6 +104,7 @@ func TestCalculatePackagePrice(t *testing.T) {
 		ProductID:       "PRD-A",
 		BusinessID:      "BUS-1",
 		ProductName:     "Product A",
+		ProductPreview:  []string{"https://img.toentoen.com/prd-a.jpg"},
 		Price:           12000,
 		Discount:        2000,
 		DiscountType:    "nominal",
@@ -114,11 +115,12 @@ func TestCalculatePackagePrice(t *testing.T) {
 
 	// Product B: 10.000 tanpa diskon (harga efektif 10.000)
 	repo.products["PRD-B"] = models.Product{
-		ProductID:   "PRD-B",
-		BusinessID:  "BUS-1",
-		ProductName: "Product B",
-		Price:       10000,
-		IsActive:    true,
+		ProductID:      "PRD-B",
+		BusinessID:     "BUS-1",
+		ProductName:    "Product B",
+		ProductPreview: []string{"https://img.toentoen.com/prd-b.jpg"},
+		Price:          10000,
+		IsActive:       true,
 	}
 
 	// 1. Validasi minimal 2 produk
@@ -159,6 +161,10 @@ func TestCalculatePackagePrice(t *testing.T) {
 	if res.PotentialSavings != 2000 {
 		t.Errorf("expected PotentialSavings 2000, got %v", res.PotentialSavings)
 	}
+
+	if res.PackageImageURL != "https://img.toentoen.com/prd-a.jpg" {
+		t.Errorf("expected PackageImageURL to match first product image, got %v", res.PackageImageURL)
+	}
 }
 
 func TestCreatePackagePricingRules(t *testing.T) {
@@ -173,6 +179,7 @@ func TestCreatePackagePricingRules(t *testing.T) {
 		ProductID:       "PRD-A",
 		BusinessID:      "BUS-1",
 		ProductName:     "Product A",
+		ProductPreview:  []string{"https://img.toentoen.com/prd-a.jpg"},
 		Price:           12000,
 		Discount:        2000,
 		DiscountType:    "nominal",
@@ -218,6 +225,9 @@ func TestCreatePackagePricingRules(t *testing.T) {
 	}
 	if pkgDef.SavingsAmount != 0 {
 		t.Errorf("expected savings 0, got %v", pkgDef.SavingsAmount)
+	}
+	if len(pkgDef.ProductPreview) == 0 || pkgDef.ProductPreview[0] != "https://img.toentoen.com/prd-a.jpg" {
+		t.Errorf("expected package to take image from first product, got %v", pkgDef.ProductPreview)
 	}
 
 	// Skenario 3: Merchant memberi diskon tambahan menjadi 10.000 (diskon 50%) -> SUKSES
