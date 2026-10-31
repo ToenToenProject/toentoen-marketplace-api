@@ -29,6 +29,14 @@ type Product struct {
 	DiscountStartAt *time.Time `gorm:"column:discount_start_at" json:"discount_start_at"`
 	DiscountEndAt   *time.Time `gorm:"column:discount_end_at" json:"discount_end_at"`
 
+	// Fitur Paket Produk (Standalone Package)
+	IsPackage                bool                 `gorm:"column:is_package;default:false;index" json:"is_package"`
+	OriginalPackagePrice     *float64             `gorm:"column:original_package_price" json:"original_package_price,omitempty"`
+	BaseEffectivePrice       *float64             `gorm:"column:base_effective_price" json:"base_effective_price,omitempty"`
+	PackageSavingsAmount     *float64             `gorm:"column:package_savings_amount" json:"package_savings_amount,omitempty"`
+	PackageSavingsPercentage *float64             `gorm:"column:package_savings_percentage" json:"package_savings_percentage,omitempty"`
+	PackageItems             []ProductPackageItem `gorm:"foreignKey:PackageProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"package_items,omitempty"`
+
 	// 🪄 KOLOM VIRTUAL HASIL SUBQUERY (Aman, tidak memicu error migrasi/gorm insert)
 	HasVariants bool    `gorm:"->;column:has_variants" json:"has_variants"`
 	MinPrice    float64 `gorm:"->;column:min_price" json:"min_price"`
@@ -66,6 +74,23 @@ type ProductVariant struct {
 	IsActive        bool      `gorm:"column:is_active;default:true" json:"is_active"`
 	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+type ProductPackageItem struct {
+	PackageProductID   string    `gorm:"primaryKey;column:package_product_id" json:"package_product_id"`
+	ItemProductID      string    `gorm:"primaryKey;column:item_product_id" json:"item_product_id"`
+	Quantity           int       `gorm:"column:quantity;default:1" json:"quantity"`
+	ItemNormalPrice    float64   `gorm:"column:item_normal_price;default:0" json:"item_normal_price"`
+	ItemEffectivePrice float64   `gorm:"column:item_effective_price;default:0" json:"item_effective_price"`
+	HasDiscount        bool      `gorm:"column:has_discount;default:false" json:"has_discount"`
+	CreatedAt          time.Time `gorm:"column:created_at" json:"created_at"`
+
+	// Relasi
+	ItemProduct *Product `gorm:"foreignKey:ItemProductID;references:ProductID" json:"product,omitempty"`
+}
+
+func (ProductPackageItem) TableName() string {
+	return "product_package_items"
 }
 
 // ==========================================
@@ -211,4 +236,94 @@ type ProductDetailResponse struct {
 	UpdatedAt    time.Time        `json:"updated_at"`
 	Group        *ProductGroup    `json:"product_group,omitempty"`
 	Variants     []ProductVariant `json:"variants"`
+}
+
+// ==========================================
+// 3. DTO UNTUK FITUR PAKET PRODUK (STANDALONE PACKAGE)
+// ==========================================
+
+type PackageProductItemInput struct {
+	ProductID string `json:"product_id" validate:"required"`
+	Quantity  int    `json:"quantity" validate:"omitempty,min=1"`
+}
+
+type CalculatePackageInput struct {
+	Products []PackageProductItemInput `json:"products" validate:"required,min=2,max=20"`
+}
+
+type CalculatePackageItemDetail struct {
+	ProductID              string  `json:"product_id"`
+	ProductName            string  `json:"product_name"`
+	ImageURL               string  `json:"image_url"`
+	Quantity               int     `json:"quantity"`
+	NormalPrice            float64 `json:"normal_price"`
+	SubtotalNormalPrice    float64 `json:"subtotal_normal_price"`
+	HasExistingDiscount    bool    `json:"has_existing_discount"`
+	DiscountType           string  `json:"discount_type,omitempty"`
+	DiscountValue          float64 `json:"discount_value,omitempty"`
+	EffectivePrice         float64 `json:"effective_price"`
+	SubtotalEffectivePrice float64 `json:"subtotal_effective_price"`
+}
+
+type CalculatePackageResponse struct {
+	TotalNormalPrice    float64                      `json:"total_normal_price"`
+	TotalEffectivePrice float64                      `json:"total_effective_price"`
+	DefaultPackagePrice float64                      `json:"default_package_price"`
+	PotentialSavings    float64                      `json:"potential_savings"`
+	Items               []CalculatePackageItemDetail `json:"items"`
+}
+
+type CreatePackageInput struct {
+	PackageName        string                    `json:"package_name" validate:"required,min=3,max=100"`
+	ProductDescription string                    `json:"product_description" validate:"omitempty,max=1000"`
+	ProductGroupID     *string                   `json:"product_group_id"`
+	ProductPreview     []string                  `json:"product_preview" validate:"omitempty,max=10"`
+	PackagePrice       float64                   `json:"package_price" validate:"required,gt=0"`
+	StockType          string                    `json:"stock_type"` // in_stock, out_of_stock, etc.
+	Products           []PackageProductItemInput `json:"products" validate:"required,min=2,max=20"`
+}
+
+type UpdatePackageInput struct {
+	PackageName        *string                    `json:"package_name" validate:"omitempty,min=3,max=100"`
+	ProductDescription *string                    `json:"product_description" validate:"omitempty,max=1000"`
+	ProductGroupID     *string                    `json:"product_group_id"`
+	ProductPreview     *[]string                  `json:"product_preview" validate:"omitempty,max=10"`
+	PackagePrice       *float64                   `json:"package_price" validate:"omitempty,gt=0"`
+	StockType          *string                    `json:"stock_type"`
+	Products           *[]PackageProductItemInput `json:"products" validate:"omitempty,min=2,max=20"`
+	IsActive           *bool                      `json:"is_active"`
+}
+
+type PackageItemDetailResponse struct {
+	ProductID              string  `json:"product_id"`
+	ProductName            string  `json:"product_name"`
+	ImageURL               string  `json:"image_url"`
+	Quantity               int     `json:"quantity"`
+	NormalPrice            float64 `json:"normal_price"`
+	EffectivePrice         float64 `json:"effective_price"`
+	SubtotalEffectivePrice float64 `json:"subtotal_effective_price"`
+	StockType              string  `json:"stock_type"`
+	IsActive               bool    `json:"is_active"`
+}
+
+type PackageDetailResponse struct {
+	ProductID                string                      `json:"product_id"`
+	PackageID                string                      `json:"package_id"`
+	BusinessID               string                      `json:"business_id"`
+	PackageName              string                      `json:"package_name"`
+	ProductDescription       string                      `json:"product_description"`
+	ProductGroupID           *string                     `json:"product_group_id,omitempty"`
+	ProductPreview           []string                    `json:"product_preview"`
+	PackagePrice             float64                     `json:"package_price"`
+	OriginalPackagePrice     float64                     `json:"original_package_price"`
+	BaseEffectivePrice       float64                     `json:"base_effective_price"`
+	SavingsAmount            float64                     `json:"savings_amount"`
+	SavingsPercentage        float64                     `json:"savings_percentage"`
+	IsDiscounted             bool                        `json:"is_discounted"`
+	StockType                string                      `json:"stock_type"`
+	IsActive                 bool                        `json:"is_active"`
+	ItemsCount               int                         `json:"items_count"`
+	Items                    []PackageItemDetailResponse `json:"items"`
+	CreatedAt                time.Time                   `json:"created_at"`
+	UpdatedAt                time.Time                   `json:"updated_at"`
 }

@@ -2,6 +2,7 @@ package product
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
@@ -30,12 +31,15 @@ type ProductDetailResponse struct {
 	BusinessAvatar     *string  `json:"business_avatar,omitempty"`
 	StockStatus        string   `json:"stock_status"`
 
-	// Informasi Promosi yang Berlaku
 	IsPromoted      bool                               `json:"is_promoted"`
 	PromotionID     *string                            `json:"promotion_id,omitempty"`
 	PromotionName   *string                            `json:"promotion_name,omitempty"`
 	DiscountSource  string                             `json:"discount_source,omitempty"`
 	ActivePromotion *models.BusinessActivePromotionItem `json:"active_promotion,omitempty"`
+
+	// Fitur Paket Produk (Standalone Package)
+	IsPackage    bool                               `json:"is_package"`
+	PackageItems []models.PackageItemDetailResponse `json:"package_items,omitempty"`
 
 	PremiumSimilarProducts []models.ProductListItem `json:"premium_similar_products"`
 	SimilarProducts        []models.ProductListItem `json:"similar_products"`
@@ -149,6 +153,55 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		stockStatus = "Out of Stock"
 	}
 
+	var packageItems []models.PackageItemDetailResponse
+	if prod.IsPackage {
+		if prod.OriginalPackagePrice != nil && *prod.OriginalPackagePrice > prod.Price {
+			isDiscounted = true
+			orig := *prod.OriginalPackagePrice
+			originalPrice = &orig
+			discountAmount = *prod.OriginalPackagePrice - prod.Price
+			if prod.PackageSavingsPercentage != nil && *prod.PackageSavingsPercentage > 0 {
+				discountPct = *prod.PackageSavingsPercentage
+			} else if *prod.OriginalPackagePrice > 0 {
+				discountPct = math.Round((discountAmount / *prod.OriginalPackagePrice) * 10000) / 100
+			}
+			discountType = "nominal"
+			if discountSource == "" {
+				discountSource = "package"
+			}
+		}
+
+		for _, pi := range prod.PackageItems {
+			name := ""
+			imgURL := ""
+			st := "in_stock"
+			act := true
+			if pi.ItemProduct != nil {
+				name = pi.ItemProduct.ProductName
+				st = pi.ItemProduct.StockType
+				act = pi.ItemProduct.IsActive
+				if len(pi.ItemProduct.ProductPreview) > 0 {
+					imgURL = pi.ItemProduct.ProductPreview[0]
+				}
+				if st == "out_of_stock" {
+					stockStatus = "Out of Stock"
+				}
+			}
+
+			packageItems = append(packageItems, models.PackageItemDetailResponse{
+				ProductID:              pi.ItemProductID,
+				ProductName:            name,
+				ImageURL:               imgURL,
+				Quantity:               pi.Quantity,
+				NormalPrice:            pi.ItemNormalPrice,
+				EffectivePrice:         pi.ItemEffectivePrice,
+				SubtotalEffectivePrice: pi.ItemEffectivePrice * float64(pi.Quantity),
+				StockType:              st,
+				IsActive:               act,
+			})
+		}
+	}
+
 	bName := ""
 	if bus.BusinessName != nil {
 		bName = *bus.BusinessName
@@ -180,6 +233,8 @@ func (s *productDetailService) GetProductDetail(productID string) (*ProductDetai
 		PromotionName:      promoName,
 		DiscountSource:     discountSource,
 		ActivePromotion:    activePromoItem,
+		IsPackage:          prod.IsPackage,
+		PackageItems:       packageItems,
 	}
 
 	// Fetch similar products

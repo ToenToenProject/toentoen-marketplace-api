@@ -351,7 +351,7 @@ func (r *repository) GetActivePromotionPosts(businessID string) ([]models.Busine
 
 func (r *repository) GetAllProducts(businessID string, groupID string) ([]models.Product, error) {
 	var products []models.Product
-	query := r.db.Where("business_id = ? AND is_active = ?", businessID, true)
+	query := r.db.Preload("PackageItems.ItemProduct").Where("business_id = ? AND is_active = ?", businessID, true)
 	
 	if groupID != "" {
 		if groupID == "promotion" {
@@ -361,7 +361,7 @@ func (r *repository) GetAllProducts(businessID string, groupID string) ([]models
 		}
 	}
 
-	err := query.Order("created_at DESC").Find(&products).Error
+	err := query.Order("is_package DESC, sort_order ASC, created_at DESC").Find(&products).Error
 	return products, err
 }
 

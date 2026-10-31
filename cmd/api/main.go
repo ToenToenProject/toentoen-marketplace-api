@@ -134,6 +134,10 @@ func main() {
 	productService := catalog.NewProductService(productRepo, notifService)
 	productHandler := catalog.NewProductHandler(productService)
 
+	packageRepo := catalog.NewPackageRepository(database.DB)
+	packageService := catalog.NewPackageService(packageRepo, notifService)
+	packageHandler := catalog.NewPackageHandler(packageService)
+
 	productGroupRepo := catalog.NewProductGroupRepository(database.DB)
 	productGroupService := catalog.NewProductGroupService(productGroupRepo, notifService)
 	productGroupHandler := catalog.NewProductGroupHandler(productGroupService)
@@ -784,6 +788,24 @@ func main() {
 	productRoutes.Delete("/:product_id", productHandler.DeleteProduct)
 	productRoutes.Patch("/bulk-status", productHandler.BulkUpdateStatus)
 	productRoutes.Delete("/bulk-delete", productHandler.BulkDelete)
+
+	// -> Packages (Paket Produk / Standalone Package)
+	packageRoutes := sharedBusinessScope.Group("/packages")
+	packageRoutes.Post("/calculate", packageHandler.CalculatePackagePrice)
+	packageRoutes.Post("/", packageHandler.CreatePackage)
+	packageRoutes.Get("/", packageHandler.GetPackages)
+	packageRoutes.Get("/:package_id", packageHandler.GetPackageDetail)
+	packageRoutes.Put("/:package_id", packageHandler.UpdatePackage)
+	packageRoutes.Delete("/:package_id", packageHandler.DeletePackage)
+
+	// Alias route /products/packages
+	productPackageRoutes := sharedBusinessScope.Group("/products/packages")
+	productPackageRoutes.Post("/calculate", packageHandler.CalculatePackagePrice)
+	productPackageRoutes.Post("/", packageHandler.CreatePackage)
+	productPackageRoutes.Get("/", packageHandler.GetPackages)
+	productPackageRoutes.Get("/:package_id", packageHandler.GetPackageDetail)
+	productPackageRoutes.Put("/:package_id", packageHandler.UpdatePackage)
+	productPackageRoutes.Delete("/:package_id", packageHandler.DeletePackage)
 
 	// -> Product Groups
 	productGroupRoutes := sharedBusinessScope.Group("/product-groups")

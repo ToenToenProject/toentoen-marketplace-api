@@ -98,6 +98,7 @@ func ConnectDB() {
 		&models.SignalConversation{},
 		&models.SignalMessage{},
 		&models.Product{},
+		&models.ProductPackageItem{},
 		&models.Promotion{},
 		&models.PromotionProduct{},
 		&models.PromotionBundleItem{},
@@ -180,6 +181,12 @@ func ConnectDB() {
 			FOREIGN KEY (business_id) REFERENCES businesses (business_id) ON DELETE CASCADE
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_business_likes_business_id ON business_likes (business_id)`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_package BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS original_package_price NUMERIC(15,2) NULL`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS base_effective_price NUMERIC(15,2) NULL`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS package_savings_amount NUMERIC(15,2) NULL`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS package_savings_percentage NUMERIC(5,2) NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_products_is_package ON products (is_package)`,
 		`DO $$
 		BEGIN
 			IF EXISTS (

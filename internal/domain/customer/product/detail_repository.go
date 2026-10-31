@@ -23,7 +23,7 @@ func NewProductDetailRepository(db *gorm.DB) ProductDetailRepository {
 
 func (r *productDetailRepository) GetProductWithBusiness(productID string) (*models.Product, *models.Business, error) {
 	var product models.Product
-	if err := r.db.Where("product_id = ?", productID).First(&product).Error; err != nil {
+	if err := r.db.Preload("PackageItems.ItemProduct").Where("product_id = ?", productID).First(&product).Error; err != nil {
 		return nil, nil, err
 	}
 

@@ -189,13 +189,13 @@ func (r *productRepository) GetProducts(businessID, search, productGroupID, stoc
 		}
 	}
 
-	// Eksekusi Sorting 
+	// Eksekusi Sorting (Paket selalu diposisikan di urutan teratas)
 	if sort == "lowest_price" {
-		query = query.Order("price ASC, product_id ASC")
+		query = query.Order("is_package DESC, price ASC, product_id ASC")
 	} else if sort == "highest_price" {
-		query = query.Order("price DESC, product_id DESC")
+		query = query.Order("is_package DESC, price DESC, product_id DESC")
 	} else {
-		query = query.Order("created_at DESC, product_id DESC")
+		query = query.Order("is_package DESC, created_at DESC, product_id DESC")
 	}
 
 	// --- 3. EKSEKUSI FINAL ---

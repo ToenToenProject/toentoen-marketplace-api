@@ -82,6 +82,7 @@ type SimpleProductResponse struct {
 	PromotionName    *string `json:"promotion_name,omitempty"`
 	DiscountSource   string  `json:"discount_source,omitempty"`
 	IsBundle         bool    `json:"is_bundle"`
+	IsPackage        bool    `json:"is_package"`
 	BundleItemsCount int     `json:"bundle_items_count,omitempty"`
 }
 
@@ -639,23 +640,55 @@ func mapToSimpleProduct(p models.Product, promo *productPromoItem) SimpleProduct
 		stockStatus = "In Stock"
 	}
 
+	isBundle := false
+	isPackage := p.IsPackage
+	bundleItemsCount := 0
+
+	if p.IsPackage {
+		isBundle = true
+		bundleItemsCount = len(p.PackageItems)
+		if p.OriginalPackagePrice != nil && *p.OriginalPackagePrice > p.Price {
+			isDiscounted = true
+			orig := *p.OriginalPackagePrice
+			originalPrice = &orig
+			discountAmount = *p.OriginalPackagePrice - p.Price
+			if p.PackageSavingsPercentage != nil && *p.PackageSavingsPercentage > 0 {
+				discountPct = *p.PackageSavingsPercentage
+			} else if *p.OriginalPackagePrice > 0 {
+				discountPct = math.Round((discountAmount / *p.OriginalPackagePrice) * 10000) / 100
+			}
+			discountType = "nominal"
+			if discountSource == "" {
+				discountSource = "package"
+			}
+		}
+		for _, item := range p.PackageItems {
+			if item.ItemProduct != nil && item.ItemProduct.StockType == "out_of_stock" {
+				stockStatus = "Out of Stock"
+			}
+		}
+	}
+
 	return SimpleProductResponse{
-		ProductID:      p.ProductID,
-		ProductName:    p.ProductName,
-		ProductPreview: p.ProductPreview,
-		Price:          currentPrice,
-		OriginalPrice:  originalPrice,
-		IsDiscounted:   isDiscounted,
-		DiscountType:   discountType,
-		DiscountAmount: discountAmount,
-		DiscountPct:    discountPct,
-		AverageRating:  p.AverageRating,
-		ReviewCount:    p.ReviewCount,
-		StockStatus:    stockStatus,
-		IsPromoted:     isPromoted,
-		PromotionID:    promoID,
-		PromotionName:  promoName,
-		DiscountSource: discountSource,
+		ProductID:        p.ProductID,
+		ProductName:      p.ProductName,
+		ProductPreview:   p.ProductPreview,
+		Price:            currentPrice,
+		OriginalPrice:    originalPrice,
+		IsDiscounted:     isDiscounted,
+		DiscountType:     discountType,
+		DiscountAmount:   discountAmount,
+		DiscountPct:      discountPct,
+		AverageRating:    p.AverageRating,
+		ReviewCount:      p.ReviewCount,
+		StockStatus:      stockStatus,
+		IsPromoted:       isPromoted,
+		PromotionID:      promoID,
+		PromotionName:    promoName,
+		DiscountSource:   discountSource,
+		IsBundle:         isBundle,
+		IsPackage:        isPackage,
+		BundleItemsCount: bundleItemsCount,
 	}
 }
 

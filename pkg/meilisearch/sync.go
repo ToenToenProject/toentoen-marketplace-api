@@ -2,6 +2,7 @@ package meilisearch
 
 import (
 	"log"
+	"math"
 	"strings"
 	"time"
 
@@ -541,6 +542,17 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 			}
 		}
 	}
+
+	if p.IsPackage && p.OriginalPackagePrice != nil && *p.OriginalPackagePrice > p.Price {
+		isDiscounted = true
+		discountAmount = *p.OriginalPackagePrice - p.Price
+		if p.PackageSavingsPercentage != nil && *p.PackageSavingsPercentage > 0 {
+			discountPct = *p.PackageSavingsPercentage
+		} else if *p.OriginalPackagePrice > 0 {
+			discountPct = math.Round((discountAmount / *p.OriginalPackagePrice) * 10000) / 100
+		}
+		promotionType = "package"
+	}
 	hasPromo := isDiscounted
 
 	bizName := ""
@@ -623,7 +635,7 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 		Lat:            latPtr,
 		Lng:            lngPtr,
 		CreatedAt:      p.CreatedAt.Unix(),
-		IsPackage:      false,
+		IsPackage:      p.IsPackage,
 		PromotionType:  promotionType,
 		PromotionID:    promotionID,
 		HasPromo:       hasPromo,
