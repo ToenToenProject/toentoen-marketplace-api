@@ -187,3 +187,26 @@ func (h *PromotionHandler) StopPromotion(c *fiber.Ctx) error {
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Promosi berhasil dihentikan", nil)
 }
+
+// 7. PUSH PROMOTION NOTIFICATION
+func (h *PromotionHandler) PushPromotionNotification(c *fiber.Ctx) error {
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	promotionID := strings.TrimSpace(c.Params("promotion_id"))
+	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid", nil)
+	}
+
+	res, err := h.service.PushPromotionNotification(requesterID, requesterRole, businessID, promotionID)
+	if err != nil {
+		if strings.Contains(err.Error(), "tidak memiliki izin") || strings.Contains(err.Error(), "tidak memiliki akses") {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
+		}
+		if strings.Contains(err.Error(), "sudah pernah dikirimkan") {
+			return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		}
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, res.Message, res)
+}

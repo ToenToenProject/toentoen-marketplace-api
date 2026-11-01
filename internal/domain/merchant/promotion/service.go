@@ -24,6 +24,7 @@ type PromotionService interface {
 	GetCustomerPromotionDetail(promotionID string) (*models.PromotionDetailResponse, error)
 	ExtendPromotion(requesterID, role, businessID, promotionID string, input models.ExtendPromotionInput) error
 	StopPromotion(requesterID, role, businessID, promotionID string) error
+	PushPromotionNotification(requesterID, role, businessID, promotionID string) (*models.PushPromotionResponse, error)
 
 	RecordPromotionEvents(events []models.PromotionEvent) error
 }
@@ -81,12 +82,20 @@ func (s *promotionService) CreatePromotion(
 	}
 
 	now := time.Now()
-	// Berikan toleransi mundur untuk start_at agar tidak gagal karena latency atau perbedaan jam client
-	if input.StartAt.IsZero() || input.StartAt.Before(now.Add(-5*time.Minute)) {
+	if input.DurationDays > 0 {
+		if input.DurationDays != 1 && input.DurationDays != 3 && input.DurationDays != 7 {
+			return nil, errors.New("pilihan periode promosi harus 1, 3, atau 7 hari")
+		}
 		input.StartAt = now
-	}
-	if input.EndAt.IsZero() || !input.EndAt.After(input.StartAt) {
-		input.EndAt = input.StartAt.AddDate(0, 0, 7) // Auto-fallback default 7 hari jika end_at tidak valid
+		input.EndAt = now.AddDate(0, 0, input.DurationDays)
+	} else {
+		// Berikan toleransi mundur untuk start_at agar tidak gagal karena latency atau perbedaan jam client
+		if input.StartAt.IsZero() || input.StartAt.Before(now.Add(-5*time.Minute)) {
+			input.StartAt = now
+		}
+		if input.EndAt.IsZero() || !input.EndAt.After(input.StartAt) {
+			input.EndAt = input.StartAt.AddDate(0, 0, 7) // Auto-fallback default 7 hari jika end_at tidak valid
+		}
 	}
 
 	totalDurationHours := input.EndAt.Sub(input.StartAt).Hours()
@@ -138,14 +147,9 @@ func (s *promotionService) CreatePromotion(
 
 	var mainProductItem *models.EligibleProductItem
 	promotionID := utils.GenerateUUID("PRM")
-	isActiveNow := !input.StartAt.After(now)
-
-	status := models.PromotionStatusScheduled
-	var notifiedAt *time.Time
-	if isActiveNow {
-		status = models.PromotionStatusActive
-		notifiedAt = &now
-	}
+	isActiveNow := true
+	status := models.PromotionStatusActive
+	var notifiedAt *time.Time = nil
 
 	promoProducts := make([]models.PromotionProduct, 0, len(input.Products))
 	productsToUpdate := make([]models.Product, 0)
@@ -310,22 +314,10 @@ func (s *promotionService) CreatePromotion(
 		return nil, fmt.Errorf("gagal membuat promosi: %w", err)
 	}
 
-	// Jika langsung aktif, kirim notifikasi dan sync search
-	if isActiveNow && s.notifService != nil {
-		var mainProdModel *models.Product
-		if mainProductItem != nil {
-			mainProdModel = &models.Product{
-				ProductID:      mainProductItem.ProductID,
-				ProductName:    mainProductItem.ProductName,
-				ProductPreview: []string{mainProductItem.ImageURL},
-			}
-		}
-		notification.NotifyPromotionCreated(database.DB, s.notifService, businessID, promo, mainProdModel, productIDsList, requesterID)
-		go meilisearch.SyncBusiness(database.DB, businessID)
-	}
-	if isActiveNow {
-		go meilisearch.SyncPromotion(database.DB, promotionID)
-	}
+	// Promosi langsung aktif di katalog. Sinkronkan data ke Meilisearch.
+	// Blast notifikasi dilakukan secara manual oleh merchant via endpoint push promotion.
+	go meilisearch.SyncBusiness(database.DB, businessID)
+	go meilisearch.SyncPromotion(database.DB, promotionID)
 
 	return s.GetPromotionDetail(requesterID, role, businessID, promotionID)
 }
@@ -632,8 +624,20 @@ func (s *promotionService) GetPromotions(
 			bundleCount = &cnt
 		}
 
+		notifSent := p.NotifiedAt != nil
+		canPush := (p.Status == models.PromotionStatusActive && !notifSent)
+		pTitle := p.Caption
+		if p.PromotionType == models.PromotionTypeBundling && p.PackageName != nil && *p.PackageName != "" {
+			pTitle = fmt.Sprintf("Promo Paket: %s", *p.PackageName)
+		} else if p.MainProduct != nil && p.MainProduct.ProductName != "" {
+			pTitle = fmt.Sprintf("Promo %s", p.MainProduct.ProductName)
+		}
+
 		allItems = append(allItems, models.PromotionListItem{
+			ID:                 p.PromotionID,
 			PromotionID:        p.PromotionID,
+			Title:              pTitle,
+			Description:        p.Caption,
 			PromotionType:      pType,
 			PostID:             p.PostID,
 			Caption:            p.Caption,
@@ -651,6 +655,8 @@ func (s *promotionService) GetPromotions(
 			StartAt:            p.StartAt,
 			EndAt:              p.EndAt,
 			Status:             p.Status,
+			NotificationSent:   notifSent,
+			CanPushNotification: canPush,
 			ImpressionCount:    p.ImpressionCount,
 			ClickCount:         p.ClickCount,
 			CreatedAt:          p.CreatedAt,
@@ -684,20 +690,25 @@ func (s *promotionService) GetPromotions(
 
 		postIDVal := post.PostID
 		allItems = append(allItems, models.PromotionListItem{
-			PromotionID:     post.PostID,
-			PromotionType:   models.PromotionTypePost,
-			PostID:          &postIDVal,
-			Caption:         post.Content,
-			MainProduct:     nil,
-			Post:            postCard,
-			ProductCount:    0,
-			RemainingDays:   remainingDays,
-			StartAt:         post.CreatedAt,
-			EndAt:           endAt,
-			Status:          status,
-			ImpressionCount: 0,
-			ClickCount:      post.LikeCount,
-			CreatedAt:       post.CreatedAt,
+			ID:                  post.PostID,
+			PromotionID:         post.PostID,
+			Title:               post.Content,
+			Description:         post.Content,
+			PromotionType:       models.PromotionTypePost,
+			PostID:              &postIDVal,
+			Caption:             post.Content,
+			MainProduct:         nil,
+			Post:                postCard,
+			ProductCount:        0,
+			RemainingDays:       remainingDays,
+			StartAt:             post.CreatedAt,
+			EndAt:               endAt,
+			Status:              status,
+			NotificationSent:    true,
+			CanPushNotification: false,
+			ImpressionCount:     0,
+			ClickCount:          post.LikeCount,
+			CreatedAt:           post.CreatedAt,
 		})
 	}
 
@@ -766,6 +777,56 @@ func (s *promotionService) GetPromotions(
 	}, nil
 }
 
+func formatRupiah(amount float64) string {
+	str := fmt.Sprintf("%.0f", amount)
+	n := len(str)
+	if n <= 3 {
+		return str
+	}
+	var res []byte
+	rem := n % 3
+	if rem > 0 {
+		res = append(res, []byte(str[:rem])...)
+	}
+	for i := rem; i < n; i += 3 {
+		if len(res) > 0 {
+			res = append(res, '.')
+		}
+		res = append(res, []byte(str[i:i+3])...)
+	}
+	return string(res)
+}
+
+func mapBusinessToPromotionProfile(bus *models.Business) *models.PromotionBusinessProfile {
+	if bus == nil {
+		return nil
+	}
+	bizName := "Toko"
+	if bus.BusinessName != nil && strings.TrimSpace(*bus.BusinessName) != "" {
+		bizName = strings.TrimSpace(*bus.BusinessName)
+	}
+	logo := ""
+	if bus.LogoURL != nil {
+		logo = *bus.LogoURL
+	}
+	address := ""
+	if bus.AddressDetail != nil {
+		address = *bus.AddressDetail
+	}
+	isVerified := bus.IsVerified
+	if !isVerified && bus.NIB != nil && *bus.NIB != "" {
+		isVerified = true
+	}
+	return &models.PromotionBusinessProfile{
+		ID:         bus.BusinessID,
+		Name:       bizName,
+		LogoURL:    logo,
+		Address:    address,
+		Rating:     bus.AverageRating,
+		IsVerified: isVerified,
+	}
+}
+
 func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion) *models.PromotionDetailResponse {
 	now := time.Now()
 	remainingDays := 0
@@ -786,6 +847,37 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 	}
 
 	mainProdID := promo.MainProductID
+
+	// Profil bisnis untuk tombol kunjungi toko
+	var bizProfile *models.PromotionBusinessProfile
+	bizName := "Toko"
+	if promo.Business != nil {
+		bizProfile = mapBusinessToPromotionProfile(promo.Business)
+		if bizProfile != nil {
+			bizName = bizProfile.Name
+		}
+	} else if promo.BusinessID != "" {
+		biz, err := s.repo.GetBusinessByID(promo.BusinessID)
+		if err == nil && biz != nil {
+			bizProfile = mapBusinessToPromotionProfile(biz)
+			if bizProfile != nil {
+				bizName = bizProfile.Name
+			}
+		}
+	}
+
+	// Status notifikasi push
+	notifSent := promo.NotifiedAt != nil
+	notifStatus := "not_sent"
+	if notifSent {
+		notifStatus = "sent"
+	}
+	canPush := (promo.Status == models.PromotionStatusActive && !notifSent)
+	notifInfo := &models.PromotionNotificationInfo{
+		Status:  notifStatus,
+		SentAt:  promo.NotifiedAt,
+		CanPush: canPush,
+	}
 
 	if promo.PromotionType == models.PromotionTypeBundling {
 		bundleItemDetails := make([]models.PromotionBundleItemDetail, 0, len(promo.BundleItems))
@@ -816,12 +908,33 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 			})
 		}
 
+		var discInfo *models.PromotionDiscountInfo
+		if promo.SavingsAmount != nil {
+			discInfo = &models.PromotionDiscountInfo{
+				Type:  "nominal",
+				Value: *promo.SavingsAmount,
+			}
+		}
+
+		pkgName := ""
+		if promo.PackageName != nil {
+			pkgName = *promo.PackageName
+		}
+		title := fmt.Sprintf("%s: Promo Paket Hemat %s", bizName, pkgName)
+
 		return &models.PromotionDetailResponse{
 			PromotionID:        promo.PromotionID,
+			ID:                 promo.PromotionID,
+			Title:              title,
+			Description:        promo.Caption,
 			PromotionType:      models.PromotionTypeBundling,
 			BusinessID:         promo.BusinessID,
 			Caption:            promo.Caption,
 			MainProductID:      &mainProdID,
+			Discount:           discInfo,
+			Notification:       notifInfo,
+			Business:           bizProfile,
+			ProductCount:       len(bundleItemDetails),
 			PostID:             promo.PostID,
 			Post:               postCard,
 			PackageName:        promo.PackageName,
@@ -843,6 +956,8 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 	}
 
 	productDetails := make([]models.PromotionProductDetailItem, 0, len(promo.Products))
+	var mainProdName string
+
 	for _, pp := range promo.Products {
 		name := ""
 		img := ""
@@ -863,11 +978,19 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 			finalPrice = 0
 		}
 
+		isMain := pp.ProductID == promo.MainProductID
+		if isMain && mainProdName == "" {
+			mainProdName = name
+		}
+
 		productDetails = append(productDetails, models.PromotionProductDetailItem{
 			ProductID:      pp.ProductID,
+			ID:             pp.ProductID,
 			ProductName:    name,
+			Name:           name,
 			ImageURL:       img,
 			OriginalPrice:  origPrice,
+			Price:          finalPrice,
 			FinalPrice:     finalPrice,
 			DiscountSource: pp.DiscountSource,
 			DiscountType:   pp.DiscountType,
@@ -875,16 +998,57 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 			DiscountAmount: cut,
 			DiscountPct:    pct,
 			MaxDiscount:    pp.MaxDiscount,
-			IsMainProduct:  pp.ProductID == promo.MainProductID,
+			IsMainProduct:  isMain,
 		})
+	}
+
+	if mainProdName == "" && len(productDetails) > 0 {
+		mainProdName = productDetails[0].ProductName
+	}
+
+	var discInfo *models.PromotionDiscountInfo
+	var discStr string
+	if len(promo.Products) > 0 {
+		dType := promo.Products[0].DiscountType
+		dVal := promo.Products[0].Discount
+		discInfo = &models.PromotionDiscountInfo{
+			Type:  dType,
+			Value: dVal,
+		}
+		if dType == "nominal" {
+			discStr = fmt.Sprintf("Rp %s", formatRupiah(dVal))
+		} else {
+			discStr = fmt.Sprintf("%.0f%%", dVal)
+		}
+	}
+
+	nOthers := len(productDetails) - 1
+	var title string
+	if mainProdName != "" {
+		if nOthers > 0 {
+			title = fmt.Sprintf("%s diskon %s untuk %s dan %d produk lainnya.", bizName, discStr, mainProdName, nOthers)
+		} else {
+			title = fmt.Sprintf("%s diskon %s untuk %s.", bizName, discStr, mainProdName)
+		}
+	} else if discStr != "" {
+		title = fmt.Sprintf("%s memberikan diskon %s.", bizName, discStr)
+	} else {
+		title = fmt.Sprintf("Promosi dari %s", bizName)
 	}
 
 	return &models.PromotionDetailResponse{
 		PromotionID:     promo.PromotionID,
+		ID:              promo.PromotionID,
+		Title:           title,
+		Description:     promo.Caption,
 		PromotionType:   models.PromotionTypeCatalog,
 		BusinessID:      promo.BusinessID,
 		Caption:         promo.Caption,
 		MainProductID:   &mainProdID,
+		Discount:        discInfo,
+		Notification:    notifInfo,
+		Business:        bizProfile,
+		ProductCount:    len(productDetails),
 		PostID:          promo.PostID,
 		Post:            postCard,
 		StartAt:         promo.StartAt,
@@ -915,6 +1079,14 @@ func (s *promotionService) buildPostPromotionDetailResponse(post *models.Busines
 		status = models.PromotionStatusEnded
 	}
 
+	var bizProfile *models.PromotionBusinessProfile
+	if post.BusinessID != "" {
+		biz, err := s.repo.GetBusinessByID(post.BusinessID)
+		if err == nil && biz != nil {
+			bizProfile = mapBusinessToPromotionProfile(biz)
+		}
+	}
+
 	postCard := &models.PromotionPostCard{
 		PostID:       post.PostID,
 		Content:      post.Content,
@@ -927,12 +1099,17 @@ func (s *promotionService) buildPostPromotionDetailResponse(post *models.Busines
 	postIDVal := post.PostID
 	return &models.PromotionDetailResponse{
 		PromotionID:     post.PostID,
+		ID:              post.PostID,
+		Title:           post.Content,
+		Description:     post.Content,
 		PromotionType:   models.PromotionTypePost,
 		BusinessID:      post.BusinessID,
 		Caption:         post.Content,
 		MainProductID:   nil,
 		PostID:          &postIDVal,
 		Post:            postCard,
+		Business:        bizProfile,
+		ProductCount:    0,
 		StartAt:         post.CreatedAt,
 		EndAt:           endAt,
 		Status:          status,
@@ -942,6 +1119,57 @@ func (s *promotionService) buildPostPromotionDetailResponse(post *models.Busines
 		CreatedAt:       post.CreatedAt,
 		Products:        []models.PromotionProductDetailItem{},
 	}
+}
+
+func (s *promotionService) PushPromotionNotification(
+	requesterID, role, businessID, promotionID string,
+) (*models.PushPromotionResponse, error) {
+	if err := s.checkManageAccess(requesterID, role, businessID); err != nil {
+		return nil, err
+	}
+
+	promo, err := s.repo.GetPromotionByID(businessID, promotionID)
+	if err != nil || promo == nil {
+		return nil, errors.New("promosi tidak ditemukan")
+	}
+
+	if promo.Status != models.PromotionStatusActive {
+		return nil, fmt.Errorf("hanya promosi aktif yang dapat dikirimkan notifikasinya (status saat ini: %s)", promo.Status)
+	}
+
+	if promo.NotifiedAt != nil {
+		return nil, errors.New("notifikasi untuk promosi ini sudah pernah dikirimkan")
+	}
+
+	now := time.Now()
+	if err := s.repo.UpdatePromotionNotifiedAt(businessID, promotionID, now); err != nil {
+		return nil, fmt.Errorf("gagal memperbarui status pengiriman notifikasi: %w", err)
+	}
+
+	promo.NotifiedAt = &now
+
+	if s.notifService != nil {
+		var mainProdModel *models.Product
+		productIDsList := make([]string, 0, len(promo.Products))
+		for _, p := range promo.Products {
+			productIDsList = append(productIDsList, p.ProductID)
+			if p.ProductID == promo.MainProductID && p.Product != nil {
+				mainProdModel = p.Product
+			}
+		}
+		if mainProdModel == nil && len(promo.Products) > 0 && promo.Products[0].Product != nil {
+			mainProdModel = promo.Products[0].Product
+		}
+		notification.NotifyPromotionCreated(database.DB, s.notifService, businessID, promo, mainProdModel, productIDsList, requesterID)
+	}
+
+	return &models.PushPromotionResponse{
+		Success:     true,
+		Message:     "Notifikasi promosi berhasil dikirimkan ke pelanggan",
+		PromotionID: promotionID,
+		NotifiedAt:  now,
+		SentAt:      now,
+	}, nil
 }
 
 func (s *promotionService) GetPromotionDetail(requesterID, role, businessID, promotionID string) (*models.PromotionDetailResponse, error) {

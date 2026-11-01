@@ -841,7 +841,11 @@ func main() {
 	promoRoutes.Get("/", promotionHandler.GetPromotions)
 	promoRoutes.Get("/:promotion_id", promotionHandler.GetPromotionDetail)
 	promoRoutes.Patch("/:promotion_id/extend", middlewares.RequireKYC, promotionHandler.ExtendPromotion)
+	promoRoutes.Post("/:promotion_id/extend", middlewares.RequireKYC, promotionHandler.ExtendPromotion)
 	promoRoutes.Patch("/:promotion_id/stop", middlewares.RequireKYC, promotionHandler.StopPromotion)
+	promoRoutes.Post("/:promotion_id/stop", middlewares.RequireKYC, promotionHandler.StopPromotion)
+	promoRoutes.Post("/:promotion_id/push", middlewares.RequireKYC, promotionHandler.PushPromotionNotification)
+	promoRoutes.Post("/:promotion_id/push-notification", middlewares.RequireKYC, promotionHandler.PushPromotionNotification)
 
 	// ==========================================
 	// ROUTES: DEMAND SIGNAL V2 - MERCHANT

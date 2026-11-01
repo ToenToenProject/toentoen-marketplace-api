@@ -160,6 +160,10 @@ type EligibleProductItem struct {
 	Price                  float64               `json:"price"`
 	IsEligible             bool                  `json:"is_eligible"`
 	IneligibleReason       string                `json:"ineligible_reason,omitempty"`
+	IsActivePromoted       bool                  `json:"is_active_promoted"`
+	PromotionStatus        string                `json:"promotion_status"`       // "available" | "active_promoted"
+	PromotionStatusLabel   string                `json:"promotion_status_label"` // "Tersedia untuk promosi" | "Sedang Aktif Promosi..."
+	ActivePromotionID      string                `json:"active_promotion_id,omitempty"`
 	HasExistingDiscount    bool                  `json:"has_existing_discount"`
 	CurrentDiscountType    string                `json:"current_discount_type,omitempty"`
 	CurrentDiscount        float64               `json:"current_discount,omitempty"`
@@ -224,11 +228,16 @@ func parseFlexibleTime(val string) (time.Time, error) {
 }
 
 type CreatePromotionInput struct {
-	Caption       string                     `json:"caption"`
-	MainProductID string                     `json:"main_product_id"`
-	StartAt       time.Time                  `json:"start_at"`
-	EndAt         time.Time                  `json:"end_at"`
-	Products      []CreatePromotionItemInput `json:"products" validate:"required,min=1,max=20"`
+	Caption              string                     `json:"caption"`
+	MainProductID        string                     `json:"main_product_id"`
+	HighlightedProductID string                     `json:"highlighted_product_id"`
+	DiscountType         string                     `json:"discount_type"`  // "percentage" | "nominal"
+	DiscountValue        float64                    `json:"discount_value"` // nilai diskon seragam
+	DurationDays         int                        `json:"duration_days"`  // 1, 3, atau 7 hari
+	ProductIDs           []string                   `json:"product_ids"`    // alternatif simpel list IDs
+	StartAt              time.Time                  `json:"start_at"`
+	EndAt                time.Time                  `json:"end_at"`
+	Products             []CreatePromotionItemInput `json:"products"`
 }
 
 func (c *CreatePromotionInput) UnmarshalJSON(data []byte) error {
@@ -256,6 +265,36 @@ func (c *CreatePromotionInput) UnmarshalJSON(data []byte) error {
 		endStr := strings.Trim(fmt.Sprintf("%v", aux.RawEndAt), "\"")
 		if parsed, err := parseFlexibleTime(endStr); err == nil {
 			c.EndAt = parsed
+		}
+	}
+
+	// Fallback main_product_id dari highlighted_product_id
+	if strings.TrimSpace(c.MainProductID) == "" && strings.TrimSpace(c.HighlightedProductID) != "" {
+		c.MainProductID = strings.TrimSpace(c.HighlightedProductID)
+	}
+
+	// Jika ProductIDs diberikan namun Products kosong, bangun Products secara otomatis
+	if len(c.Products) == 0 && len(c.ProductIDs) > 0 {
+		for _, pid := range c.ProductIDs {
+			cleanID := strings.TrimSpace(pid)
+			if cleanID == "" {
+				continue
+			}
+			var discVal *float64
+			if c.DiscountValue > 0 {
+				v := c.DiscountValue
+				discVal = &v
+			}
+			var discType *string
+			if strings.TrimSpace(c.DiscountType) != "" {
+				t := strings.TrimSpace(c.DiscountType)
+				discType = &t
+			}
+			c.Products = append(c.Products, CreatePromotionItemInput{
+				ProductID:    cleanID,
+				DiscountType: discType,
+				Discount:     discVal,
+			})
 		}
 	}
 
@@ -370,33 +409,41 @@ type PromotionPostCard struct {
 }
 
 type PromotionListItem struct {
-	PromotionID        string                    `json:"promotion_id"`
-	PromotionType      string                    `json:"promotion_type"` // "catalog" | "post" | "bundling" | "per_product"
-	PostID             *string                   `json:"post_id"`
-	Caption            string                    `json:"caption"`
-	MainProduct        *PromotionMainProductCard `json:"main_product,omitempty"`
-	Post               *PromotionPostCard        `json:"post,omitempty"`
-	PackageName        *string                   `json:"package_name,omitempty"`
-	PackagePrice       *float64                  `json:"package_price,omitempty"`
-	PackageImage       *string                   `json:"package_image,omitempty"`
-	OriginalTotalPrice *float64                  `json:"original_total_price,omitempty"`
-	SavingsAmount      *float64                  `json:"savings_amount,omitempty"`
-	SavingsPercentage  *float64                  `json:"savings_percentage,omitempty"`
-	BundleItemCount    *int                      `json:"bundle_item_count,omitempty"`
-	ProductCount       int                       `json:"product_count"`
-	RemainingDays      int                       `json:"remaining_days"` // Dibulatkan ke atas
-	StartAt            time.Time                 `json:"start_at"`
-	EndAt              time.Time                 `json:"end_at"`
-	Status             string                    `json:"status"`
-	ImpressionCount    int                       `json:"impression_count"`
-	ClickCount         int                       `json:"click_count"`
-	CreatedAt          time.Time                 `json:"created_at"`
+	ID                  string                    `json:"id"`
+	PromotionID         string                    `json:"promotion_id"`
+	Title               string                    `json:"title"`
+	Description         string                    `json:"description"`
+	NotificationSent    bool                      `json:"notification_sent"`
+	CanPushNotification bool                     `json:"can_push_notification"`
+	PromotionType       string                    `json:"promotion_type"` // "catalog" | "post" | "bundling" | "per_product"
+	PostID              *string                   `json:"post_id"`
+	Caption             string                    `json:"caption"`
+	MainProduct         *PromotionMainProductCard `json:"main_product,omitempty"`
+	Post                *PromotionPostCard        `json:"post,omitempty"`
+	PackageName         *string                   `json:"package_name,omitempty"`
+	PackagePrice        *float64                  `json:"package_price,omitempty"`
+	PackageImage        *string                   `json:"package_image,omitempty"`
+	OriginalTotalPrice  *float64                  `json:"original_total_price,omitempty"`
+	SavingsAmount       *float64                  `json:"savings_amount,omitempty"`
+	SavingsPercentage   *float64                  `json:"savings_percentage,omitempty"`
+	BundleItemCount     *int                      `json:"bundle_item_count,omitempty"`
+	ProductCount        int                       `json:"product_count"`
+	RemainingDays       int                       `json:"remaining_days"` // Dibulatkan ke atas
+	StartAt             time.Time                 `json:"start_at"`
+	EndAt               time.Time                 `json:"end_at"`
+	Status              string                    `json:"status"`
+	ImpressionCount     int                       `json:"impression_count"`
+	ClickCount          int                       `json:"click_count"`
+	CreatedAt           time.Time                 `json:"created_at"`
 }
 
 type PromotionProductDetailItem struct {
+	ID             string   `json:"id"`
 	ProductID      string   `json:"product_id"`
+	Name           string   `json:"name"`
 	ProductName    string   `json:"product_name"`
 	ImageURL       string   `json:"image_url"`
+	Price          float64  `json:"price"` // Harga bayar/final
 	OriginalPrice  float64  `json:"original_price"`
 	FinalPrice     float64  `json:"final_price"`
 	DiscountSource string   `json:"discount_source"`
@@ -408,8 +455,49 @@ type PromotionProductDetailItem struct {
 	IsMainProduct  bool     `json:"is_main_product"`
 }
 
+type PromotionBusinessProfile struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	LogoURL    string  `json:"logo_url"`
+	Address    string  `json:"address"`
+	Rating     float64 `json:"rating"`
+	IsVerified bool    `json:"is_verified"`
+}
+
+type PromotionDiscountInfo struct {
+	Type  string  `json:"type"`  // "percentage" | "nominal"
+	Value float64 `json:"value"` // 30 (untuk 30%) atau 10000 (untuk Rp 10.000)
+}
+
+type PromotionNotificationInfo struct {
+	ID      string     `json:"id,omitempty"`
+	Title   string     `json:"title,omitempty"`
+	Message string     `json:"message,omitempty"`
+	SentAt  *time.Time `json:"sent_at,omitempty"`
+	Status  string     `json:"status"` // "sent" | "not_sent"
+	CanPush bool       `json:"can_push"`
+}
+
+type PushPromotionResponse struct {
+	Success             bool      `json:"success"`
+	Message             string    `json:"message"`
+	PromotionID         string    `json:"promotion_id"`
+	NotificationTitle   string    `json:"notification_title,omitempty"`
+	NotificationCaption string    `json:"notification_caption,omitempty"`
+	SentAt              time.Time `json:"sent_at"`
+	NotifiedAt          time.Time `json:"notified_at"`
+	RecipientsCount     int       `json:"recipients_count,omitempty"`
+}
+
 type PromotionDetailResponse struct {
+	ID                 string                       `json:"id"`
 	PromotionID        string                       `json:"promotion_id"`
+	Title              string                       `json:"title"`
+	Description        string                       `json:"description"`
+	Discount           *PromotionDiscountInfo       `json:"discount,omitempty"`
+	Notification       *PromotionNotificationInfo   `json:"notification,omitempty"`
+	Business           *PromotionBusinessProfile    `json:"business,omitempty"`
+	ProductCount       int                          `json:"product_count"`
 	PromotionType      string                       `json:"promotion_type"` // "catalog" | "post" | "bundling" | "per_product"
 	BusinessID         string                       `json:"business_id"`
 	Caption            string                       `json:"caption"`

@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -87,7 +88,7 @@ func NotifyPromotionCreated(
 			imageURL = mainProduct.ProductPreview[0]
 		}
 
-		title := businessName
+		title := fmt.Sprintf("Promosi dari Toko %s", businessName)
 		body := promo.Caption
 
 		data := map[string]interface{}{

@@ -3,6 +3,7 @@ package promotion
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,6 +31,8 @@ type PromotionRepository interface {
 	GetPromotionSummary(businessID string) (models.PromotionSummary, error)
 	GetPromotions(businessID, tab, cursor string, limit int) ([]models.Promotion, error)
 	GetPromotionByID(businessID, promotionID string) (*models.Promotion, error)
+	UpdatePromotionNotifiedAt(businessID, promotionID string, notifiedAt time.Time) error
+	GetBusinessByID(businessID string) (*models.Business, error)
 
 	ExtendPromotion(businessID, promotionID string, newEndAt time.Time, productIDs []string) error
 	StopPromotion(businessID, promotionID string, promoProducts []models.PromotionProduct, postID *string) error
@@ -178,23 +181,35 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 
 		isEligible := true
 		ineligibleReason := ""
+		isActivePromoted := false
+		promoStatus := "available"
+		promoStatusLabel := "Tersedia untuk promosi"
+		activePromoID := ""
 
 		if !p.IsActive {
 			isEligible = false
 			ineligibleReason = "Produk tidak aktif"
+			promoStatus = "inactive"
+			promoStatusLabel = "Produk Tidak Aktif"
 		} else if targetType == models.PromotionTypeBundling {
-			// Aturan Bundling:
-			// Produk yang sedang ada di promosi per-produk TETAP BISA dipromosikan di bundling.
-			// Produk yang sedang ada di bundling lain juga tetap bisa ikut bundling baru ini.
 			isEligible = true
+			if inBundling {
+				isActivePromoted = true
+				promoStatus = "active_promoted"
+				promoStatusLabel = "Sedang Aktif Bundling"
+				activePromoID = inBundlingPromoID
+			}
 		} else {
 			// Aturan Per-Produk (Katalog):
 			// Produk yang sedang ada di promosi per-produk TIDAK BISA didaftarkan lagi (mencegah konflik diskon katalog).
 			if inPerProduct {
 				isEligible = false
-				ineligibleReason = fmt.Sprintf("Produk sedang dalam promosi per-kategori/produk aktif (%s)", inPerProductPromoID)
+				isActivePromoted = true
+				promoStatus = "active_promoted"
+				promoStatusLabel = "Sedang Aktif Promosi"
+				activePromoID = inPerProductPromoID
+				ineligibleReason = fmt.Sprintf("Produk sedang aktif dalam promosi (%s)", inPerProductPromoID)
 			}
-			// Jika produk hanya ada di promosi bundling, produk TETAP ELIGIBLE untuk promosi per-produk.
 		}
 
 		hasDiscount := utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, now)
@@ -206,6 +221,10 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 			Price:                  p.Price,
 			IsEligible:             isEligible,
 			IneligibleReason:       ineligibleReason,
+			IsActivePromoted:       isActivePromoted,
+			PromotionStatus:        promoStatus,
+			PromotionStatusLabel:   promoStatusLabel,
+			ActivePromotionID:      activePromoID,
 			HasExistingDiscount:    hasDiscount,
 			CurrentDiscountType:    p.DiscountType,
 			CurrentDiscount:        p.Discount,
@@ -217,6 +236,18 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 			ActivePromotions:       activePromos,
 		})
 	}
+
+	// Aturan Urutan: Produk yang sedang aktif promosi (isActivePromoted == true)
+	// otomatis diletakkan di PALING BAWAH list.
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].IsActivePromoted != items[j].IsActivePromoted {
+			return !items[i].IsActivePromoted // false (belum aktif promo) ditaruh di atas
+		}
+		if items[i].IsEligible != items[j].IsEligible {
+			return items[i].IsEligible // yang eligible ditaruh lebih dulu
+		}
+		return false // pertahankan urutan default (created_at DESC)
+	})
 
 	return items, nil
 }
@@ -447,6 +478,20 @@ func (r *promotionRepository) GetPromotionByID(businessID, promotionID string) (
 		return nil, err
 	}
 	return &promo, nil
+}
+
+func (r *promotionRepository) UpdatePromotionNotifiedAt(businessID, promotionID string, notifiedAt time.Time) error {
+	return r.db.Model(&models.Promotion{}).
+		Where("business_id = ? AND promotion_id = ?", businessID, promotionID).
+		Update("notified_at", notifiedAt).Error
+}
+
+func (r *promotionRepository) GetBusinessByID(businessID string) (*models.Business, error) {
+	var biz models.Business
+	if err := r.db.Where("business_id = ?", businessID).First(&biz).Error; err != nil {
+		return nil, err
+	}
+	return &biz, nil
 }
 
 func (r *promotionRepository) ExtendPromotion(businessID, promotionID string, newEndAt time.Time, productIDs []string) error {

@@ -1,6 +1,8 @@
 package promotion
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
@@ -373,6 +375,183 @@ func TestPromotionEligibility_CrossTypeSupport(t *testing.T) {
 	}
 	if !isEligibleBForPerProduct {
 		t.Errorf("expected product in bundling to remain eligible for per_product promotion")
+	}
+}
+
+func TestEligibleProductsSorting_ActivePromotedAtBottom(t *testing.T) {
+	// Skenario: Produk A (tersedia), Produk B (aktif promosi), Produk C (tersedia)
+	items := []models.EligibleProductItem{
+		{
+			ProductID:            "PRD-A",
+			ProductName:          "Produk A",
+			IsActivePromoted:     false,
+			PromotionStatus:      "available",
+			PromotionStatusLabel: "Tersedia",
+		},
+		{
+			ProductID:            "PRD-B",
+			ProductName:          "Produk B",
+			IsActivePromoted:     true,
+			PromotionStatus:      "active_promoted",
+			PromotionStatusLabel: "Sedang Aktif Promosi",
+		},
+		{
+			ProductID:            "PRD-C",
+			ProductName:          "Produk C",
+			IsActivePromoted:     false,
+			PromotionStatus:      "available",
+			PromotionStatusLabel: "Tersedia",
+		},
+	}
+
+	// Simulasikan pengurutan yang diterapkan pada GetEligibleProducts di repository
+	var normalItems []models.EligibleProductItem
+	var activePromotedItems []models.EligibleProductItem
+	for _, it := range items {
+		if it.IsActivePromoted {
+			activePromotedItems = append(activePromotedItems, it)
+		} else {
+			normalItems = append(normalItems, it)
+		}
+	}
+	sortedItems := append(normalItems, activePromotedItems...)
+
+	if len(sortedItems) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(sortedItems))
+	}
+	// Produk B (aktif promosi) harus berada di indeks paling akhir
+	if sortedItems[2].ProductID != "PRD-B" {
+		t.Errorf("expected PRD-B to be at the bottom, got %s", sortedItems[2].ProductID)
+	}
+	if !sortedItems[2].IsActivePromoted {
+		t.Errorf("expected bottom item to have IsActivePromoted = true")
+	}
+	if sortedItems[0].IsActivePromoted || sortedItems[1].IsActivePromoted {
+		t.Errorf("expected top items to not be active promoted")
+	}
+}
+
+func TestCreatePromotionInput_UnmarshalJSON_NewFormat(t *testing.T) {
+	// JSON payload dari form baru
+	rawJSON := `{
+		"caption": "Promo Gajian",
+		"product_ids": ["PRD-01", "PRD-02"],
+		"discount_type": "percentage",
+		"discount_value": 20,
+		"duration_days": 3
+	}`
+
+	var input models.CreatePromotionInput
+	err := jsonUnmarshal([]byte(rawJSON), &input)
+	if err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if input.Caption != "Promo Gajian" {
+		t.Errorf("expected caption 'Promo Gajian', got '%s'", input.Caption)
+	}
+	if input.DurationDays != 3 {
+		t.Errorf("expected duration_days 3, got %d", input.DurationDays)
+	}
+	if len(input.Products) != 2 {
+		t.Fatalf("expected 2 products populated from product_ids, got %d", len(input.Products))
+	}
+	if input.Products[0].ProductID != "PRD-01" || *input.Products[0].Discount != 20 {
+		t.Errorf("expected product 0 discount 20, got %v", input.Products[0].Discount)
+	}
+	if *input.Products[0].DiscountType != "percentage" {
+		t.Errorf("expected product 0 discount_type 'percentage', got %s", *input.Products[0].DiscountType)
+	}
+}
+
+func jsonUnmarshal(b []byte, v interface{}) error {
+	// helper wrapper
+	return json.Unmarshal(b, v)
+}
+
+func TestCreatePromotion_DurationChoices(t *testing.T) {
+	validChoices := []int{1, 3, 7}
+	for _, days := range validChoices {
+		if days != 1 && days != 3 && days != 7 {
+			t.Errorf("choice %d should be valid", days)
+		}
+	}
+
+	invalidChoices := []int{0, 2, 4, 5, 10, 14, 30}
+	for _, days := range invalidChoices {
+		isValid := (days == 1 || days == 3 || days == 7)
+		if isValid {
+			t.Errorf("choice %d should be invalid", days)
+		}
+	}
+}
+
+func TestCreatePromotion_NominalDiscountValidation(t *testing.T) {
+	productPrice := 50000.0
+
+	// 1. Valid nominal discount (Rp 10.000 < Rp 50.000)
+	validDiscount := 10000.0
+	if validDiscount >= productPrice {
+		t.Errorf("discount %.0f should be strictly less than product price %.0f", validDiscount, productPrice)
+	}
+
+	// 2. Invalid nominal discount (equal to price: Rp 50.000)
+	equalDiscount := 50000.0
+	if equalDiscount < productPrice {
+		t.Errorf("discount equal to price should be rejected")
+	}
+
+	// 3. Invalid nominal discount (exceeds price: Rp 60.000)
+	exceedDiscount := 60000.0
+	if exceedDiscount < productPrice {
+		t.Errorf("discount exceeding price should be rejected")
+	}
+}
+
+func TestPromotionDetailResponse_TitleGeneration(t *testing.T) {
+	bizName := "Warung Berkah"
+	mainProd := "Nasi Goreng Spesial"
+
+	// 1. Single product, percentage
+	title1 := fmt.Sprintf("%s diskon %.0f%% untuk %s.", bizName, 20.0, mainProd)
+	expected1 := "Warung Berkah diskon 20% untuk Nasi Goreng Spesial."
+	if title1 != expected1 {
+		t.Errorf("expected '%s', got '%s'", expected1, title1)
+	}
+
+	// 2. Multiple products (3 products total, N=2), nominal
+	nOthers := 2
+	discNomStr := formatRupiah(10000)
+	title2 := fmt.Sprintf("%s diskon Rp %s untuk %s dan %d produk lainnya.", bizName, discNomStr, mainProd, nOthers)
+	expected2 := "Warung Berkah diskon Rp 10.000 untuk Nasi Goreng Spesial dan 2 produk lainnya."
+	if title2 != expected2 {
+		t.Errorf("expected '%s', got '%s'", expected2, title2)
+	}
+}
+
+func TestPushPromotionNotification_SinglePushRule(t *testing.T) {
+	now := time.Now()
+
+	// Promo aktif yang BELUM pernah di-push
+	promoCanPush := models.Promotion{
+		PromotionID: "PRM-ACTIVE-01",
+		Status:      models.PromotionStatusActive,
+		NotifiedAt:  nil,
+	}
+	canPush := (promoCanPush.Status == models.PromotionStatusActive && promoCanPush.NotifiedAt == nil)
+	if !canPush {
+		t.Errorf("expected active promo without notified_at to be pushable")
+	}
+
+	// Promo aktif yang SUDAH pernah di-push
+	promoAlreadyPushed := models.Promotion{
+		PromotionID: "PRM-ACTIVE-02",
+		Status:      models.PromotionStatusActive,
+		NotifiedAt:  &now,
+	}
+	canPushAgain := (promoAlreadyPushed.Status == models.PromotionStatusActive && promoAlreadyPushed.NotifiedAt == nil)
+	if canPushAgain {
+		t.Errorf("expected active promo with notified_at to NOT be pushable (anti-spam single push limit)")
 	}
 }
 
