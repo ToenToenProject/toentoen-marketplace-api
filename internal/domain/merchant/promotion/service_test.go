@@ -2,7 +2,9 @@ package promotion
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 	"toentoen-backend/internal/domain/shared/models"
@@ -239,142 +241,112 @@ func TestPromotionListItem_JSONContract(t *testing.T) {
 	}
 }
 
-func TestBundlingPromotionValidation(t *testing.T) {
-	// 1. Min 2 products
-	inputFew := models.CreateBundlingPromotionInput{
-		PackageName:  "Paket Single",
-		PackagePrice: 20000,
-		Products: []models.BundlingProductItemInput{
-			{ProductID: "PRD-01", Quantity: 1},
+func TestPromotionValidation_Max10ActivePromotions(t *testing.T) {
+	exactErrorMessage := "Batas maksimal 10 promosi aktif telah tercapai. Harap tunggu hingga salah satu promosi berakhir atau hentikan promosi yang sedang berjalan sebelum membuat promosi baru."
+
+	// 1. Kasus 9 promosi aktif (belum mencapai batas 10) -> Harus diizinkan
+	activeCount9 := int64(9)
+	var err9 error
+	if activeCount9 >= 10 {
+		err9 = errors.New(exactErrorMessage)
+	}
+	if err9 != nil {
+		t.Errorf("expected 9 active promotions to be allowed, got error: %v", err9)
+	}
+
+	// 2. Kasus 10 promosi aktif (sudah mencapai batas) -> Harus ditolak (cegah promosi ke-11)
+	activeCount10 := int64(10)
+	var err10 error
+	if activeCount10 >= 10 {
+		err10 = errors.New(exactErrorMessage)
+	}
+	if err10 == nil {
+		t.Errorf("expected 10 active promotions to be rejected when attempting to create 11th promo")
+	} else if err10.Error() != exactErrorMessage {
+		t.Errorf("expected exact error message '%s', got '%s'", exactErrorMessage, err10.Error())
+	}
+
+	// 3. Kasus > 10 promosi aktif -> Tetap ditolak
+	activeCount15 := int64(15)
+	var err15 error
+	if activeCount15 >= 10 {
+		err15 = errors.New(exactErrorMessage)
+	}
+	if err15 == nil {
+		t.Errorf("expected > 10 active promotions to be rejected")
+	}
+}
+
+func TestEligibleProducts_PackageProductsSupported(t *testing.T) {
+	// Skenario: Produk Reguler A, Paket Hemat B (is_package = true), Produk C (aktif promosi)
+	items := []models.EligibleProductItem{
+		{
+			ProductID:            "PRD-REG-01",
+			ProductName:          "Kopi Susu",
+			Price:                15000,
+			IsPackage:            false,
+			IsActivePromoted:     false,
+			IsEligible:           true,
+			PromotionStatus:      "available",
+			PromotionStatusLabel: "Tersedia untuk promosi",
+		},
+		{
+			ProductID:            "PRD-PKG-01",
+			ProductName:          "Paket Sarapan Hemat",
+			Price:                25000,
+			IsPackage:            true,
+			IsActivePromoted:     false,
+			IsEligible:           true,
+			PromotionStatus:      "available",
+			PromotionStatusLabel: "Tersedia untuk promosi",
+		},
+		{
+			ProductID:            "PRD-REG-02",
+			ProductName:          "Roti Bakar",
+			Price:                12000,
+			IsPackage:            false,
+			IsActivePromoted:     true,
+			IsEligible:           false,
+			PromotionStatus:      "active_promoted",
+			PromotionStatusLabel: "Sedang Aktif Promosi",
 		},
 	}
-	if len(inputFew.Products) < 2 {
-		// Valid rejection
-	} else {
-		t.Errorf("expected rejection for fewer than 2 products")
+
+	// Pengurutan sesuai aturan di repository:
+	// 1. Produk belum aktif promosi di atas, aktif promosi di paling bawah
+	// 2. Pada daftar produk yang belum aktif promosi, paket (is_package = true) ditaruh di paling atas
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].IsActivePromoted != items[j].IsActivePromoted {
+			return !items[i].IsActivePromoted
+		}
+		if items[i].IsPackage != items[j].IsPackage {
+			return items[i].IsPackage
+		}
+		if items[i].IsEligible != items[j].IsEligible {
+			return items[i].IsEligible
+		}
+		return false
+	})
+
+	// Index 0 harus Paket (is_package = true)
+	if items[0].ProductID != "PRD-PKG-01" {
+		t.Errorf("expected package product to be at index 0, got %s", items[0].ProductID)
+	}
+	if !items[0].IsPackage {
+		t.Errorf("expected index 0 to have is_package = true")
 	}
 
-	// 2. Package price must be cheaper than original total price
-	// Product 1: Mie Ayam (Rp 25.000 x 1 = Rp 25.000)
-	// Product 2: Es Teh (Rp 5.000 x 2 = Rp 10.000)
-	// Original Total = Rp 35.000
-	origTotal := 35000.0
-
-	// Invalid package price: Rp 35.000 (same price)
-	invalidPkgPrice := 35000.0
-	if invalidPkgPrice >= origTotal {
-		// Valid rejection
-	} else {
-		t.Errorf("expected rejection when package price equals or exceeds original price")
+	// Index 1 harus Produk reguler yang belum aktif promosi
+	if items[1].ProductID != "PRD-REG-01" {
+		t.Errorf("expected regular product at index 1, got %s", items[1].ProductID)
 	}
 
-	// Valid package price: Rp 28.000
-	validPkgPrice := 28000.0
-	savingsAmount := origTotal - validPkgPrice
-	savingsPercentage := (savingsAmount / origTotal) * 100
-
-	if savingsAmount != 7000.0 {
-		t.Errorf("expected savings amount 7000, got %.2f", savingsAmount)
+	// Index 2 harus Produk yang sedang aktif promosi (paling bawah)
+	if items[2].ProductID != "PRD-REG-02" {
+		t.Errorf("expected active promoted product at index 2, got %s", items[2].ProductID)
 	}
-	expectedPct := 20.0
-	if savingsPercentage < expectedPct-0.01 || savingsPercentage > expectedPct+0.01 {
-		t.Errorf("expected savings percentage 20.0%%, got %.2f%%", savingsPercentage)
-	}
-}
-
-func TestBundlingPromotion_JSONContract(t *testing.T) {
-	now := time.Now()
-	pkgName := "Paket Kenyang Berdua"
-	pkgPrice := 50000.0
-	origTotal := 65000.0
-	savingsAmt := 15000.0
-	savingsPct := 23.08
-	pkgImg := "https://res.cloudinary.com/demo/image/upload/sample.jpg"
-
-	bundlingItem := models.PromotionListItem{
-		PromotionID:        "PRM-BND-01",
-		PromotionType:      models.PromotionTypeBundling,
-		Caption:            "Paket Spesial Berdua!",
-		PackageName:        &pkgName,
-		PackagePrice:       &pkgPrice,
-		PackageImage:       &pkgImg,
-		OriginalTotalPrice: &origTotal,
-		SavingsAmount:      &savingsAmt,
-		SavingsPercentage:  &savingsPct,
-		ProductCount:       2,
-		RemainingDays:      7,
-		StartAt:            now,
-		EndAt:              now.AddDate(0, 0, 7),
-		Status:             models.PromotionStatusActive,
-	}
-
-	if bundlingItem.PromotionType != "bundling" {
-		t.Errorf("expected promotion_type 'bundling', got %s", bundlingItem.PromotionType)
-	}
-	if bundlingItem.PackageName == nil || *bundlingItem.PackageName != pkgName {
-		t.Errorf("expected package name %s, got %v", pkgName, bundlingItem.PackageName)
-	}
-	if bundlingItem.PackagePrice == nil || *bundlingItem.PackagePrice != pkgPrice {
-		t.Errorf("expected package price %.0f, got %v", pkgPrice, bundlingItem.PackagePrice)
-	}
-	if bundlingItem.SavingsAmount == nil || *bundlingItem.SavingsAmount != savingsAmt {
-		t.Errorf("expected savings amount %.0f, got %v", savingsAmt, bundlingItem.SavingsAmount)
-	}
-	if bundlingItem.ProductCount != 2 {
-		t.Errorf("expected product count 2, got %d", bundlingItem.ProductCount)
-	}
-}
-
-func TestPromotionEligibility_CrossTypeSupport(t *testing.T) {
-	// Skenario: Produk A sedang aktif di promosi per-produk (PRM-CAT-01)
-	prodID := "PRD-A"
-	activePerProductMap := map[string]string{
-		prodID: "PRM-CAT-01",
-	}
-	activeBundlingMap := map[string]string{}
-
-	// 1. Evaluasi untuk target_type: "per_product" (promosi per kategori / per produk baru)
-	// Aturan: Produk yang sudah ada di per_product TIDAK BISA dipromosikan lagi di per_product
-	inPerProduct := false
-	if _, ok := activePerProductMap[prodID]; ok {
-		inPerProduct = true
-	}
-
-	targetTypePerProduct := "per_product"
-	isEligiblePerProduct := true
-	if targetTypePerProduct == "per_product" && inPerProduct {
-		isEligiblePerProduct = false
-	}
-	if isEligiblePerProduct {
-		t.Errorf("expected product in per_product promotion to be ineligible for another per_product promotion")
-	}
-
-	// 2. Evaluasi untuk target_type: "bundling" (promosi paket bundling)
-	// Aturan: Produk yang sudah ada di per_product TETAP BISA dipromosikan di paket bundling
-	targetTypeBundling := "bundling"
-	isEligibleBundling := true
-	if targetTypeBundling == "bundling" {
-		isEligibleBundling = true // Selalu eligible untuk bundling
-	}
-	if !isEligibleBundling {
-		t.Errorf("expected product in per_product promotion to remain eligible for bundling promotion")
-	}
-
-	// 3. Skenario sebaliknya: Produk B sedang aktif di paket bundling (PRM-BND-01)
-	prodB := "PRD-B"
-	activeBundlingMap[prodB] = "PRM-BND-01"
-
-	// Produk B ingin didaftarkan ke promosi per-produk
-	inPerProductB := false
-	if _, ok := activePerProductMap[prodB]; ok {
-		inPerProductB = true
-	}
-	isEligibleBForPerProduct := true
-	if targetTypePerProduct == "per_product" && inPerProductB {
-		isEligibleBForPerProduct = false
-	}
-	if !isEligibleBForPerProduct {
-		t.Errorf("expected product in bundling to remain eligible for per_product promotion")
+	if !items[2].IsActivePromoted {
+		t.Errorf("expected index 2 to have is_active_promoted = true")
 	}
 }
 

@@ -836,7 +836,6 @@ func main() {
 	promoRoutes.Get("/eligible-products", promotionHandler.GetEligibleProducts)
 	promoRoutes.Post("", middlewares.RequireKYC, promotionHandler.CreatePromotion)
 	promoRoutes.Post("/", middlewares.RequireKYC, promotionHandler.CreatePromotion)
-	promoRoutes.Post("/bundling", middlewares.RequireKYC, promotionHandler.CreateBundlingPromotion)
 	promoRoutes.Get("", promotionHandler.GetPromotions)
 	promoRoutes.Get("/", promotionHandler.GetPromotions)
 	promoRoutes.Get("/:promotion_id", promotionHandler.GetPromotionDetail)

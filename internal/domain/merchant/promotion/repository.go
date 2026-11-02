@@ -38,6 +38,7 @@ type PromotionRepository interface {
 	StopPromotion(businessID, promotionID string, promoProducts []models.PromotionProduct, postID *string) error
 
 	HasActivePromotions(businessID string) (bool, error)
+	CountActivePromotions(businessID string) (int64, error)
 	GetProductsInActivePromotions(businessID string) ([]models.Product, error)
 	RecordPromotionEvents(events []models.PromotionEvent) error
 
@@ -129,25 +130,14 @@ func (r *promotionRepository) GetActiveBundlingPromotionProductIDs(businessID st
 func (r *promotionRepository) GetEligibleProducts(businessID string, targetType string) ([]models.EligibleProductItem, error) {
 	var products []models.Product
 	err := r.db.Where("business_id = ? AND is_active = ?", businessID, true).
-		Order("created_at DESC").
+		Order("is_package DESC, created_at DESC").
 		Find(&products).Error
 	if err != nil {
 		return nil, err
 	}
 
-	targetType = strings.ToLower(strings.TrimSpace(targetType))
-	if targetType == "" {
-		targetType = models.PromotionTypePerProduct
-	}
-
-	// 1. Ambil produk yang sedang berada dalam promosi per-produk
+	// Ambil produk yang sedang berada dalam promosi per-produk
 	activePerProductMap, err := r.GetActivePromotionProductIDs(businessID, models.PromotionTypePerProduct)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. Ambil produk yang sedang berada dalam promosi paket bundling
-	activeBundlingMap, err := r.GetActiveBundlingPromotionProductIDs(businessID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,20 +151,12 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 		}
 
 		inPerProductPromoID, inPerProduct := activePerProductMap[p.ProductID]
-		inBundlingPromoID, inBundling := activeBundlingMap[p.ProductID]
 
 		activePromos := make([]models.ActivePromotionInfo, 0)
 		if inPerProduct {
 			activePromos = append(activePromos, models.ActivePromotionInfo{
 				PromotionID:   inPerProductPromoID,
 				PromotionType: models.PromotionTypePerProduct,
-				Status:        "active",
-			})
-		}
-		if inBundling {
-			activePromos = append(activePromos, models.ActivePromotionInfo{
-				PromotionID:   inBundlingPromoID,
-				PromotionType: models.PromotionTypeBundling,
 				Status:        "active",
 			})
 		}
@@ -191,25 +173,15 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 			ineligibleReason = "Produk tidak aktif"
 			promoStatus = "inactive"
 			promoStatusLabel = "Produk Tidak Aktif"
-		} else if targetType == models.PromotionTypeBundling {
-			isEligible = true
-			if inBundling {
-				isActivePromoted = true
-				promoStatus = "active_promoted"
-				promoStatusLabel = "Sedang Aktif Bundling"
-				activePromoID = inBundlingPromoID
-			}
-		} else {
+		} else if inPerProduct {
 			// Aturan Per-Produk (Katalog):
 			// Produk yang sedang ada di promosi per-produk TIDAK BISA didaftarkan lagi (mencegah konflik diskon katalog).
-			if inPerProduct {
-				isEligible = false
-				isActivePromoted = true
-				promoStatus = "active_promoted"
-				promoStatusLabel = "Sedang Aktif Promosi"
-				activePromoID = inPerProductPromoID
-				ineligibleReason = fmt.Sprintf("Produk sedang aktif dalam promosi (%s)", inPerProductPromoID)
-			}
+			isEligible = false
+			isActivePromoted = true
+			promoStatus = "active_promoted"
+			promoStatusLabel = "Sedang Aktif Promosi"
+			activePromoID = inPerProductPromoID
+			ineligibleReason = fmt.Sprintf("Produk sedang aktif dalam promosi (%s)", inPerProductPromoID)
 		}
 
 		hasDiscount := utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, now)
@@ -219,6 +191,7 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 			ProductName:            p.ProductName,
 			ImageURL:               imageURL,
 			Price:                  p.Price,
+			IsPackage:              p.IsPackage,
 			IsEligible:             isEligible,
 			IneligibleReason:       ineligibleReason,
 			IsActivePromoted:       isActivePromoted,
@@ -232,16 +205,20 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 			CurrentDiscountStartAt: p.DiscountStartAt,
 			CurrentDiscountEndAt:   p.DiscountEndAt,
 			InPerProductPromotion:  inPerProduct,
-			InBundlingPromotion:    inBundling,
+			InBundlingPromotion:    false,
 			ActivePromotions:       activePromos,
 		})
 	}
 
-	// Aturan Urutan: Produk yang sedang aktif promosi (isActivePromoted == true)
-	// otomatis diletakkan di PALING BAWAH list.
+	// Aturan Urutan:
+	// 1. Produk yang belum aktif promosi berada di ATAS. Produk aktif promosi (isActivePromoted == true) di PALING BAWAH.
+	// 2. Pada daftar produk yang belum aktif promosi, paket (is_package == true) ditaruh di bagian paling atas.
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].IsActivePromoted != items[j].IsActivePromoted {
 			return !items[i].IsActivePromoted // false (belum aktif promo) ditaruh di atas
+		}
+		if items[i].IsPackage != items[j].IsPackage {
+			return items[i].IsPackage // paket ditaruh di atas produk reguler
 		}
 		if items[i].IsEligible != items[j].IsEligible {
 			return items[i].IsEligible // yang eligible ditaruh lebih dulu
@@ -640,6 +617,15 @@ func (r *promotionRepository) GetProductsInActivePromotions(businessID string) (
 		Order("products.created_at DESC").
 		Find(&products).Error
 	return products, err
+}
+
+func (r *promotionRepository) CountActivePromotions(businessID string) (int64, error) {
+	now := time.Now()
+	var count int64
+	err := r.db.Model(&models.Promotion{}).
+		Where("business_id = ? AND status = ? AND end_at > ?", businessID, models.PromotionStatusActive, now).
+		Count(&count).Error
+	return count, err
 }
 
 func (r *promotionRepository) RecordPromotionEvents(events []models.PromotionEvent) error {

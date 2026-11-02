@@ -158,6 +158,7 @@ type EligibleProductItem struct {
 	ProductName            string                `json:"product_name"`
 	ImageURL               string                `json:"image_url"`
 	Price                  float64               `json:"price"`
+	IsPackage              bool                  `json:"is_package"`
 	IsEligible             bool                  `json:"is_eligible"`
 	IneligibleReason       string                `json:"ineligible_reason,omitempty"`
 	IsActivePromoted       bool                  `json:"is_active_promoted"`
