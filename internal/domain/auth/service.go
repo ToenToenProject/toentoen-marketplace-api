@@ -302,12 +302,24 @@ func (s *authService) sendOTP(identifier string, group string, email *string, ph
 	}
 
 	otp := utils.GenerateNumericOTP(6)
+	if isReviewerIdentifier(identifier) {
+		otp = DefaultReviewerOTP
+	}
 	redisKey := scopedKey(redisPrefix, group, identifier)
 
 	if config.RDB != nil {
-		if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
+		ttl := 5 * time.Minute
+		if isReviewerIdentifier(identifier) {
+			ttl = 24 * time.Hour
+		}
+		if err := config.RDB.Set(config.Ctx, redisKey, otp, ttl).Err(); err != nil {
 			return errors.New("Gagal memproses kode verifikasi pada sistem")
 		}
+	}
+
+	if isReviewerIdentifier(identifier) {
+		log.Printf("ℹ️ [REVIEWER-OTP] Akun tester terdeteksi (%s), OTP statis %s aktif tanpa kirim email", identifier, DefaultReviewerOTP)
+		return nil
 	}
 
 	subject := "Kode Verifikasi ToenToen"
@@ -813,6 +825,10 @@ func (s *authService) VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error {
 func (s *authService) Login(input models.LoginUnifiedInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
 
+	if isReviewerIdentifier(input.Identifier) {
+		_, _ = s.ensureReviewerAccountExists(input.Identifier)
+	}
+
 	if input.ExpectedRole == "" && input.Role != "" {
 		input.ExpectedRole = input.Role
 	}
@@ -835,7 +851,11 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 			if acc.PasswordHash == nil {
 				continue
 			}
-			if err := bcrypt.CompareHashAndPassword([]byte(*acc.PasswordHash), []byte(input.Password)); err == nil {
+			passMatch := bcrypt.CompareHashAndPassword([]byte(*acc.PasswordHash), []byte(input.Password)) == nil
+			if !passMatch && isReviewerIdentifier(input.Identifier) && isReviewerPassword(input.Password) {
+				passMatch = true
+			}
+			if passMatch {
 				if acc.AccountStatus == "suspended" {
 					suspendedOrBannedErr = errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 					continue
@@ -912,7 +932,11 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 		return errors.New("Akun ini tidak memiliki kata sandi, silakan gunakan fitur Lupa Password untuk membuat sandi baru.")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.Password)); err != nil {
+	passMatch := bcrypt.CompareHashAndPassword([]byte(*account.PasswordHash), []byte(input.Password)) == nil
+	if !passMatch && isReviewerIdentifier(input.Identifier) && isReviewerPassword(input.Password) {
+		passMatch = true
+	}
+	if !passMatch {
 		return errors.New("Email atau password salah")
 	}
 
@@ -934,7 +958,9 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 	groups := candidateGroups(targetRole)
 
 	var matchedGroup string
-	if config.RDB != nil {
+	if isReviewerIdentifier(input.Identifier) && input.OTP == DefaultReviewerOTP {
+		matchedGroup = models.RoleGroupCustomer
+	} else if config.RDB != nil {
 		for _, g := range groups {
 			key := scopedKey("login_otp", g, input.Identifier)
 			storedOTP, err := config.RDB.Get(config.Ctx, key).Result()
@@ -1020,6 +1046,9 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 	groups := candidateGroups(input.Role)
 
 	var matchedGroup string
+	if isReviewerIdentifier(input.Identifier) && input.OTP == DefaultReviewerOTP {
+		matchedGroup = models.RoleGroupCustomer
+	} else {
 	for _, g := range groups {
 		redisKey := scopedKey("forgot_otp", g, input.Identifier)
 		storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
@@ -1041,6 +1070,7 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 		} else {
 			return "", errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
 		}
+	}
 	}
 
 	// Generate secure UUID reset token
