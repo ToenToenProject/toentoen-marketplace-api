@@ -350,6 +350,11 @@ func main() {
 	api.Post("/webhook/whatsapp", webhookHandler.HandleWhatsAppWebhookEvent)
 
 	// ==========================================
+	// ROUTES: LEGAL & COMPLIANCE (Google Play Store)
+	// ==========================================
+	registerLegalRoutes(app, api)
+
+	// ==========================================
 	// ROUTES: PUBLIC METADATA (Categories, Tags)
 	// ==========================================
 	metaGroup := api.Group("/meta")
