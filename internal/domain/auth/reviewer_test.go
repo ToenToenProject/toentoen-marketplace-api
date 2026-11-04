@@ -61,52 +61,117 @@ func TestReviewerLoginFlow(t *testing.T) {
 	hashStr := string(hashBytes)
 	emailStr := DefaultReviewerEmail
 
-	reviewerAcc := &models.Account{
-		AccountID:       "acc-google-reviewer-test",
+	reviewerCust := &models.Account{
+		AccountID:       "acc-google-reviewer-cust",
 		Email:           &emailStr,
-		Username:        "googletester",
+		Username:        "googletester_cust",
 		PasswordHash:    &hashStr,
 		Role:            "customer",
 		AccountStatus:   "active",
 		EmailVerifiedAt: &now,
 	}
 
+	reviewerOwner := &models.Account{
+		AccountID:       "acc-google-reviewer-owner",
+		Email:           &emailStr,
+		Username:        "googletester_owner",
+		PasswordHash:    &hashStr,
+		Role:            "owner",
+		AccountStatus:   "active",
+		EmailVerifiedAt: &now,
+	}
+
+	reviewerAdmin := &models.Account{
+		AccountID:       "acc-google-reviewer-admin",
+		Email:           &emailStr,
+		Username:        "googletester_admin",
+		PasswordHash:    &hashStr,
+		Role:            "business_admin",
+		AccountStatus:   "active",
+		EmailVerifiedAt: &now,
+	}
+
 	mockRepo := &mockAuthRepo{
 		accounts: map[string]*models.Account{
-			DefaultReviewerEmail: reviewerAcc,
+			DefaultReviewerEmail + ":customer":       reviewerCust,
+			DefaultReviewerEmail + ":owner":          reviewerOwner,
+			DefaultReviewerEmail + ":business_admin": reviewerAdmin,
 		},
 	}
 	service := NewAuthService(mockRepo)
 
-	t.Run("Login reviewer returns nil error and triggers static OTP", func(t *testing.T) {
+	if config.Envs == nil {
+		config.Envs = &config.AppConfig{
+			JWTSecret: "test-secret-key-12345678901234567890",
+		}
+	}
+
+	t.Run("Customer login and OTP verification", func(t *testing.T) {
 		err := service.Login(models.LoginUnifiedInput{
-			Identifier: DefaultReviewerEmail,
-			Password:   DefaultReviewerPassword,
+			Identifier:   DefaultReviewerEmail,
+			Password:     DefaultReviewerPassword,
+			ExpectedRole: "customer",
 		})
 		if err != nil {
-			t.Fatalf("expected reviewer login to succeed, got: %v", err)
-		}
-	})
-
-	t.Run("VerifyLoginOTP accepts DefaultReviewerOTP 123456", func(t *testing.T) {
-		if config.Envs == nil {
-			config.Envs = &config.AppConfig{
-				JWTSecret: "test-secret-key-12345678901234567890",
-			}
+			t.Fatalf("expected customer login to succeed, got: %v", err)
 		}
 
 		token, acc, err := service.VerifyLoginOTP(models.VerifyLoginOTPInput{
-			Identifier: DefaultReviewerEmail,
-			OTP:        DefaultReviewerOTP,
+			Identifier:   DefaultReviewerEmail,
+			OTP:          DefaultReviewerOTP,
+			ExpectedRole: "customer",
 		})
 		if err != nil {
-			t.Fatalf("expected reviewer OTP verification to succeed, got: %v", err)
+			t.Fatalf("expected OTP verification to succeed, got: %v", err)
 		}
-		if token == "" {
-			t.Errorf("expected non-empty JWT token")
+		if token == "" || acc.Role != "customer" {
+			t.Errorf("expected valid customer session, got role %v", acc.Role)
 		}
-		if acc == nil || acc.Role != "customer" {
-			t.Errorf("expected valid customer account, got %+v", acc)
+	})
+
+	t.Run("Owner login and OTP verification", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier:   DefaultReviewerEmail,
+			Password:     DefaultReviewerPassword,
+			ExpectedRole: "owner",
+		})
+		if err != nil {
+			t.Fatalf("expected owner login to succeed, got: %v", err)
+		}
+
+		token, acc, err := service.VerifyLoginOTP(models.VerifyLoginOTPInput{
+			Identifier:   DefaultReviewerEmail,
+			OTP:          DefaultReviewerOTP,
+			ExpectedRole: "owner",
+		})
+		if err != nil {
+			t.Fatalf("expected OTP verification to succeed, got: %v", err)
+		}
+		if token == "" || acc.Role != "owner" {
+			t.Errorf("expected valid owner session, got role %v", acc.Role)
+		}
+	})
+
+	t.Run("Business Admin login and OTP verification", func(t *testing.T) {
+		err := service.Login(models.LoginUnifiedInput{
+			Identifier:   DefaultReviewerEmail,
+			Password:     DefaultReviewerPassword,
+			ExpectedRole: "business_admin",
+		})
+		if err != nil {
+			t.Fatalf("expected business_admin login to succeed, got: %v", err)
+		}
+
+		token, acc, err := service.VerifyLoginOTP(models.VerifyLoginOTPInput{
+			Identifier:   DefaultReviewerEmail,
+			OTP:          DefaultReviewerOTP,
+			ExpectedRole: "business_admin",
+		})
+		if err != nil {
+			t.Fatalf("expected OTP verification to succeed, got: %v", err)
+		}
+		if token == "" || acc.Role != "business_admin" {
+			t.Errorf("expected valid admin session, got role %v", acc.Role)
 		}
 	})
 }

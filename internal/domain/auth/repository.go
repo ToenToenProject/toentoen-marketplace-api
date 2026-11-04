@@ -55,8 +55,19 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 
 		case "owner":
 			ownerRecord := models.Owner{AccountID: account.AccountID}
-			if account.Owner != nil && account.Owner.ReferralCode != nil {
-				ownerRecord.ReferralCode = account.Owner.ReferralCode
+			if account.Owner != nil {
+				if account.Owner.ReferralCode != nil {
+					ownerRecord.ReferralCode = account.Owner.ReferralCode
+				}
+				if account.Owner.KycStatus != "" {
+					ownerRecord.KycStatus = account.Owner.KycStatus
+				}
+				if account.Owner.KycVerifiedAt != nil {
+					ownerRecord.KycVerifiedAt = account.Owner.KycVerifiedAt
+				}
+				if account.Owner.KtpName != nil {
+					ownerRecord.KtpName = account.Owner.KtpName
+				}
 			}
 			// Wariskan data KYC terverifikasi jika pengguna sudah memiliki akun Admin yang terverifikasi
 			kychelper.InheritVerifiedKYCOnCreate(tx, account, "owner", &ownerRecord, nil)
@@ -69,6 +80,17 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 			adminRecord := models.BusinessAdmin{
 				AccountID:      account.AccountID,
 				InvitationCode: &inviteCode,
+			}
+			if account.BusinessAdmin != nil {
+				if account.BusinessAdmin.KycStatus != "" {
+					adminRecord.KycStatus = account.BusinessAdmin.KycStatus
+				}
+				if account.BusinessAdmin.KycVerifiedAt != nil {
+					adminRecord.KycVerifiedAt = account.BusinessAdmin.KycVerifiedAt
+				}
+				if account.BusinessAdmin.KtpName != nil {
+					adminRecord.KtpName = account.BusinessAdmin.KtpName
+				}
 			}
 			// Wariskan data KYC terverifikasi jika pengguna sudah memiliki akun Owner yang terverifikasi
 			kychelper.InheritVerifiedKYCOnCreate(tx, account, "business_admin", nil, &adminRecord)

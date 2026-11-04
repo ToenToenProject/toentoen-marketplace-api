@@ -826,7 +826,7 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	input.Identifier = cleanIdentifier(input.Identifier)
 
 	if isReviewerIdentifier(input.Identifier) {
-		_, _ = s.ensureReviewerAccountExists(input.Identifier)
+		_ = s.ensureReviewerAccounts(input.Identifier)
 	}
 
 	if input.ExpectedRole == "" && input.Role != "" {
@@ -959,7 +959,11 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 
 	var matchedGroup string
 	if isReviewerIdentifier(input.Identifier) && input.OTP == DefaultReviewerOTP {
-		matchedGroup = models.RoleGroupCustomer
+		if targetRole != "" {
+			matchedGroup = models.RoleGroupOf(targetRole)
+		} else {
+			matchedGroup = models.RoleGroupCustomer
+		}
 	} else if config.RDB != nil {
 		for _, g := range groups {
 			key := scopedKey("login_otp", g, input.Identifier)
@@ -1047,7 +1051,11 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 
 	var matchedGroup string
 	if isReviewerIdentifier(input.Identifier) && input.OTP == DefaultReviewerOTP {
-		matchedGroup = models.RoleGroupCustomer
+		if input.Role != "" {
+			matchedGroup = models.RoleGroupOf(input.Role)
+		} else {
+			matchedGroup = models.RoleGroupCustomer
+		}
 	} else {
 	for _, g := range groups {
 		redisKey := scopedKey("forgot_otp", g, input.Identifier)
