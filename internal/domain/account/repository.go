@@ -25,7 +25,7 @@ type ProfileRepository interface {
 	SaveBusinessAdminProfile(account *models.Account, businessAdmin *models.BusinessAdmin) error
 
 	DeleteAccountTx(accountID string, role string) ([]string, []string, error)
-	CheckUsernameExists(username string, excludeAccountID string) (bool, error)
+	CheckUsernameExists(username string, excludeAccountID string, roleGroup ...string) (bool, error)
 	CheckEmailExists(email string, excludeAccountID string, roleGroup ...string) (bool, error)
 	CheckPhoneNumberExists(phone string, excludeAccountID string, roleGroup ...string) (bool, error)
 	CheckKtpNumberExists(ktp string, excludeAccountID string) (bool, error)
@@ -193,9 +193,23 @@ func (r *profileRepository) SaveBusinessAdminProfile(account *models.Account, bu
 }
 
 // DeleteAccountTx deletes the account and all associated data, returning lists of deleted business IDs and product IDs for Meilisearch cleanup
-func (r *profileRepository) CheckUsernameExists(username string, excludeAccountID string) (bool, error) {
+func (r *profileRepository) CheckUsernameExists(username string, excludeAccountID string, roleGroup ...string) (bool, error) {
+	query := r.db.Model(&models.Account{}).Where("LOWER(username) = LOWER(?) AND account_id != ?", strings.TrimSpace(username), excludeAccountID)
+	var group string
+	if len(roleGroup) > 0 && roleGroup[0] != "" {
+		group = roleGroup[0]
+	} else if excludeAccountID != "" {
+		// Dapatkan group dari akun yang sedang mengedit
+		var acc models.Account
+		if err := r.db.Select("role").Where("account_id = ?", excludeAccountID).First(&acc).Error; err == nil {
+			group = models.RoleGroupOf(acc.Role)
+		}
+	}
+	if roles := models.RolesInGroup(group); len(roles) > 0 {
+		query = query.Where("role IN ?", roles)
+	}
 	var count int64
-	err := r.db.Model(&models.Account{}).Where("LOWER(username) = LOWER(?) AND account_id != ?", strings.TrimSpace(username), excludeAccountID).Count(&count).Error
+	err := query.Count(&count).Error
 	return count > 0, err
 }
 

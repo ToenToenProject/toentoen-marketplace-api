@@ -46,7 +46,7 @@ func (m *mockProfileRepo) SaveBusinessAdminProfile(account *models.Account, busi
 func (m *mockProfileRepo) DeleteAccountTx(accountID string, role string) ([]string, []string, error) {
 	return nil, nil, nil
 }
-func (m *mockProfileRepo) CheckUsernameExists(username string, excludeAccountID string) (bool, error) {
+func (m *mockProfileRepo) CheckUsernameExists(username string, excludeAccountID string, roleGroup ...string) (bool, error) {
 	return false, nil
 }
 func (m *mockProfileRepo) CheckEmailExists(email string, excludeAccountID string, roleGroup ...string) (bool, error) {

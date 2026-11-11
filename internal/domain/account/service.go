@@ -371,7 +371,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 	}
 	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
 		cleanUsername := strings.TrimSpace(*input.Username)
-		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID)
+		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID, models.RoleGroupCustomer)
 		if err != nil {
 			return nil, err
 		}
@@ -591,7 +591,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 	}
 	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
 		cleanUsername := strings.TrimSpace(*input.Username)
-		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID)
+		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID, models.RoleGroupOwner)
 		if err != nil {
 			return nil, err
 		}
@@ -681,7 +681,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 	}
 	if input.Username != nil && strings.TrimSpace(*input.Username) != "" {
 		cleanUsername := strings.TrimSpace(*input.Username)
-		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID)
+		exists, err := s.repo.CheckUsernameExists(cleanUsername, accountID, models.RoleGroupAdmin)
 		if err != nil {
 			return nil, err
 		}

@@ -61,7 +61,7 @@ type Account struct {
 	PhoneNumber       *string    `json:"phoneNumber"`
 	FirstName         string     `json:"firstName"`
 	LastName          string     `json:"lastName"`
-	Username          string     `gorm:"unique;" json:"username"`
+	Username          string     `json:"username"`
 	ProfilePictureUrl *string    `json:"profilePictureUrl"`
 	PasswordHash  *string    `json:"-"`
 	Role          string     `json:"role"`
