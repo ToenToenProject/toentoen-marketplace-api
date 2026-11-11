@@ -93,3 +93,7 @@ docs/
 
 # Codebase Memory MCP
 .codebase-memory/
+
+# AI Agent Local Rules
+GEMINI.md
+AGENTS.md
