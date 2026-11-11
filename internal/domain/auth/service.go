@@ -553,6 +553,22 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 	input.Identifier = cleanIdentifier(input.Identifier)
 	groups := candidateGroups(input.Role)
 
+	tokenStr := strings.TrimSpace(input.FirebaseToken)
+	if tokenStr == "" {
+		tokenStr = strings.TrimSpace(input.IDToken)
+	}
+	isFirebaseVerified := false
+	if tokenStr != "" {
+		verifiedPhone, err := utils.VerifyFirebasePhoneToken(tokenStr)
+		if err != nil {
+			return "", err
+		}
+		if !utils.MatchPhoneNumbers(verifiedPhone, input.Identifier) {
+			return "", errors.New("Nomor telepon pada klaim token Firebase tidak cocok dengan identitas pendaftaran")
+		}
+		isFirebaseVerified = true
+	}
+
 	if config.RDB != nil {
 		// Cari data pendaftaran sementara di setiap kelompok role yang relevan.
 		// Kelompok yang dipakai adalah yang kode OTP-nya cocok.
@@ -569,7 +585,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 			if err := json.Unmarshal([]byte(storedJSON), &p); err != nil {
 				return "", errors.New("Gagal membaca data pendaftaran sementara")
 			}
-			if p.OTP != input.OTP {
+			if !isFirebaseVerified && p.OTP != input.OTP {
 				continue
 			}
 			if pending != nil {
@@ -579,7 +595,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 			pending = &matched
 			group = g
 		}
-		if pending == nil && hasAnyPending {
+		if pending == nil && hasAnyPending && !isFirebaseVerified {
 			return "", errors.New("OTP tidak valid atau sudah kadaluarsa")
 		}
 
@@ -815,11 +831,100 @@ func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
 }
 
 func (s *authService) SendPhoneOTP(phone string) error {
-	return errors.New("Layanan verifikasi OTP melalui nomor telepon/WhatsApp sedang dalam tahap pengembangan. Silakan gunakan alamat email.")
+	cleanPhone := utils.NormalizePhoneNumber(phone)
+	if len(cleanPhone) < 7 || len(cleanPhone) > 15 {
+		return errors.New("Nomor telepon tidak valid (harus 7-15 digit angka)")
+	}
+
+	// 1. Akun pengujian reviewer Google Play tidak perlu kirim SMS/WA
+	if isReviewerIdentifier(phone) || isReviewerIdentifier(cleanPhone) {
+		return nil
+	}
+
+	// 2. Rate limiting di Redis: Cooldown 60 detik per nomor
+	rateKey := fmt.Sprintf("ratelimit:phone_otp:%s", cleanPhone)
+	if config.RDB != nil {
+		if exists, _ := config.RDB.Exists(config.Ctx, rateKey).Result(); exists > 0 {
+			return errors.New("Harap tunggu 60 detik sebelum meminta kode OTP kembali")
+		}
+	}
+
+	// 3. Generate 6 digit OTP & simpan di Redis (5 menit)
+	otp := utils.GenerateNumericOTP(6)
+	otpKey := fmt.Sprintf("phone_otp:%s", cleanPhone)
+	if config.RDB != nil {
+		if err := config.RDB.Set(config.Ctx, otpKey, otp, 5*time.Minute).Err(); err != nil {
+			return errors.New("Gagal memproses kode OTP pada sistem")
+		}
+		_ = config.RDB.Set(config.Ctx, rateKey, "1", 60*time.Second).Err()
+	}
+
+	// 4. Kirim via WhatsApp (Fonnte / console log)
+	waMsg := fmt.Sprintf("Kode OTP verifikasi nomor telepon ToenToen Anda adalah: *%s*\n\nKode berlaku 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
+	if err := utils.SendWAOTP(phone, otp, waMsg); err != nil {
+		log.Printf("⚠️ Gagal mengirim WA OTP ke %s: %v", phone, err)
+	}
+
+	return nil
 }
 
 func (s *authService) VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error {
-	return errors.New("Layanan verifikasi OTP melalui nomor telepon/WhatsApp sedang dalam tahap pengembangan.")
+	cleanPhone := utils.NormalizePhoneNumber(input.Phone)
+	if len(cleanPhone) < 7 || len(cleanPhone) > 15 {
+		return errors.New("Nomor telepon tidak valid")
+	}
+
+	tokenStr := strings.TrimSpace(input.FirebaseToken)
+	if tokenStr == "" {
+		tokenStr = strings.TrimSpace(input.IDToken)
+	}
+
+	// Mode 1: Verifikasi via Firebase ID Token (Flutter)
+	if tokenStr != "" {
+		verifiedPhone, err := utils.VerifyFirebasePhoneToken(tokenStr)
+		if err != nil {
+			return err
+		}
+		if !utils.MatchPhoneNumbers(verifiedPhone, input.Phone) {
+			return errors.New("Nomor telepon pada klaim token Firebase tidak cocok dengan nomor yang diajukan")
+		}
+	} else {
+		// Mode 2: Verifikasi via OTP manual / WA OTP / Reviewer mock
+		inputOTP := strings.TrimSpace(input.OTP)
+		if inputOTP == "" {
+			return errors.New("Kode OTP atau Firebase Token wajib disertakan")
+		}
+
+		isReviewer := isReviewerIdentifier(input.Phone) || isReviewerIdentifier(cleanPhone)
+		if !(isReviewer && inputOTP == DefaultReviewerOTP) {
+			otpKey := fmt.Sprintf("phone_otp:%s", cleanPhone)
+			storedOTP, err := config.RDB.Get(config.Ctx, otpKey).Result()
+			if err != nil || storedOTP == "" {
+				return errors.New("Kode OTP tidak valid atau sudah kedaluwarsa")
+			}
+			if storedOTP != inputOTP {
+				return errors.New("Kode OTP salah")
+			}
+			config.RDB.Del(config.Ctx, otpKey)
+		}
+	}
+
+	// Cari akun dengan nomor telepon ini dan tandai terverifikasi
+	roleGroup := ""
+	if input.Role != "" {
+		roleGroup = models.RoleGroupOf(NormalizeExpectedRole(input.Role))
+	}
+	account, err := s.repo.FindByIdentifier(input.Phone, roleGroup)
+	if err == nil && account != nil {
+		now := time.Now()
+		account.PhoneVerifiedAt = &now
+		if account.AccountStatus == "inactive" {
+			account.AccountStatus = "active"
+		}
+		_ = s.repo.Update(account)
+	}
+
+	return nil
 }
 
 func (s *authService) Login(input models.LoginUnifiedInput) error {
@@ -958,7 +1063,25 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 	groups := candidateGroups(targetRole)
 
 	var matchedGroup string
-	if isReviewerIdentifier(input.Identifier) && input.OTP == DefaultReviewerOTP {
+	tokenStr := strings.TrimSpace(input.FirebaseToken)
+	if tokenStr == "" {
+		tokenStr = strings.TrimSpace(input.IDToken)
+	}
+
+	if tokenStr != "" {
+		verifiedPhone, err := utils.VerifyFirebasePhoneToken(tokenStr)
+		if err != nil {
+			return "", nil, err
+		}
+		if !utils.MatchPhoneNumbers(verifiedPhone, input.Identifier) {
+			return "", nil, errors.New("Nomor telepon pada klaim token Firebase tidak cocok dengan identitas login")
+		}
+		if targetRole != "" {
+			matchedGroup = models.RoleGroupOf(targetRole)
+		} else {
+			matchedGroup = models.RoleGroupCustomer
+		}
+	} else if isReviewerIdentifier(input.Identifier) && input.OTP == DefaultReviewerOTP {
 		if targetRole != "" {
 			matchedGroup = models.RoleGroupOf(targetRole)
 		} else {
@@ -1340,11 +1463,88 @@ func (s *authService) RequestPhoneChange(accountID string, input models.RequestP
 		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
 	}
 
-	return errors.New("Layanan verifikasi nomor telepon/WhatsApp sedang dalam tahap pengembangan. Fitur nomor telepon belum dapat digunakan saat ini.")
+	// 3. Simpan data request ke Redis & kirim WA OTP (sebagai alternatif jika tidak menggunakan Firebase di Flutter)
+	otp := utils.GenerateNumericOTP(6)
+	changeData := map[string]string{
+		"new_phone": newPhoneClean,
+		"otp":       otp,
+	}
+	changeJSON, _ := json.Marshal(changeData)
+	redisKey := fmt.Sprintf("phone_change:%s", accountID)
+	if config.RDB != nil {
+		_ = config.RDB.Set(config.Ctx, redisKey, string(changeJSON), 5*time.Minute).Err()
+	}
+
+	waMsg := fmt.Sprintf("Kode verifikasi perubahan nomor telepon akun ToenToen Anda adalah: *%s*\n\nKode berlaku 5 menit.", otp)
+	_ = utils.SendWAOTP(newPhoneClean, otp, waMsg)
+
+	return nil
 }
 
 func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPhoneChangeInput) error {
-	return errors.New("Layanan verifikasi nomor telepon/WhatsApp sedang dalam tahap pengembangan.")
+	account, err := s.repo.FindByID(accountID)
+	if err != nil {
+		return errors.New("Sesi pengguna tidak valid")
+	}
+
+	newPhoneClean := strings.TrimSpace(input.NewPhone)
+	if newPhoneClean == "" {
+		return errors.New("Nomor telepon baru wajib diisi")
+	}
+
+	tokenStr := strings.TrimSpace(input.FirebaseToken)
+	if tokenStr == "" {
+		tokenStr = strings.TrimSpace(input.IDToken)
+	}
+
+	// 1. Verifikasi nomor baru (Firebase Token atau OTP)
+	if tokenStr != "" {
+		verifiedPhone, err := utils.VerifyFirebasePhoneToken(tokenStr)
+		if err != nil {
+			return err
+		}
+		if !utils.MatchPhoneNumbers(verifiedPhone, newPhoneClean) {
+			return errors.New("Nomor telepon pada token Firebase tidak cocok dengan nomor baru yang diajukan")
+		}
+	} else {
+		inputOTP := strings.TrimSpace(input.OTP)
+		if inputOTP == "" {
+			return errors.New("Kode OTP atau Firebase Token wajib disertakan")
+		}
+
+		isReviewer := isReviewerIdentifier(newPhoneClean)
+		if !(isReviewer && inputOTP == DefaultReviewerOTP) {
+			redisKey := fmt.Sprintf("phone_change:%s", accountID)
+			storedJSON, err := config.RDB.Get(config.Ctx, redisKey).Result()
+			if err != nil || storedJSON == "" {
+				return errors.New("Permintaan ubah nomor telepon tidak ditemukan atau sudah kedaluwarsa")
+			}
+			var changeData map[string]string
+			if err := json.Unmarshal([]byte(storedJSON), &changeData); err != nil {
+				return errors.New("Gagal memproses data verifikasi")
+			}
+			if changeData["otp"] != inputOTP || !utils.MatchPhoneNumbers(changeData["new_phone"], newPhoneClean) {
+				return errors.New("Kode OTP tidak valid")
+			}
+			config.RDB.Del(config.Ctx, redisKey)
+		}
+	}
+
+	// 2. Cek apakah nomor baru sudah dipakai akun lain di kelompok role yang sama
+	group := models.RoleGroupOf(account.Role)
+	if exists, err := s.repo.FindByIdentifier(newPhoneClean, group); err == nil && exists != nil && exists.AccountID != accountID {
+		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
+	}
+
+	// 3. Simpan nomor telepon baru ke akun
+	now := time.Now()
+	account.PhoneNumber = &newPhoneClean
+	account.PhoneVerifiedAt = &now
+	if err := s.repo.Update(account); err != nil {
+		return errors.New("Gagal menyimpan nomor telepon baru")
+	}
+
+	return nil
 }
 
 func (s *authService) CreateBusinessAdmin(ownerID string, input models.CreateBusinessAdminInput) (*models.Account, error) {

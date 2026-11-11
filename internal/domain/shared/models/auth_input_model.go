@@ -11,10 +11,12 @@ type RegisterUnifiedInput struct {
 }
 
 type VerifyRegisterOTPInput struct {
-	Identifier string `json:"identifier" validate:"required"`
-	OTP        string `json:"otp" validate:"required,len=6"`
+	Identifier    string `json:"identifier" validate:"required"`
+	OTP           string `json:"otp"`
 	// Role opsional, wajib jika identifier sedang mendaftar di 2 kelompok role sekaligus
-	Role string `json:"role" query:"role"`
+	Role          string `json:"role" query:"role"`
+	FirebaseToken string `json:"firebase_token,omitempty"`
+	IDToken       string `json:"id_token,omitempty"`
 }
 
 type PendingRegistration struct {
@@ -59,10 +61,12 @@ type LoginUnifiedInput struct {
 }
 
 type VerifyLoginOTPInput struct {
-	Identifier   string `json:"identifier" validate:"required"`
-	OTP          string `json:"otp" validate:"required"`
-	ExpectedRole string `json:"expected_role" query:"expected_role"`
-	Role         string `json:"role" query:"role"`
+	Identifier    string `json:"identifier" validate:"required"`
+	OTP           string `json:"otp"`
+	ExpectedRole  string `json:"expected_role" query:"expected_role"`
+	Role          string `json:"role" query:"role"`
+	FirebaseToken string `json:"firebase_token,omitempty"`
+	IDToken       string `json:"id_token,omitempty"`
 }
 
 type ForgotPasswordInput struct {
@@ -100,8 +104,10 @@ type RequestPhoneChangeInput struct {
 }
 
 type VerifyPhoneChangeInput struct {
-	NewPhone string `json:"new_phone" validate:"required"`
-	OTP      string `json:"otp" validate:"required"`
+	NewPhone      string `json:"new_phone" validate:"required"`
+	OTP           string `json:"otp"`
+	FirebaseToken string `json:"firebase_token,omitempty"`
+	IDToken       string `json:"id_token,omitempty"`
 }
 
 type ChangePasswordInput struct {
@@ -141,8 +147,11 @@ type SendPhoneOTPInput struct {
 }
 
 type VerifyPhoneOTPInput struct {
-	Phone string `json:"phone" validate:"required"`
-	OTP   string `json:"otp" validate:"required,len=6"`
+	Phone         string `json:"phone" validate:"required"`
+	OTP           string `json:"otp"`
+	Role          string `json:"role" query:"role"`
+	FirebaseToken string `json:"firebase_token,omitempty"`
+	IDToken       string `json:"id_token,omitempty"`
 }
 
 type KYCStatusResponse struct {

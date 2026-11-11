@@ -6,11 +6,15 @@ import (
 	"log"
 
 	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"firebase.google.com/go/v4/messaging"
 	"google.golang.org/api/option"
 )
 
-var FCMClient *messaging.Client
+var (
+	FCMClient          *messaging.Client
+	FirebaseAuthClient *auth.Client
+)
 
 func InitFirebase() {
 	// Firebase SDK terbaru lebih stabil jika kita membiarkannya membaca ProjectID 
@@ -27,11 +31,26 @@ func InitFirebase() {
 	client, err := app.Messaging(context.Background())
 	if err != nil {
 		log.Printf("⚠️ Warning getting Messaging client: %v (Push notifications disabled)\n", err)
-		return
+	} else {
+		FCMClient = client
+		fmt.Println("✅ Firebase Cloud Messaging berhasil dikoneksikan!")
 	}
 
-	FCMClient = client
-	fmt.Println("✅ Firebase Cloud Messaging berhasil dikoneksikan!")
+	authClient, err := app.Auth(context.Background())
+	if err != nil {
+		log.Printf("⚠️ Warning getting Firebase Auth client: %v (Phone Auth disabled)\n", err)
+	} else {
+		FirebaseAuthClient = authClient
+		fmt.Println("✅ Firebase Authentication berhasil dikoneksikan!")
+	}
+}
+
+// VerifyFirebaseIDToken memverifikasi Firebase ID token dan mengembalikan decoded token
+func VerifyFirebaseIDToken(ctx context.Context, idToken string) (*auth.Token, error) {
+	if FirebaseAuthClient == nil {
+		return nil, fmt.Errorf("Firebase Auth client belum diinisialisasi")
+	}
+	return FirebaseAuthClient.VerifyIDToken(ctx, idToken)
 }
 
 // SendPushNotification diperbarui untuk menghindari error 404 /batch
