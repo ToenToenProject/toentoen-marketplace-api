@@ -338,28 +338,6 @@ func (s *authService) sendOTP(identifier string, group string, email *string, ph
 		subject = strings.TrimSpace(customSubject[0])
 	}
 
-	var waMessage string
-	subjLower := strings.ToLower(subject)
-	if strings.Contains(subjLower, "aktivasi") && strings.Contains(subjLower, "admin") {
-		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nAnda telah didaftarkan sebagai Admin Toko di ToenToen. Gunakan kode verifikasi (OTP) berikut untuk membuat kata sandi baru dan mengaktifkan akun Anda:\n\n%s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun demi keamanan toko.", otp)
-	} else if strings.Contains(subjLower, "admin") && strings.Contains(subjLower, "registrasi") {
-		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi registrasi Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
-	} else if strings.Contains(subjLower, "admin") && (strings.Contains(subjLower, "reset") || strings.Contains(subjLower, "kata sandi")) {
-		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi reset kata sandi Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
-	} else if strings.Contains(subjLower, "admin") && (strings.Contains(subjLower, "login") || strings.Contains(subjLower, "masuk")) {
-		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi login Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
-	} else if strings.Contains(subjLower, "admin") && strings.Contains(subjLower, "email") {
-		waMessage = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi email Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
-	} else if strings.Contains(subjLower, "registrasi") {
-		waMessage = fmt.Sprintf("Selamat Datang di ToenToen!\n\nKode verifikasi registrasi akun Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit.", otp)
-	} else if strings.Contains(subjLower, "login") || strings.Contains(subjLower, "masuk") {
-		waMessage = fmt.Sprintf("Kode verifikasi login akun ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
-	} else if strings.Contains(subjLower, "reset") || strings.Contains(subjLower, "kata sandi") {
-		waMessage = fmt.Sprintf("Kode verifikasi reset kata sandi akun ToenToen Anda adalah:\n\n%s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
-	} else {
-		waMessage = fmt.Sprintf("Kode verifikasi (OTP) ToenToen Anda adalah: %s\n\nKode ini berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
-	}
-
 	var sent bool
 	var lastErr error
 
@@ -371,12 +349,14 @@ func (s *authService) sendOTP(identifier string, group string, email *string, ph
 		}
 	}
 
-	if hasPhone {
-		if err := utils.SendWAOTP(cleanPhone, otp, waMessage); err != nil {
-			if !sent {
-				lastErr = err
-			}
+	// Untuk nomor telepon publik, verifikasi diarahkan full menggunakan SMS via Firebase Phone Auth di sisi aplikasi.
+	// Jika identifier adalah nomor telepon dan tidak memiliki email terdaftar:
+	if !sent && hasPhone {
+		// Jika akun tester Google Play Reviewer, izinkan langsung dengan OTP statis
+		if isReviewerIdentifier(identifier) || isReviewerIdentifier(cleanPhone) {
+			sent = true
 		} else {
+			// Kode OTP disimpan di Redis sehingga jika aplikasi memanggil verifikasi nomor, sistem siap memvalidasi.
 			sent = true
 		}
 	}
@@ -388,12 +368,10 @@ func (s *authService) sendOTP(identifier string, group string, email *string, ph
 		if lastErr != nil {
 			log.Printf("[SEND-OTP-ERROR] Gagal mengirim OTP (%s): %v", identifier, lastErr)
 		}
-		if hasEmail && !hasPhone {
+		if hasEmail {
 			return errors.New("Gagal mengirimkan kode verifikasi ke email Anda. Pastikan alamat email aktif dan valid, atau coba beberapa saat lagi.")
-		} else if hasPhone && !hasEmail {
-			return errors.New("Gagal mengirimkan kode verifikasi ke nomor WhatsApp Anda. Pastikan nomor terdaftar di WhatsApp dan coba lagi.")
 		}
-		return errors.New("Gagal mengirimkan kode verifikasi. Pastikan email atau nomor WhatsApp Anda aktif dan coba lagi.")
+		return errors.New("Gagal memproses kode verifikasi. Pastikan data akun valid dan coba lagi.")
 	}
 
 	return nil
@@ -500,18 +478,8 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 			return errors.New("Gagal mengirimkan kode verifikasi ke email Anda. Pastikan alamat email aktif dan valid, atau coba beberapa saat lagi.")
 		}
 	} else {
-		// Kirim kode verifikasi ke WhatsApp
-		waMsg := fmt.Sprintf("Selamat Datang di ToenToen!\n\nKode verifikasi registrasi akun Anda adalah:\n\n%s\n\nKode ini berlaku selama 5 menit.", otp)
-		if input.Role == "business_admin" {
-			waMsg = fmt.Sprintf("Halo Rekan Admin!\n\nKode verifikasi registrasi Admin Toko ToenToen Anda adalah:\n\n%s\n\nKode ini berlaku selama 5 menit.", otp)
-		}
-		if err := utils.SendWAOTP(input.Identifier, otp, waMsg); err != nil {
-			if config.RDB != nil {
-				config.RDB.Del(config.Ctx, pendingKey)
-				config.RDB.Del(config.Ctx, otpKey)
-			}
-			return errors.New("Gagal mengirimkan kode verifikasi ke nomor WhatsApp Anda. Pastikan nomor aktif dan coba lagi.")
-		}
+		// Untuk registrasi nomor HP, verifikasi kode diarahkan menggunakan SMS OTP via Firebase di aplikasi
+		log.Printf("ℹ️ [REGISTER-PHONE] Registrasi nomor %s disimpan di pending registrasi untuk verifikasi via SMS Firebase", input.Identifier)
 	}
 
 	return nil
@@ -849,7 +817,7 @@ func (s *authService) SendPhoneOTP(phone string) error {
 		}
 	}
 
-	// 3. Generate 6 digit OTP & simpan di Redis (5 menit)
+	// 3. Simpan OTP ke Redis (5 menit) untuk pencocokan jika verifikasi dipanggil manual
 	otp := utils.GenerateNumericOTP(6)
 	otpKey := fmt.Sprintf("phone_otp:%s", cleanPhone)
 	if config.RDB != nil {
@@ -859,12 +827,7 @@ func (s *authService) SendPhoneOTP(phone string) error {
 		_ = config.RDB.Set(config.Ctx, rateKey, "1", 60*time.Second).Err()
 	}
 
-	// 4. Kirim via WhatsApp (Fonnte / console log)
-	waMsg := fmt.Sprintf("Kode OTP verifikasi nomor telepon ToenToen Anda adalah: *%s*\n\nKode berlaku 5 menit. Jangan berikan kode ini kepada siapapun.", otp)
-	if err := utils.SendWAOTP(phone, otp, waMsg); err != nil {
-		log.Printf("⚠️ Gagal mengirim WA OTP ke %s: %v", phone, err)
-	}
-
+	log.Printf("ℹ️ [PHONE-OTP] OTP untuk nomor %s disiapkan di Redis (aplikasi memverifikasi via SMS Firebase)", cleanPhone)
 	return nil
 }
 
@@ -1463,7 +1426,7 @@ func (s *authService) RequestPhoneChange(accountID string, input models.RequestP
 		return errors.New("Nomor telepon baru sudah terdaftar pada akun lain")
 	}
 
-	// 3. Simpan data request ke Redis & kirim WA OTP (sebagai alternatif jika tidak menggunakan Firebase di Flutter)
+	// 3. Simpan data request ke Redis untuk verifikasi SMS Firebase di aplikasi
 	otp := utils.GenerateNumericOTP(6)
 	changeData := map[string]string{
 		"new_phone": newPhoneClean,
@@ -1474,9 +1437,6 @@ func (s *authService) RequestPhoneChange(accountID string, input models.RequestP
 	if config.RDB != nil {
 		_ = config.RDB.Set(config.Ctx, redisKey, string(changeJSON), 5*time.Minute).Err()
 	}
-
-	waMsg := fmt.Sprintf("Kode verifikasi perubahan nomor telepon akun ToenToen Anda adalah: *%s*\n\nKode berlaku 5 menit.", otp)
-	_ = utils.SendWAOTP(newPhoneClean, otp, waMsg)
 
 	return nil
 }
