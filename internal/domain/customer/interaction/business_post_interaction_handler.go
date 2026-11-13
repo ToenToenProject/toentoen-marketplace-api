@@ -45,6 +45,9 @@ func (h *PostInteractionHandler) ToggleLike(c *fiber.Ctx) error {
 // 2. HANDLER CREATE COMMENT / REPLY
 func (h *PostInteractionHandler) AddPostComment(c *fiber.Ctx) error {
 	postID := strings.TrimSpace(c.Params("post_id"))
+	if postID == "" {
+		postID = strings.TrimSpace(c.Params("postId"))
+	}
 
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
@@ -74,6 +77,9 @@ func (h *PostInteractionHandler) AddPostComment(c *fiber.Ctx) error {
 // 3. HANDLER EDIT COMMENT
 func (h *PostInteractionHandler) EditPostComment(c *fiber.Ctx) error {
 	postID := strings.TrimSpace(c.Params("post_id"))
+	if postID == "" {
+		postID = strings.TrimSpace(c.Params("postId"))
+	}
 	commentID := strings.TrimSpace(c.Params("comment_id"))
 
 	accountID, ok := c.Locals("account_id").(string)
@@ -100,6 +106,9 @@ func (h *PostInteractionHandler) EditPostComment(c *fiber.Ctx) error {
 // 4. HANDLER DELETE COMMENT
 func (h *PostInteractionHandler) DeletePostComment(c *fiber.Ctx) error {
 	postID := strings.TrimSpace(c.Params("post_id"))
+	if postID == "" {
+		postID = strings.TrimSpace(c.Params("postId"))
+	}
 	commentID := strings.TrimSpace(c.Params("comment_id"))
 
 	accountID, ok := c.Locals("account_id").(string)
@@ -117,6 +126,9 @@ func (h *PostInteractionHandler) DeletePostComment(c *fiber.Ctx) error {
 // 5. HANDLER GET COMMENTS
 func (h *PostInteractionHandler) GetPostComments(c *fiber.Ctx) error {
 	postID := strings.TrimSpace(c.Params("post_id"))
+	if postID == "" {
+		postID = strings.TrimSpace(c.Params("postId"))
+	}
 	currentAccountID, _, _ := utils.GetRequesterInfo(c)
 
 	comments, err := h.service.GetPostComments(postID, currentAccountID)
@@ -164,6 +176,9 @@ func (h *PostInteractionHandler) ToggleCommentLike(c *fiber.Ctx) error {
 // 7. HANDLER REPORT POST
 func (h *PostInteractionHandler) ReportPost(c *fiber.Ctx) error {
 	postID := strings.TrimSpace(c.Params("post_id"))
+	if postID == "" {
+		postID = strings.TrimSpace(c.Params("postId"))
+	}
 
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
