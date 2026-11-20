@@ -381,7 +381,7 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 		tagIDs = append(tagIDs, t.TagID)
 		if t.Name != "" {
 			tagNames = append(tagNames, t.Name)
-			switch strings.ToLower(strings.TrimSpace(t.TagType)) {
+			switch inferTagType(t.Name, t.TagType) {
 			case "facility":
 				facilities = append(facilities, t.Name)
 			case "service":
@@ -1244,6 +1244,36 @@ func SyncPromotion(db *gorm.DB, promotionID string) error {
 		_ = SyncProduct(db, pp.ProductID)
 	}
 	return nil
+}
+
+// inferTagType mengklasifikasikan tag menjadi 'facility', 'service', atau 'characteristic'.
+// Jika kolom tag_type dari DB sudah terisi eksplisit, nilai tersebut diprioritaskan.
+func inferTagType(name, explicitType string) string {
+	et := strings.ToLower(strings.TrimSpace(explicitType))
+	if et == "facility" || et == "service" || et == "characteristic" {
+		return et
+	}
+	lower := strings.ToLower(strings.TrimSpace(name))
+	facilityKeywords := []string{
+		"wifi", "wi-fi", "parkir", "toilet", "mushola", "musholla",
+		"ac", "ruang tunggu", "qris", "colokan", "stop kontak",
+		"smoking", "merokok", "indoor", "outdoor",
+	}
+	for _, kw := range facilityKeywords {
+		if strings.Contains(lower, kw) {
+			return "facility"
+		}
+	}
+	serviceKeywords := []string{
+		"servis", "service", "ganti oli", "cuci", "potong rambut",
+		"cukur", "delivery", "pesan antar", "reparasi", "perbaikan",
+	}
+	for _, kw := range serviceKeywords {
+		if strings.Contains(lower, kw) {
+			return "service"
+		}
+	}
+	return "characteristic"
 }
 
 
