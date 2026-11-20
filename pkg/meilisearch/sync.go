@@ -26,6 +26,7 @@ type MatchedProductPreview struct {
 	IsDiscounted   bool     `json:"is_discounted"`
 	DiscountPct    float64  `json:"discount_pct,omitempty"`
 	StockType      string   `json:"stock_type"`
+	OfferingType   string   `json:"offering_type,omitempty"`
 }
 
 type MeiliBusinessHour struct {
@@ -64,12 +65,16 @@ type MeiliBusinessDocument struct {
 	CategoryNames []string `json:"category_names"`
 	Categories    []string `json:"categories,omitempty"` // alias untuk kompatibilitas
 
-	// Tag & Hashtag fields
-	TagIDs     []int64  `json:"tag_ids"`
-	TagNames   []string `json:"tag_names"`
-	Tags       []string `json:"tags,omitempty"` // alias untuk kompatibilitas
-	CustomTags []string `json:"custom_tags,omitempty"`
-	Hashtags   []string `json:"hashtags,omitempty"`
+	// Tag & Hashtag fields (dipisah menjadi Facilities, Services, Characteristics)
+	TagIDs          []int64  `json:"tag_ids"`
+	TagNames        []string `json:"tag_names"`
+	Tags            []string `json:"tags,omitempty"` // alias untuk kompatibilitas
+	Facilities      []string `json:"facilities,omitempty"`
+	Services        []string `json:"services,omitempty"`
+	Characteristics []string `json:"characteristics,omitempty"`
+	OfferingTypes   []string `json:"offering_types,omitempty"`
+	CustomTags      []string `json:"custom_tags,omitempty"`
+	Hashtags        []string `json:"hashtags,omitempty"`
 
 	// Enhanced Gatekeeping & Scope fields
 	StoreType       string                  `json:"store_type"`
@@ -81,6 +86,12 @@ type MeiliBusinessDocument struct {
 	City            string                  `json:"city"`
 	AddressDetail   string                  `json:"address_detail"`
 	MatchedProducts []MatchedProductPreview `json:"matched_products,omitempty"`
+
+	// Universal Search Match Explanation (computed saat pencarian, tidak wajib disimpan di index)
+	MatchType       string  `json:"match_type,omitempty"`       // EXACT_OFFERING, RELATED_OFFERING, NAME_MATCH, CATEGORY_MATCH, SERVICE_MATCH, FACILITY_MATCH
+	MatchedOffering string  `json:"matched_offering,omitempty"` // Nama produk/layanan/kategori/fasilitas yang cocok
+	MatchReason     string  `json:"match_reason,omitempty"`     // Label ramah pengguna (mis. "Menu cocok: Ayam Bakar")
+	MatchConfidence float64 `json:"match_confidence,omitempty"`
 }
 
 type MeiliProductDocument struct {
@@ -95,6 +106,7 @@ type MeiliProductDocument struct {
 	DiscountPct    float64     `json:"discount_pct"`
 	DiscountAmount float64     `json:"discount_amount,omitempty"`
 	StockType      string      `json:"stock_type"`
+	OfferingType   string      `json:"offering_type,omitempty"`
 	BusinessID     string      `json:"business_id"`
 	BusinessName   string      `json:"business_name"`
 	StoreType      string      `json:"store_type"`
@@ -148,6 +160,10 @@ func InitMeilisearchIndices() {
 		"category_names",
 		"tag_ids",
 		"tag_names",
+		"facilities",
+		"services",
+		"characteristics",
+		"offering_types",
 		"hashtags",
 		"store_type",
 		"has_promo",
@@ -162,6 +178,9 @@ func InitMeilisearchIndices() {
 		"name",
 		"products",
 		"category_names",
+		"services",
+		"facilities",
+		"characteristics",
 		"tag_names",
 		"custom_tags",
 		"hashtags",
@@ -210,6 +229,7 @@ func InitMeilisearchIndices() {
 		"is_package",
 		"promotion_type",
 		"stock_type",
+		"offering_type",
 		"is_open",
 		"store_type",
 		"business_id",
@@ -260,6 +280,7 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 	productNames := make([]string, 0, len(products))
 	matchedPreviews := make([]MatchedProductPreview, 0, len(products))
 	stockTypeMap := make(map[string]bool)
+	offeringTypeMap := make(map[string]bool)
 	var hasPromo bool
 	var minPrice, maxPrice float64
 
@@ -269,6 +290,9 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 		}
 		if p.StockType != "" {
 			stockTypeMap[p.StockType] = true
+		}
+		if p.OfferingType != "" {
+			offeringTypeMap[p.OfferingType] = true
 		}
 
 		currentPrice := p.Price
@@ -301,6 +325,7 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 			IsDiscounted:   isDiscounted,
 			DiscountPct:    discountPct,
 			StockType:      p.StockType,
+			OfferingType:   p.OfferingType,
 		})
 	}
 
@@ -349,10 +374,21 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 
 	tagIDs := make([]int64, 0, len(tags))
 	tagNames := make([]string, 0, len(tags))
+	facilities := make([]string, 0)
+	services := make([]string, 0)
+	characteristics := make([]string, 0)
 	for _, t := range tags {
 		tagIDs = append(tagIDs, t.TagID)
 		if t.Name != "" {
 			tagNames = append(tagNames, t.Name)
+			switch strings.ToLower(strings.TrimSpace(t.TagType)) {
+			case "facility":
+				facilities = append(facilities, t.Name)
+			case "service":
+				services = append(services, t.Name)
+			default:
+				characteristics = append(characteristics, t.Name)
+			}
 		}
 	}
 	for _, ct := range b.CustomTags {
@@ -422,6 +458,11 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 		stockTypes = append(stockTypes, st)
 	}
 
+	offeringTypes := make([]string, 0, len(offeringTypeMap))
+	for ot := range offeringTypeMap {
+		offeringTypes = append(offeringTypes, ot)
+	}
+
 	city := ""
 	if b.City != nil {
 		city = *b.City
@@ -446,15 +487,19 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 		IsManuallyClosed: b.IsManuallyClosed,
 		CloseTime:        closeTime,
 		Hours:            meiliHours,
-		CategoryID:      primaryCatID,
-		CategoryIDs:     categoryIDs,
-		CategoryNames:   categoryNames,
-		Categories:      categoryNames,
-		TagIDs:          tagIDs,
-		TagNames:        tagNames,
-		Tags:            tagNames,
-		CustomTags:      b.CustomTags,
-		Hashtags:        b.Hashtags,
+		CategoryID:       primaryCatID,
+		CategoryIDs:      categoryIDs,
+		CategoryNames:    categoryNames,
+		Categories:       categoryNames,
+		TagIDs:           tagIDs,
+		TagNames:         tagNames,
+		Tags:             tagNames,
+		Facilities:       facilities,
+		Services:         services,
+		Characteristics:  characteristics,
+		OfferingTypes:    offeringTypes,
+		CustomTags:       b.CustomTags,
+		Hashtags:         b.Hashtags,
 		StoreType:       storeType,
 		StoreTypeLabel:  storeTypeLabel,
 		HasPromo:        hasPromo,
@@ -619,6 +664,7 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 		DiscountPct:    discountPct,
 		DiscountAmount: discountAmount,
 		StockType:      p.StockType,
+		OfferingType:   p.OfferingType,
 		BusinessID:     p.BusinessID,
 		BusinessName:   bizName,
 		StoreType:      storeType,

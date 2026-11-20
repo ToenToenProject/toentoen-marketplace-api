@@ -193,22 +193,44 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
+	// Gatekeeping: offering_types / offering_type
+	var offeringTypes []string
+	rawOfferingTypes := c.Query("offering_types")
+	if rawOfferingTypes == "" {
+		rawOfferingTypes = c.Query("offering_type")
+	}
+	if rawOfferingTypes != "" {
+		for _, ot := range strings.Split(rawOfferingTypes, ",") {
+			trimmed := strings.ToUpper(strings.TrimSpace(ot))
+			if trimmed != "" {
+				offeringTypes = append(offeringTypes, trimmed)
+			}
+		}
+	}
+
+	var accountID string
+	if authAccountID, _, errAuth := utils.GetRequesterInfo(c); errAuth == nil {
+		accountID = authAccountID
+	}
+
 	req := SearchRequest{
-		Scope:       scope,
-		Keyword:     keyword,
-		CategoryIDs: catIDs,
-		Category:    catName,
-		TagIDs:      tagIDs,
-		TagNames:    tagNames,
-		RawTags:     rawTags,
-		Hashtags:    hashtags,
-		Sort:        sort,
-		IsOpenNow:   isOpenNow,
-		IsPromo:     isPromo,
-		StoreTypes:  storeTypes,
-		MinPrice:    minPrice,
-		MaxPrice:    maxPrice,
-		StockTypes:  stockTypes,
+		Scope:         scope,
+		Keyword:       keyword,
+		CategoryIDs:   catIDs,
+		Category:      catName,
+		TagIDs:        tagIDs,
+		TagNames:      tagNames,
+		RawTags:       rawTags,
+		Hashtags:      hashtags,
+		Sort:          sort,
+		IsOpenNow:     isOpenNow,
+		IsPromo:       isPromo,
+		StoreTypes:    storeTypes,
+		MinPrice:      minPrice,
+		MaxPrice:      maxPrice,
+		StockTypes:    stockTypes,
+		OfferingTypes: offeringTypes,
+		AccountID:     accountID,
 	}
 
 	if lat, err := strconv.ParseFloat(c.Query("lat", "0"), 64); err == nil {
@@ -303,4 +325,52 @@ func (h *ExploreHandler) RecordFeedEvents(c *fiber.Ctx) error {
 	}(accountID, input)
 
 	return utils.SendResponse(c, fiber.StatusOK, "00", "Aktivitas feed berhasil direkam", nil)
+}
+
+func (h *ExploreHandler) RecordSearchClick(c *fiber.Ctx) error {
+	var input models.SearchClickInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "Format request tidak valid", nil)
+	}
+	if strings.TrimSpace(input.SearchLogID) == "" || strings.TrimSpace(input.BusinessID) == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "search_log_id dan business_id wajib diisi", nil)
+	}
+
+	go func(in models.SearchClickInput) {
+		_ = h.service.RecordSearchClick(in)
+	}(input)
+
+	return utils.SendResponse(c, fiber.StatusOK, "00", "Klik pencarian berhasil direkam", nil)
+}
+
+func (h *ExploreHandler) GetZeroResultSearches(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "50"))
+	logs, err := h.service.GetZeroResultSearches(limit)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, "99", "Gagal mengambil analitik pencarian kosong", nil)
+	}
+	return utils.SendResponse(c, fiber.StatusOK, "00", "Berhasil mengambil analitik pencarian kosong", logs)
+}
+
+func (h *ExploreHandler) ListSearchSynonyms(c *fiber.Ctx) error {
+	items, err := h.service.ListSearchSynonyms()
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, "99", "Gagal memuat kamus sinonim", nil)
+	}
+	return utils.SendResponse(c, fiber.StatusOK, "00", "Berhasil memuat kamus sinonim", items)
+}
+
+func (h *ExploreHandler) UpsertSearchSynonym(c *fiber.Ctx) error {
+	var input models.UpsertSynonymInput
+	if err := c.BodyParser(&input); err != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "Format request tidak valid", nil)
+	}
+	if strings.TrimSpace(input.Term) == "" || strings.TrimSpace(input.CanonicalTerm) == "" {
+		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "term dan canonical_term wajib diisi", nil)
+	}
+	item, err := h.service.UpsertSearchSynonym(input)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, "99", "Gagal menyimpan sinonim", nil)
+	}
+	return utils.SendResponse(c, fiber.StatusOK, "00", "Sinonim berhasil disimpan dan disinkronkan ke Meilisearch", item)
 }

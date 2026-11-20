@@ -32,6 +32,13 @@ type ExploreRepository interface {
 	GetSeenPostIDs(accountID string, since time.Time) (map[string]bool, error)
 	BatchSaveInteractions(events []models.UserPostInteraction) error
 	UpsertUserCategoryAffinity(accountID string, categoryID int64, deltaScore float64) error
+
+	// Universal Search Analytics & Dynamic Synonyms
+	CreateSearchLog(log *models.SearchLog) error
+	RecordSearchClick(logID, businessID string) error
+	GetZeroResultSearches(limit int) ([]models.SearchLog, error)
+	ListSearchSynonyms() ([]models.SearchSynonym, error)
+	UpsertSearchSynonym(input models.UpsertSynonymInput) (*models.SearchSynonym, error)
 }
 
 type exploreRepository struct {
@@ -59,12 +66,14 @@ type SearchRequest struct {
 	Offset      int64
 
 	// Gatekeeping filters
-	IsOpenNow  *bool
-	IsPromo    *bool
-	StoreTypes []string
-	MinPrice   *float64
-	MaxPrice   *float64
-	StockTypes []string
+	IsOpenNow     *bool
+	IsPromo       *bool
+	StoreTypes    []string
+	MinPrice      *float64
+	MaxPrice      *float64
+	StockTypes    []string
+	OfferingTypes []string
+	AccountID     string
 }
 
 type MeiliBusinessDocument = myMeili.MeiliBusinessDocument
@@ -1116,4 +1125,87 @@ func (r *exploreRepository) UpsertUserCategoryAffinity(accountID string, categor
 			updated_at = NOW()
 	`
 	return r.db.Exec(query, accountID, categoryID, deltaScore).Error
+}
+
+func (r *exploreRepository) CreateSearchLog(entry *models.SearchLog) error {
+	if r.db == nil || entry == nil {
+		return nil
+	}
+	return r.db.Create(entry).Error
+}
+
+func (r *exploreRepository) RecordSearchClick(logID, businessID string) error {
+	if r.db == nil || strings.TrimSpace(logID) == "" || strings.TrimSpace(businessID) == "" {
+		return nil
+	}
+	return r.db.Model(&models.SearchLog{}).
+		Where("log_id = ?", logID).
+		Update("clicked_business_id", businessID).Error
+}
+
+func (r *exploreRepository) GetZeroResultSearches(limit int) ([]models.SearchLog, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var logs []models.SearchLog
+	err := r.db.Where("is_zero_result = ?", true).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}
+
+func (r *exploreRepository) ListSearchSynonyms() ([]models.SearchSynonym, error) {
+	var items []models.SearchSynonym
+	err := r.db.Order("dimension ASC, term ASC").Find(&items).Error
+	return items, err
+}
+
+func (r *exploreRepository) UpsertSearchSynonym(input models.UpsertSynonymInput) (*models.SearchSynonym, error) {
+	term := strings.ToLower(strings.TrimSpace(input.Term))
+	if term == "" {
+		return nil, fmt.Errorf("term wajib diisi")
+	}
+	dimension := strings.ToLower(strings.TrimSpace(input.Dimension))
+	if dimension == "" {
+		dimension = "general"
+	}
+	isActive := true
+	if input.IsActive != nil {
+		isActive = *input.IsActive
+	}
+
+	cleanedSyns := make([]string, 0, len(input.Synonyms))
+	for _, s := range input.Synonyms {
+		if trimmed := strings.ToLower(strings.TrimSpace(s)); trimmed != "" {
+			cleanedSyns = append(cleanedSyns, trimmed)
+		}
+	}
+
+	var existing models.SearchSynonym
+	err := r.db.Where("term = ?", term).First(&existing).Error
+	if err == nil {
+		existing.CanonicalTerm = strings.TrimSpace(input.CanonicalTerm)
+		existing.Synonyms = cleanedSyns
+		existing.Dimension = dimension
+		existing.IsActive = isActive
+		if err := r.db.Save(&existing).Error; err != nil {
+			return nil, err
+		}
+		_ = myMeili.SyncSynonymsFromDB(r.db)
+		return &existing, nil
+	}
+
+	created := models.SearchSynonym{
+		Term:          term,
+		CanonicalTerm: strings.TrimSpace(input.CanonicalTerm),
+		Synonyms:      cleanedSyns,
+		Dimension:     dimension,
+		IsActive:      isActive,
+	}
+	if err := r.db.Create(&created).Error; err != nil {
+		return nil, err
+	}
+	_ = myMeili.SyncSynonymsFromDB(r.db)
+	return &created, nil
 }

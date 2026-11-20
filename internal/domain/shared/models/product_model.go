@@ -42,7 +42,8 @@ type Product struct {
 	MinPrice    float64 `gorm:"->;column:min_price" json:"min_price"`
 	MaxPrice    float64 `gorm:"->;column:max_price" json:"max_price"`
 
-	StockType string `gorm:"column:stock_type;default:'in_stock'" json:"stock_type"`
+	StockType    string `gorm:"column:stock_type;default:'in_stock'" json:"stock_type"`
+	OfferingType string `gorm:"column:offering_type;default:'OTHER'" json:"offering_type"` // MENU_ITEM, RETAIL_PRODUCT, SERVICE, ROOM_TYPE, RENTAL_ITEM, OTHER
 
 	Tags      []string `gorm:"column:tags;type:jsonb;serializer:json;default:'[]'" json:"hashtags"`
 	TagsAlias []string `gorm:"-" json:"tags,omitempty"`

@@ -1,6 +1,18 @@
 package meilisearch
 
-import "strings"
+import (
+	"log"
+	"strings"
+	"sync"
+
+	"gorm.io/gorm"
+	"toentoen-backend/internal/domain/shared/models"
+)
+
+var (
+	synonymCacheMu sync.RWMutex
+	dynamicSynMap  map[string][]string
+)
 
 // GetIndonesianSynonyms mengembalikan kamus statis sinonim, bahasa gaul, singkatan kuliner,
 // dan toleransi ejaan umum bahasa Indonesia untuk mesin pencari.
@@ -89,10 +101,102 @@ func GetIndonesianSynonyms() map[string][]string {
 		"espresso":  {"espreso"},
 		"cappucino": {"cappuccino"},
 		"apron":     {"celemek"},
+
+		// 🔧 Otomotif, Jasa & Layanan
+		"montir":         {"bengkel mobil", "bengkel", "mekanik", "servis mobil"},
+		"mekanik":        {"bengkel mobil", "bengkel", "montir", "servis mobil"},
+		"bengkel mtr":    {"bengkel motor", "servis motor"},
+		"ganti oli":      {"oli mesin", "servis oli", "oil change"},
+		"servis ac":      {"service ac", "cuci ac", "perbaikan ac", "ac mobil"},
+		"pangkas rambut": {"barbershop", "potong rambut", "cukur", "haircut"},
+		"barbershop":     {"pangkas rambut", "potong rambut", "cukur", "haircut"},
+		"ayam bakar":     {"ayam panggang", "grilled chicken"},
+		"ayam panggang":  {"ayam bakar", "grilled chicken"},
+		"tempat ngopi":   {"kafe", "cafe", "coffee shop", "warkop"},
+		"wifi":           {"wi-fi", "internet gratis", "free wifi"},
+		"wi-fi":          {"wifi", "internet gratis", "free wifi"},
 	}
 }
 
-// ExpandKeywordWithSynonyms memperluas kata kunci pencarian dengan sinonim statis
+// LoadMergedSynonyms menggabungkan kamus statis bawaan dengan kamus dinamis dari tabel search_synonyms di DB.
+func LoadMergedSynonyms(db *gorm.DB) map[string][]string {
+	merged := GetIndonesianSynonyms()
+	if db == nil {
+		return merged
+	}
+
+	var rows []models.SearchSynonym
+	if err := db.Where("is_active = ?", true).Find(&rows).Error; err != nil {
+		log.Printf("⚠️ Gagal memuat sinonim dinamis dari DB (fallback statis): %v", err)
+		return merged
+	}
+
+	for _, r := range rows {
+		term := strings.ToLower(strings.TrimSpace(r.Term))
+		if term == "" {
+			continue
+		}
+		seen := make(map[string]bool)
+		var list []string
+		for _, existing := range merged[term] {
+			low := strings.ToLower(strings.TrimSpace(existing))
+			if low != "" && !seen[low] {
+				seen[low] = true
+				list = append(list, low)
+			}
+		}
+		if canon := strings.ToLower(strings.TrimSpace(r.CanonicalTerm)); canon != "" && canon != term && !seen[canon] {
+			seen[canon] = true
+			list = append(list, canon)
+		}
+		for _, syn := range r.Synonyms {
+			low := strings.ToLower(strings.TrimSpace(syn))
+			if low != "" && low != term && !seen[low] {
+				seen[low] = true
+				list = append(list, low)
+			}
+		}
+		if len(list) > 0 {
+			merged[term] = list
+		}
+	}
+
+	synonymCacheMu.Lock()
+	dynamicSynMap = merged
+	synonymCacheMu.Unlock()
+
+	return merged
+}
+
+// SyncSynonymsFromDB memuat sinonim gabungan (statis + DB) lalu memperbarui setting Meilisearch.
+func SyncSynonymsFromDB(db *gorm.DB) error {
+	merged := LoadMergedSynonyms(db)
+	if Client == nil {
+		return nil
+	}
+
+	if _, err := Client.Index("businesses").UpdateSynonyms(&merged); err != nil {
+		return err
+	}
+	if _, err := Client.Index("products").UpdateSynonyms(&merged); err != nil {
+		return err
+	}
+	log.Printf("🔍 Meilisearch synonyms synced (%d terms)", len(merged))
+	return nil
+}
+
+// getEffectiveSynonyms mengembalikan kamus sinonim terbaru (cache DB jika tersedia, atau statis).
+func getEffectiveSynonyms() map[string][]string {
+	synonymCacheMu.RLock()
+	cached := dynamicSynMap
+	synonymCacheMu.RUnlock()
+	if len(cached) > 0 {
+		return cached
+	}
+	return GetIndonesianSynonyms()
+}
+
+// ExpandKeywordWithSynonyms memperluas kata kunci pencarian dengan sinonim (statis + dinamis DB)
 // untuk digunakan pada fallback query PostgreSQL jika Meilisearch offline/kosong.
 func ExpandKeywordWithSynonyms(keyword string) []string {
 	kw := strings.ToLower(strings.TrimSpace(keyword))
@@ -103,7 +207,7 @@ func ExpandKeywordWithSynonyms(keyword string) []string {
 	resultMap := make(map[string]bool)
 	resultMap[kw] = true
 
-	dict := GetIndonesianSynonyms()
+	dict := getEffectiveSynonyms()
 
 	// 1. Cek kecocokan langsung seluruh frasa
 	if syns, ok := dict[kw]; ok {

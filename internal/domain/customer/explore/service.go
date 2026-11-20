@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"toentoen-backend/internal/domain/shared/models"
+	myMeili "toentoen-backend/pkg/meilisearch"
 	"toentoen-backend/pkg/utils"
 )
 
@@ -14,6 +15,10 @@ type ExploreService interface {
 	GetExploreBusinesses(req SearchRequest) (ExploreResponse, error)
 	GetTimelinePosts(query models.TimelineQueryInput, currentAccountID string) ([]models.PostResponse, error)
 	RecordFeedEvents(accountID string, batch models.FeedEventBatchInput) error
+	RecordSearchClick(input models.SearchClickInput) error
+	GetZeroResultSearches(limit int) ([]models.SearchLog, error)
+	ListSearchSynonyms() ([]models.SearchSynonym, error)
+	UpsertSearchSynonym(input models.UpsertSynonymInput) (*models.SearchSynonym, error)
 }
 
 type exploreService struct {
@@ -31,11 +36,13 @@ type ExploreSummary struct {
 }
 
 type ExploreResponse struct {
-	Scope      string                  `json:"scope"`
-	Businesses []MeiliBusinessDocument `json:"businesses"`
-	Products   []MeiliProductDocument  `json:"products"`
-	Summary    ExploreSummary          `json:"summary"`
-	Pagination PaginationMeta          `json:"pagination"`
+	Scope        string                  `json:"scope"`
+	Businesses   []MeiliBusinessDocument `json:"businesses"`
+	Products     []MeiliProductDocument  `json:"products"`
+	Summary      ExploreSummary          `json:"summary"`
+	Pagination   PaginationMeta          `json:"pagination"`
+	ParsedIntent *ParsedSearchIntent     `json:"parsed_intent,omitempty"`
+	SearchLogID  string                  `json:"search_log_id,omitempty"`
 }
 
 type PaginationMeta struct {
@@ -58,11 +65,92 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 	}
 	req.Scope = scope
 
+	// 🔍 Query Understanding: Parsing natural language intent & hard filters
+	rawKeyword := strings.TrimSpace(req.Keyword)
+	var parsedIntent *ParsedSearchIntent
+	if rawKeyword != "" {
+		parsed := ParseSearchQuery(rawKeyword)
+		parsedIntent = &parsed
+
+		// Terapkan Hard Filter otomatis dari query bahasa natural jika belum diset eksplisit oleh user
+		if parsed.DetectedOpenNow && req.IsOpenNow == nil {
+			openTrue := true
+			req.IsOpenNow = &openTrue
+		}
+		if parsed.DetectedPromo && req.IsPromo == nil {
+			promoTrue := true
+			req.IsPromo = &promoTrue
+		}
+		if parsed.DetectedNearby && (req.Sort == "" || req.Sort == "relevance") && (req.Lat != 0 || req.Lng != 0) {
+			req.Sort = "nearest"
+		}
+		for _, fac := range parsed.DetectedFacilities {
+			if !containsStringCaseInsensitive(req.TagNames, fac) {
+				req.TagNames = append(req.TagNames, fac)
+			}
+		}
+
+		// Gunakan clean query agar frasa modifier ("buka sekarang", "dekat sini", "ada wifi")
+		// tidak mengotori pencarian teks utama di Meilisearch
+		req.Keyword = parsed.CleanQuery
+	}
+
 	page := req.Offset
 	if page <= 0 {
 		page = 1
 	}
 	req.Offset = (page - 1) * req.Limit
+
+	var searchLogID string
+	logSearchAsync := func(resultCount int64) {
+		if rawKeyword == "" || s.repo == nil {
+			return
+		}
+		searchLogID = utils.GenerateUUID("SLOG")
+		var accPtr *string
+		if strings.TrimSpace(req.AccountID) != "" {
+			acc := req.AccountID
+			accPtr = &acc
+		}
+		var latPtr, lngPtr *float64
+		if req.Lat != 0 || req.Lng != 0 {
+			latVal, lngVal := req.Lat, req.Lng
+			latPtr, lngPtr = &latVal, &lngVal
+		}
+		intentMap := map[string]interface{}{}
+		cleanQ := req.Keyword
+		if parsedIntent != nil {
+			intentMap["entity_type"] = parsedIntent.EntityType
+			intentMap["detected_facilities"] = parsedIntent.DetectedFacilities
+			intentMap["detected_open_now"] = parsedIntent.DetectedOpenNow
+			intentMap["detected_nearby"] = parsedIntent.DetectedNearby
+			intentMap["detected_promo"] = parsedIntent.DetectedPromo
+		}
+		appliedFilters := map[string]interface{}{
+			"scope":        req.Scope,
+			"category_ids": req.CategoryIDs,
+			"tag_names":    req.TagNames,
+			"is_open_now":  req.IsOpenNow,
+			"is_promo":     req.IsPromo,
+			"sort":         req.Sort,
+		}
+		entry := &models.SearchLog{
+			LogID:          searchLogID,
+			AccountID:      accPtr,
+			RawQuery:       rawKeyword,
+			CleanQuery:     cleanQ,
+			ParsedIntent:   intentMap,
+			AppliedFilters: appliedFilters,
+			ResultCount:    int(resultCount),
+			IsZeroResult:   resultCount == 0,
+			Latitude:       latPtr,
+			Longitude:      lngPtr,
+		}
+		go func(e *models.SearchLog) {
+			defer func() { _ = recover() }()
+			_ = s.repo.CreateSearchLog(e)
+		}(entry)
+	}
 
 	// 1. Scope: PRODUCT
 	if req.Scope == "product" {
@@ -90,6 +178,8 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 			}
 		}
 
+		logSearchAsync(summary.TotalHits)
+
 		return ExploreResponse{
 			Scope:      "product",
 			Businesses: []MeiliBusinessDocument{},
@@ -104,6 +194,8 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 				TotalPages:  totalPages,
 				TotalItems:  summary.TotalHits,
 			},
+			ParsedIntent: parsedIntent,
+			SearchLogID:  searchLogID,
 		}, nil
 	}
 
@@ -121,7 +213,11 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 		docs = []MeiliBusinessDocument{}
 	}
 
+	// Siapkan sinonim ekspansi untuk menghitung Match Explanation
+	expandedTerms := myMeili.ExpandKeywordWithSynonyms(req.Keyword)
+
 	// Pastikan original koordinat Latitude, Longitude, Lat, Lng berpresisi tinggi terisi
+	// sekaligus hitung Match Explanation (match_type, matched_offering, match_reason)
 	for i := range docs {
 		if docs[i].Latitude == nil && (docs[i].Geo.Lat != 0 || docs[i].Geo.Lng != 0) {
 			latVal := docs[i].Geo.Lat
@@ -130,6 +226,23 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 			docs[i].Longitude = &lngVal
 			docs[i].Lat = &latVal
 			docs[i].Lng = &lngVal
+		}
+		if req.Keyword != "" {
+			ComputeMatchExplanation(&docs[i], req.Keyword, expandedTerms)
+		}
+	}
+
+	// Update parsedIntent entity_type berdasarkan hasil match dominan pertama jika masih GENERAL
+	if parsedIntent != nil && parsedIntent.EntityType == "GENERAL" && len(docs) > 0 {
+		switch docs[0].MatchType {
+		case "EXACT_OFFERING", "RELATED_OFFERING":
+			parsedIntent.EntityType = "OFFERING"
+		case "SERVICE_MATCH":
+			parsedIntent.EntityType = "SERVICE"
+		case "CATEGORY_MATCH":
+			parsedIntent.EntityType = "CATEGORY"
+		case "FACILITY_MATCH":
+			parsedIntent.EntityType = "FACILITY"
 		}
 	}
 
@@ -148,6 +261,8 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 		}
 	}
 
+	logSearchAsync(summary.TotalHits)
+
 	return ExploreResponse{
 		Scope:      req.Scope,
 		Businesses: docs,
@@ -162,6 +277,8 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 			TotalPages:  totalPages,
 			TotalItems:  summary.TotalHits,
 		},
+		ParsedIntent: parsedIntent,
+		SearchLogID:  searchLogID,
 	}, nil
 }
 
@@ -480,6 +597,22 @@ func (s *exploreService) RecordFeedEvents(accountID string, batch models.FeedEve
 	}
 
 	return s.repo.BatchSaveInteractions(interactions)
+}
+
+func (s *exploreService) RecordSearchClick(input models.SearchClickInput) error {
+	return s.repo.RecordSearchClick(input.SearchLogID, input.BusinessID)
+}
+
+func (s *exploreService) GetZeroResultSearches(limit int) ([]models.SearchLog, error) {
+	return s.repo.GetZeroResultSearches(limit)
+}
+
+func (s *exploreService) ListSearchSynonyms() ([]models.SearchSynonym, error) {
+	return s.repo.ListSearchSynonyms()
+}
+
+func (s *exploreService) UpsertSearchSynonym(input models.UpsertSynonymInput) (*models.SearchSynonym, error) {
+	return s.repo.UpsertSearchSynonym(input)
 }
 
 func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {

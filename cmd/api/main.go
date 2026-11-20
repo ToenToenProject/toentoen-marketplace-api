@@ -76,6 +76,9 @@ func main() {
 	// 🔍 Auto-sync PostgreSQL businesses & products to Meilisearch on startup
 	go func() {
 		meilisearch.InitMeilisearchIndices()
+		if errSyn := meilisearch.SyncSynonymsFromDB(database.DB); errSyn != nil {
+			log.Printf("⚠️ Meilisearch auto-sync synonyms error: %v", errSyn)
+		}
 		countBiz, err := meilisearch.SyncAllBusinesses(database.DB)
 		if err != nil {
 			log.Printf("⚠️ Meilisearch auto-sync businesses error: %v", err)
@@ -917,8 +920,12 @@ func main() {
 	customerExploreGroup.Get("/business/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/businesses/:business_id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
 	customerExploreGroup.Get("/businesses/:business_id/profile", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
-	customerExploreGroup.Get("/businesses", exploreHandler.SearchBusinesses)
-	customerExploreGroup.Get("/search", exploreHandler.SearchBusinesses)
+	customerExploreGroup.Get("/businesses", middlewares.OptionalAuth, exploreHandler.SearchBusinesses)
+	customerExploreGroup.Get("/search", middlewares.OptionalAuth, exploreHandler.SearchBusinesses)
+	customerExploreGroup.Post("/search-click", middlewares.OptionalAuth, exploreHandler.RecordSearchClick)
+	customerExploreGroup.Get("/analytics/zero-results", middlewares.RequireAuth, middlewares.AllowRoles("platform_admin", "super_admin"), exploreHandler.GetZeroResultSearches)
+	customerExploreGroup.Get("/synonyms", exploreHandler.ListSearchSynonyms)
+	customerExploreGroup.Post("/synonyms", middlewares.RequireAuth, middlewares.AllowRoles("platform_admin", "super_admin"), exploreHandler.UpsertSearchSynonym)
 
 	// Direct business aliases
 	api.Get("/customer/business/:id", middlewares.OptionalAuth, businessProfileHandler.GetProfile)
@@ -937,6 +944,7 @@ func main() {
 	customerExploreGroup.Post("/timeline/events", middlewares.OptionalAuth, exploreHandler.RecordFeedEvents)
 	customerExploreGroup.Post("/sync", func(c *fiber.Ctx) error {
 		meilisearch.InitMeilisearchIndices()
+		_ = meilisearch.SyncSynonymsFromDB(database.DB)
 		count, err := meilisearch.SyncAllBusinesses(database.DB)
 		if err != nil {
 			return utils.SendResponse(c, 500, "99", fmt.Sprintf("Gagal sinkronisasi Meilisearch: %v", err), nil)
