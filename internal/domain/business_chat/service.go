@@ -175,7 +175,36 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 			}
 		}
 
-		if s.notifService != nil && len(offlineStaffIDs) > 0 {
+		cleanContent := strings.TrimSpace(firstMsg.Content)
+		isTemplate := strings.EqualFold(cleanContent, "halo kak, saya ingin bertanya mengenai toko anda.") ||
+			strings.Contains(strings.ToLower(cleanContent), "halo kak, saya ingin bertanya mengenai toko anda")
+
+		if !isTemplate && s.notifService != nil && len(staffIDs) > 0 {
+			go func() {
+				title := "Pesan Baru dari Pelanggan"
+				body := formatChatPushBody(firstMsg.MessageType, firstMsg.Content)
+				data := map[string]interface{}{
+					"type":            "chat",
+					"target_id":       convID,
+					"conversation_id": convID,
+					"business_id":     businessID,
+					"customer_id":     customerID,
+					"customer_name":   senderName,
+					"sender_name":     senderName,
+					"message_id":      firstMsg.MessageID,
+				}
+				s.notifService.SendNotification(
+					staffIDs,
+					customerID,
+					"chat",
+					convID,
+					title,
+					body,
+					data,
+					nil,
+				)
+			}()
+		} else if isTemplate && s.notifService != nil && len(offlineStaffIDs) > 0 {
 			go func() {
 				title := senderName
 				body := formatChatPushBody(firstMsg.MessageType, firstMsg.Content)
@@ -400,22 +429,74 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 		}
 	}
 
-	if s.notifService != nil && len(offlineAccountIDs) > 0 {
-		go func() {
-			title := senderName
-			body := formatChatPushBody(message.MessageType, message.Content)
-			pushData := map[string]string{
-				"conversation_id": conversationID,
-				"type":            "chat",
-				"action":          "open_business_chat",
-				"business_id":     conv.BusinessID,
-				"sender_type":     senderType,
-				"sender_name":     senderName,
-				"target_type":     "chat",
-				"target_id":       conversationID,
-			}
-			_ = s.notifService.SendPushToAccounts(offlineAccountIDs, title, body, pushData)
-		}()
+	if isCustomer {
+		cleanContent := strings.TrimSpace(message.Content)
+		isTemplate := strings.EqualFold(cleanContent, "halo kak, saya ingin bertanya mengenai toko anda.") ||
+			strings.Contains(strings.ToLower(cleanContent), "halo kak, saya ingin bertanya mengenai toko anda")
+
+		// Jika bukan template, buatkan entri notifikasi in-app untuk akun merchant (Owner & Staff)
+		staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(conv.BusinessID)
+		if !isTemplate && s.notifService != nil && len(staffIDs) > 0 {
+			go func(recipients []string, sName string) {
+				title := "Pesan Baru dari Pelanggan"
+				body := formatChatPushBody(message.MessageType, message.Content)
+				data := map[string]interface{}{
+					"type":            "chat",
+					"target_id":       conversationID,
+					"conversation_id": conversationID,
+					"business_id":     conv.BusinessID,
+					"customer_id":     conv.CustomerID,
+					"customer_name":   sName,
+					"sender_name":     sName,
+					"message_id":      message.MessageID,
+				}
+				s.notifService.SendNotification(
+					recipients,
+					requesterID,
+					"chat",
+					conversationID,
+					title,
+					body,
+					data,
+					nil,
+				)
+			}(staffIDs, senderName)
+		} else if isTemplate && s.notifService != nil && len(offlineAccountIDs) > 0 {
+			go func() {
+				title := senderName
+				body := formatChatPushBody(message.MessageType, message.Content)
+				pushData := map[string]string{
+					"conversation_id": conversationID,
+					"type":            "chat",
+					"action":          "open_business_chat",
+					"business_id":     conv.BusinessID,
+					"sender_type":     senderType,
+					"sender_name":     senderName,
+					"target_type":     "chat",
+					"target_id":       conversationID,
+				}
+				_ = s.notifService.SendPushToAccounts(offlineAccountIDs, title, body, pushData)
+			}()
+		}
+	} else {
+		// Pesan dari merchant ke customer
+		if s.notifService != nil && len(offlineAccountIDs) > 0 {
+			go func() {
+				title := senderName
+				body := formatChatPushBody(message.MessageType, message.Content)
+				pushData := map[string]string{
+					"conversation_id": conversationID,
+					"type":            "chat",
+					"action":          "open_business_chat",
+					"business_id":     conv.BusinessID,
+					"sender_type":     senderType,
+					"sender_name":     senderName,
+					"target_type":     "chat",
+					"target_id":       conversationID,
+				}
+				_ = s.notifService.SendPushToAccounts(offlineAccountIDs, title, body, pushData)
+			}()
+		}
 	}
 
 	return message, nil

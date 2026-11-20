@@ -133,7 +133,13 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 		var isNew bool
 
 		// 1. Cek apakah ada notifikasi unread dengan tipe dan referenceID yang sama (AGREGASI)
-		existingNotif, err := s.repo.GetUnreadNotificationByRef(recipientID, notifType, referenceID)
+		// Catatan: Tipe 'chat' tidak diagregasi/dilewati agar setiap pesan nyata dari pelanggan
+		// selalu menghasilkan entri notifikasi in-app unread baru di database.
+		var existingNotif *models.UserNotification
+		var err error
+		if notifType != "chat" {
+			existingNotif, err = s.repo.GetUnreadNotificationByRef(recipientID, notifType, referenceID)
+		}
 		if err == nil && existingNotif != nil {
 			// Parse actor_ids existing
 			var actors []string

@@ -991,20 +991,55 @@ func (s *signalService) SendMessage(accountID, role, conversationID string, inpu
 // notifyNewMessage mengirimkan event new_message ke lawan bicara dan multi-device staff/owner
 func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalConversation, signal *models.Signal, msg *models.SignalMessage) {
 	var recipientIDs []string
-	var senderTitle string
+	var notifTitle string
+	var senderName string
+	isCustomer := (senderID == signal.CustomerID)
 
 	event := realtime.WSEvent{
 		Type: "new_message",
 		Data: msg,
 	}
 
-	if senderID == signal.CustomerID {
-		// Customer mengirim pesan -> kirim ke merchant creator + owner toko
-		recipientIDs = []string{conv.MerchantID}
-		if biz, err := s.businessRepo.FindBusinessByID(conv.BusinessID); err == nil && biz != nil && biz.AccountID != "" && biz.AccountID != conv.MerchantID {
-			recipientIDs = append(recipientIDs, biz.AccountID)
+	cleanContent := strings.TrimSpace(msg.MessageText)
+	isTemplate := strings.EqualFold(cleanContent, "halo kak, saya ingin bertanya mengenai toko anda.") ||
+		strings.Contains(strings.ToLower(cleanContent), "halo kak, saya ingin bertanya mengenai toko anda")
+
+	customerName := "Pelanggan"
+	if signal.Account != nil {
+		fullName := strings.TrimSpace(signal.Account.FirstName + " " + signal.Account.LastName)
+		if fullName != "" {
+			customerName = fullName
+		} else if signal.Account.Username != "" {
+			customerName = signal.Account.Username
 		}
-		senderTitle = "💬 Pesan Baru dari Pelanggan"
+	}
+
+	if isCustomer {
+		// Customer mengirim pesan -> ambil semua staff & owner toko
+		staffIDs, err := s.businessRepo.GetBusinessStaffAccountIDs(conv.BusinessID)
+		if err == nil && len(staffIDs) > 0 {
+			recipientIDs = staffIDs
+		} else {
+			recipientIDs = []string{conv.MerchantID}
+			if biz, err := s.businessRepo.FindBusinessByID(conv.BusinessID); err == nil && biz != nil && biz.AccountID != "" && biz.AccountID != conv.MerchantID {
+				recipientIDs = append(recipientIDs, biz.AccountID)
+			}
+		}
+
+		// Pastikan conv.MerchantID masuk jika belum ada
+		hasMerchant := false
+		for _, rid := range recipientIDs {
+			if rid == conv.MerchantID {
+				hasMerchant = true
+				break
+			}
+		}
+		if !hasMerchant && conv.MerchantID != "" {
+			recipientIDs = append(recipientIDs, conv.MerchantID)
+		}
+
+		notifTitle = "Pesan Baru dari Pelanggan"
+		senderName = customerName
 
 		// Live WebSocket broadcast ke semua staff/owner toko
 		s.hub.BroadcastToUsers(recipientIDs, event)
@@ -1015,7 +1050,8 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 		if biz, err := s.businessRepo.FindBusinessByID(conv.BusinessID); err == nil && biz != nil && biz.BusinessName != nil && *biz.BusinessName != "" {
 			bizName = *biz.BusinessName
 		}
-		senderTitle = fmt.Sprintf("💬 Pesan dari %s", bizName)
+		notifTitle = fmt.Sprintf("Pesan Baru dari %s", bizName)
+		senderName = bizName
 
 		// Live WebSocket ke customer
 		s.hub.SendToUser(signal.CustomerID, event)
@@ -1030,6 +1066,11 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 	}
 
 	// Simpan ke in-app notification & push FCM
+	// Jika pengirim adalah customer dan isi pesan adalah template inisiasi, lewati pembuatan notifikasi in-app
+	if isCustomer && isTemplate {
+		return
+	}
+
 	if s.notifService != nil && len(recipientIDs) > 0 {
 		body := msg.MessageText
 		if body == "" {
@@ -1043,14 +1084,16 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 			senderID,
 			"chat",
 			conv.ConversationID,
-			senderTitle,
+			notifTitle,
 			body,
 			map[string]interface{}{
 				"type":            "chat",
 				"target_id":       conv.ConversationID,
 				"conversation_id": conv.ConversationID,
 				"business_id":     conv.BusinessID,
-				"sender_name":     senderTitle,
+				"customer_id":     signal.CustomerID,
+				"customer_name":   customerName,
+				"sender_name":     senderName,
 				"offer_id":        conv.ConversationID,
 				"signal_id":       conv.SignalID,
 				"post_id":         conv.SignalID,
