@@ -64,26 +64,8 @@ func (r *businessChatRepository) hasSignalIDColumn() bool {
 }
 
 func (r *businessChatRepository) FindSignalForConversation(businessID, customerID string) *models.SignalPostReference {
-	// 1. Cek apakah ada record di signal_conversations untuk business & customer ini
-	var sig models.Signal
-	err := r.db.Preload("Images").
-		Joins("JOIN signal_conversations sc ON sc.signal_id = signals.signal_id").
-		Where("sc.business_id = ? AND signals.customer_id = ?", businessID, customerID).
-		Order("sc.created_at DESC").
-		First(&sig).Error
-	if err == nil && sig.SignalID != "" {
-		return sig.ToPostReference()
-	}
-
-	// 2. Fallback: ambil sinyal aktif atau terbaru milik customer ini
-	err = r.db.Preload("Images").
-		Where("customer_id = ?", customerID).
-		Order("created_at DESC").
-		First(&sig).Error
-	if err == nil && sig.SignalID != "" {
-		return sig.ToPostReference()
-	}
-
+	// Chat reguler toko tidak boleh otomatis dikaitkan dengan sinyal apa pun milik customer.
+	// Referensi sinyal hanya boleh ada jika percakapan secara eksplisit memiliki signal_id yang sah.
 	return nil
 }
 
@@ -93,6 +75,7 @@ func (r *businessChatRepository) GetSignalPostReferenceByID(signalID string) *mo
 	}
 	var sig models.Signal
 	if err := r.db.Preload("Images").Where("signal_id = ?", signalID).First(&sig).Error; err == nil && sig.SignalID != "" {
+		sig.EvaluateStatus()
 		return sig.ToPostReference()
 	}
 	return nil
@@ -232,9 +215,6 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 		if c.SignalID != nil && *c.SignalID != "" {
 			signalRef = r.GetSignalPostReferenceByID(*c.SignalID)
 		}
-		if signalRef == nil {
-			signalRef = r.FindSignalForConversation(c.BusinessID, c.CustomerID)
-		}
 
 		var sigID, sigTitle, sigDesc string
 		if signalRef != nil {
@@ -313,9 +293,6 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 		var signalRef *models.SignalPostReference
 		if c.SignalID != nil && *c.SignalID != "" {
 			signalRef = r.GetSignalPostReferenceByID(*c.SignalID)
-		}
-		if signalRef == nil {
-			signalRef = r.FindSignalForConversation(c.BusinessID, c.CustomerID)
 		}
 
 		var sigID, sigTitle, sigDesc string

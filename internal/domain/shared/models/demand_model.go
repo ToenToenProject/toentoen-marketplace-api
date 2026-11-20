@@ -30,6 +30,23 @@ type DemandSignal struct {
 	Responses []DemandResponse `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"responses,omitempty"`
 }
 
+// EvaluateStatus pada DemandSignal legacy
+func (d *DemandSignal) EvaluateStatus() {
+	if d == nil {
+		return
+	}
+	if !d.ExpiresAt.IsZero() {
+		d.ExpiresAt = d.ExpiresAt.UTC()
+	}
+	if !d.CreatedAt.IsZero() {
+		d.CreatedAt = d.CreatedAt.UTC()
+	}
+	now := time.Now().UTC()
+	if !d.ExpiresAt.IsZero() && (now.After(d.ExpiresAt) || now.Equal(d.ExpiresAt)) {
+		d.Status = "expired"
+	}
+}
+
 type DemandResponse struct {
 	ResponseID string    `gorm:"primaryKey;column:response_id" json:"response_id"`
 	SignalID   string    `gorm:"not null" json:"signal_id"`

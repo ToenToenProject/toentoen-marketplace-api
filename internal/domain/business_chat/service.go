@@ -285,9 +285,6 @@ func (s *businessChatService) GetMessages(conversationID string, requesterID str
 	if conv.SignalID != nil && *conv.SignalID != "" {
 		signalRef = s.repo.GetSignalPostReferenceByID(*conv.SignalID)
 	}
-	if signalRef == nil {
-		signalRef = s.repo.FindSignalForConversation(conv.BusinessID, conv.CustomerID)
-	}
 
 	return messages, signalRef, nil
 }

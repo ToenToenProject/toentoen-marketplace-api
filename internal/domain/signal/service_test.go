@@ -210,3 +210,106 @@ func TestSignalExploreItem_EvaluateStatus(t *testing.T) {
 	}
 }
 
+func TestDemandSignal_EvaluateStatus(t *testing.T) {
+	now := time.Now()
+
+	demandActive := models.DemandSignal{
+		Status:    "open",
+		ExpiresAt: now.Add(2 * time.Hour),
+	}
+	demandActive.EvaluateStatus()
+	if demandActive.Status != "open" {
+		t.Errorf("expected open, got %s", demandActive.Status)
+	}
+
+	demandExpired := models.DemandSignal{
+		Status:    "open",
+		ExpiresAt: now.Add(-5 * time.Minute),
+	}
+	demandExpired.EvaluateStatus()
+	if demandExpired.Status != "expired" {
+		t.Errorf("expected expired, got %s", demandExpired.Status)
+	}
+}
+
+func TestSignal_ValidOfferFilter_TimeValidation(t *testing.T) {
+	signalCreatedAt := time.Now()
+	minTime := signalCreatedAt.Add(-5 * time.Second)
+
+	// Percakapan lama yang terjadi sebelum sinyal dibuat (e.g. chat umum toko)
+	oldConv := models.SignalConversation{
+		ConversationID: "CONV-OLD",
+		CreatedAt:      signalCreatedAt.Add(-1 * time.Hour),
+		Messages: []models.SignalMessage{
+			{
+				MessageID:   "MSG-1",
+				SenderType:  "customer",
+				MessageText: "Halo kak, saya ingin bertanya mengenai toko Anda.",
+				CreatedAt:   signalCreatedAt.Add(-1 * time.Hour),
+			},
+		},
+	}
+
+	// Percakapan baru yang terjadi setelah sinyal dibuat tapi belum ada balasan merchant
+	newConvCustomerOnly := models.SignalConversation{
+		ConversationID: "CONV-NEW-1",
+		CreatedAt:      signalCreatedAt.Add(2 * time.Minute),
+		Messages: []models.SignalMessage{
+			{
+				MessageID:   "MSG-2",
+				SenderType:  "customer",
+				MessageText: "Toko kakak ada barang ini?",
+				CreatedAt:   signalCreatedAt.Add(2 * time.Minute),
+			},
+		},
+	}
+
+	// Percakapan baru yang sah dengan balasan penawaran dari merchant
+	newConvValid := models.SignalConversation{
+		ConversationID: "CONV-NEW-2",
+		CreatedAt:      signalCreatedAt.Add(5 * time.Minute),
+		Messages: []models.SignalMessage{
+			{
+				MessageID:   "MSG-3",
+				SenderType:  "merchant",
+				MessageText: "Halo kak, kami ada ready stock sesuai kebutuhan kakak!",
+				CreatedAt:   signalCreatedAt.Add(6 * time.Minute),
+			},
+		},
+	}
+
+	allConvs := []models.SignalConversation{oldConv, newConvCustomerOnly, newConvValid}
+
+	var validConversations []models.SignalConversation
+	for _, conv := range allConvs {
+		if !conv.CreatedAt.IsZero() && conv.CreatedAt.Before(minTime) {
+			continue // Chat lama tereliminasi
+		}
+
+		var validMessages []models.SignalMessage
+		hasMerchantOffer := false
+
+		for _, msg := range conv.Messages {
+			if !msg.CreatedAt.IsZero() && msg.CreatedAt.Before(minTime) {
+				continue // Pesan lama tereliminasi
+			}
+			if msg.SenderType == "merchant" {
+				hasMerchantOffer = true
+			}
+			validMessages = append(validMessages, msg)
+		}
+
+		if hasMerchantOffer {
+			conv.Messages = validMessages
+			validConversations = append(validConversations, conv)
+		}
+	}
+
+	if len(validConversations) != 1 {
+		t.Fatalf("expected exactly 1 valid offer conversation, got %d", len(validConversations))
+	}
+	if validConversations[0].ConversationID != "CONV-NEW-2" {
+		t.Errorf("expected CONV-NEW-2, got %s", validConversations[0].ConversationID)
+	}
+}
+

@@ -152,6 +152,18 @@ func (r *signalRepository) GetSignalByID(signalID string) (*models.Signal, error
 	}
 	signal.PopulateCategories()
 	signal.EvaluateStatus()
+
+	// Hitung offer_count valid secara dinamis
+	var validOfferCount int64
+	minTime := signal.CreatedAt.Add(-5 * time.Second)
+	_ = r.db.Model(&models.SignalConversation{}).
+		Joins("JOIN signal_messages sm ON sm.conversation_id = signal_conversations.conversation_id").
+		Where("signal_conversations.signal_id = ? AND signal_conversations.created_at >= ? AND sm.sender_type = 'merchant' AND sm.created_at >= ?",
+			signal.SignalID, minTime, minTime).
+		Distinct("signal_conversations.conversation_id").
+		Count(&validOfferCount).Error
+	signal.OfferCount = int(validOfferCount)
+
 	return &signal, nil
 }
 
@@ -174,6 +186,49 @@ func (r *signalRepository) GetMySignals(customerID string) ([]models.Signal, err
 		signals[i].PopulateCategories()
 		signals[i].EvaluateStatus()
 	}
+
+	// Sinkronisasi offer_count valid untuk setiap signal milik customer
+	if len(signals) > 0 {
+		sigIDs := make([]string, len(signals))
+		for i, s := range signals {
+			sigIDs[i] = s.SignalID
+		}
+
+		type offerCountRow struct {
+			SignalID string `gorm:"column:signal_id"`
+			Count    int    `gorm:"column:offer_count"`
+		}
+		var counts []offerCountRow
+		errCounts := r.db.Raw(`
+			SELECT sc.signal_id, COUNT(DISTINCT sc.conversation_id) AS offer_count
+			FROM signal_conversations sc
+			JOIN signals s ON sc.signal_id = s.signal_id
+			JOIN signal_messages sm ON sm.conversation_id = sc.conversation_id
+			WHERE sc.signal_id IN ?
+			  AND sc.created_at >= (s.created_at - INTERVAL '5 seconds')
+			  AND sm.sender_type = 'merchant'
+			  AND sm.created_at >= (s.created_at - INTERVAL '5 seconds')
+			GROUP BY sc.signal_id
+		`, sigIDs).Scan(&counts).Error
+
+		countMap := make(map[string]int)
+		if errCounts == nil {
+			for _, c := range counts {
+				countMap[c.SignalID] = c.Count
+			}
+		}
+
+		for i := range signals {
+			validCount := countMap[signals[i].SignalID]
+			if signals[i].OfferCount != validCount {
+				signals[i].OfferCount = validCount
+				go func(sid string, cnt int) {
+					_ = r.db.Model(&models.Signal{}).Where("signal_id = ?", sid).Update("offer_count", cnt)
+				}(signals[i].SignalID, validCount)
+			}
+		}
+	}
+
 	return signals, nil
 }
 
@@ -188,7 +243,10 @@ func (r *signalRepository) GetSignalWithConversations(signalID string) (*models.
 			return db.Order("created_at ASC")
 		}).
 		Preload("Conversations.Business").
-		Preload("Conversations.Merchant")
+		Preload("Conversations.Merchant").
+		Preload("Conversations.Messages", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at ASC")
+		})
 	if hasSignalCategories(r.db) {
 		q = q.Preload("SignalCategories.Category")
 	}
@@ -198,6 +256,45 @@ func (r *signalRepository) GetSignalWithConversations(signalID string) (*models.
 	}
 	signal.PopulateCategories()
 	signal.EvaluateStatus()
+
+	// Filter percakapan & pesan yang valid:
+	// a. Wajib terhubung ke signal_id ini
+	// b. Percakapan dibuat >= signal.CreatedAt - 5s
+	// c. Pesan dibuat >= signal.CreatedAt - 5s
+	// d. Percakapan hanya diakui sebagai penawaran jika memiliki balasan/penawaran dari merchant (sender_type = 'merchant')
+	var validConversations []models.SignalConversation
+	minTime := signal.CreatedAt.Add(-5 * time.Second)
+
+	for _, conv := range signal.Conversations {
+		if !conv.CreatedAt.IsZero() && conv.CreatedAt.Before(minTime) {
+			continue
+		}
+
+		var validMessages []models.SignalMessage
+		hasMerchantOffer := false
+
+		for _, msg := range conv.Messages {
+			if !msg.CreatedAt.IsZero() && msg.CreatedAt.Before(minTime) {
+				continue
+			}
+			if msg.SenderType == "merchant" {
+				hasMerchantOffer = true
+			}
+			validMessages = append(validMessages, msg)
+		}
+
+		if hasMerchantOffer {
+			conv.Messages = validMessages
+			validConversations = append(validConversations, conv)
+		}
+	}
+
+	signal.Conversations = validConversations
+	signal.OfferCount = len(validConversations)
+
+	// Sinkronisasi kolom offer_count di DB
+	_ = r.db.Model(&models.Signal{}).Where("signal_id = ?", signal.SignalID).Update("offer_count", signal.OfferCount)
+
 	return &signal, nil
 }
 
@@ -310,6 +407,12 @@ func (r *signalRepository) ExpireOverdueSignals() (int64, error) {
 			Where("signal_id IN ?", overdueIDs).
 			Update("status", "locked").Error; err != nil {
 			return err
+		}
+
+		// Update juga pada tabel legacy demand_signals jika ada
+		var hasDemandSignals bool
+		if err := tx.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'demand_signals')").Scan(&hasDemandSignals).Error; err == nil && hasDemandSignals {
+			tx.Exec("UPDATE demand_signals SET status = 'expired' WHERE expires_at <= NOW() AND status IN ('active', 'open')")
 		}
 
 		return nil
@@ -446,7 +549,15 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 			s.min_budget,
 			s.max_budget,
 			s.max_offers,
-			s.offer_count,
+			COALESCE((
+				SELECT COUNT(DISTINCT sc_cnt.conversation_id)
+				FROM signal_conversations sc_cnt
+				JOIN signal_messages sm_cnt ON sm_cnt.conversation_id = sc_cnt.conversation_id
+				WHERE sc_cnt.signal_id = s.signal_id
+				  AND sc_cnt.created_at >= (s.created_at - INTERVAL '5 seconds')
+				  AND sm_cnt.sender_type = 'merchant'
+				  AND sm_cnt.created_at >= (s.created_at - INTERVAL '5 seconds')
+			), 0) AS offer_count,
 			s.expires_at,
 			s.created_at,
 			ST_Distance(s.location::geography, %s::geography) / 1000 AS distance_km,
