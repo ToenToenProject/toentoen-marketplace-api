@@ -51,38 +51,73 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 		data["business_id"] = bizID
 	}
 
-	// Normalisasi alias keys agar backward-compatible
-	switch targetType {
-	case "signal":
-		data["type"] = "signal"
+	// Normalisasi alias keys agar backward-compatible dan sesuai standar navigasi Frontend
+	switch notifType {
+	case "signal_offer":
+		data["type"] = "signal_offer"
 		if data["signal_id"] == nil || data["signal_id"] == "" {
 			data["signal_id"] = targetID
 		}
+	case "promo":
+		data["type"] = "promo"
+		if data["promotion_id"] == nil || data["promotion_id"] == "" {
+			data["promotion_id"] = targetID
+		}
+	case "post_comment":
+		data["type"] = "post_comment"
+		if data["post_id"] == nil || data["post_id"] == "" {
+			data["post_id"] = targetID
+		}
+	case "post_like":
+		data["type"] = "post_like"
 		if data["post_id"] == nil || data["post_id"] == "" {
 			data["post_id"] = targetID
 		}
 	case "chat":
+		data["type"] = "chat"
 		if data["conversation_id"] == nil || data["conversation_id"] == "" {
 			data["conversation_id"] = targetID
 		}
-		if data["offer_id"] == nil || data["offer_id"] == "" {
-			data["offer_id"] = targetID
-		}
-	case "review":
+	case "new_review":
+		data["type"] = "new_review"
 		if data["review_id"] == nil || data["review_id"] == "" {
 			data["review_id"] = targetID
 		}
-	case "post":
-		if data["post_id"] == nil || data["post_id"] == "" {
-			data["post_id"] = targetID
-		}
-	case "promotion":
-		if data["promotion_id"] == nil || data["promotion_id"] == "" {
-			data["promotion_id"] = targetID
-		}
-	case "invitation":
-		if data["assignment_id"] == nil || data["assignment_id"] == "" {
-			data["assignment_id"] = targetID
+	default:
+		switch targetType {
+		case "signal":
+			data["type"] = "signal"
+			if data["signal_id"] == nil || data["signal_id"] == "" {
+				data["signal_id"] = targetID
+			}
+			if data["post_id"] == nil || data["post_id"] == "" {
+				data["post_id"] = targetID
+			}
+		case "chat":
+			data["type"] = "chat"
+			if data["conversation_id"] == nil || data["conversation_id"] == "" {
+				data["conversation_id"] = targetID
+			}
+			if data["offer_id"] == nil || data["offer_id"] == "" {
+				data["offer_id"] = targetID
+			}
+		case "review":
+			if data["review_id"] == nil || data["review_id"] == "" {
+				data["review_id"] = targetID
+			}
+		case "post":
+			if data["post_id"] == nil || data["post_id"] == "" {
+				data["post_id"] = targetID
+			}
+		case "promotion":
+			data["type"] = "promo"
+			if data["promotion_id"] == nil || data["promotion_id"] == "" {
+				data["promotion_id"] = targetID
+			}
+		case "invitation":
+			if data["assignment_id"] == nil || data["assignment_id"] == "" {
+				data["assignment_id"] = targetID
+			}
 		}
 	}
 
@@ -208,6 +243,20 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 					stringData["business_id"] = bizID
 				}
 
+				// Eksplisit pastikan field ID target utama selalu tersedia di stringData FCM
+				switch notifType {
+				case "post_comment", "post_like":
+					stringData["post_id"] = targetID
+				case "chat":
+					stringData["conversation_id"] = targetID
+				case "new_review":
+					stringData["review_id"] = targetID
+				case "signal_offer":
+					stringData["signal_id"] = targetID
+				case "promo":
+					stringData["promotion_id"] = targetID
+				}
+
 				_ = config.SendPushNotification(tokens, notifToSave.Title, notifToSave.Body, stringData)
 			}
 		}
@@ -252,37 +301,72 @@ func (s *notificationService) GetMyNotifications(accountID string, page, limit i
 		}
 
 		// Pertahankan backward-compatible alias keys di dalam data
-		switch targetType {
-		case "signal":
-			dataMap["type"] = "signal"
+		switch standardType {
+		case "signal_offer":
+			dataMap["type"] = "signal_offer"
 			if dataMap["signal_id"] == nil || dataMap["signal_id"] == "" {
 				dataMap["signal_id"] = targetID
 			}
+		case "promo":
+			dataMap["type"] = "promo"
+			if dataMap["promotion_id"] == nil || dataMap["promotion_id"] == "" {
+				dataMap["promotion_id"] = targetID
+			}
+		case "post_comment":
+			dataMap["type"] = "post_comment"
+			if dataMap["post_id"] == nil || dataMap["post_id"] == "" {
+				dataMap["post_id"] = targetID
+			}
+		case "post_like":
+			dataMap["type"] = "post_like"
 			if dataMap["post_id"] == nil || dataMap["post_id"] == "" {
 				dataMap["post_id"] = targetID
 			}
 		case "chat":
+			dataMap["type"] = "chat"
 			if dataMap["conversation_id"] == nil || dataMap["conversation_id"] == "" {
 				dataMap["conversation_id"] = targetID
 			}
-			if dataMap["offer_id"] == nil || dataMap["offer_id"] == "" {
-				dataMap["offer_id"] = targetID
-			}
-		case "review":
+		case "new_review":
+			dataMap["type"] = "new_review"
 			if dataMap["review_id"] == nil || dataMap["review_id"] == "" {
 				dataMap["review_id"] = targetID
 			}
-		case "post":
-			if dataMap["post_id"] == nil || dataMap["post_id"] == "" {
-				dataMap["post_id"] = targetID
-			}
-		case "promotion":
-			if dataMap["promotion_id"] == nil || dataMap["promotion_id"] == "" {
-				dataMap["promotion_id"] = targetID
-			}
-		case "invitation":
-			if dataMap["assignment_id"] == nil || dataMap["assignment_id"] == "" {
-				dataMap["assignment_id"] = targetID
+		default:
+			switch targetType {
+			case "signal":
+				dataMap["type"] = "signal"
+				if dataMap["signal_id"] == nil || dataMap["signal_id"] == "" {
+					dataMap["signal_id"] = targetID
+				}
+				if dataMap["post_id"] == nil || dataMap["post_id"] == "" {
+					dataMap["post_id"] = targetID
+				}
+			case "chat":
+				dataMap["type"] = "chat"
+				if dataMap["conversation_id"] == nil || dataMap["conversation_id"] == "" {
+					dataMap["conversation_id"] = targetID
+				}
+				if dataMap["offer_id"] == nil || dataMap["offer_id"] == "" {
+					dataMap["offer_id"] = targetID
+				}
+			case "review":
+				if dataMap["review_id"] == nil || dataMap["review_id"] == "" {
+					dataMap["review_id"] = targetID
+				}
+			case "post":
+				if dataMap["post_id"] == nil || dataMap["post_id"] == "" {
+					dataMap["post_id"] = targetID
+				}
+			case "promotion":
+				dataMap["type"] = "promo"
+				if dataMap["promotion_id"] == nil || dataMap["promotion_id"] == "" {
+					dataMap["promotion_id"] = targetID
+				}
+			case "invitation":
+				if dataMap["assignment_id"] == nil || dataMap["assignment_id"] == "" {
+					dataMap["assignment_id"] = targetID
+				}
 			}
 		}
 

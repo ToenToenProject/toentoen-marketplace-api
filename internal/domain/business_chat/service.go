@@ -181,7 +181,7 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 				body := formatChatPushBody(firstMsg.MessageType, firstMsg.Content)
 				pushData := map[string]string{
 					"conversation_id": convID,
-					"type":            "business_chat",
+					"type":            "chat",
 					"action":          "open_business_chat",
 					"business_id":     businessID,
 					"sender_type":     "customer",
@@ -406,7 +406,7 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 			body := formatChatPushBody(message.MessageType, message.Content)
 			pushData := map[string]string{
 				"conversation_id": conversationID,
-				"type":            "business_chat",
+				"type":            "chat",
 				"action":          "open_business_chat",
 				"business_id":     conv.BusinessID,
 				"sender_type":     senderType,

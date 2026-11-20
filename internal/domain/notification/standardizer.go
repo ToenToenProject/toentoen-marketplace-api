@@ -48,9 +48,22 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 			}
 		}
 
-	// B. Obrolan / Chat (Signal Reply, Signal Offer, Direct Business Chat, Support Chat, Signal Message)
-	case lowerType == "chat" || lowerType == "business_chat" || lowerType == "support_chat" ||
-		lowerType == "signal_reply" || lowerType == "signal_offer" || lowerType == "respond_demand_signal" || lowerType == "signal_message":
+	// A1. Balasan / Tanggapan Sinyal Kebutuhan (Signal Offer)
+	case lowerType == "signal_offer" || lowerType == "signal_reply" || lowerType == "respond_demand_signal":
+		standardType = "signal_offer"
+		targetType = "signal"
+		if targetID == "" {
+			if sid, ok := data["signal_id"].(string); ok && sid != "" {
+				targetID = sid
+			} else if pid, ok := data["post_id"].(string); ok && pid != "" {
+				targetID = pid
+			} else if strings.HasPrefix(cleanRefID, "SIG-") {
+				targetID = cleanRefID
+			}
+		}
+
+	// B. Obrolan / Chat (Direct Business Chat, Support Chat, Signal Message)
+	case lowerType == "chat" || lowerType == "business_chat" || lowerType == "support_chat" || lowerType == "signal_message":
 		standardType = "chat"
 		targetType = "chat"
 		if targetID == "" {
@@ -60,7 +73,7 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 				targetID = oid
 			} else if sid, ok := data["session_id"].(string); ok && sid != "" {
 				targetID = sid
-			} else if strings.HasPrefix(cleanRefID, "CONV-") {
+			} else if strings.HasPrefix(cleanRefID, "CONV-") || strings.HasPrefix(cleanRefID, "BCONV-") {
 				targetID = cleanRefID
 			}
 		}
@@ -119,7 +132,7 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 
 	// E. Promosi (Per Produk & Bundling)
 	case strings.Contains(lowerType, "promo") || strings.Contains(lowerType, "bundling"):
-		standardType = "promotion"
+		standardType = "promo"
 		targetType = "promotion"
 		if targetID == "" {
 			if prmid, ok := data["promotion_id"].(string); ok && prmid != "" {

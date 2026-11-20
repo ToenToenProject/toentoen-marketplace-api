@@ -176,16 +176,16 @@ func TestGetMyNotificationsStandardizedPayload(t *testing.T) {
 		t.Errorf("Expected legacy signal_id and post_id %q, got %v", sigID, n1.Data)
 	}
 
-	// 2. Verifikasi NOTIF-2 (Tawaran / Tanggapan Chat)
+	// 2. Verifikasi NOTIF-2 (Tawaran / Tanggapan Sinyal)
 	n2 := responses[1]
-	if n2.Type != "chat" {
-		t.Errorf("Expected Type 'chat', got %q", n2.Type)
+	if n2.Type != "signal_offer" {
+		t.Errorf("Expected Type 'signal_offer', got %q", n2.Type)
 	}
-	if n2.Data["target_type"] != "chat" || n2.TargetType != "chat" {
-		t.Errorf("Expected target_type 'chat', got data=%v, root=%v", n2.Data["target_type"], n2.TargetType)
+	if n2.Data["target_type"] != "signal" || n2.TargetType != "signal" {
+		t.Errorf("Expected target_type 'signal', got data=%v, root=%v", n2.Data["target_type"], n2.TargetType)
 	}
-	if n2.Data["target_id"] != convID || n2.TargetID != convID {
-		t.Errorf("Expected target_id %q, got data=%v, root=%v", convID, n2.Data["target_id"], n2.TargetID)
+	if n2.Data["target_id"] != sigID || n2.TargetID != sigID {
+		t.Errorf("Expected target_id %q, got data=%v, root=%v", sigID, n2.Data["target_id"], n2.TargetID)
 	}
 	if n2.Data["business_id"] != bizID {
 		t.Errorf("Expected business_id %q, got %v", bizID, n2.Data["business_id"])
@@ -218,10 +218,10 @@ func TestGetMyNotificationsStandardizedPayload(t *testing.T) {
 		t.Errorf("Expected target_id %q, got data=%v, root=%v", postID, n4.Data["target_id"], n4.TargetID)
 	}
 
-	// 5. Verifikasi NOTIF-5 (Promotion)
+	// 5. Verifikasi NOTIF-5 (Promotion / Promo)
 	n5 := responses[4]
-	if n5.Type != "promotion" {
-		t.Errorf("Expected Type 'promotion', got %q", n5.Type)
+	if n5.Type != "promo" {
+		t.Errorf("Expected Type 'promo', got %q", n5.Type)
 	}
 	if n5.Data["target_type"] != "promotion" || n5.TargetType != "promotion" {
 		t.Errorf("Expected target_type 'promotion', got data=%v, root=%v", n5.Data["target_type"], n5.TargetType)
@@ -296,8 +296,8 @@ func TestSendNotificationSignalPayloadNormalization(t *testing.T) {
 	svc.SendNotification(
 		[]string{"ACC-CUSTOMER1"},
 		"ACC-MERCHANT1",
-		"signal_reply",
-		convID,
+		"signal_offer",
+		sigID,
 		"Tawaran Baru",
 		"Merchant memberi penawaran",
 		map[string]interface{}{
@@ -311,16 +311,16 @@ func TestSendNotificationSignalPayloadNormalization(t *testing.T) {
 		t.Fatalf("Expected 2 saved notifications, got %d", len(repo.saved))
 	}
 	saved2 := repo.saved[1]
-	if saved2.Type != "chat" {
-		t.Errorf("Expected saved Type 'chat', got %q", saved2.Type)
+	if saved2.Type != "signal_offer" {
+		t.Errorf("Expected saved Type 'signal_offer', got %q", saved2.Type)
 	}
 	var data2 map[string]interface{}
 	_ = json.Unmarshal(saved2.Data, &data2)
-	if data2["target_type"] != "chat" || data2["target_id"] != convID {
-		t.Errorf("Expected target_type 'chat' and target_id %q, got %v", convID, data2)
+	if data2["target_type"] != "signal" || data2["target_id"] != sigID {
+		t.Errorf("Expected target_type 'signal' and target_id %q, got %v", sigID, data2)
 	}
-	if data2["conversation_id"] != convID || data2["offer_id"] != convID {
-		t.Errorf("Expected conversation_id and offer_id %q, got %v", convID, data2)
+	if data2["signal_id"] != sigID {
+		t.Errorf("Expected signal_id %q, got %v", sigID, data2)
 	}
 }
 
@@ -345,19 +345,29 @@ func TestStandardizeNotificationMetadataCases(t *testing.T) {
 			wantTargetID: "SIG-001",
 		},
 		{
-			name:         "Signal Message with CONV ref",
-			rawType:      "signal_message",
+			name:         "Signal Offer with SIG ref",
+			rawType:      "signal_offer",
+			refID:        "SIG-001",
+			data:         map[string]interface{}{"signal_id": "SIG-001", "conversation_id": "CONV-002"},
+			wantType:     "signal_offer",
+			wantTarget:   "signal",
+			wantTargetID: "SIG-001",
+		},
+		{
+			name:         "Chat with CONV ref",
+			rawType:      "chat",
 			refID:        "CONV-002",
-			data:         map[string]interface{}{"conversation_id": "CONV-002", "signal_id": "SIG-001"},
+			data:         map[string]interface{}{"conversation_id": "CONV-002", "business_id": "BUS-001"},
 			wantType:     "chat",
 			wantTarget:   "chat",
 			wantTargetID: "CONV-002",
+			wantBizID:    "BUS-001",
 		},
 		{
 			name:         "Business Review with REV ref",
 			rawType:      "business_review",
 			refID:        "REV-003",
-			data:         map[string]interface{}{"business_id": "BUS-001"},
+			data:         map[string]interface{}{"business_id": "BUS-001", "review_id": "REV-003"},
 			wantType:     "new_review",
 			wantTarget:   "review",
 			wantTargetID: "REV-003",
@@ -367,19 +377,31 @@ func TestStandardizeNotificationMetadataCases(t *testing.T) {
 			name:         "Post Comment",
 			rawType:      "post_comment",
 			refID:        "PST-004",
-			data:         map[string]interface{}{"post_id": "PST-004", "comment_id": "CMT-100"},
+			data:         map[string]interface{}{"post_id": "PST-004", "business_id": "BUS-001", "comment_id": "CMT-100"},
 			wantType:     "post_comment",
 			wantTarget:   "post",
 			wantTargetID: "PST-004",
+			wantBizID:    "BUS-001",
+		},
+		{
+			name:         "Post Like",
+			rawType:      "post_like",
+			refID:        "PST-004",
+			data:         map[string]interface{}{"post_id": "PST-004", "business_id": "BUS-001"},
+			wantType:     "post_like",
+			wantTarget:   "post",
+			wantTargetID: "PST-004",
+			wantBizID:    "BUS-001",
 		},
 		{
 			name:         "Promotion with PRM ref",
 			rawType:      "business_promotion",
 			refID:        "PRM-005",
-			data:         map[string]interface{}{"promotion_id": "PRM-005"},
-			wantType:     "promotion",
+			data:         map[string]interface{}{"promotion_id": "PRM-005", "business_id": "BUS-001"},
+			wantType:     "promo",
 			wantTarget:   "promotion",
 			wantTargetID: "PRM-005",
+			wantBizID:    "BUS-001",
 		},
 		{
 			name:         "KYC Approved with ACC ref",
