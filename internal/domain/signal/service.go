@@ -732,8 +732,9 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 	if err != nil {
 		return nil, errors.New("signal tidak ditemukan")
 	}
-	if signal.Status != "active" {
-		return nil, errors.New("signal ini sudah tidak aktif")
+	signal.EvaluateStatus()
+	if signal.Status != "active" || !signal.IsActive {
+		return nil, errors.New("signal ini sudah tidak aktif atau telah kedaluwarsa")
 	}
 
 	existing, _ := s.signalRepo.FindExistingConversationByBusiness(signalID, input.BusinessID)

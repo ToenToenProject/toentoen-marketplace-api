@@ -158,11 +158,18 @@ func (s *Signal) PopulateCategories() {
 
 // EvaluateStatus mengevaluasi dan menetapkan status serta field is_active terkini secara akurat.
 // Nilai status: "active", "closed", "inactive", "expired", "completed".
+// Waktu expires_at dan created_at dipastikan selalu berformat UTC standar ISO-8601 (offset Z).
 func (s *Signal) EvaluateStatus() {
 	if s == nil {
 		return
 	}
-	now := time.Now()
+	if !s.ExpiresAt.IsZero() {
+		s.ExpiresAt = s.ExpiresAt.UTC()
+	}
+	if !s.CreatedAt.IsZero() {
+		s.CreatedAt = s.CreatedAt.UTC()
+	}
+	now := time.Now().UTC()
 	cleanStatus := strings.ToLower(strings.TrimSpace(s.Status))
 
 	switch cleanStatus {
@@ -399,6 +406,52 @@ type SignalExploreItem struct {
 	Images          []string  `json:"images"`
 	Tags            []string  `json:"tags"`          // Nama tag yang dipilih customer
 	TagOverlapScore int       `json:"relevance_score"` // Jumlah tag overlap dengan bisnis merchant
+}
+
+// EvaluateStatus mengevaluasi dan menetapkan status serta field is_active pada SignalExploreItem secara dinamis.
+// Waktu expires_at dan created_at dipastikan berformat UTC standar ISO-8601 (offset Z).
+func (item *SignalExploreItem) EvaluateStatus() {
+	if item == nil {
+		return
+	}
+	if !item.ExpiresAt.IsZero() {
+		item.ExpiresAt = item.ExpiresAt.UTC()
+	}
+	if !item.CreatedAt.IsZero() {
+		item.CreatedAt = item.CreatedAt.UTC()
+	}
+	now := time.Now().UTC()
+	cleanStatus := strings.ToLower(strings.TrimSpace(item.Status))
+
+	switch cleanStatus {
+	case "completed", "finished":
+		item.Status = "completed"
+		item.IsActive = false
+	case "closed":
+		item.Status = "closed"
+		item.IsActive = false
+	case "inactive":
+		item.Status = "inactive"
+		item.IsActive = false
+	case "expired":
+		item.Status = "expired"
+		item.IsActive = false
+	case "active", "":
+		if !item.ExpiresAt.IsZero() && (now.After(item.ExpiresAt) || now.Equal(item.ExpiresAt)) {
+			item.Status = "expired"
+			item.IsActive = false
+		} else {
+			item.Status = "active"
+			item.IsActive = true
+		}
+	default:
+		if !item.ExpiresAt.IsZero() && (now.After(item.ExpiresAt) || now.Equal(item.ExpiresAt)) {
+			item.Status = "expired"
+			item.IsActive = false
+		} else {
+			item.IsActive = (item.Status == "active")
+		}
+	}
 }
 
 // SignalMerchantComparison untuk matriks perbandingan toko penawar bagi customer

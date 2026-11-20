@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// StartSignalExpiryWorker menjalankan background scheduler secara berkala (setiap 30 detik)
+// StartSignalExpiryWorker menjalankan background scheduler secara berkala (setiap 5 menit)
 // untuk mengupdate kolom status menjadi 'expired' dan mengunci roomchat pada sinyal-sinyal
 // yang masa aktifnya telah terlampaui (status = 'active' AND expires_at <= NOW()).
 func StartSignalExpiryWorker(repo SignalRepository) {
@@ -21,7 +21,7 @@ func StartSignalExpiryWorker(repo SignalRepository) {
 			log.Printf("[SignalExpiryWorker] Inisialisasi awal berhasil menandai %d sinyal kedaluwarsa sebagai expired", count)
 		}
 
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
 		for range ticker.C {

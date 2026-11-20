@@ -558,6 +558,8 @@ func main() {
 	// ==========================================
 	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth, middlewares.RequireEmailVerified)
 	customerSignalGroup.Post("/", customerSignalHandler.CreateSignal)
+	customerSignalGroup.Get("/", customerSignalHandler.GetMySignals)
+	customerSignalGroup.Get("", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/me", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)
 	customerSignalGroup.Put("/:signal_id", customerSignalHandler.UpdateSignal)

@@ -178,5 +178,35 @@ func TestSignal_EvaluateStatus(t *testing.T) {
 	if sigCompleted.Status != "completed" || sigCompleted.IsActive {
 		t.Errorf("expected completed with is_active=false, got status=%s is_active=%v", sigCompleted.Status, sigCompleted.IsActive)
 	}
+
+	// 6. Test UTC format
+	if sigActive.ExpiresAt.Location() != time.UTC {
+		t.Errorf("expected UTC location for expires_at, got %v", sigActive.ExpiresAt.Location())
+	}
+}
+
+func TestSignalExploreItem_EvaluateStatus(t *testing.T) {
+	now := time.Now()
+
+	itemActive := models.SignalExploreItem{
+		Status:    "active",
+		ExpiresAt: now.Add(1 * time.Hour),
+	}
+	itemActive.EvaluateStatus()
+	if itemActive.Status != "active" || !itemActive.IsActive {
+		t.Errorf("expected item active, got status=%s is_active=%v", itemActive.Status, itemActive.IsActive)
+	}
+	if itemActive.ExpiresAt.Location() != time.UTC {
+		t.Errorf("expected UTC location for item expires_at, got %v", itemActive.ExpiresAt.Location())
+	}
+
+	itemExpired := models.SignalExploreItem{
+		Status:    "active",
+		ExpiresAt: now.Add(-10 * time.Minute),
+	}
+	itemExpired.EvaluateStatus()
+	if itemExpired.Status != "expired" || itemExpired.IsActive {
+		t.Errorf("expected item expired, got status=%s is_active=%v", itemExpired.Status, itemExpired.IsActive)
+	}
 }
 

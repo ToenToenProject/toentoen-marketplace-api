@@ -151,6 +151,7 @@ func (r *signalRepository) GetSignalByID(signalID string) (*models.Signal, error
 		return nil, err
 	}
 	signal.PopulateCategories()
+	signal.EvaluateStatus()
 	return &signal, nil
 }
 
@@ -171,6 +172,7 @@ func (r *signalRepository) GetMySignals(customerID string) ([]models.Signal, err
 	}
 	for i := range signals {
 		signals[i].PopulateCategories()
+		signals[i].EvaluateStatus()
 	}
 	return signals, nil
 }
@@ -195,6 +197,7 @@ func (r *signalRepository) GetSignalWithConversations(signalID string) (*models.
 		return nil, err
 	}
 	signal.PopulateCategories()
+	signal.EvaluateStatus()
 	return &signal, nil
 }
 
@@ -437,6 +440,7 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 			s.description,
 			s.category_id,
 			s.category,
+			s.status,
 			s.is_urgent,
 			s.radius_km,
 			s.min_budget,
@@ -582,7 +586,10 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		}
 	}
 
+	filtered := make([]models.SignalExploreItem, 0, len(results))
 	for i := range results {
+		results[i].EvaluateStatus()
+
 		if len(results[i].Categories) == 0 {
 			if results[i].Category != "" {
 				results[i].Categories = []string{results[i].Category}
@@ -603,9 +610,14 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		if results[i].Tags == nil {
 			results[i].Tags = []string{}
 		}
+
+		// Hanya sertakan sinyal yang statusnya aktif dan belum expired
+		if results[i].Status == "active" && results[i].IsActive {
+			filtered = append(filtered, results[i])
+		}
 	}
 
-	return results, nil
+	return filtered, nil
 }
 
 // ================================================================
