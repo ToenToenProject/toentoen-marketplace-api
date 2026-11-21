@@ -166,7 +166,8 @@ func (s *LocationService) SyncMerchantLocationsFromDB() error {
 	err := s.db.Table("businesses").
 		Select("business_id, business_name, logo_url, store_type, latitude, longitude, is_active, is_manually_closed").
 		Where("latitude IS NOT NULL AND longitude IS NOT NULL AND latitude != 0 AND longitude != 0").
-		Where("is_active = ?", true).
+		Where("is_active = ? AND status != ?", true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')").
 		Find(&rows).Error
 
 	if err != nil {

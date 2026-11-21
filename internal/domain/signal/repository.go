@@ -1151,9 +1151,10 @@ func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryIDs []in
 	customerPoint := fmt.Sprintf("ST_SetSRID(ST_MakePoint(%f, %f), 4326)", lng, lat)
 	query := fmt.Sprintf(`
 		SELECT DISTINCT account_id FROM (
-			-- 1. Owner Toko
+			-- 1. Owner Toko (hanya yang sudah KYC verified)
 			SELECT b.account_id
 			FROM businesses b
+			JOIN owners o ON o.account_id = b.account_id AND o.kyc_status = 'verified'
 			JOIN business_has_categories bhc ON b.business_id = bhc.business_id
 			WHERE (
 				bhc.category_id IN (?)
@@ -1161,14 +1162,16 @@ func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryIDs []in
 				OR bhc.category_id IN (SELECT category_id FROM business_categories WHERE parent_id IN (?))
 			)
 			  AND b.is_active = true
+			  AND b.status != 'deleted'
 			  AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
 			  AND ST_DWithin(ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography, %s::geography, ? * 1000)
 
 			UNION
 
-			-- 2. Staff / Business Admin Toko
+			-- 2. Staff / Business Admin Toko (hanya dari toko yang owner-nya sudah KYC verified)
 			SELECT baa.admin_id AS account_id
 			FROM businesses b
+			JOIN owners o ON o.account_id = b.account_id AND o.kyc_status = 'verified'
 			JOIN business_has_categories bhc ON b.business_id = bhc.business_id
 			JOIN business_admin_assignments baa ON b.business_id = baa.business_id
 			WHERE (
@@ -1177,6 +1180,7 @@ func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryIDs []in
 				OR bhc.category_id IN (SELECT category_id FROM business_categories WHERE parent_id IN (?))
 			)
 			  AND b.is_active = true
+			  AND b.status != 'deleted'
 			  AND baa.status IN ('active', 'accepted')
 			  AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
 			  AND ST_DWithin(ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography, %s::geography, ? * 1000)

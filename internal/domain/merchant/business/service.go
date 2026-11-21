@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/notification"
+	"toentoen-backend/internal/domain/shared/kychelper"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/internal/domain/shared/permissions"
 	"toentoen-backend/pkg/crypto"
@@ -160,12 +161,10 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		return "", errors.New("Email akun Anda belum terverifikasi. Silakan verifikasi email Anda terlebih dahulu sebelum membuat bisnis.")
 	}
 
-	if kycStatus != "pending" && kycStatus != "verified" {
-		if kycStatus == "rejected" {
-			return "", errors.New("Pengajuan verifikasi identitas (KYC) Anda ditolak. Silakan periksa alasan penolakan dan ajukan ulang berkas KYC Anda sebelum membuat bisnis.")
-		}
-		return "", errors.New("Anda belum dapat membuat bisnis karena pengajuan verifikasi identitas (KYC) Anda belum dikirimkan. Silakan lengkapi dan ajukan KYC terlebih dahulu.")
-	}
+	// Merchant diperbolehkan membuat & mengelola toko meskipun KYC belum disetujui.
+	// Toko baru selalu dibuat dalam kondisi tertutup (is_manually_closed = true)
+	// dan tidak akan tampil ke publik (customer) sampai KYC owner disetujui ('verified').
+	_ = kycStatus
 
 	// Validasi Tag NIB: Tag NIB hanya dapat dipilih jika bisnis memiliki NIB yang terisi
 	cleanNIB := strings.TrimSpace(input.NIB)
@@ -393,6 +392,11 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 
 	// 🪄 MAGIC: Hitung is_open_now secara live sebelum dikembalikan ke Frontend
 	business.IsOpenNow = utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours, business.ConfirmedOpenDate, business.ConfirmedOvertimeDate)
+
+	// Populate Visibility info berdasarkan status KYC owner
+	_, ownerKYCStatus, _ := s.repo.GetOwnerKYCStatus(business.AccountID)
+	business.Visibility = kychelper.BuildBusinessVisibility(ownerKYCStatus, business.IsActive, business.Status)
+	business.IsVerified = (ownerKYCStatus == "verified")
 
 	// Filter: Jika bisnis belum memiliki NIB, pastikan tag NIB tidak ikut dimunculkan
 	hasNIBDetail := business.NIB != nil && strings.TrimSpace(*business.NIB) != ""
@@ -971,6 +975,21 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	// Nilai baru yang akan di-apply (Flip)
 	newStatus := !business.IsManuallyClosed
 
+	// 🔒 Gerbang KYC: Aksi MEMBUKA toko (!newStatus) wajib menunggu verifikasi KYC owner disetujui ('verified').
+	// Aksi menutup toko (newStatus == true) tetap diperbolehkan.
+	if !newStatus {
+		_, ownerKYCStatus, _ := s.repo.GetOwnerKYCStatus(business.AccountID)
+		if ownerKYCStatus != "verified" {
+			if ownerKYCStatus == "pending" {
+				return false, errors.New("toko belum dapat dibuka karena verifikasi identitas (KYC) pemilik toko sedang dalam proses peninjauan, mohon tunggu")
+			}
+			if ownerKYCStatus == "rejected" {
+				return false, errors.New("toko belum dapat dibuka karena pengajuan verifikasi identitas (KYC) ditolak. Silakan ajukan ulang berkas KYC Anda")
+			}
+			return false, errors.New("toko belum dapat dibuka karena pemilik toko belum menyelesaikan verifikasi identitas (KYC)")
+		}
+	}
+
 	loc := utils.GetWIBLocation()
 	todayStr := time.Now().In(loc).Format("2006-01-02")
 
@@ -1042,14 +1061,27 @@ func (s *businessService) ConfirmScheduleAction(requesterID, businessID string, 
 
 	var actionErr error
 	switch input.Action {
-	case "confirm_open":
-		// Merchant konfirmasi: Toko siap buka sesuai jadwal hari ini
-		actionErr = s.repo.ConfirmOpenToday(businessID, todayStr)
-	case "confirm_overtime":
-		// Merchant konfirmasi: Toko lanjut buka / lembur melewati jam tutup reguler
-		actionErr = s.repo.ConfirmOvertimeToday(businessID, todayStr)
+	case "confirm_open", "confirm_overtime":
+		// 🔒 Gerbang KYC: Konfirmasi buka / lembur hanya boleh dilakukan jika KYC owner sudah 'verified'
+		_, ownerKYCStatus, _ := s.repo.GetOwnerKYCStatus(business.AccountID)
+		if ownerKYCStatus != "verified" {
+			if ownerKYCStatus == "pending" {
+				return errors.New("toko belum dapat dibuka karena verifikasi identitas (KYC) pemilik toko sedang dalam proses peninjauan, mohon tunggu")
+			}
+			if ownerKYCStatus == "rejected" {
+				return errors.New("toko belum dapat dibuka karena pengajuan verifikasi identitas (KYC) ditolak. Silakan ajukan ulang berkas KYC Anda")
+			}
+			return errors.New("toko belum dapat dibuka karena pemilik toko belum menyelesaikan verifikasi identitas (KYC)")
+		}
+		if input.Action == "confirm_open" {
+			// Merchant konfirmasi: Toko siap buka sesuai jadwal hari ini
+			actionErr = s.repo.ConfirmOpenToday(businessID, todayStr)
+		} else {
+			// Merchant konfirmasi: Toko lanjut buka / lembur melewati jam tutup reguler
+			actionErr = s.repo.ConfirmOvertimeToday(businessID, todayStr)
+		}
 	case "decline":
-		// Merchant menolak: Toko tetap tutup / langsung tutup
+		// Merchant menolak: Toko tetap tutup / langsung tutup (diizinkan tanpa KYC)
 		actionErr = s.repo.DeclineSchedule(businessID)
 	default:
 		return errors.New("aksi tidak valid")

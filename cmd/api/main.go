@@ -92,6 +92,15 @@ func main() {
 		} else {
 			log.Printf("🔍 Meilisearch auto-synced %d products successfully", countProd)
 		}
+
+		// 🔄 Rekonsiliasi periodik visibilitas publik (KYC approval/rejection dari internal-operations) setiap 10 menit
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if _, err := meilisearch.SyncAllBusinesses(database.DB); err != nil {
+				log.Printf("⚠️ Periodic KYC visibility Meilisearch sync error: %v", err)
+			}
+		}
 	}()
 
 	// WebSocket Hub (Real-Time)
@@ -751,9 +760,9 @@ func main() {
 	businessGroup.Get("", sharedAccess, businessHandler.GetMyBusinesses)
 	businessGroup.Get("/", sharedAccess, businessHandler.GetMyBusinesses)
 
-	// Owner-only Business Creation & Deletion
-	businessGroup.Post("", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
-	businessGroup.Post("/", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), middlewares.RequireOwnerKYCSubmitted, businessHandler.CreateBusiness)
+	// Owner-only Business Creation & Deletion (diperbolehkan tanpa menunggu approval KYC; toko tetap tertutup & tidak publik sampai KYC verified)
+	businessGroup.Post("", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), businessHandler.CreateBusiness)
+	businessGroup.Post("/", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), businessHandler.CreateBusiness)
 	businessGroup.Delete("/:id", middlewares.RequireEmailVerified, middlewares.AllowRoles("owner"), businessHandler.DeleteBusiness)
 
 	// Shared Business Scope (Owner & Business Admin dengan BusinessAccessGuard)
@@ -775,11 +784,13 @@ func main() {
 		mScope.Patch("", businessHandler.UpdateBusiness)
 		mScope.Patch("/", businessHandler.UpdateBusiness)
 	}
-	sharedBusinessScope.Patch("/toggle-status", middlewares.RequireKYC, businessHandler.ToggleStoreStatus)
-	sharedBusinessScope.Post("/schedule-confirmation", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
-	sharedBusinessScope.Post("/schedule-confirmation/", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
-	sharedBusinessScope.Patch("/schedule-confirmation", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
-	sharedBusinessScope.Patch("/schedule-confirmation/", middlewares.RequireKYC, businessHandler.ConfirmSchedule)
+	// Toggle status & schedule confirmation: aksi BUKA toko dikunci KYC di dalam service; aksi TUTUP/DECLINE tetap diizinkan
+	sharedBusinessScope.Patch("/toggle-status", businessHandler.ToggleStoreStatus)
+	sharedBusinessScope.Post("/schedule-confirmation", businessHandler.ConfirmSchedule)
+	sharedBusinessScope.Post("/schedule-confirmation/", businessHandler.ConfirmSchedule)
+	sharedBusinessScope.Patch("/schedule-confirmation", businessHandler.ConfirmSchedule)
+	sharedBusinessScope.Patch("/schedule-confirmation/", businessHandler.ConfirmSchedule)
+	// 🔒 Go Public: Live streaming tetap mewajibkan KYC verified
 	sharedBusinessScope.Patch("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 	sharedBusinessScope.Post("/toggle-live", middlewares.RequireKYC, businessHandler.ToggleLiveStatus)
 
@@ -826,33 +837,33 @@ func main() {
 	productGroupRoutes.Put("/:product_group_id", productGroupHandler.UpdateGroup)
 	productGroupRoutes.Delete("/:product_group_id", productGroupHandler.DeleteGroup)
 
-	// -> Posts & Comments
+	// -> Posts & Comments (merchant boleh membuat/mengelola post sebelum KYC verified; tidak tampil di feed publik sampai KYC verified)
 	postRoutes := sharedBusinessScope.Group("/posts")
-	postRoutes.Post("/", middlewares.RequireKYC, businessPostHandler.CreatePost)
+	postRoutes.Post("/", businessPostHandler.CreatePost)
 	postRoutes.Get("/", businessPostHandler.GetPosts)
 	postRoutes.Get("/:post_id", businessPostHandler.GetPostDetail)
 	postRoutes.Put("/:post_id", businessPostHandler.UpdatePost)
 	postRoutes.Patch("/:post_id", businessPostHandler.UpdatePost)
 	postRoutes.Delete("/:post_id", businessPostHandler.DeletePost)
-	postRoutes.Patch("/:post_id/promotion/stop", middlewares.RequireKYC, businessPostHandler.StopPostPromotion)
-	postRoutes.Post("/:post_id/promotion/stop", middlewares.RequireKYC, businessPostHandler.StopPostPromotion)
-	postRoutes.Patch("/:post_id/promotion/extend", middlewares.RequireKYC, businessPostHandler.ExtendPostPromotion)
-	postRoutes.Post("/:post_id/promotion/extend", middlewares.RequireKYC, businessPostHandler.ExtendPostPromotion)
-	postRoutes.Patch("/:post_id/stop-promotion", middlewares.RequireKYC, businessPostHandler.StopPostPromotion)
-	postRoutes.Patch("/:post_id/extend-promotion", middlewares.RequireKYC, businessPostHandler.ExtendPostPromotion)
+	postRoutes.Patch("/:post_id/promotion/stop", businessPostHandler.StopPostPromotion)
+	postRoutes.Post("/:post_id/promotion/stop", businessPostHandler.StopPostPromotion)
+	postRoutes.Patch("/:post_id/promotion/extend", businessPostHandler.ExtendPostPromotion)
+	postRoutes.Post("/:post_id/promotion/extend", businessPostHandler.ExtendPostPromotion)
+	postRoutes.Patch("/:post_id/stop-promotion", businessPostHandler.StopPostPromotion)
+	postRoutes.Patch("/:post_id/extend-promotion", businessPostHandler.ExtendPostPromotion)
 
-	// -> Promotions (Promosi Merchant)
+	// -> Promotions (Promosi Merchant: kelola diperbolehkan tanpa KYC, tetapi push broadcast ke publik tetap wajib KYC verified)
 	promoRoutes := sharedBusinessScope.Group("/promotions")
 	promoRoutes.Get("/eligible-products", promotionHandler.GetEligibleProducts)
-	promoRoutes.Post("", middlewares.RequireKYC, promotionHandler.CreatePromotion)
-	promoRoutes.Post("/", middlewares.RequireKYC, promotionHandler.CreatePromotion)
+	promoRoutes.Post("", promotionHandler.CreatePromotion)
+	promoRoutes.Post("/", promotionHandler.CreatePromotion)
 	promoRoutes.Get("", promotionHandler.GetPromotions)
 	promoRoutes.Get("/", promotionHandler.GetPromotions)
 	promoRoutes.Get("/:promotion_id", promotionHandler.GetPromotionDetail)
-	promoRoutes.Patch("/:promotion_id/extend", middlewares.RequireKYC, promotionHandler.ExtendPromotion)
-	promoRoutes.Post("/:promotion_id/extend", middlewares.RequireKYC, promotionHandler.ExtendPromotion)
-	promoRoutes.Patch("/:promotion_id/stop", middlewares.RequireKYC, promotionHandler.StopPromotion)
-	promoRoutes.Post("/:promotion_id/stop", middlewares.RequireKYC, promotionHandler.StopPromotion)
+	promoRoutes.Patch("/:promotion_id/extend", promotionHandler.ExtendPromotion)
+	promoRoutes.Post("/:promotion_id/extend", promotionHandler.ExtendPromotion)
+	promoRoutes.Patch("/:promotion_id/stop", promotionHandler.StopPromotion)
+	promoRoutes.Post("/:promotion_id/stop", promotionHandler.StopPromotion)
 	promoRoutes.Post("/:promotion_id/push", middlewares.RequireKYC, promotionHandler.PushPromotionNotification)
 	promoRoutes.Post("/:promotion_id/push-notification", middlewares.RequireKYC, promotionHandler.PushPromotionNotification)
 
@@ -951,6 +962,27 @@ func main() {
 		}
 		return utils.SendResponse(c, 200, "00", fmt.Sprintf("Berhasil menyinkronkan %d bisnis ke Meilisearch", count), fiber.Map{
 			"total_synced": count,
+		})
+	})
+
+	// Internal hook untuk sinkronisasi instan visibilitas toko setelah KYC owner di-approve/reject
+	api.Post("/internal/kyc/:account_id/sync", func(c *fiber.Ctx) error {
+		accountID := strings.TrimSpace(c.Params("account_id"))
+		if accountID == "" {
+			return utils.SendResponse(c, 400, "11", "account_id wajib diisi", nil)
+		}
+		syncedCount, err := meilisearch.SyncOwnerBusinesses(database.DB, accountID)
+		if err != nil {
+			return utils.SendResponse(c, 500, "99", fmt.Sprintf("Gagal menyinkronkan bisnis owner: %v", err), nil)
+		}
+		if locationService != nil {
+			go func() {
+				_ = locationService.SyncMerchantLocationsFromDB()
+			}()
+		}
+		return utils.SendResponse(c, 200, "00", "Sinkronisasi visibilitas KYC berhasil", fiber.Map{
+			"account_id":        accountID,
+			"synced_businesses": syncedCount,
 		})
 	})
 

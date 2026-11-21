@@ -663,7 +663,8 @@ func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]M
 		Preload("Hours").
 		Preload("Categories").
 		Preload("Tags").
-		Where("businesses.is_active = ? AND businesses.status != ?", true, "deleted")
+		Where("businesses.is_active = ? AND businesses.status != ?", true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')")
 
 	if strings.TrimSpace(req.Keyword) != "" {
 		expandedTerms := myMeili.ExpandKeywordWithSynonyms(req.Keyword)
@@ -819,7 +820,8 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resul
 	query := r.db.Model(&models.Product{}).
 		Select("products.*").
 		Joins("JOIN businesses ON businesses.business_id = products.business_id").
-		Where("products.is_active = ? AND businesses.is_active = ? AND businesses.status != ?", true, true, "deleted")
+		Where("products.is_active = ? AND businesses.is_active = ? AND businesses.status != ?", true, true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')")
 
 	if strings.TrimSpace(req.Keyword) != "" {
 		expandedTerms := myMeili.ExpandKeywordWithSynonyms(req.Keyword)
@@ -885,7 +887,8 @@ func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resul
 		bndQuery := r.db.Model(&models.Promotion{}).
 			Preload("BundleItems.Product").
 			Joins("JOIN businesses ON businesses.business_id = promotions.business_id").
-			Where("promotions.promotion_type = 'bundling' AND promotions.status = 'active' AND promotions.start_at <= ? AND promotions.end_at >= ? AND businesses.is_active = ? AND businesses.status != ?", now, now, true, "deleted")
+			Where("promotions.promotion_type = 'bundling' AND promotions.status = 'active' AND promotions.start_at <= ? AND promotions.end_at >= ? AND businesses.is_active = ? AND businesses.status != ?", now, now, true, "deleted").
+			Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')")
 
 		if strings.TrimSpace(req.Keyword) != "" {
 			expandedTerms := myMeili.ExpandKeywordWithSynonyms(req.Keyword)
@@ -1020,7 +1023,10 @@ func (r *exploreRepository) GetTimelinePosts(limit, offset int) ([]models.Busine
 	err := r.db.Preload("Business").
 		Preload("Business.Categories").
 		Preload("Business.Hours").
-		Order("created_at desc").
+		Joins("JOIN businesses ON businesses.business_id = business_posts.business_id").
+		Where("businesses.is_active = ? AND businesses.status != ?", true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')").
+		Order("business_posts.created_at desc").
 		Limit(limit).
 		Offset(offset).
 		Find(&posts).Error
@@ -1038,7 +1044,8 @@ func (r *exploreRepository) GetCandidatePosts(categoryID int64, limit int) ([]mo
 		Preload("Business.Categories").
 		Preload("Business.Hours").
 		Joins("JOIN businesses ON businesses.business_id = business_posts.business_id").
-		Where("businesses.is_active = ?", true)
+		Where("businesses.is_active = ? AND businesses.status != ?", true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')")
 
 	if categoryID > 0 {
 		query = query.Joins("JOIN business_has_categories ON business_has_categories.business_id = businesses.business_id").

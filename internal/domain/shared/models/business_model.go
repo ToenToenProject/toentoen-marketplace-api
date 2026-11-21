@@ -122,9 +122,10 @@ type Business struct {
 	TotalReviews  int64     `gorm:"-" json:"total_reviews"`
 	LikeCount     int       `gorm:"default:0;column:like_count" json:"like_count"`
 	TotalLikes    int       `gorm:"-" json:"total_likes"`
-	IsActive      bool      `gorm:"default:true;column:is_active" json:"is_active"`	
-	IsVerified    bool      `gorm:"-" json:"is_verified"`
-	HasNIB        bool      `gorm:"-" json:"has_nib"`
+	IsActive         bool                          `gorm:"default:true;column:is_active" json:"is_active"`
+	IsVerified       bool                          `gorm:"-" json:"is_verified"`
+	HasNIB           bool                          `gorm:"-" json:"has_nib"`
+	Visibility       *BusinessVisibilityInfo       `gorm:"-" json:"visibility,omitempty"`
 	ActivePromotions []BusinessActivePromotionItem `gorm:"-" json:"active_promotions"`
 	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at" json:"updated_at"`
@@ -148,6 +149,13 @@ type BusinessHour struct {
 }
 
 func (BusinessHour) TableName() string { return "business_hours" }
+
+// BusinessVisibilityInfo menjelaskan status visibilitas toko di sisi customer berdasarkan status KYC owner.
+type BusinessVisibilityInfo struct {
+	IsPublic  bool   `json:"is_public"`
+	KycStatus string `json:"kyc_status"`
+	Reason    string `json:"reason,omitempty"`
+}
 
 type CreateBusinessInput struct {
 	LogoURL      string `json:"logo_url"`

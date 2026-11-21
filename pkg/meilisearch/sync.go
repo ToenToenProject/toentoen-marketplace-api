@@ -8,6 +8,7 @@ import (
 
 	"github.com/meilisearch/meilisearch-go"
 	"gorm.io/gorm"
+	"toentoen-backend/internal/domain/shared/kychelper"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 )
@@ -852,8 +853,8 @@ func SyncBusiness(db *gorm.DB, businessID string) error {
 		return err
 	}
 
-	// If business is inactive or soft-deleted, remove from index
-	if !b.IsActive || b.Status == "deleted" {
+	// If business is inactive, soft-deleted, or owner KYC is not yet verified, remove from public search index
+	if !b.IsActive || b.Status == "deleted" || !kychelper.IsOwnerKYCVerified(db, b.AccountID) {
 		_ = DeleteBusinessDoc(businessID)
 		_ = DeleteBusinessProductsDoc(db, businessID)
 		return nil
@@ -899,7 +900,7 @@ func SyncProduct(db *gorm.DB, productID string) error {
 	if err := db.Preload("Hours").Preload("Categories").Where("business_id = ?", p.BusinessID).First(&b).Error; err != nil {
 		return err
 	}
-	if !b.IsActive || b.Status == "deleted" {
+	if !b.IsActive || b.Status == "deleted" || !kychelper.IsOwnerKYCVerified(db, b.AccountID) {
 		return DeleteProductDoc(productID)
 	}
 
@@ -927,7 +928,7 @@ func SyncBusinessProducts(db *gorm.DB, businessID string) error {
 	}
 
 	prodIndex := Client.Index("products")
-	if !b.IsActive || b.Status == "deleted" {
+	if !b.IsActive || b.Status == "deleted" || !kychelper.IsOwnerKYCVerified(db, b.AccountID) {
 		ids := make([]string, len(products))
 		for i, p := range products {
 			ids[i] = p.ProductID
@@ -1011,14 +1012,31 @@ func DeleteBusinessDoc(businessID string) error {
 	return err
 }
 
-// SyncAllBusinesses synchronizes all active businesses and products from PostgreSQL to Meilisearch
+// SyncAllBusinesses synchronizes all active, KYC-verified businesses and products from PostgreSQL to Meilisearch
+// and removes any non-verified / inactive businesses that may have been indexed previously.
 func SyncAllBusinesses(db *gorm.DB) (int, error) {
 	if Client == nil {
 		return 0, nil
 	}
 
+	// Bersihkan bisnis yang owner-nya belum KYC verified atau tidak aktif agar tidak bocor ke publik
+	var hiddenBizIDs []string
+	if errHidden := db.Table("businesses").
+		Where("is_active = ? OR status = ? OR NOT EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')", false, "deleted").
+		Pluck("business_id", &hiddenBizIDs).Error; errHidden == nil && len(hiddenBizIDs) > 0 {
+		bizIndex := Client.Index("businesses")
+		_, _ = bizIndex.DeleteDocuments(hiddenBizIDs, nil)
+		var hiddenProdIDs []string
+		if errHP := db.Model(&models.Product{}).Where("business_id IN ?", hiddenBizIDs).Pluck("product_id", &hiddenProdIDs).Error; errHP == nil && len(hiddenProdIDs) > 0 {
+			_, _ = Client.Index("products").DeleteDocuments(hiddenProdIDs, nil)
+		}
+	}
+
 	var businesses []models.Business
-	err := db.Preload("Hours").Preload("Categories").Preload("Tags").Where("is_active = ? AND status != ?", true, "deleted").Find(&businesses).Error
+	err := db.Preload("Hours").Preload("Categories").Preload("Tags").
+		Where("businesses.is_active = ? AND businesses.status != ?", true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')").
+		Find(&businesses).Error
 	if err != nil {
 		log.Printf("⚠️ Gagal query semua businesses untuk Meilisearch: %v", err)
 		return 0, err
@@ -1079,14 +1097,17 @@ func SyncAllBusinesses(db *gorm.DB) (int, error) {
 	return len(bizDocs), nil
 }
 
-// SyncAllProducts synchronizes all active products from PostgreSQL to Meilisearch
+// SyncAllProducts synchronizes all active products of KYC-verified businesses from PostgreSQL to Meilisearch
 func SyncAllProducts(db *gorm.DB) (int, error) {
 	if Client == nil || db == nil {
 		return 0, nil
 	}
 
 	var businesses []models.Business
-	err := db.Preload("Hours").Preload("Categories").Where("is_active = ? AND status != ?", true, "deleted").Find(&businesses).Error
+	err := db.Preload("Hours").Preload("Categories").
+		Where("businesses.is_active = ? AND businesses.status != ?", true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')").
+		Find(&businesses).Error
 	if err != nil {
 		log.Printf("⚠️ Gagal query businesses untuk SyncAllProducts: %v", err)
 		return 0, err
@@ -1144,6 +1165,13 @@ func UpdateBusinessStatus(db *gorm.DB, businessID string) error {
 	var b models.Business
 	if err := db.Preload("Hours").Where("business_id = ?", businessID).First(&b).Error; err != nil {
 		return err
+	}
+
+	// Jangan pernah update / buat dokumen di Meilisearch jika owner belum KYC verified atau toko tidak aktif
+	if !b.IsActive || b.Status == "deleted" || !kychelper.IsOwnerKYCVerified(db, b.AccountID) {
+		_ = DeleteBusinessDoc(businessID)
+		_ = DeleteBusinessProductsDoc(db, businessID)
+		return nil
 	}
 
 	loc := utils.GetWIBLocation()
@@ -1274,6 +1302,22 @@ func inferTagType(name, explicitType string) string {
 		}
 	}
 	return "characteristic"
+}
+
+// SyncOwnerBusinesses menyinkronkan ulang (atau menghapus dari index publik) semua bisnis milik seorang owner
+// setelah status KYC owner berubah (approved / rejected).
+func SyncOwnerBusinesses(db *gorm.DB, ownerAccountID string) (int, error) {
+	if db == nil || strings.TrimSpace(ownerAccountID) == "" {
+		return 0, nil
+	}
+	var businessIDs []string
+	if err := db.Model(&models.Business{}).Where("account_id = ?", ownerAccountID).Pluck("business_id", &businessIDs).Error; err != nil {
+		return 0, err
+	}
+	for _, bid := range businessIDs {
+		_ = SyncBusiness(db, bid)
+	}
+	return len(businessIDs), nil
 }
 
 

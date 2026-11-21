@@ -306,3 +306,65 @@ func FindSiblingAccountIDs(db *gorm.DB, accountID string) []string {
 	_ = q.Pluck("account_id", &siblingIDs).Error
 	return siblingIDs
 }
+
+// GetEffectiveOwnerKYCStatus mengembalikan status KYC efektif milik owner ('verified', 'pending', 'rejected', 'unverified').
+// Jika belum 'verified', otomatis memeriksa sibling account yang mungkin sudah 'verified'.
+func GetEffectiveOwnerKYCStatus(db *gorm.DB, ownerID string) string {
+	if db == nil || strings.TrimSpace(ownerID) == "" {
+		return "unverified"
+	}
+	var owner models.Owner
+	if err := db.Select("kyc_status").Where("account_id = ?", ownerID).First(&owner).Error; err != nil {
+		return "unverified"
+	}
+	status := strings.ToLower(strings.TrimSpace(owner.KycStatus))
+	if status == "" {
+		status = "unverified"
+	}
+	if status != "verified" {
+		if SyncVerifiedKYCIfSiblingVerified(db, ownerID, "owner") {
+			return "verified"
+		}
+	}
+	return status
+}
+
+// IsOwnerKYCVerified mengembalikan true jika owner bisnis telah lolos verifikasi KYC ('verified').
+func IsOwnerKYCVerified(db *gorm.DB, ownerID string) bool {
+	return GetEffectiveOwnerKYCStatus(db, ownerID) == "verified"
+}
+
+// BuildBusinessVisibility menyusun objek ringkasan visibilitas publik toko untuk dashboard merchant.
+func BuildBusinessVisibility(kycStatus string, isActive bool, bizStatus string) *models.BusinessVisibilityInfo {
+	status := strings.ToLower(strings.TrimSpace(kycStatus))
+	if status == "" {
+		status = "unverified"
+	}
+	if bizStatus == "deleted" || !isActive {
+		return &models.BusinessVisibilityInfo{
+			IsPublic:  false,
+			KycStatus: status,
+			Reason:    "Toko sedang tidak aktif sehingga tidak tampil ke publik.",
+		}
+	}
+	if status == "verified" {
+		return &models.BusinessVisibilityInfo{
+			IsPublic:  true,
+			KycStatus: status,
+			Reason:    "",
+		}
+	}
+
+	reason := "Toko belum tampil ke publik karena verifikasi identitas (KYC) belum diajukan. Anda tetap dapat melengkapi profil dan produk toko."
+	switch status {
+	case "pending":
+		reason = "Toko belum tampil ke publik karena verifikasi identitas (KYC) sedang dalam proses peninjauan. Anda tetap dapat mengelola toko dan produk."
+	case "rejected":
+		reason = "Toko belum tampil ke publik karena pengajuan KYC ditolak. Silakan ajukan ulang berkas KYC Anda."
+	}
+	return &models.BusinessVisibilityInfo{
+		IsPublic:  false,
+		KycStatus: status,
+		Reason:    reason,
+	}
+}

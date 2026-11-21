@@ -63,7 +63,8 @@ func (r *repository) GetBusinessDetail(businessID string) (models.Business, erro
 	err := r.db.
 		Preload("Categories").
 		Preload("Hours").
-		Where("business_id = ?", businessID).
+		Where("business_id = ? AND is_active = ? AND status != ?", businessID, true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')").
 		First(&business).Error
 	
 	if err != nil {

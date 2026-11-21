@@ -80,6 +80,11 @@ func (m *mockBusinessRepo) DeclineSchedule(businessID string) error {
 	return nil
 }
 
+func (m *mockBusinessRepo) ToggleStoreStatus(business *models.Business) error {
+	m.updatedBiz = business
+	return nil
+}
+
 func (m *mockBusinessRepo) GetBusinessesWithHours() ([]models.Business, error) {
 	return nil, nil
 }
@@ -122,35 +127,41 @@ func TestCreateBusiness_OwnerRestrictions(t *testing.T) {
 		}
 	})
 
-	t.Run("fails when KYC is unverified", func(t *testing.T) {
+	t.Run("succeeds when KYC is unverified (store starts closed & hidden from public)", func(t *testing.T) {
 		repo := &mockBusinessRepo{
 			emailVerified: true,
 			kycStatus:     "unverified",
 		}
 		service := NewBusinessService(repo, nil)
 
-		_, err := service.CreateBusiness("OWNER_1", input)
-		if err == nil {
-			t.Fatal("expected error when KYC is unverified, got nil")
+		bizID, err := service.CreateBusiness("OWNER_1", input)
+		if err != nil {
+			t.Fatalf("expected success when KYC is unverified, got error: %v", err)
 		}
-		if !strings.Contains(err.Error(), "belum dikirimkan") {
-			t.Errorf("unexpected error message: %v", err)
+		if bizID == "" {
+			t.Errorf("expected non-empty business ID, got empty")
+		}
+		if repo.createdBiz == nil || !repo.createdBiz.IsManuallyClosed {
+			t.Errorf("expected newly created unverified business to start closed (IsManuallyClosed=true)")
 		}
 	})
 
-	t.Run("fails when KYC is rejected", func(t *testing.T) {
+	t.Run("succeeds when KYC is rejected (store starts closed & hidden from public)", func(t *testing.T) {
 		repo := &mockBusinessRepo{
 			emailVerified: true,
 			kycStatus:     "rejected",
 		}
 		service := NewBusinessService(repo, nil)
 
-		_, err := service.CreateBusiness("OWNER_1", input)
-		if err == nil {
-			t.Fatal("expected error when KYC is rejected, got nil")
+		bizID, err := service.CreateBusiness("OWNER_1", input)
+		if err != nil {
+			t.Fatalf("expected success when KYC is rejected, got error: %v", err)
 		}
-		if !strings.Contains(err.Error(), "ditolak") {
-			t.Errorf("unexpected error message: %v", err)
+		if bizID == "" {
+			t.Errorf("expected non-empty business ID, got empty")
+		}
+		if repo.createdBiz == nil || !repo.createdBiz.IsManuallyClosed {
+			t.Errorf("expected newly created rejected-KYC business to start closed (IsManuallyClosed=true)")
 		}
 	})
 
@@ -171,6 +182,9 @@ func TestCreateBusiness_OwnerRestrictions(t *testing.T) {
 		if repo.createdBiz == nil || *repo.createdBiz.BusinessName != "Toko Berkah" {
 			t.Errorf("expected business to be created, got: %+v", repo.createdBiz)
 		}
+		if !repo.createdBiz.IsManuallyClosed {
+			t.Errorf("expected newly created pending-KYC business to start closed (IsManuallyClosed=true)")
+		}
 	})
 
 	t.Run("succeeds when email is verified and KYC is verified", func(t *testing.T) {
@@ -186,6 +200,9 @@ func TestCreateBusiness_OwnerRestrictions(t *testing.T) {
 		}
 		if bizID == "" {
 			t.Errorf("expected non-empty business ID, got empty")
+		}
+		if repo.createdBiz == nil || !repo.createdBiz.IsManuallyClosed {
+			t.Errorf("expected newly created business to start closed by default")
 		}
 	})
 }
@@ -380,9 +397,10 @@ func TestConfirmScheduleAction(t *testing.T) {
 		AccountID:  "OWNER_1",
 	}
 
-	t.Run("confirm_open calls ConfirmOpenToday", func(t *testing.T) {
+	t.Run("confirm_open calls ConfirmOpenToday when KYC verified", func(t *testing.T) {
 		repo := &mockBusinessRepo{
-			findBiz: existingBiz,
+			findBiz:   existingBiz,
+			kycStatus: "verified",
 		}
 		service := NewBusinessService(repo, nil)
 
@@ -400,9 +418,25 @@ func TestConfirmScheduleAction(t *testing.T) {
 		}
 	})
 
-	t.Run("confirm_overtime calls ConfirmOvertimeToday", func(t *testing.T) {
+	t.Run("confirm_open blocked when KYC is pending", func(t *testing.T) {
 		repo := &mockBusinessRepo{
-			findBiz: existingBiz,
+			findBiz:   existingBiz,
+			kycStatus: "pending",
+		}
+		service := NewBusinessService(repo, nil)
+
+		err := service.ConfirmScheduleAction("OWNER_1", "BIZ_123", models.ConfirmScheduleInput{
+			Action: "confirm_open",
+		})
+		if err == nil {
+			t.Fatal("expected KYC error when confirming open with pending KYC")
+		}
+	})
+
+	t.Run("confirm_overtime calls ConfirmOvertimeToday when KYC verified", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			findBiz:   existingBiz,
+			kycStatus: "verified",
 		}
 		service := NewBusinessService(repo, nil)
 
@@ -515,6 +549,68 @@ func TestBusinessDetails_Max300Chars(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "maksimal 300 karakter") {
 			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestToggleStoreStatus_KYCGate(t *testing.T) {
+	t.Run("blocks opening store when owner KYC is pending", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			emailVerified: true,
+			kycStatus:     "pending",
+			findBiz: &models.Business{
+				BusinessID:       "BIZ_1",
+				AccountID:        "OWNER_1",
+				IsManuallyClosed: true, // currently closed -> trying to OPEN
+			},
+		}
+		service := NewBusinessService(repo, nil)
+		_, err := service.ToggleStoreStatus("OWNER_1", "BIZ_1")
+		if err == nil {
+			t.Fatal("expected error when opening store with pending KYC, got nil")
+		}
+		if !strings.Contains(err.Error(), "KYC") {
+			t.Errorf("expected KYC error message, got: %v", err)
+		}
+	})
+
+	t.Run("allows closing store even when owner KYC is not verified", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			emailVerified: true,
+			kycStatus:     "pending",
+			findBiz: &models.Business{
+				BusinessID:       "BIZ_1",
+				AccountID:        "OWNER_1",
+				IsManuallyClosed: false, // currently open -> trying to CLOSE
+			},
+		}
+		service := NewBusinessService(repo, nil)
+		isClosed, err := service.ToggleStoreStatus("OWNER_1", "BIZ_1")
+		if err != nil {
+			t.Fatalf("expected closing store to succeed without KYC, got error: %v", err)
+		}
+		if !isClosed {
+			t.Errorf("expected store to be closed (true), got false")
+		}
+	})
+
+	t.Run("allows opening store when owner KYC is verified", func(t *testing.T) {
+		repo := &mockBusinessRepo{
+			emailVerified: true,
+			kycStatus:     "verified",
+			findBiz: &models.Business{
+				BusinessID:       "BIZ_1",
+				AccountID:        "OWNER_1",
+				IsManuallyClosed: true,
+			},
+		}
+		service := NewBusinessService(repo, nil)
+		isClosed, err := service.ToggleStoreStatus("OWNER_1", "BIZ_1")
+		if err != nil {
+			t.Fatalf("expected opening store to succeed with verified KYC, got error: %v", err)
+		}
+		if isClosed {
+			t.Errorf("expected store to be open (false), got true")
 		}
 	})
 }
