@@ -96,4 +96,5 @@ docs/
 
 # AI Agent Local Rules
 GEMINI.md
+.vscode/
 AGENTS.md

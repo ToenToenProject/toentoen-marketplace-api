@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 )
 
@@ -78,11 +79,24 @@ type SupportTicketDetailResponse struct {
 	Attachments                []SupportTicketAttachment `json:"attachments"`
 }
 
-// FormatDetailResponse mengonversi SupportTicket model ke response dengan fallback saran CS
+// FormatDetailResponse mengonversi SupportTicket model ke response dengan fallback saran CS yang dinamis
 func (t *SupportTicket) FormatDetailResponse() SupportTicketDetailResponse {
-	suggestions := "Tiket masih direview"
+	var suggestions string
 	if t.CustomerServiceSuggestions != nil && *t.CustomerServiceSuggestions != "" {
 		suggestions = *t.CustomerServiceSuggestions
+	} else {
+		switch strings.ToLower(t.SupportTicketStatus) {
+		case "in_progress":
+			suggestions = "Tiket sedang dalam penanganan oleh tim Customer Service"
+		case "solved":
+			suggestions = "Tiket telah diselesaikan oleh tim Customer Service"
+		case "closed":
+			suggestions = "Tiket telah ditutup"
+		case "pending":
+			fallthrough
+		default:
+			suggestions = "Tiket masih direview"
+		}
 	}
 
 	attachments := t.Attachments
