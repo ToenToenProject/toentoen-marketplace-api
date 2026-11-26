@@ -51,8 +51,7 @@ func (s *demandService) CreateSignal(accountID string, input models.CreateSignal
 	}
 
 	// === TRIGGER NOTIFIKASI REAL-TIME FCM ===
-	// Menggunakan goroutine (go func) agar API merespons dengan cepat ke pembeli 
-	// tanpa harus menunggu proses pengiriman notifikasi dari server Google selesai.
+	// Dispatch real-time push notification asynchronously.
 	go func() {
     log.Println("🔍 Memulai proses pencarian token...") // Tambahkan ini
     
@@ -88,18 +87,15 @@ func (s *demandService) CreateSignal(accountID string, input models.CreateSignal
 	return &signal, nil
 }
 
-// 2. Owner mencari orderan yang terbuka
 func (s *demandService) ExploreOpenSignals(category string) ([]models.DemandSignal, error) {
 	return s.demandRepo.GetOpenSignalsByCategory(category)
 }
 
-// 3. Owner menawarkan jasanya
 func (s *demandService) SubmitResponse(accountID, role, signalID string, input models.CreateResponseInput) (*models.DemandResponse, error) {
 	if !s.demandRepo.VerifyBusinessAccess(accountID, role, input.BusinessID) {
 		return nil, errors.New("forbidden: anda tidak memiliki akses ke bisnis ini")
 	}
 
-	// Cek apakah signalnya masih open
 	signal, err := s.demandRepo.GetSignalByID(signalID)
 	if err != nil || signal.Status != "open" {
 		return nil, errors.New("signal ini sudah tidak tersedia atau sudah diambil orang lain")
@@ -119,14 +115,13 @@ func (s *demandService) SubmitResponse(accountID, role, signalID string, input m
 	return &response, nil
 }
 
-// 4. Pembeli menerima tawaran
 func (s *demandService) AcceptOffer(accountID, signalID, responseID string) error {
 	signal, err := s.demandRepo.GetSignalByID(signalID)
 	if err != nil {
 		return errors.New("signal tidak ditemukan")
 	}
 
-	// Pastikan hanya pembuat signal yang bisa memencet tombol "Terima"
+	// Ensure only signal creator can accept merchant responses.
 	if signal.AccountID != accountID {
 		return errors.New("forbidden: anda bukan pemilik signal ini")
 	}
@@ -148,12 +143,11 @@ func (s *demandService) GetActiveFeed(accountID string, businessID string, curre
 	var activeBusiness *models.Business
 	var err error
 
-	// 1. Tentukan Bisnis Mana yang Mau Dipakai
+	// Resolve target merchant business.
 	if businessID != "" {
-		// Jika Frontend mengirim business_id, cari bisnis spesifik tersebut
+		// Target specific business if business_id is provided.
 		activeBusiness, err = s.businessRepo.GetSpecificBusiness(accountID, businessID)
 	} else {
-		// Jika kosong (mungkin Owner baru login), ambil bisnis pertama sebagai default
 		businesses, errRepo := s.businessRepo.FindBusinessesByOwnerID(accountID)
 		if errRepo == nil && len(businesses) > 0 {
 			activeBusiness = &businesses[0] // Ambil index 0
@@ -162,36 +156,28 @@ func (s *demandService) GetActiveFeed(accountID string, businessID string, curre
 		}
 	}
 
-	// Jika masih error atau gagal dapat bisnis, hentikan
 	if err != nil || activeBusiness == nil {
 		return nil, fmt.Errorf("akses bisnis ditolak atau tidak ditemukan: %v", err)
 	}
 
-	// 2. Ekstrak Kategori (Sama seperti sebelumnya)
 	var categories []string
 	for _, cat := range activeBusiness.Categories {
 		categories = append(categories, cat.Name)
 	}
 
-	// 3. Fallback Koordinat (Sama seperti sebelumnya)
-	// 3. Fallback Koordinat (Sangat Penting!)
 	if currentLat == 0 && currentLng == 0 {
-		// CEK DULU: Pastikan data di database tidak kosong (bukan NULL/nil)
 		if activeBusiness.Latitude != nil && activeBusiness.Longitude != nil {
-			// Gunakan tanda * di depan variabel untuk "membongkar" isi pointernya
 			currentLat = *activeBusiness.Latitude
 			currentLng = *activeBusiness.Longitude
 		}
 	}
 
-	// 4. Lanjutkan ke perhitungan Haversine
 	return s.demandRepo.GetActiveSignalsForOwner(currentLat, currentLng, categories)
 }
 
 func (s *demandService) GetSignalDetail(signalID string) (*models.DemandSignal, error) {
 	signal, err := s.demandRepo.GetSignalByID(signalID)
 	if err != nil {
-		// Jika err dari GORM adalah "record not found", kita tangkap di sini
 		return nil, fmt.Errorf("sinyal dengan ID %s tidak ditemukan", signalID)
 	}
 

@@ -19,7 +19,7 @@ func NewHandler(s Service) *Handler {
 	}
 }
 
-// GetProfile Handler untuk menarik detail profile Business
+// GetProfile returns public or authenticated business profile details.
 func (h *Handler) GetProfile(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
@@ -32,7 +32,6 @@ func (h *Handler) GetProfile(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "ID bisnis wajib diisi", nil)
 	}
 
-	// Ambil account_id (opsional) dari middleware auth (jika dipasang)
 	var accountID string
 	if id, ok := c.Locals("account_id").(string); ok && id != "" {
 		accountID = id
@@ -44,7 +43,7 @@ func (h *Handler) GetProfile(c *fiber.Ctx) error {
 		}
 	}
 
-	// Baca konteks sumber kunjungan (dikirim dari Flutter untuk analytics)
+	// Source context telemetry for visitor analytics.
 	sourceType := c.Query("source")
 	searchedTag := c.Query("tag")
 	productID := c.Query("product_id")
@@ -57,15 +56,10 @@ func (h *Handler) GetProfile(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"status":       "success",
-		"responseCode": constants.Success,
-		"message":      "Profil toko berhasil diambil",
-		"data":         profile,
-	})
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil toko berhasil diambil", profile)
 }
 
-// ToggleLike Handler untuk aksi Like/Unlike profil bisnis
+// ToggleLike toggles like status on a business profile.
 func (h *Handler) ToggleLike(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
@@ -106,20 +100,15 @@ func (h *Handler) ToggleLike(c *fiber.Ctx) error {
 		message = "Profil bisnis berhasil disukai"
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"status":       "success",
-		"responseCode": constants.Success,
-		"message":      message,
-		"data": fiber.Map{
-			"business_id": businessID,
-			"is_liked":    isLiked,
-			"total_likes": totalLikes,
-			"like_count":  totalLikes,
-		},
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, fiber.Map{
+		"business_id": businessID,
+		"is_liked":    isLiked,
+		"total_likes": totalLikes,
+		"like_count":  totalLikes,
 	})
 }
 
-// ToggleBookmark Handler untuk menyimpan/menghapus toko favorit
+// ToggleBookmark toggles bookmark status for a business.
 func (h *Handler) ToggleBookmark(c *fiber.Ctx) error {
 	businessID := c.Params("business_id")
 	if businessID == "" {
@@ -150,11 +139,11 @@ func (h *Handler) ToggleBookmark(c *fiber.Ctx) error {
 	})
 }
 
-// GetBookmarks Handler untuk menarik daftar toko yang disimpan pengguna (Bookmarks)
-// Mendukung query parameter untuk mode pencarian & integrasi wishlist:
-//   - include_wishlist: "true" (menggabungkan toko yang produknya di-wishlist pengguna)
-//   - filter: "all", "saved", "wishlisted" (filter tipe simpanan toko)
-//   - format: "object" (default jika include_wishlist/filter diisi, mengembalikan ID array + list merchant), "array" / "list" (langsung slice merchant)
+// GetBookmarks returns bookmarked stores for the authenticated user.
+// Supports query parameters for search modes and wishlist integration:
+// - include_wishlist: union bookmarked and wishlisted stores.
+// - filter: filter by bookmark/wishlist source.
+// - format: response format ("object" or "list").
 func (h *Handler) GetBookmarks(c *fiber.Ctx) error {
 	var accountID string
 	if id, ok := c.Locals("account_id").(string); ok && id != "" {
@@ -171,8 +160,16 @@ func (h *Handler) GetBookmarks(c *fiber.Ctx) error {
 	filterQuery := strings.ToLower(strings.TrimSpace(c.Query("filter", "")))
 	format := strings.ToLower(strings.TrimSpace(c.Query("format", "")))
 
-	// Mode Terpadu: Jika meminta integrasi wishlist atau spesifik filter simpanan toko
+	// Unified mode: evaluate wishlist union if requested.
 	if includeWishlist || filterQuery != "" {
+		if accountID == "" {
+			if format == "array" || format == "list" {
+				return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", []SavedShopItem{})
+			}
+			return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", SavedAndWishlistedShopsResponse{
+				Merchants: []SavedShopItem{},
+			})
+		}
 		filter := "all"
 		if filterQuery != "" {
 			filter = filterQuery
@@ -190,9 +187,9 @@ func (h *Handler) GetBookmarks(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", res)
 	}
 
-	// Mode Standar (Default): Daftar toko yang dibookmark pengguna
+	// Standard mode: return bookmarked stores only.
 	if accountID == "" {
-		// Pengunjung tamu / belum login: kembalikan list kosong tanpa error 401
+		// Return empty list without 401 error for guest visitors.
 		return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", []BusinessProfileResponse{})
 	}
 
@@ -204,8 +201,7 @@ func (h *Handler) GetBookmarks(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar toko tersimpan berhasil diambil", bookmarks)
 }
 
-// GetSavedAndWishlistedShops Handler untuk menarik daftar toko yang disimpan (bookmark) dan/atau di-wishlist pengguna
-// GET /shops/saved_and_wishlisted
+// GetSavedAndWishlistedShops returns bookmarked and wishlisted stores for the user.
 // Query params:
 //   - filter: "all" (default), "saved", "wishlisted"
 //   - format: "object" (default, berisi shops + ID list), "array" / "list" (langsung slice shops)

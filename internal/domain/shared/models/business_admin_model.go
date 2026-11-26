@@ -7,13 +7,9 @@ import (
 	"time"
 )
 
-// ================================================================
-// PERMISSION CONSTANTS
-// ================================================================
-
-// Kunci-kunci izin yang tersedia. Tambahkan di sini saat ada permission baru.
+// Permission constants for business admin staff assignments.
 const (
-	// --- Manajemen Produk & Etalase ---
+	// Product and catalog management.
 	PermAddProduct           = "add_product"             // 1A. Tambah produk baru
 	PermEditProduct          = "edit_product"            // 1B. Ubah informasi produk & kelola foto/media
 	PermDeleteProduct        = "delete_product"          // 1C. Hapus produk
@@ -21,28 +17,28 @@ const (
 	PermDeleteProductGroup   = "delete_product_group"    // 1F. Menghapus grup baru
 	PermReorderProductGroups = "reorder_product_groups"  // 1G. Mengatur urutan grup produk etalase
 
-	// --- Operasional Toko ---
+	// Store operations.
 	PermManageStoreStatus        = "manage_store_status"         // 2A. Mengatur status aktif toko (buka/tutup)
 	PermEditStoreProfileAndHours = "edit_store_profile_and_hours" // 2B. Ubah profil toko & atur jadwal buka/tutup toko
 	PermManageLiveStreaming      = "manage_live_streaming"       // 2C. Mengelola siaran langsung (live toko)
 
-	// --- Komunikasi & Layanan Pelanggan ---
+	// Customer communication.
 	PermManageBusinessChat   = "manage_business_chat"   // 3A. Chat langsung pelanggan
 	PermManageDemandSignals  = "manage_demand_signals"  // 3B. Akses fitur cari pelanggan (Demand Signal)
 	PermReplyBusinessReviews = "reply_business_reviews" // 3Ca. Balas ulasan toko & beri like
 	PermReplyFeedComments    = "reply_feed_comments"    // 3Cb. Balas komentar feed & beri like
 	PermReplyProductReviews  = "reply_product_reviews"  // 3Cc. Balas ulasan produk & beri like
 
-	// --- Pemasaran & Konten Feed Toko ---
+	// Marketing and posts.
 	PermManageBusinessPosts = "manage_business_posts" // 4A. Kelola postingan feed toko
 	PermManagePromotions    = "manage_promotions"     // 4B. Kelola promosi toko
 
-	// --- Laporan & Analitik Toko ---
+	// Analytics and reports.
 	PermViewAnalyticsDaily   = "view_analytics_daily"   // 5Aa. Melihat analitik harian
 	PermViewAnalyticsHistory = "view_analytics_history" // 5Ab. Melihat analitik riwayat
 	PermViewAnalyticsExplore = "view_analytics_explore" // 5Ac. Melihat analitik jelajahi tren pasar
 
-	// --- Legacy Aliases (Backward Compatibility) ---
+	// Legacy compatibility aliases.
 	PermEditProductDetails  = "edit_product_details"  // Deprecated: gunakan PermEditProduct
 	PermChangeProductImage  = "change_product_image"  // Deprecated: gunakan PermEditProduct
 	PermManageProductGroups = "manage_product_groups" // Deprecated: gunakan PermCreateProductGroup / PermDeleteProductGroup
@@ -55,10 +51,8 @@ const (
 	PermCreateSupportTicket = "create_support_ticket" // Sekarang open/general access untuk semua staf
 )
 
-// AllPermissions adalah daftar semua kunci permission yang valid.
-// Urutan ini menentukan urutan tampil di UI/response API.
+// AllPermissions lists valid permission keys in display order.
 var AllPermissions = []string{
-	// 1. Produk & Etalase
 	PermAddProduct,
 	PermEditProduct,
 	PermDeleteProduct,
@@ -66,30 +60,25 @@ var AllPermissions = []string{
 	PermDeleteProductGroup,
 	PermReorderProductGroups,
 
-	// 2. Operasional Toko
 	PermManageStoreStatus,
 	PermEditStoreProfileAndHours,
 	PermManageLiveStreaming,
 
-	// 3. Komunikasi & Layanan Pelanggan
 	PermManageBusinessChat,
 	PermManageDemandSignals,
 	PermReplyBusinessReviews,
 	PermReplyFeedComments,
 	PermReplyProductReviews,
 
-	// 4. Pemasaran & Konten
 	PermManageBusinessPosts,
 	PermManagePromotions,
 
-	// 5. Laporan & Analitik
 	PermViewAnalyticsDaily,
 	PermViewAnalyticsHistory,
 	PermViewAnalyticsExplore,
 }
 
-// PermissionLabels memetakan kunci izin ke nama yang mudah dibaca manusia (Bahasa Indonesia).
-// Digunakan untuk membangun pesan notifikasi perubahan izin.
+// PermissionLabels maps permission keys to human-readable activity notification labels.
 var PermissionLabels = map[string]string{
 	PermAddProduct:               "Tambah Produk Baru",
 	PermEditProduct:              "Ubah Informasi & Media Produk",
@@ -112,11 +101,10 @@ var PermissionLabels = map[string]string{
 	PermViewAnalyticsExplore:     "Melihat Analitik Jelajahi",
 }
 
-// AdminPermissions adalah alias untuk map permission (key → bool).
-// Key tidak ada berarti false (default deny).
+// AdminPermissions maps permission keys to granted booleans (missing keys default to false).
 type AdminPermissions map[string]bool
 
-// Value implementasi untuk GORM JSONB serialization
+// Value implements driver.Valuer for GORM JSONB serialization.
 func (p AdminPermissions) Value() (driver.Value, error) {
 	if p == nil {
 		return "{}", nil
@@ -125,7 +113,7 @@ func (p AdminPermissions) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-// Scan implementasi untuk GORM JSONB deserialization
+// Scan implements sql.Scanner for GORM JSONB deserialization.
 func (p *AdminPermissions) Scan(value interface{}) error {
 	if value == nil {
 		*p = AdminPermissions{}
@@ -143,8 +131,7 @@ func (p *AdminPermissions) Scan(value interface{}) error {
 	return json.Unmarshal(bytes, p)
 }
 
-// AllTrue mengembalikan map dengan semua permission = true.
-// Digunakan untuk Owner & Supervisor yang memiliki akses penuh.
+// AllTrue returns a permission set with all permissions granted (for owners and supervisors).
 func (AdminPermissions) AllTrue() AdminPermissions {
 	result := make(AdminPermissions, len(AllPermissions))
 	for _, p := range AllPermissions {
@@ -153,9 +140,6 @@ func (AdminPermissions) AllTrue() AdminPermissions {
 	return result
 }
 
-// ================================================================
-// MODELS
-// ================================================================
 
 type BusinessAdmin struct {
 	AccountID      string    `gorm:"primaryKey;column:account_id" json:"account_id"`
@@ -200,24 +184,23 @@ type BusinessAdminAssignment struct {
 	Role   string `gorm:"default:'staff';not null;column:role" json:"role"`     // "supervisor" atau "staff"
 	Status string `gorm:"default:'pending';column:status" json:"status"` // "pending", "pending_owner_approval", "active", "scheduled_for_deletion", "revoked", "rejected"
 
-	// Granular Permission Toggle (JSONB, default empty = semua false)
+	// Granular permissions stored in JSONB.
 	Permissions AdminPermissions `gorm:"type:jsonb;column:permissions;default:'{}'" json:"permissions"`
 
-	// Grace Period (3 Hari)
+	// Deletion grace period timestamp.
 	DeletionScheduledAt *time.Time `gorm:"column:deletion_scheduled_at" json:"deletion_scheduled_at"`
 	DeletionInitiatedBy *string    `gorm:"column:deletion_initiated_by" json:"deletion_initiated_by"` // "owner", "supervisor", "self"
 
-	// Cooldown Penolakan (3x reject -> 7 days cooldown)
+	// Rejection cooldown timestamp.
 	RejectionCount int        `gorm:"default:0;column:rejection_count" json:"rejection_count"`
 	LastRejectedAt *time.Time `gorm:"column:last_rejected_at" json:"last_rejected_at"`
 
-	// Saklar Notifikasi Aktivitas Staf ke Owner (Poin 9b: Menu Titik Tiga)
+	// Owner activity notification toggle.
 	IsNotifyOwnerEnabled bool `gorm:"default:true;column:is_notify_owner_enabled" json:"is_notify_owner_enabled"`
 
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 
-	// Relasi
 	Business   *Business            `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 	Admin      *BusinessAdmin       `gorm:"foreignKey:AdminID;references:AccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"admin,omitempty"`
 	Supervisor *Account             `gorm:"foreignKey:SupervisorID;references:AccountID" json:"supervisor,omitempty"`
@@ -240,9 +223,6 @@ func (BusinessAdminShift) TableName() string {
 	return "business_admin_shifts"
 }
 
-// ================================================================
-// DTO Input & Response
-// ================================================================
 
 type InviteAdminInput struct {
 	InvitationCode string `json:"invitation_code" validate:"required"`
@@ -268,7 +248,7 @@ type UpdatePermissionsInput struct {
 	Replace     bool             `json:"replace,omitempty"` // Jika true, reset semua izin lalu set sesuai permissions yang dikirim
 }
 
-// PermissionResponse adalah response untuk GET/PUT permissions.
+// PermissionResponse represents the API response for permissions endpoints.
 type PermissionResponse struct {
 	AssignmentID         string           `json:"assignment_id"`
 	AdminID              string           `json:"admin_id"`

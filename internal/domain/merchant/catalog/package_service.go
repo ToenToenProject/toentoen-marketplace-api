@@ -261,19 +261,17 @@ func (s *packageService) CreatePackage(
 		return nil, errors.New("harga paket harus lebih besar dari 0")
 	}
 
-	// Validasi: harga paket tidak boleh melebihi total harga produk setelah diskon
 	if input.PackagePrice > totalEffectivePrice {
 		return nil, fmt.Errorf("harga paket (Rp %.0f) tidak boleh melebihi total harga produk setelah diskon (Rp %.0f)", input.PackagePrice, totalEffectivePrice)
 	}
 
-	// Hitung penghematan paket
 	savingsAmount := totalEffectivePrice - input.PackagePrice
 	savingsPercentage := 0.0
 	if totalEffectivePrice > 0 && savingsAmount > 0 {
 		savingsPercentage = math.Round((savingsAmount/totalEffectivePrice)*10000) / 100
 	}
 
-	// Gambar paket: otomatis mengambil foto dari item pertama dari produk yang dipilih
+	// Package preview defaults to the first selected product image.
 	var previews []string
 	for _, pid := range productIDs {
 		if p, ok := prodMap[pid]; ok && len(p.ProductPreview) > 0 {
@@ -281,7 +279,7 @@ func (s *packageService) CreatePackage(
 			break
 		}
 	}
-	// Jika merchant secara eksplisit menyertakan custom preview, gunakan sebagai override
+	// Custom preview image overrides default.
 	if len(input.ProductPreview) > 0 {
 		previews = input.ProductPreview
 	}
@@ -367,7 +365,7 @@ func (s *packageService) UpdatePackage(
 	now := time.Now()
 	existing.UpdatedAt = now
 
-	// Jika produk komponen diupdate
+	// If package component products are updated.
 	var newPackageItems []models.ProductPackageItem
 	if input.Products != nil && len(*input.Products) > 0 {
 		prodInputs := *input.Products
@@ -443,7 +441,7 @@ func (s *packageService) UpdatePackage(
 		existing.OriginalPackagePrice = &totalNormalPrice
 		existing.BaseEffectivePrice = &totalEffectivePrice
 
-		// Jika merchant tidak mengirimkan custom ProductPreview, sinkronkan gambar ke produk pertama yang baru
+		// Re-sync package image to first component product if custom preview is unset.
 		if input.ProductPreview == nil {
 			for _, pid := range productIDs {
 				if p, ok := prodMap[pid]; ok && len(p.ProductPreview) > 0 {
@@ -454,7 +452,6 @@ func (s *packageService) UpdatePackage(
 		}
 	}
 
-	// Update harga paket
 	if input.PackagePrice != nil && *input.PackagePrice > 0 {
 		existing.Price = *input.PackagePrice
 	}

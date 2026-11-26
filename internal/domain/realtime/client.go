@@ -9,17 +9,17 @@ import (
 )
 
 const (
-	// Waktu tunggu untuk menulis pesan ke client
+	// Time allowed to write a message to the peer.
 	writeWait = 10 * time.Second
-	// Waktu tunggu untuk menerima pong dari client
+	// Time allowed to read the next pong message from the peer.
 	pongWait = 60 * time.Second
-	// Interval pengiriman ping ke client (harus lebih kecil dari pongWait)
+	// Send pings to peer with this period; must be less than pongWait.
 	pingPeriod = (pongWait * 9) / 10
-	// Ukuran maksimum buffer pesan masuk (dinaikkan untuk payload lokasi)
+	// Maximum message size allowed from peer.
 	maxMessageSize = 2048
 )
 
-// LocationState menyimpan state throttle lokasi per koneksi client
+// LocationState tracks client location throttling state.
 type LocationState struct {
 	LastLat         float64
 	LastLng         float64
@@ -30,7 +30,7 @@ type LocationState struct {
 	LastUpdateAt    time.Time
 }
 
-// SubscriptionArea menyimpan area yang di-subscribe oleh customer
+// SubscriptionArea tracks customer viewport subscription bounding box.
 type SubscriptionArea struct {
 	Lat      float64
 	Lng      float64
@@ -52,7 +52,7 @@ type Client struct {
 	locMu    sync.Mutex
 }
 
-// GetLocationState mengembalikan location state untuk client ini (lazy init)
+// GetLocationState returns client location state (lazy initialized).
 func (c *Client) GetLocationState() *LocationState {
 	c.locMu.Lock()
 	defer c.locMu.Unlock()
@@ -62,7 +62,7 @@ func (c *Client) GetLocationState() *LocationState {
 	return c.locState
 }
 
-// SetSubscriptionArea mengatur area subscription untuk live location
+// SetSubscriptionArea configures viewport bounding box for live location.
 func (c *Client) SetSubscriptionArea(lat, lng, radiusKm float64) {
 	c.locMu.Lock()
 	defer c.locMu.Unlock()
@@ -74,7 +74,7 @@ func (c *Client) SetSubscriptionArea(lat, lng, radiusKm float64) {
 	}
 }
 
-// GetSubscriptionArea mengembalikan area subscription saat ini
+// GetSubscriptionArea returns current viewport bounding box.
 func (c *Client) GetSubscriptionArea() *SubscriptionArea {
 	c.locMu.Lock()
 	defer c.locMu.Unlock()
@@ -88,7 +88,7 @@ func (c *Client) ClearSubscriptionArea() {
 	c.subArea = nil
 }
 
-// ReadPump membaca pesan dari WebSocket client dan meroute-kannya
+// ReadPump pumps messages from WebSocket connection to application hub.
 // Dijalankan di goroutine terpisah per client
 func (c *Client) ReadPump() {
 	defer func() {
@@ -112,14 +112,14 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		// Route pesan ke handler yang sesuai
+		// Route message to registered handler.
 		if len(msg) > 0 {
 			c.Hub.HandleIncomingMessage(c, msg)
 		}
 	}
 }
 
-// WritePump menulis pesan dari server ke WebSocket client
+// WritePump pumps messages from hub to WebSocket connection.
 // Dijalankan di goroutine terpisah per client
 func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)

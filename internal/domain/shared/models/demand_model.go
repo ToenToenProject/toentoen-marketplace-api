@@ -7,9 +7,7 @@ import (
 	"time"
 )
 
-// ================================================================
-// DEMAND SIGNAL V1 (LEGACY — Tidak digunakan lagi, tabel tetap ada)
-// ================================================================
+// Demand Signal V1 (legacy model retained for schema compatibility).
 
 type DemandSignal struct {
 	SignalID    string    `gorm:"primaryKey;column:signal_id" json:"signal_id"`
@@ -30,7 +28,7 @@ type DemandSignal struct {
 	Responses []DemandResponse `gorm:"foreignKey:SignalID;references:SignalID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"responses,omitempty"`
 }
 
-// EvaluateStatus pada DemandSignal legacy
+// EvaluateStatus calculates legacy demand status based on responses and timestamps.
 func (d *DemandSignal) EvaluateStatus() {
 	if d == nil {
 		return
@@ -59,7 +57,7 @@ type DemandResponse struct {
 	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 }
 
-// --- LEGACY V1 INPUT STRUCTS (masih dipakai oleh package demand lama) ---
+// Legacy V1 input structs.
 
 type CreateSignalInput struct {
 	CategoryID     *int64   `json:"category_id"`
@@ -109,7 +107,7 @@ type CreateResponseInput struct {
 // DEMAND SIGNAL V2 (BARU — Conversation-Based)
 // ================================================================
 
-// Signal adalah permintaan kebutuhan dari customer
+// Signal represents a customer demand request.
 type Signal struct {
 	SignalID    string    `gorm:"primaryKey;column:signal_id" json:"signal_id"`
 	CustomerID  string    `gorm:"not null;column:customer_id" json:"customer_id"`
@@ -131,7 +129,7 @@ type Signal struct {
 	ExpiresAt   time.Time `json:"expires_at"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 
-	// Kolom location (PostGIS geometry) dikelola via raw SQL, tidak oleh GORM
+	// PostGIS geometry column is managed via raw SQL.
 	// location geometry(Point, 4326)
 
 	// Relations
@@ -145,7 +143,7 @@ type Signal struct {
 
 func (Signal) TableName() string { return "signals" }
 
-// PopulateCategories mengisi CategoryIDs dan Categories dari SignalCategories atau fallback ke CategoryID tunggal
+// PopulateCategories populates category slices from associations or falls back to singular CategoryID.
 func (s *Signal) PopulateCategories() {
 	if len(s.SignalCategories) > 0 {
 		s.CategoryIDs = make([]int64, 0, len(s.SignalCategories))
@@ -220,7 +218,7 @@ func (s *Signal) EvaluateStatus() {
 	}
 }
 
-// SignalPostReference adalah objek referensi postingan sinyal kebutuhan untuk ruang chat
+// SignalPostReference encapsulates signal summary references in chat rooms.
 type SignalPostReference struct {
 	SignalID    string   `json:"signal_id"`
 	Title       string   `json:"title"`
@@ -235,7 +233,7 @@ type SignalPostReference struct {
 	Images      []string `json:"images"`
 }
 
-// ToPostReference mengubah model Signal menjadi SignalPostReference yang ringkas dan terformat
+// ToPostReference converts Signal model into a compact SignalPostReference.
 func (s *Signal) ToPostReference() *SignalPostReference {
 	if s == nil {
 		return nil
@@ -297,7 +295,7 @@ func FormatRupiah(val float64) string {
 	return string(res)
 }
 
-// SignalCategory adalah relasi many-to-many antara signal dan kategori bisnis (maks 5 kategori)
+// SignalCategory maps signals to business categories (max 5).
 type SignalCategory struct {
 	SignalID   string    `gorm:"primaryKey;column:signal_id" json:"signal_id"`
 	CategoryID int64     `gorm:"primaryKey;column:category_id" json:"category_id"`
@@ -306,7 +304,7 @@ type SignalCategory struct {
 
 func (SignalCategory) TableName() string { return "signal_categories" }
 
-// SignalTag adalah relasi antara signal dan tag bisnis yang dipilih customer
+// SignalTag maps signals to relevance booster tags.
 type SignalTag struct {
 	SignalID string `gorm:"primaryKey;column:signal_id" json:"signal_id"`
 	TagID    int64  `gorm:"primaryKey;column:tag_id" json:"tag_id"`
@@ -316,7 +314,7 @@ type SignalTag struct {
 
 func (SignalTag) TableName() string { return "signal_tags" }
 
-// SignalImage adalah lampiran gambar pada signal
+// SignalImage represents image attachments for a signal.
 type SignalImage struct {
 	ImageID  string `gorm:"primaryKey;column:image_id" json:"image_id"`
 	SignalID string `gorm:"not null;column:signal_id" json:"signal_id"`
@@ -325,7 +323,7 @@ type SignalImage struct {
 
 func (SignalImage) TableName() string { return "signal_images" }
 
-// SignalConversation adalah ruang negosiasi antara customer dan merchant
+// SignalConversation represents a negotiation channel between a customer and a merchant.
 type SignalConversation struct {
 	ConversationID string    `gorm:"primaryKey;column:conversation_id" json:"conversation_id"`
 	SignalID       string    `gorm:"not null;column:signal_id" json:"signal_id"`
@@ -342,7 +340,7 @@ type SignalConversation struct {
 
 func (SignalConversation) TableName() string { return "signal_conversations" }
 
-// SignalMessage adalah isi chat dalam conversation
+// SignalMessage represents a chat message within a signal conversation.
 type SignalMessage struct {
 	MessageID      string    `gorm:"primaryKey;column:message_id" json:"message_id"`
 	ConversationID string    `gorm:"not null;column:conversation_id" json:"conversation_id"`
@@ -377,7 +375,7 @@ type SendMessageInput struct {
 // RESPONSE STRUCTS (V2)
 // ================================================================
 
-// SignalListItem untuk daftar signal (ringkas)
+// SignalListItem represents a compact summary of a signal.
 type SignalListItem struct {
 	SignalID          string    `json:"signal_id"`
 	Description       string    `json:"description"`
@@ -397,7 +395,7 @@ type SignalListItem struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
-// SignalExploreItem untuk merchant explore (dengan jarak dan relevansi tag)
+// SignalExploreItem represents a signal with distance and tag relevance for merchant exploration.
 type SignalExploreItem struct {
 	SignalID        string    `json:"signal_id"`
 	CustomerID      string    `json:"customer_id"`
@@ -425,7 +423,7 @@ type SignalExploreItem struct {
 	TagOverlapScore int       `json:"relevance_score"` // Jumlah tag overlap dengan bisnis merchant
 }
 
-// EvaluateStatus mengevaluasi dan menetapkan status serta field is_active pada SignalExploreItem secara dinamis.
+// EvaluateStatus dynamically computes status and is_active flags for SignalExploreItem.
 // Waktu expires_at dan created_at dipastikan berformat UTC standar ISO-8601 (offset Z).
 func (item *SignalExploreItem) EvaluateStatus() {
 	if item == nil {
@@ -471,7 +469,7 @@ func (item *SignalExploreItem) EvaluateStatus() {
 	}
 }
 
-// SignalMerchantComparison untuk matriks perbandingan toko penawar bagi customer
+// SignalMerchantComparison represents a comparison matrix of responding merchants.
 type SignalMerchantComparison struct {
 	BusinessID        string    `json:"business_id"`
 	BusinessName      string    `json:"business_name"`
@@ -490,7 +488,7 @@ type CustomerSignalDetailResponse struct {
 	Comparisons []SignalMerchantComparison `json:"merchant_comparisons"`
 }
 
-// ConversationListItem untuk daftar roomchat (Merchant / Customer)
+// ConversationListItem represents a conversation thread in user inboxes.
 type ConversationListItem struct {
 	ConversationID    string               `json:"conversation_id"`
 	SignalID          string               `json:"signal_id"`
@@ -508,7 +506,7 @@ type ConversationListItem struct {
 	PeerName          string               `json:"peer_name"`
 	PeerAvatar        *string              `json:"peer_avatar"`
 	
-	// Bisnis (Toko)
+	// Business information.
 	BusinessID        string               `json:"business_id"`
 	BusinessName      string               `json:"business_name"`
 	BusinessLogo      *string              `json:"business_logo"`
@@ -527,7 +525,7 @@ type ConversationListItem struct {
 	SignalPostReference *SignalPostReference `json:"signal_post_reference,omitempty"`
 }
 
-// MerchantSignalDetailResponse menyertakan status balasan merchant yang sedang login
+// MerchantSignalDetailResponse includes responding status of authenticated merchant.
 type MerchantSignalDetailResponse struct {
 	Signal           *Signal             `json:"signal"`
 	HasReplied       bool                `json:"has_replied"`

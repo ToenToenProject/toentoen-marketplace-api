@@ -5,12 +5,8 @@ import (
 	"time"
 )
 
-// ==========================================
-// ROLE GROUP (Pemisahan identitas akun)
-// ==========================================
-// Satu email / nomor telepon boleh dipakai untuk akun peran customer, owner, dan business_admin.
-// Setiap akun memiliki account_id sendiri sehingga seluruh relasi data
-// (review, signal, bisnis, laporan, transaksi, dll.) terisolasi dan tidak pernah tercampur antar peran.
+// Accounts isolate identity per role group (customer, owner, business_admin).
+// The same email or phone number may be reused across distinct role accounts with separate account_ids.
 const (
 	RoleGroupCustomer = "customer"
 	RoleGroupOwner    = "owner"
@@ -18,7 +14,7 @@ const (
 	RoleGroupMerchant = "merchant" // backwards-compatible alias
 )
 
-// RoleGroupOf mengembalikan kelompok role.
+// RoleGroupOf returns the role group for a given role.
 func RoleGroupOf(role string) string {
 	switch strings.ToLower(strings.TrimSpace(role)) {
 	case "customer", "buyer", "user", "pelanggan":
@@ -34,7 +30,7 @@ func RoleGroupOf(role string) string {
 	}
 }
 
-// RolesInGroup mengembalikan daftar role yang termasuk dalam kelompok tertentu.
+// RolesInGroup returns roles belonging to a role group.
 func RolesInGroup(group string) []string {
 	switch strings.ToLower(strings.TrimSpace(group)) {
 	case RoleGroupCustomer:
@@ -56,7 +52,7 @@ func RolesInGroup(group string) []string {
 type Account struct {
 	AccountID     string     `gorm:"primaryKey" json:"accountId"`
 	AuthProvider  string     `gorm:"default:'local'" json:"authProvider"`
-	// Unik per kelompok role (lihat scripts/migrations/20261006_accounts_identity_per_role_group.sql)
+	// Scoped uniqueness per role group.
 	Email             *string    `json:"email"`
 	PhoneNumber       *string    `json:"phoneNumber"`
 	FirstName         string     `json:"firstName"`

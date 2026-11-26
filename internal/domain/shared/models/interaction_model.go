@@ -7,7 +7,7 @@ import (
 )
 
 // ==========================================
-// 1. INTERAKSI UNTUK PRODUK (DISKUSI / Q&A)
+// Product discussion and Q&A interactions.
 // ==========================================
 
 type ProductComment struct {
@@ -17,10 +17,10 @@ type ProductComment struct {
 	AccountID            string         `gorm:"column:account_id" json:"account_id"`
 	Content              string         `gorm:"column:content" json:"content"`
 
-	// Kunci Nesting Level 1
+	// Maximum nesting depth of 1 level.
 	ReplyToCommentID     *string        `gorm:"column:reply_to_comment_id;index" json:"reply_to_comment_id"`
 
-	// Fitur Mention/Tagging (Untuk membalas child comment)
+	// Mention tagging for child comment replies.
 	RepliedToAccountID   *string        `gorm:"column:replied_to_account_id" json:"replied_to_account_id"`
 	RepliedToAccountName *string        `gorm:"column:replied_to_account_name" json:"replied_to_account_name"`
 
@@ -49,7 +49,6 @@ type ProductCommentLike struct {
 }
 
 // ==========================================
-// 2. INTERAKSI UNTUK POST
 // ==========================================
 
 type BusinessPostComment struct {
@@ -59,10 +58,10 @@ type BusinessPostComment struct {
 	AccountID            string         `gorm:"column:account_id" json:"account_id"`
 	Content              string         `gorm:"column:content" json:"content"`
 
-	// Kunci Nesting Level 1
+	// Maximum nesting depth of 1 level.
 	ReplyToCommentID     *string        `gorm:"column:reply_to_comment_id;index" json:"reply_to_comment_id"`
 
-	// Fitur Mention/Tagging (Untuk membalas child comment)
+	// Mention tagging for child comment replies.
 	RepliedToAccountID   *string        `gorm:"column:replied_to_account_id" json:"replied_to_account_id"`
 	RepliedToAccountName *string        `gorm:"column:replied_to_account_name" json:"replied_to_account_name"`
 
@@ -90,7 +89,6 @@ type BusinessPostCommentLike struct {
 }
 
 // ==========================================
-// 3. DTO (Data Transfer Object)
 // ==========================================
 
 type CreateProductCommentInput struct {
@@ -120,7 +118,7 @@ type UpdateCommentInput struct {
 	MediaURLs []string `json:"media_urls,omitempty"`
 }
 
-// DTO Output (Response yang dikirim ke Frontend untuk Komentar Produk & Post)
+// Response DTO for product and post discussion comments.
 type CommentResponse struct {
 	CommentID              string            `json:"comment_id"`
 	AccountID              string            `json:"account_id"`

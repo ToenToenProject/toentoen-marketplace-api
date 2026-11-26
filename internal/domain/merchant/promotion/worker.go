@@ -13,9 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// StartPromotionWorker menjalankan background scheduler setiap 1 menit untuk:
-// 1. Mengaktifkan promosi terjadwal (scheduled -> active), membuat post feed, dan mengirim notifikasi broadcast.
-// 2. Menyelesaikan promosi yang kedaluwarsa (active -> ended) dan mengembalikan diskon produk ke kondisi semula.
+// StartPromotionWorker runs a 1-minute background scheduler to:
 func StartPromotionWorker(db *gorm.DB, notifService notification.NotificationService) {
 	if db == nil {
 		return
@@ -50,7 +48,6 @@ func processScheduledPromotions(
 	for _, promo := range promos {
 		pCopy := promo
 		err := db.Transaction(func(tx *gorm.DB) error {
-			// 1. Update status promosi menjadi active
 			if err := tx.Model(&models.Promotion{}).
 				Where("promotion_id = ? AND status = ?", pCopy.PromotionID, models.PromotionStatusScheduled).
 				Updates(map[string]interface{}{
@@ -61,7 +58,6 @@ func processScheduledPromotions(
 				return err
 			}
 
-			// 2. Buat auto-post feed promosi
 			img := ""
 			if pCopy.PromotionType == models.PromotionTypeBundling {
 				if pCopy.PackageImage != nil && *pCopy.PackageImage != "" {
@@ -96,14 +92,12 @@ func processScheduledPromotions(
 				return err
 			}
 
-			// Simpan link post_id ke promosi
 			if err := tx.Model(&models.Promotion{}).
 				Where("promotion_id = ?", pCopy.PromotionID).
 				Update("post_id", autoPost.PostID).Error; err != nil {
 				return err
 			}
 
-			// 3. Tulis diskon ke tabel products jika per_product
 			if pCopy.PromotionType != models.PromotionTypeBundling {
 				for _, pp := range pCopy.Products {
 					if err := tx.Model(&models.Product{}).
@@ -131,7 +125,6 @@ func processScheduledPromotions(
 
 		log.Printf("🎉 [PROMOTION-WORKER] Berhasil mengaktifkan promosi %s untuk bisnis %s", pCopy.PromotionID, pCopy.BusinessID)
 
-		// 4. Kirim notifikasi broadcast & sync search
 		if notifService != nil {
 			productIDs := make([]string, 0)
 			var mainProd *models.Product
@@ -180,11 +173,11 @@ func processExpiredPromotionalPosts(db *gorm.DB, now time.Time) {
 		if db.Migrator().HasTable(&models.BusinessPost{}) && db.Migrator().HasColumn(&models.BusinessPost{}, "promotion_end_at") {
 			hasPromotionEndAtColumn = true
 		} else {
-			// Coba buat kolom jika belum ada
+			// Attempt column creation if missing.
 			if err := db.Exec("ALTER TABLE business_posts ADD COLUMN IF NOT EXISTS promotion_end_at TIMESTAMPTZ").Error; err == nil {
 				hasPromotionEndAtColumn = true
 			} else {
-				// Kolom belum ada dan belum bisa dibuat, tunda hingga migrasi dijalankan
+				// Defer if column does not yet exist.
 				return
 			}
 		}

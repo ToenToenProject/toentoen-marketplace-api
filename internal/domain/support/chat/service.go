@@ -37,7 +37,7 @@ func formatGreetingMessage(account *models.Account) string {
 		firstName := strings.TrimSpace(account.FirstName)
 		lastName := strings.TrimSpace(account.LastName)
 
-		// Cegah fallback ke placeholder register akun baru seperti "New", "New Account", atau "Kak"
+		// Ignore default placeholder names (e.g. "New", "New Account", "Kak").
 		if strings.EqualFold(firstName, "New") && (strings.EqualFold(lastName, "Account") || lastName == "") {
 			displayName = ""
 		} else if !strings.EqualFold(firstName, "New") && !strings.EqualFold(firstName, "Kak") && firstName != "" {
@@ -68,10 +68,9 @@ func NewSupportChatService(repo SupportChatRepository, hub *realtime.Hub, notifS
 }
 
 func (s *supportChatService) InitiateChat(accountID string, userRole string, businessID *string) (*models.CSChatSession, *models.CSChatMessage, bool, error) {
-	// 1. Cek apakah user sudah memiliki sesi aktif yang belum di-end/hide
 	existingSession, err := s.repo.FindActiveSessionByAccountID(accountID)
 	if err == nil && existingSession != nil {
-		// Sudah ada sesi aktif, kembalikan sesi tersebut (isNew = false)
+		// Return existing active session.
 		existingSession.LastMessagePreview, _ = crypto.Decrypt(existingSession.LastMessagePreview)
 		existingSession.LastMessagePreview = cleanGreetingContent(existingSession.LastMessagePreview)
 		messages, _ := s.repo.GetMessagesBySessionID(existingSession.SessionID, 1, "")
@@ -86,15 +85,12 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 		return existingSession, lastMsg, false, nil
 	}
 
-	// 2. Ambil data akun user untuk mendapatkan nama tampilan
 	account, err := s.repo.GetAccountByID(accountID)
 	greetingContent := formatGreetingMessage(account)
 
 	now := time.Now()
-	// Prefix LCS: Live Chat Session
 	sessionID := utils.GenerateUUID("LCS")
 
-	// Prefix LCM: Live Chat Message
 	greetingMsg := &models.CSChatMessage{
 		MessageID:   utils.GenerateUUID("LCM"),
 		SessionID:   sessionID,
@@ -137,7 +133,6 @@ func (s *supportChatService) InitiateChat(accountID string, userRole string, bus
 		return nil, nil, false, errors.New("Gagal membuat sesi live chat")
 	}
 
-	// 3. Broadcast event real-time ke CS via WebSocket jika hub tersedia
 	if s.hub != nil {
 		event := realtime.WSEvent{
 			Type: "CS_CHAT_NEW_SESSION",
@@ -167,7 +162,6 @@ func (s *supportChatService) GetChatMessages(sessionID string, requesterID strin
 		return nil, errors.New("Sesi live chat tidak ditemukan")
 	}
 
-	// Validasi akses: hanya pemilik sesi chat atau admin CS yang boleh membaca
 	if !isCS && session.AccountID != requesterID {
 		return nil, errors.New("Anda tidak memiliki akses ke percakapan ini")
 	}
@@ -206,7 +200,6 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 		return nil, errors.New("Sesi live chat ini sudah diakhiri. Silakan mulai sesi live chat baru.")
 	}
 
-	// Validasi sender
 	if senderType == "user" && session.AccountID != senderID {
 		return nil, errors.New("Anda tidak memiliki akses ke percakapan ini")
 	}
@@ -242,7 +235,6 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 		return nil, errors.New("Gagal mengirim pesan")
 	}
 
-	// Update metadata session
 	newStatus := session.Status
 	var csAdminIDToUpdate *string
 	if senderType == "cs" {
@@ -255,7 +247,6 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 	encPreview, _ := crypto.Encrypt(message.Content)
 	_ = s.repo.UpdateSessionLastMessage(sessionID, encPreview, now, newStatus, csAdminIDToUpdate)
 
-	// Broadcast via WebSocket (kirim plaintext ke websocket client) & Push Notification jika offline
 	event := realtime.WSEvent{
 		Type: "CS_CHAT_NEW_MESSAGE",
 		Data: message,
@@ -263,14 +254,14 @@ func (s *supportChatService) SendMessage(sessionID string, senderID string, send
 
 	var offlineAccountIDs []string
 	if senderType == "cs" {
-		// Pengirim adalah CS, kirim ke user pemilik sesi
+		// Message sent by CS: deliver to session user.
 		if s.hub != nil && s.hub.IsOnline(session.AccountID) {
 			s.hub.SendToAccount(session.AccountID, event)
 		} else {
 			offlineAccountIDs = append(offlineAccountIDs, session.AccountID)
 		}
 	} else {
-		// Pengirim adalah user, kirim ke CS assigned jika ada
+		// Message sent by user: deliver to assigned CS agent.
 		if session.CSAdminID != nil && *session.CSAdminID != "" {
 			if s.hub != nil && s.hub.IsOnline(*session.CSAdminID) {
 				s.hub.SendToAccount(*session.CSAdminID, event)
@@ -354,7 +345,6 @@ func (s *supportChatService) EndChat(sessionID string, requesterID string, isCS 
 		return errors.New("Gagal mengakhiri percakapan")
 	}
 
-	// Broadcast WS event
 	if s.hub != nil {
 		event := realtime.WSEvent{
 			Type: "CS_CHAT_ENDED",
@@ -396,7 +386,6 @@ func (s *supportChatService) MarkAsRead(sessionID string, requesterID string, is
 		return fmt.Errorf("Gagal menandai pesan sebagai telah dibaca: %w", err)
 	}
 
-	// Broadcast WS event agar pihak lawan mengetahui pesan telah dibaca
 	if s.hub != nil {
 		event := realtime.WSEvent{
 			Type: "CS_CHAT_MESSAGES_READ",

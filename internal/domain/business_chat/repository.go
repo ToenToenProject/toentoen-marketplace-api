@@ -64,8 +64,7 @@ func (r *businessChatRepository) hasSignalIDColumn() bool {
 }
 
 func (r *businessChatRepository) FindSignalForConversation(businessID, customerID string) *models.SignalPostReference {
-	// Chat reguler toko tidak boleh otomatis dikaitkan dengan sinyal apa pun milik customer.
-	// Referensi sinyal hanya boleh ada jika percakapan secara eksplisit memiliki signal_id yang sah.
+	// Direct store chats must not link to customer signals unless explicitly specified with a valid signal_id.
 	return nil
 }
 
@@ -114,7 +113,7 @@ func (r *businessChatRepository) GetConversationByID(conversationID string) (*mo
 		return &conv, nil
 	}
 
-	// Fallback jika conversationID berasal dari signal_conversations (e.g. CONV-xxx)
+	// Fallback for legacy signal conversation identifiers.
 	var sigConv models.SignalConversation
 	if errSig := r.db.Preload("Business").Where("conversation_id = ?", conversationID).First(&sigConv).Error; errSig == nil {
 		var sig models.Signal
@@ -383,7 +382,7 @@ func (r *businessChatRepository) GetMessagesByConversationID(conversationID stri
 	if cursor != "" {
 		var cursorMsg models.DirectBusinessMessage
 		if err := r.db.Select("created_at").Where("message_id = ?", cursor).First(&cursorMsg).Error; err == nil {
-			// Mengambil N pesan tepat sebelum kursor (scroll ke atas)
+			// Retrieve messages prior to cursor for backward scroll.
 			var reverseMessages []models.DirectBusinessMessage
 			err := r.db.Preload("ProductDetail").
 				Where("conversation_id = ? AND created_at < ?", conversationID, cursorMsg.CreatedAt).
@@ -400,8 +399,7 @@ func (r *businessChatRepository) GetMessagesByConversationID(conversationID stri
 		}
 	}
 
-	// KETIKA CURSOR KOSONG (Initial Load saat buka chat room):
-	// Ambil N pesan TERAKHIR (terbaru) dengan ORDER BY created_at DESC LIMIT limit, lalu dibalik ke ASC!
+	// Empty cursor (initial load): fetch latest N messages in descending order and reverse to chronological order.
 	var reverseMessages []models.DirectBusinessMessage
 	err := r.db.Preload("ProductDetail").
 		Where("conversation_id = ?", conversationID).
@@ -415,7 +413,7 @@ func (r *businessChatRepository) GetMessagesByConversationID(conversationID stri
 		messages = append(messages, reverseMessages[i])
 	}
 
-	// Fallback jika tidak ada pesan di direct_business_messages tapi percakapan berasal dari signal_conversations
+	// Fallback lookup for messages in signal_conversations.
 	if len(messages) == 0 {
 		var sigMsgs []models.SignalMessage
 		q := r.db.Where("conversation_id = ?", conversationID).Order("created_at ASC")
@@ -465,7 +463,6 @@ func (r *businessChatRepository) MarkMessagesAsRead(conversationID string, reade
 
 func (r *businessChatRepository) VerifyMerchantAccess(businessID string, accountID string) (bool, error) {
 	var count int64
-	// 1. Cek apakah owner
 	if err := r.db.Model(&models.Business{}).Where("business_id = ? AND account_id = ?", businessID, accountID).Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -473,7 +470,7 @@ func (r *businessChatRepository) VerifyMerchantAccess(businessID string, account
 		return true, nil
 	}
 
-	// 2. Cek apakah assigned business admin yang aktif
+	// 2. Verify active business admin assignment.
 	if err := r.db.Model(&models.BusinessAdminAssignment{}).
 		Where("business_id = ? AND admin_id = ? AND status IN ('accepted', 'active', 'scheduled_for_deletion')", businessID, accountID).
 		Count(&count).Error; err != nil {
@@ -485,13 +482,11 @@ func (r *businessChatRepository) VerifyMerchantAccess(businessID string, account
 func (r *businessChatRepository) GetMerchantStaffAccountIDs(businessID string) ([]string, error) {
 	var ids []string
 
-	// 1. Owner account ID
 	var business models.Business
 	if err := r.db.Select("account_id").Where("business_id = ?", businessID).First(&business).Error; err == nil && business.AccountID != "" {
 		ids = append(ids, business.AccountID)
 	}
 
-	// 2. Active assigned business admins
 	var assignments []models.BusinessAdminAssignment
 	if err := r.db.Select("admin_id").
 		Where("business_id = ? AND status IN ('accepted', 'active', 'scheduled_for_deletion')", businessID).

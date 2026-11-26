@@ -19,7 +19,7 @@ type ProductService interface {
 	DeleteProduct(requesterID, role, businessID, productID string) error
 	GetProductDetail(requesterID, role, businessID, productID string) (*models.ProductDetailResponse, error)
 
-	// FUNGSI INI DIKEMBALIKAN: Menggunakan Cursor untuk Infinite Scroll & Multi-Filter
+	// Cursor pagination supporting infinite scroll and multi-filtering.
 	GetAllProducts(requesterID, role, businessID string, search, productGroupID, stockType string, isActive *bool, sort string, cursor string, limit int) (*models.GetProductsResponse, error)
 
 	BulkUpdateStatus(requesterID, role, businessID string, productIDs []string, isActive bool) error
@@ -35,7 +35,6 @@ func NewProductService(repo ProductRepository, notifService notification.Notific
 	return &productService{repo, notifService}
 }
 
-// 1. CREATE PRODUCT
 func (s *productService) CreateProduct(requesterID, role, businessID string, input models.CreateProductInput) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
@@ -113,7 +112,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 			return errors.New("negara asal (origin_country) wajib diisi untuk produk luar negeri / impor")
 		}
 	} else {
-		// Jika FE langsung mengirim nama negara
+		// Direct country name from client request.
 		origin = "imported"
 		if input.OriginCountry != nil && strings.TrimSpace(*input.OriginCountry) != "" {
 			country := strings.TrimSpace(*input.OriginCountry)
@@ -166,7 +165,7 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 		return fmt.Errorf("gagal membuat produk: %w", err)
 	}
 
-	// 🎉 Jika produk baru langsung memiliki diskon/promo, picu notifikasi promo
+	// Trigger promotion alerts if newly created product carries active discount.
 	if product.Discount > 0 && s.notifService != nil {
 		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
 	}
@@ -179,7 +178,6 @@ func (s *productService) CreateProduct(requesterID, role, businessID string, inp
 	return nil
 }
 
-// 2. UPDATE PRODUCT
 func (s *productService) UpdateProduct(requesterID, role, businessID, productID string, input models.UpdateProductInput) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
@@ -256,7 +254,6 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		}
 		product.Price = *input.Price
 	}
-	// Cek apakah ada perubahan diskon saat produk sedang terdaftar di promosi aktif/terjadwal
 	isUpdatingDiscount := input.DiscountType != nil || input.Discount != nil || input.MaxDiscount != nil || input.DiscountStartAt != nil || input.DiscountEndAt != nil
 	if isUpdatingDiscount && s.repo.IsProductInActiveOrScheduledPromotion(productID) {
 		return errors.New("diskon produk ini sedang dikunci karena terdaftar dalam promosi yang sedang aktif atau terjadwal. Harap kelola melalui menu Promosi")
@@ -288,7 +285,6 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		}
 	}
 
-	// Validasi silang tipe diskon vs nilai & harga
 	if product.DiscountType == "percentage" && product.Discount > 100 {
 		return errors.New("persentase diskon tidak boleh melebihi 100%")
 	}
@@ -330,7 +326,7 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 		return errors.New("gagal memperbarui produk")
 	}
 
-	// 🎉 Jika produk diperbarui dengan diskon/promo aktif, picu notifikasi promo
+	// Trigger promotion alerts if updated product has an active discount.
 	if product.Discount > 0 && input.Discount != nil && *input.Discount > 0 && s.notifService != nil {
 		notification.NotifyBusinessPromo(database.DB, s.notifService, businessID, []string{product.ProductID}, requesterID)
 	}
@@ -343,7 +339,6 @@ func (s *productService) UpdateProduct(requesterID, role, businessID, productID 
 	return nil
 }
 
-// 3. DELETE PRODUCT
 func (s *productService) DeleteProduct(requesterID, role, businessID, productID string) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
@@ -357,7 +352,7 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 		return errors.New("gagal menghapus produk")
 	}
 
-	// 🔔 Notifikasi ke Owner jika staf menghapus produk
+	// Alert owner if staff deletes a product.
 	if role == "business_admin" {
 		notification.NotifyOwnerStaffActivity(
 			database.DB,
@@ -381,8 +376,6 @@ func (s *productService) DeleteProduct(requesterID, role, businessID, productID 
 	return nil
 }
 
-// 4. GET DETAIL PRODUCT (Single)
-// Ganti fungsi ini di internal/services/product_service.go
 func (s *productService) GetProductDetail(requesterID, role, businessID, productID string) (*models.ProductDetailResponse, error) {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses untuk melihat produk di bisnis ini")
@@ -399,7 +392,7 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 	originalMinPrice := p.MinPrice
 	originalMaxPrice := p.MaxPrice
 	
-	// Kebijakan fallback jika kolom virtual bernilai nol
+	// Fallback policy if virtual column is zero.
 	if originalMinPrice == 0 && originalMaxPrice == 0 {
 		originalMinPrice = p.Price
 		originalMaxPrice = p.Price
@@ -411,7 +404,6 @@ func (s *productService) GetProductDetail(requesterID, role, businessID, product
 	var discountAmount float64
 	var discountPct float64
 
-	// Cek apakah ada nominal/persen diskon yang dipasang
 	if p.Discount > 0 {
 		if utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, now) {
 			isDiscounted = true
@@ -502,7 +494,7 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 			thumbnail = p.ProductPreview[0]
 		}
 
-		// 🪄 LOGIKA HARGA MIN/MAX & DISKON (Sama dengan GetCatalog)
+		// Calculate min/max price range and effective discount.
 		originalMinPrice := p.MinPrice
 		originalMaxPrice := p.MaxPrice
 		if originalMinPrice == 0 && originalMaxPrice == 0 {
@@ -576,7 +568,6 @@ func (s *productService) GetAllProducts(requesterID, role, businessID string, se
 	return response, nil
 }
 
-// 6. BULK UPDATE STATUS
 func (s *productService) BulkUpdateStatus(requesterID, role, businessID string, productIDs []string, isActive bool) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
@@ -594,7 +585,6 @@ func (s *productService) BulkUpdateStatus(requesterID, role, businessID string, 
 	return nil
 }
 
-// 7. BULK DELETE
 func (s *productService) BulkDelete(requesterID, role, businessID string, productIDs []string) error {
 	if !s.repo.HasAccessToBusiness(requesterID, role, businessID) {
 		return errors.New("forbidden: Anda tidak memiliki akses untuk mengelola produk di bisnis ini")
@@ -606,7 +596,7 @@ func (s *productService) BulkDelete(requesterID, role, businessID string, produc
 		return err
 	}
 
-	// 🔔 Notifikasi ke Owner jika staf menghapus produk massal
+	// Alert owner if staff performs bulk product deletion.
 	if role == "business_admin" {
 		notification.NotifyOwnerStaffActivity(
 			database.DB,

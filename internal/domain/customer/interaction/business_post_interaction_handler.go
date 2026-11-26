@@ -153,7 +153,6 @@ func (h *PostInteractionHandler) GetPostComments(c *fiber.Ctx) error {
 	})
 }
 
-// 6. TOGGLE LIKE KOMENTAR POSTINGAN
 func (h *PostInteractionHandler) ToggleCommentLike(c *fiber.Ctx) error {
 	commentID := strings.TrimSpace(c.Params("comment_id"))
 	accountID, ok := c.Locals("account_id").(string)

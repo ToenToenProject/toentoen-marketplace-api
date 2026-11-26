@@ -641,7 +641,6 @@ func (r *productInteractionRepository) ToggleUnifiedReviewLike(reviewID, account
 		return isLiked, "product_review", errLike
 	}
 
-	// 2. Cek di reviews (toko)
 	var bReview models.Review
 	if err := r.db.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", reviewID).First(&bReview).Error; err == nil {
 		var count int64

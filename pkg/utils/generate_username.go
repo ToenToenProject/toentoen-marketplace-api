@@ -10,17 +10,17 @@ import (
 
 var nonAlphaNumUserRegex = regexp.MustCompile(`[^a-z0-9_]`)
 
-// GenerateRandomUsername membuat username unik dari email/nomor telepon dan peran opsional
+// GenerateRandomUsername generates a sanitized, collision-resistant username with an optional role indicator.
 func GenerateRandomUsername(identifier string, rolePrefix ...string) string {
 	identifier = strings.TrimSpace(strings.ToLower(identifier))
 	base := identifier
 
-	// Jika berupa email, ambil bagian sebelum @
+	// Strip domain part from email inputs.
 	if atIdx := strings.Index(base, "@"); atIdx != -1 {
 		base = base[:atIdx]
 	}
 
-	// Buang semua karakter non-alfanumerik
+	// Retain alphanumeric characters and underscores only.
 	base = nonAlphaNumUserRegex.ReplaceAllString(base, "")
 	if len(base) > 12 {
 		base = base[:12]

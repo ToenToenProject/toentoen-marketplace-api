@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// DirectBusinessConversation merepresentasikan sesi chat antara 1 Customer dan 1 Toko (Business)
+// DirectBusinessConversation represents a chat between a customer and a business.
 type DirectBusinessConversation struct {
 	ConversationID     string    `gorm:"primaryKey;column:conversation_id;type:varchar(50)" json:"conversation_id"`
 	BusinessID         string    `gorm:"column:business_id;type:varchar(50);not null;index" json:"business_id"`
@@ -15,7 +15,6 @@ type DirectBusinessConversation struct {
 	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt          time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 
-	// Relasi
 	Business *Business               `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
 	Customer *Account                `gorm:"foreignKey:CustomerID;references:AccountID" json:"customer,omitempty"`
 	Signal   *Signal                 `gorm:"foreignKey:SignalID;references:SignalID" json:"signal,omitempty"`
@@ -26,7 +25,7 @@ func (DirectBusinessConversation) TableName() string {
 	return "direct_business_conversations"
 }
 
-// DirectBusinessMessage merepresentasikan pesan dalam percakapan toko
+// DirectBusinessMessage represents a chat message within a business conversation.
 type DirectBusinessMessage struct {
 	MessageID      string     `gorm:"primaryKey;column:message_id;type:varchar(50)" json:"message_id"`
 	ConversationID string     `gorm:"column:conversation_id;type:varchar(50);not null;index" json:"conversation_id"`
@@ -41,7 +40,6 @@ type DirectBusinessMessage struct {
 	ReadAt         *time.Time `gorm:"column:read_at" json:"read_at,omitempty"`
 	CreatedAt      time.Time  `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
 
-	// Relasi
 	ProductDetail *Product `gorm:"foreignKey:ProductID;references:ProductID" json:"product_detail,omitempty"`
 }
 
@@ -49,7 +47,6 @@ func (DirectBusinessMessage) TableName() string {
 	return "direct_business_messages"
 }
 
-// Input Models
 type InitiateBusinessChatInput struct {
 	Message   string  `json:"message"`
 	ProductID *string `json:"product_id,omitempty"`
@@ -63,7 +60,6 @@ type SendBusinessChatMessageInput struct {
 	MessageType string  `json:"message_type,omitempty"` // default 'text'
 }
 
-// Response List Item
 type CustomerBusinessConversationListItem struct {
 	ConversationID      string               `json:"conversation_id"`
 	BusinessID          string               `json:"business_id"`

@@ -46,7 +46,6 @@ func NewProductGroupService(repo ProductGroupRepository, notifService notificati
 	return &productGroupService{repo, notifService}
 }
 
-// 1. CREATE GROUP (Cegah Duplikat)
 func (s *productGroupService) CreateGroup(requesterID, role, businessID string, input models.CreateGroupInput) error {
 	if role == "business_admin" && !s.repo.HasPermission(requesterID, businessID, models.PermCreateProductGroup) {
 		return errors.New("forbidden: Anda tidak memiliki izin untuk membuat grup produk baru")
@@ -71,7 +70,7 @@ func (s *productGroupService) CreateGroup(requesterID, role, businessID string, 
 		return errors.New("grup dengan nama ini sudah ada di toko Anda")
 	}
 
-	// 🪄 LOGIKA PINTAR: Jika tidak diisi (0), otomatis taruh di urutan paling bawah
+	// Unspecified display order (0) defaults to the end of the list.
 	order := input.DisplayOrder
 	if order == 0 {
 		maxOrder := s.repo.GetMaxDisplayOrder(businessID)
@@ -82,14 +81,13 @@ func (s *productGroupService) CreateGroup(requesterID, role, businessID string, 
 		ProductGroupID: utils.GenerateUUID("GRP"),
 		BusinessID:     businessID,
 		Name:           input.Name,
-		DisplayOrder:   order, // 👈 Gunakan variabel order yang sudah dihitung
+		DisplayOrder:   order,
 		IsActive:       true,
 	}
 
 	return s.repo.CreateGroup(&group)
 }
 
-// 2. UPDATE GROUP METADATA
 func (s *productGroupService) UpdateGroup(requesterID, role, businessID, productGroupID string, input models.UpdateGroupInput) error {
 	if productGroupID == "promotion" {
 		return errors.New("grup 'Promosi' adalah grup sistem otomatis dan tidak dapat diubah secara langsung")
@@ -104,7 +102,6 @@ func (s *productGroupService) UpdateGroup(requesterID, role, businessID, product
 		return errors.New("grup produk tidak ditemukan")
 	}
 
-	// Cek duplikat jika user mengubah nama
 	if input.Name != "" && input.Name != group.Name {
 		if s.repo.CheckNameExists(businessID, input.Name) {
 			return errors.New("grup dengan nama ini sudah ada")
@@ -127,21 +124,20 @@ func (s *productGroupService) ReorderGroups(requesterID, role, businessID string
 		return errors.New("forbidden: Anda tidak memiliki izin untuk mengatur urutan grup produk")
 	}
 
-	// Lakukan perulangan untuk setiap grup yang urutannya berubah
+	// Iterate groups with updated display order.
 	for _, item := range input.Orders {
 		if item.ProductGroupID == "promotion" {
 			continue // Lewati grup virtual promosi
 		}
 		err := s.repo.UpdateDisplayOrder(businessID, item.ProductGroupID, item.DisplayOrder)
 		if err != nil {
-			// Jika satu gagal, kembalikan error (Ideally pakai DB Transaction, tapi ini cukup aman)
+			// Return error on failure.
 			return errors.New("gagal mengurutkan sebagian grup")
 		}
 	}
 	return nil
 }
 
-// 3. MENGUBAH ISI GRUP (Add / Remove Product)
 func (s *productGroupService) UpdateGroupContents(requesterID, role, businessID, productGroupID string, input models.UpdateGroupContentsInput) error {
 	if productGroupID == "promotion" {
 		return errors.New("isi grup 'Promosi' dikelola secara otomatis melalui fitur Promosi")
@@ -151,13 +147,11 @@ func (s *productGroupService) UpdateGroupContents(requesterID, role, businessID,
 		return errors.New("forbidden: Anda tidak memiliki izin untuk mengubah isi grup produk")
 	}
 
-	// Pastikan grupnya valid
 	_, err := s.repo.GetGroupByID(businessID, productGroupID)
 	if err != nil {
 		return errors.New("grup produk tidak ditemukan")
 	}
 
-	// 🪄 PERBAIKAN: Panggil kembali fungsi repository untuk menghapus dari grup
 	if len(input.RemoveProductIDs) > 0 {
 		fmt.Printf("DEBUG: Menghapus %d produk. ID: %v\n", len(input.RemoveProductIDs), input.RemoveProductIDs)
 		if err := s.repo.RemoveProductsFromGroup(businessID, input.RemoveProductIDs); err != nil {
@@ -165,7 +159,7 @@ func (s *productGroupService) UpdateGroupContents(requesterID, role, businessID,
 		}
 	}
 
-	// Masukkan produk baru ke dalam grup ini
+	// Add products to this group.
 	if len(input.AddProductIDs) > 0 {
 		if err := s.repo.AddProductsToGroup(businessID, productGroupID, input.AddProductIDs); err != nil {
 			return err
@@ -175,7 +169,6 @@ func (s *productGroupService) UpdateGroupContents(requesterID, role, businessID,
 	return nil
 }
 
-// 4. DELETE GRUP (Validasi harus kosong)
 func (s *productGroupService) DeleteGroup(requesterID, role, businessID, productGroupID string) error {
 	if productGroupID == "promotion" {
 		return errors.New("grup 'Promosi' adalah grup sistem otomatis dan tidak dapat dihapus")
@@ -190,7 +183,7 @@ func (s *productGroupService) DeleteGroup(requesterID, role, businessID, product
 		return errors.New("gagal memverifikasi isi grup produk")
 	}
 
-	// LOGIKA PENTING: Cegah hapus jika ada isinya
+	// Prevent deleting product group if it contains active products.
 	if count > 0 {
 		return errors.New("tidak bisa menghapus grup karena masih ada produk di dalamnya. Silakan pindahkan atau hapus produknya terlebih dahulu")
 	}
@@ -199,7 +192,7 @@ func (s *productGroupService) DeleteGroup(requesterID, role, businessID, product
 		return err
 	}
 
-	// 🔔 Notifikasi ke Owner jika staf menghapus grup produk
+	// Alert owner if staff deletes product group.
 	if role == "business_admin" {
 		notification.NotifyOwnerStaffActivity(
 			database.DB,

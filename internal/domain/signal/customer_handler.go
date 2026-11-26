@@ -16,8 +16,7 @@ func NewCustomerHandler(service SignalService) *CustomerHandler {
 	return &CustomerHandler{service}
 }
 
-// CreateSignal membuat signal baru dari customer
-// POST /api/v1/customer/signals
+// CreateSignal creates a new demand signal request.
 func (h *CustomerHandler) CreateSignal(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -47,8 +46,7 @@ func (h *CustomerHandler) CreateSignal(c *fiber.Ctx) error {
 	})
 }
 
-// GetMySignals mengambil daftar signal milik customer
-// GET /api/v1/customer/signals/me
+// GetMySignals returns signals created by the customer.
 func (h *CustomerHandler) GetMySignals(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -63,8 +61,7 @@ func (h *CustomerHandler) GetMySignals(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar signal", signals)
 }
 
-// GetMyConversations mengambil semua roomchat percakapan milik customer
-// GET /api/v1/customer/conversations
+// GetMyConversations returns customer signal conversations.
 func (h *CustomerHandler) GetMyConversations(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -79,8 +76,7 @@ func (h *CustomerHandler) GetMyConversations(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar percakapan", conversations)
 }
 
-// GetSignalDetail mengambil detail signal beserta daftar merchant yang merespons
-// GET /api/v1/customer/signals/:signal_id atau /api/v1/customer/signals/:id
+// GetSignalDetail retrieves signal details and responding merchants.
 func (h *CustomerHandler) GetSignalDetail(c *fiber.Ctx) error {
 	accID, role, err := getSession(c)
 	if err != nil {
@@ -104,7 +100,6 @@ func (h *CustomerHandler) GetSignalDetail(c *fiber.Ctx) error {
 }
 
 // UpdateSignal memperbarui informasi signal (deskripsi, kategori, tags, lokasi, radius, dll)
-// PUT /api/v1/customer/signals/:signal_id atau /api/v1/customer/signals/:id
 func (h *CustomerHandler) UpdateSignal(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -137,7 +132,6 @@ func (h *CustomerHandler) UpdateSignal(c *fiber.Ctx) error {
 }
 
 // DeleteSignal membatalkan / menghapus signal milik customer
-// DELETE /api/v1/customer/signals/:signal_id atau /api/v1/customer/signals/:id
 func (h *CustomerHandler) DeleteSignal(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -183,7 +177,6 @@ func (h *CustomerHandler) CloseSignal(c *fiber.Ctx) error {
 }
 
 // CompleteSignal menyelesaikan signal (status → completed, semua conversation → locked)
-// PUT /api/v1/customer/signals/:signal_id/complete
 func (h *CustomerHandler) CompleteSignal(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -206,7 +199,6 @@ func (h *CustomerHandler) CompleteSignal(c *fiber.Ctx) error {
 }
 
 // GetMessages membaca isi chat dalam conversation
-// GET /api/v1/customer/conversations/:conversation_id/messages
 func (h *CustomerHandler) GetMessages(c *fiber.Ctx) error {
 	accID, role, err := getSession(c)
 	if err != nil {
@@ -238,8 +230,7 @@ func (h *CustomerHandler) GetMessages(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil pesan", respData)
 }
 
-// SendMessage mengirim pesan balasan dari customer
-// POST /api/v1/customer/conversations/:conversation_id/messages
+// SendMessage posts customer reply.
 func (h *CustomerHandler) SendMessage(c *fiber.Ctx) error {
 	accID, role, err := getSession(c)
 	if err != nil {

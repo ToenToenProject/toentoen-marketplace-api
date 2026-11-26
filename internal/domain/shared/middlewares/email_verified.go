@@ -1,45 +1,40 @@
 package middlewares
 
 import (
+	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
+	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-// RequireEmailVerified memastikan bahwa pengguna (customer, owner, business_admin)
-// telah melakukan verifikasi email (email_verified_at IS NOT NULL) sebelum dapat
-// mengakses endpoint berproteksi.
+// RequireEmailVerified ensures the authenticated user has verified their email address before accessing protected routes.
 func RequireEmailVerified(c *fiber.Ctx) error {
 	accountIDVal := c.Locals("account_id")
 	if accountIDVal == nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"responseCode": "401",
-			"error":        "Autentikasi diperlukan sebelum mengakses fitur ini",
-		})
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Autentikasi diperlukan sebelum mengakses fitur ini", nil)
 	}
 
 	accountID, ok := accountIDVal.(string)
 	if !ok || accountID == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"responseCode": "401",
-			"error":        "Sesi autentikasi tidak valid",
-		})
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi autentikasi tidak valid", nil)
+	}
+
+	if verified, hasCached := c.Locals("email_verified").(bool); hasCached {
+		if !verified {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "akun belum terverifikasi, silahkan verifikasi terlebih dahulu", nil)
+		}
+		return c.Next()
 	}
 
 	var account models.Account
 	if err := database.DB.Select("email_verified_at").Where("account_id = ?", accountID).First(&account).Error; err != nil {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"responseCode": "403",
-			"error":        "Akun tidak ditemukan",
-		})
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Akun tidak ditemukan", nil)
 	}
 
 	if account.EmailVerifiedAt == nil {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"responseCode": "403",
-			"error":        "akun belum terverifikasi, silahkan verifikasi terlebih dahulu",
-		})
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "akun belum terverifikasi, silahkan verifikasi terlebih dahulu", nil)
 	}
 
 	return c.Next()

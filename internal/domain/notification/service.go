@@ -124,7 +124,7 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 	dataBytes, _ := json.Marshal(data)
 
 	for _, recipientID := range recipientIDs {
-		// Jangan kirim notifikasi ke diri sendiri (misal owner yang melike produknya sendiri)
+		// Skip notification dispatch when sender and recipient are the same account.
 		if recipientID == triggerActorID {
 			continue
 		}
@@ -132,8 +132,8 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 		var notifToSave *models.UserNotification
 		var isNew bool
 
-		// 1. Cek apakah ada notifikasi unread dengan tipe dan referenceID yang sama (AGREGASI)
-		// Catatan: Tipe 'chat' tidak diagregasi/dilewati agar setiap pesan nyata dari pelanggan
+		// Aggregate unread notifications sharing type and reference ID.
+		// Exclude chat messages from aggregation to notify each user interaction.
 		// selalu menghasilkan entri notifikasi in-app unread baru di database.
 		var existingNotif *models.UserNotification
 		var err error
@@ -145,7 +145,7 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 			var actors []string
 			_ = json.Unmarshal(existingNotif.ActorIDs, &actors)
 			
-			// Cek apakah actor sudah ada
+			// Check if actor already contributed to this aggregated notification.
 			actorExists := false
 			for _, a := range actors {
 				if a == triggerActorID {
@@ -160,13 +160,12 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 				existingNotif.ActorIDs = actorsBytes
 				existingNotif.UpdatedAt = time.Now()
 				
-				// Ubah title & body berdasarkan jumlah actor (contoh khusus product_like)
 				if notifType == "product_like" {
 					if len(actors) == 2 {
 						existingNotif.Title = "Produk Anda disukai!"
 						existingNotif.Body = fmt.Sprintf("Seorang pengguna dan 1 lainnya menyukai produk Anda.") // Idealnya fetch nama dari DB, tapi kita pakai teks generic jika tidak ada data nama
 						
-						// Jika di Data ada informasi nama user, kita bisa parse
+						// Parse actor display name from metadata if present.
 						if triggerName, ok := data["trigger_name"].(string); ok {
 							existingNotif.Body = fmt.Sprintf("%s dan 1 lainnya menyukai produk Anda.", triggerName)
 						}
@@ -180,13 +179,11 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 					}
 				}
 				
-				// Simpan pembaruan
 				_ = s.repo.UpdateNotification(existingNotif)
 			}
 			notifToSave = existingNotif
 			isNew = false
 		} else {
-			// Buat Notifikasi Baru
 			actors := []string{triggerActorID}
 			actorsBytes, _ := json.Marshal(actors)
 			
@@ -220,7 +217,6 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 			isNew = true
 		}
 
-		// 2. Kirim via WebSocket jika Online
 		isOnline := s.hub != nil && s.hub.IsOnline(recipientID)
 		if isOnline {
 			event := realtime.WSEvent{
@@ -230,7 +226,6 @@ func (s *notificationService) SendNotification(recipientIDs []string, triggerAct
 			s.hub.SendToUser(recipientID, event)
 		}
 
-		// 3. Push Notification via FCM (dikirim jika user offline atau notifikasi baru)
 		if isNew || notifType == "product_like" || !isOnline {
 			tokens := fcmTokensMap[recipientID]
 			if len(tokens) == 0 {
@@ -425,7 +420,6 @@ func (s *notificationService) SendWelcomeMerchantNotification(accountID string) 
 		return
 	}
 
-	// 1. Cek idempotensi: pastikan belum pernah menerima notifikasi welcome
 	hasSent, err := s.repo.HasNotificationOfType(accountID, "welcome_merchant")
 	if err != nil || hasSent {
 		return
@@ -462,7 +456,7 @@ func (s *notificationService) SendWelcomeMerchantNotification(accountID string) 
 		return
 	}
 
-	// WebSocket broadcast jika merchant sedang online
+	// WebSocket broadcast when merchant is online.
 	if s.hub.IsOnline(accountID) {
 		event := realtime.WSEvent{
 			Type: "new_notification",

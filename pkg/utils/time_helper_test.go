@@ -13,7 +13,6 @@ func TestGetWIBLocation(t *testing.T) {
 		t.Fatal("Expected non-nil WIB location")
 	}
 
-	// Pastikan offset zona waktu adalah +7 jam (25200 detik)
 	now := time.Now().In(loc)
 	_, offset := now.Zone()
 	if offset != 7*3600 {
@@ -27,7 +26,6 @@ func TestCalculateStoreStatus(t *testing.T) {
 	todayStr := now.Format("2006-01-02")
 	currentDay := int(now.Weekday())
 
-	// Format jam buka dan tutup hari ini di sekitar jam saat ini
 	currentH := now.Hour()
 	currentM := now.Minute()
 
@@ -54,11 +52,9 @@ func TestCalculateStoreStatus(t *testing.T) {
 		hours := []models.BusinessHour{
 			{DayOfWeek: currentDay, OpenTime: &openTimeActive, CloseTime: &closeTimeActive},
 		}
-		// Tanpa confirmed_open_date
 		if CalculateStoreStatus(false, hours) {
 			t.Errorf("Expected store to be closed without confirmation, got open")
 		}
-		// confirmed_open_date kemarin
 		yesterday := "2020-01-01"
 		if CalculateStoreStatus(false, hours, &yesterday) {
 			t.Errorf("Expected store to be closed with expired confirmation, got open")
@@ -104,11 +100,9 @@ func TestCalculateStoreStatus(t *testing.T) {
 		hours := []models.BusinessHour{
 			{DayOfWeek: currentDay, OpenTime: &pastOpen, CloseTime: &pastClose},
 		}
-		// Tanpa overtime confirmation -> tutup
 		if CalculateStoreStatus(false, hours, &todayStr, nil) {
 			t.Errorf("Expected store past close time to be closed without overtime confirmation")
 		}
-		// Dengan overtime confirmation hari ini -> buka
 		if !CalculateStoreStatus(false, hours, &todayStr, &todayStr) {
 			t.Errorf("Expected store to be open when overtime confirmed today")
 		}

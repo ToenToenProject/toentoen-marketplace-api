@@ -5,7 +5,7 @@ import (
 )
 
 // StandardizeNotificationMetadata menstandarisasi type, target_type, target_id, dan business_id
-// agar konsisten dengan kebutuhan routing frontend:
+// Standardize payload structure for frontend navigation routing.
 // Standar Type: "signal_post", "chat", "new_review", "post_like", "kyc", "invitation", "promotion", dll.
 // Target Type: "signal" | "chat" | "review" | "post" | "kyc" | "invitation" | "promotion" | "business"
 // Target ID: ID unik entitas terkait (signal_id / conversation_id / review_id / post_id / promotion_id / assignment_id)
@@ -17,7 +17,6 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 	cleanRefID := strings.TrimSpace(refID)
 	lowerType := strings.ToLower(strings.TrimSpace(rawType))
 
-	// 1. Ambil target_id dan target_type yang sudah ada (jika sudah di-set secara eksplisit)
 	if tid, ok := data["target_id"].(string); ok && strings.TrimSpace(tid) != "" {
 		targetID = strings.TrimSpace(tid)
 	}
@@ -25,14 +24,12 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 		targetType = strings.TrimSpace(tt)
 	}
 
-	// 2. Ambil business_id
 	if bid, ok := data["business_id"].(string); ok && strings.TrimSpace(bid) != "" {
 		businessID = strings.TrimSpace(bid)
 	} else if strings.HasPrefix(cleanRefID, "BUS-") {
 		businessID = cleanRefID
 	}
 
-	// 3. Mapping berdasarkan lowerType dan cleanRefID
 	switch {
 	// A. Sinyal Permintaan Kebutuhan
 	case lowerType == "new_demand_signal" || lowerType == "signal" || lowerType == "signal_post" || lowerType == "signal_completed":
@@ -78,7 +75,7 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 			}
 		}
 
-	// C. Ulasan / Review (Toko & Produk)
+	// Store and product reviews.
 	case strings.Contains(lowerType, "review"):
 		standardType = "new_review"
 		targetType = "review"
@@ -154,7 +151,7 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 			}
 		}
 
-	// G. Undangan & Manajemen Tim Toko / Transfer
+	// Store team invitations and ownership transfer.
 	case strings.Contains(lowerType, "invit") || strings.Contains(lowerType, "admin_") ||
 		strings.Contains(lowerType, "spv_") || strings.Contains(lowerType, "transfer"):
 		standardType = "invitation"
@@ -169,7 +166,7 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 			}
 		}
 
-	// H. Live Streaming & Jadwal Buka/Tutup Toko
+	// Live streaming and operating hours.
 	case strings.Contains(lowerType, "live") || strings.Contains(lowerType, "schedule") || strings.Contains(lowerType, "store_status"):
 		standardType = rawType
 		targetType = "business"
@@ -192,7 +189,7 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 			targetID = cleanRefID
 		}
 
-	// J. Fallback berdasarkan prefix ReferenceID jika type tidak dikenal
+	// Fallback routing by ReferenceID prefix when type is unrecognized.
 	default:
 		standardType = rawType
 		if strings.HasPrefix(cleanRefID, "SIG-") {
@@ -224,7 +221,6 @@ func StandardizeNotificationMetadata(rawType, refID string, data map[string]inte
 		}
 	}
 
-	// Pastikan targetID tidak kosong jika refID ada
 	if targetID == "" && cleanRefID != "" {
 		targetID = cleanRefID
 	}

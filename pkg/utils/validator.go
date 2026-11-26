@@ -10,7 +10,7 @@ import (
 
 var validate = validator.New()
 
-// ErrorResponse represents a single validation error
+// ErrorResponse represents a single validation error.
 type ErrorResponse struct {
 	FailedField string `json:"field"`
 	Tag         string `json:"tag"`
@@ -18,7 +18,7 @@ type ErrorResponse struct {
 	Message     string `json:"message"`
 }
 
-// ValidateStruct validates a struct using go-playground/validator and returns user-friendly errors
+// ValidateStruct validates a struct using go-playground/validator and returns localized validation errors.
 func ValidateStruct(structData interface{}) []*ErrorResponse {
 	var errors []*ErrorResponse
 	err := validate.Struct(structData)
@@ -31,7 +31,6 @@ func ValidateStruct(structData interface{}) []*ErrorResponse {
 
 			isCollection := err.Kind() == reflect.Slice || err.Kind() == reflect.Array
 
-			// Create custom messages based on the tag
 			switch err.Tag() {
 			case "required":
 				element.Message = fmt.Sprintf("%s wajib diisi", err.Field())
@@ -58,7 +57,7 @@ func ValidateStruct(structData interface{}) []*ErrorResponse {
 	return errors
 }
 
-// FormatValidationErrors converts the array of errors to a single readable string
+// FormatValidationErrors converts a slice of validation errors to a comma-separated summary string.
 func FormatValidationErrors(errors []*ErrorResponse) string {
 	var msgs []string
 	for _, e := range errors {

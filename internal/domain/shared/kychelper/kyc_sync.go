@@ -8,9 +8,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// InheritVerifiedKYCOnCreate memeriksa apakah akun dengan identitas yang sama (email / nomor telepon)
-// sudah memiliki profil terverifikasi KYC di peran merchant lainnya (Owner <-> Business Admin).
-// Jika ditemukan, profil baru akan langsung mewarisi data KTP dan berstatus 'verified'.
+// InheritVerifiedKYCOnCreate checks whether an account with the same email or phone
+// already holds a verified KYC profile in a sibling merchant role (Owner <-> Business Admin).
+// If found, the new profile inherits verified KYC status and identity records immediately.
 func InheritVerifiedKYCOnCreate(db *gorm.DB, account *models.Account, role string, ownerRecord *models.Owner, adminRecord *models.BusinessAdmin) {
 	if account == nil || db == nil {
 		return
@@ -34,7 +34,7 @@ func InheritVerifiedKYCOnCreate(db *gorm.DB, account *models.Account, role strin
 		if ownerRecord == nil {
 			return
 		}
-		// Cari akun business_admin yang sudah terverifikasi KYC
+		// Find verified sibling business_admin account.
 		var siblingAdmin models.BusinessAdmin
 		q := db.Model(&models.BusinessAdmin{}).
 			Joins("JOIN accounts ON accounts.account_id = business_admins.account_id").
@@ -56,7 +56,7 @@ func InheritVerifiedKYCOnCreate(db *gorm.DB, account *models.Account, role strin
 		if adminRecord == nil {
 			return
 		}
-		// Cari akun owner yang sudah terverifikasi KYC
+		// Find verified sibling owner account.
 		var siblingOwner models.Owner
 		q := db.Model(&models.Owner{}).
 			Joins("JOIN accounts ON accounts.account_id = owners.account_id").
@@ -76,7 +76,7 @@ func InheritVerifiedKYCOnCreate(db *gorm.DB, account *models.Account, role strin
 	}
 }
 
-// CopyKYCAdminToOwner menyalin seluruh data KTP dan status verifikasi dari BusinessAdmin ke Owner.
+// CopyKYCAdminToOwner copies KTP identity details and verification status from BusinessAdmin to Owner.
 func CopyKYCAdminToOwner(src *models.BusinessAdmin, dst *models.Owner) {
 	if src == nil || dst == nil {
 		return
@@ -106,7 +106,7 @@ func CopyKYCAdminToOwner(src *models.BusinessAdmin, dst *models.Owner) {
 	dst.KycRejectionReason = nil
 }
 
-// CopyKYCOwnerToAdmin menyalin seluruh data KTP dan status verifikasi dari Owner ke BusinessAdmin.
+// CopyKYCOwnerToAdmin copies KTP identity details and verification status from Owner to BusinessAdmin.
 func CopyKYCOwnerToAdmin(src *models.Owner, dst *models.BusinessAdmin) {
 	if src == nil || dst == nil {
 		return
@@ -136,10 +136,8 @@ func CopyKYCOwnerToAdmin(src *models.Owner, dst *models.BusinessAdmin) {
 	dst.KycRejectionReason = nil
 }
 
-// SyncVerifiedKYCIfSiblingVerified memeriksa apakah akun dengan ID tertentu belum terverifikasi KYC,
-// namun memiliki akun saudara (role owner <-> business_admin dengan email/telepon yang sama)
-// yang sudah terverifikasi. Jika ditemukan, fungsi ini akan otomatis menyinkronkan data dan statusnya
-// ke database, serta mengembalikan nilai true.
+// SyncVerifiedKYCIfSiblingVerified checks if an unverified merchant account has a verified sibling account
+// sharing the same email or phone number. If verified, it synchronizes the profile and returns true.
 func SyncVerifiedKYCIfSiblingVerified(db *gorm.DB, accountID string, role string) bool {
 	if db == nil || accountID == "" {
 		return false
@@ -172,7 +170,7 @@ func SyncVerifiedKYCIfSiblingVerified(db *gorm.DB, accountID string, role string
 			}
 		}
 
-		// Cari akun business_admin yang sudah verified milik user ini
+		// Find verified sibling business_admin account.
 		var siblingAdmin models.BusinessAdmin
 		q := db.Model(&models.BusinessAdmin{}).
 			Joins("JOIN accounts ON accounts.account_id = business_admins.account_id").
@@ -222,7 +220,7 @@ func SyncVerifiedKYCIfSiblingVerified(db *gorm.DB, accountID string, role string
 			}
 		}
 
-		// Cari akun owner yang sudah verified milik user ini
+		// Find verified sibling owner account.
 		var siblingOwner models.Owner
 		q := db.Model(&models.Owner{}).
 			Joins("JOIN accounts ON accounts.account_id = owners.account_id").
@@ -268,8 +266,7 @@ func SyncVerifiedKYCIfSiblingVerified(db *gorm.DB, accountID string, role string
 	return false
 }
 
-// FindSiblingAccountIDs mengembalikan daftar account_id lain yang menggunakan email
-// atau nomor telepon yang sama dengan accountID yang diberikan.
+// FindSiblingAccountIDs returns account IDs sharing the same email or phone number across roles.
 func FindSiblingAccountIDs(db *gorm.DB, accountID string) []string {
 	if db == nil || accountID == "" {
 		return nil
@@ -307,8 +304,7 @@ func FindSiblingAccountIDs(db *gorm.DB, accountID string) []string {
 	return siblingIDs
 }
 
-// GetEffectiveOwnerKYCStatus mengembalikan status KYC efektif milik owner ('verified', 'pending', 'rejected', 'unverified').
-// Jika belum 'verified', otomatis memeriksa sibling account yang mungkin sudah 'verified'.
+// GetEffectiveOwnerKYCStatus resolves the effective KYC status for an owner, inspecting verified sibling accounts if needed.
 func GetEffectiveOwnerKYCStatus(db *gorm.DB, ownerID string) string {
 	if db == nil || strings.TrimSpace(ownerID) == "" {
 		return "unverified"
@@ -329,12 +325,12 @@ func GetEffectiveOwnerKYCStatus(db *gorm.DB, ownerID string) string {
 	return status
 }
 
-// IsOwnerKYCVerified mengembalikan true jika owner bisnis telah lolos verifikasi KYC ('verified').
+// IsOwnerKYCVerified checks whether the business owner has approved KYC verification.
 func IsOwnerKYCVerified(db *gorm.DB, ownerID string) bool {
 	return GetEffectiveOwnerKYCStatus(db, ownerID) == "verified"
 }
 
-// BuildBusinessVisibility menyusun objek ringkasan visibilitas publik toko untuk dashboard merchant.
+// BuildBusinessVisibility builds the store visibility summary for merchant dashboards based on KYC verification.
 func BuildBusinessVisibility(kycStatus string, isActive bool, bizStatus string) *models.BusinessVisibilityInfo {
 	status := strings.ToLower(strings.TrimSpace(kycStatus))
 	if status == "" {

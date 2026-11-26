@@ -64,13 +64,12 @@ func getOwnerInteractionLabel(isOwnerLiked, isOwnerReplied, isByOwner bool) stri
 	return ""
 }
 
-// 1. Customer Create Review Toko
 func (s *reviewService) CreateReview(customerID string, input models.CreateReviewInput) error {
 	if countWords(input.Comment) < 10 {
 		return errors.New("Ulasan wajib memiliki minimal 10 kata")
 	}
 
-	// 🛡️ Cegah pemilik dan staf toko mereview toko sendiri
+	// Prevent business owners and staff from reviewing their own business.
 	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(input.BusinessID)
 	for _, sid := range staffIDs {
 		if sid == customerID {
@@ -83,7 +82,7 @@ func (s *reviewService) CreateReview(customerID string, input models.CreateRevie
 		return errors.New("Anda sudah memberikan ulasan untuk toko ini. Silakan gunakan fitur edit jika ingin mengubah ulasan.")
 	}
 
-	// 🛡️ Cek masa jeda (Cooldown) jika user baru saja menghapus ulasan di toko ini
+	// Enforce cooldown if user recently deleted a review for this business.
 	lastDeleted, errDel := s.reviewRepo.GetLastDeletedReview(input.BusinessID, customerID)
 	if errDel == nil && lastDeleted != nil && !lastDeleted.DeletedAt.Time.IsZero() {
 		timeSinceDelete := time.Since(lastDeleted.DeletedAt.Time)
@@ -112,10 +111,9 @@ func (s *reviewService) CreateReview(customerID string, input models.CreateRevie
 		return err
 	}
 
-	// Update statistik rating toko
 	s.recalculateBusinessRating(input.BusinessID)
 
-	// Kirim Notifikasi ke Pemilik Toko
+	// Dispatch notification to store owner.
 	go func() {
 		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(input.BusinessID)
 		data := map[string]interface{}{
@@ -138,7 +136,6 @@ func (s *reviewService) CreateReview(customerID string, input models.CreateRevie
 	return nil
 }
 
-// 2. Customer Update Review Toko
 func (s *reviewService) UpdateReview(customerID, reviewID string, input models.UpdateReviewInput) error {
 	if countWords(input.Comment) < 10 {
 		return errors.New("Ulasan wajib memiliki minimal 10 kata")
@@ -167,14 +164,13 @@ func (s *reviewService) UpdateReview(customerID, reviewID string, input models.U
 	return nil
 }
 
-// 3. Delete Review Toko
 func (s *reviewService) DeleteReview(requesterID, role, reviewID string) error {
 	review, err := s.reviewRepo.GetReviewByID(reviewID)
 	if err != nil {
 		return errors.New("ulasan tidak ditemukan")
 	}
 
-	// 🛡️ Hanya pembuat ulasan yang dapat menghapus ulasan sendiri
+	// Only review author may delete their review.
 	if review.AccountID != requesterID {
 		return errors.New("Anda hanya memiliki izin untuk menghapus ulasan yang Anda buat sendiri")
 	}
@@ -188,7 +184,6 @@ func (s *reviewService) DeleteReview(requesterID, role, reviewID string) error {
 	return nil
 }
 
-// 4. Balas Review Toko (Customer & Merchant)
 func (s *reviewService) ReplyReview(accountID, role, reviewID string, input models.CreateReviewReplyInput) error {
 	review, err := s.reviewRepo.GetReviewByID(reviewID)
 	if err != nil {
@@ -229,7 +224,6 @@ func (s *reviewService) ReplyReview(accountID, role, reviewID string, input mode
 		return errors.New("gagal mengirimkan balasan")
 	}
 
-	// Kirim Notifikasi
 	go func() {
 		recipientID := review.AccountID
 		if input.RepliedToAccountID != nil && *input.RepliedToAccountID != "" {
@@ -257,7 +251,6 @@ func (s *reviewService) ReplyReview(accountID, role, reviewID string, input mode
 	return nil
 }
 
-// 5. Delete Review Comment
 func (s *reviewService) DeleteReviewComment(requesterID, role, commentID string) error {
 	comment, err := s.reviewRepo.GetReviewCommentByID(commentID)
 	if err != nil {
@@ -290,7 +283,6 @@ func (s *reviewService) recalculateBusinessRating(businessID string) {
 	}
 }
 
-// 6. Toggle Like Review Toko
 func (s *reviewService) ToggleReviewLike(reviewID, accountID string) (bool, error) {
 	isLiked, err := s.reviewRepo.ToggleReviewLike(reviewID, accountID)
 	if err == nil && isLiked {
@@ -317,7 +309,6 @@ func (s *reviewService) ToggleReviewLike(reviewID, accountID string) (bool, erro
 	return isLiked, err
 }
 
-// 7. Toggle Like Review Comment
 func (s *reviewService) ToggleReviewCommentLike(commentID, accountID string) (bool, error) {
 	isLiked, err := s.reviewRepo.ToggleReviewCommentLike(commentID, accountID)
 	if err == nil && isLiked {
@@ -345,7 +336,6 @@ func (s *reviewService) ToggleReviewCommentLike(commentID, accountID string) (bo
 	return isLiked, err
 }
 
-// 8. Report Review & Comment
 func (s *reviewService) ReportReview(reviewID, accountID string, input models.CreatePostReportInput) error {
 	report := models.BusinessReviewReport{
 		AccountID:   accountID,
@@ -399,7 +389,6 @@ func extractReviewUserProfile(account *models.Account, fallbackAccountID string)
 	return name, username, avatarURL, userProfile
 }
 
-// 9. Get Review Detail with Comments
 func (s *reviewService) GetReviewDetail(reviewID, currentAccountID string) (*models.BusinessReviewResponse, error) {
 	review, err := s.reviewRepo.GetReviewByID(reviewID)
 	if err != nil {
@@ -505,14 +494,13 @@ func (s *reviewService) GetReviewDetail(reviewID, currentAccountID string) (*mod
 	return resp, nil
 }
 
-// 10. Get Smart Display 5 Reviews
 func (s *reviewService) GetSmartDisplayReviews(businessID, currentAccountID string) ([]models.BusinessReviewResponse, error) {
 	rawReviews, err := s.reviewRepo.GetEligibleReviewsForSmartDisplay(businessID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter kualitas: Hanya review dengan min. 10 kata
+	// Quality filter: reviews require at least 10 words.
 	var eligible []models.Review
 	for _, r := range rawReviews {
 		if countWords(r.Comment) >= 10 {
@@ -530,7 +518,6 @@ func (s *reviewService) GetSmartDisplayReviews(businessID, currentAccountID stri
 		staffMap[sid] = true
 	}
 
-	// Hitung rata-rata rating
 	summary, _ := s.reviewRepo.GetReviewSummary(businessID)
 	avgRating := 5.0
 	if summary != nil && summary.TotalReviews > 0 {
@@ -634,7 +621,7 @@ func (s *reviewService) GetSmartDisplayReviews(businessID, currentAccountID stri
 	takeN(midList, targetMid)
 	takeN(lowList, targetLow)
 
-	// Jika belum mencapai 5, isi dari sisa daftar apa saja berdasarkan skor tertinggi
+	// Backfill remaining slots up to 5 by highest rating score.
 	if len(selected) < 5 {
 		var allRemaining []ScoredReview
 		for _, l := range [][]ScoredReview{highList, midList, lowList} {
@@ -701,7 +688,6 @@ func (s *reviewService) GetSmartDisplayReviews(businessID, currentAccountID stri
 	return responses, nil
 }
 
-// 11. Get All Reviews Paginated
 func (s *reviewService) GetAllReviews(businessID, currentAccountID string, page, limit, ratingFilter int, sortStr string) ([]models.BusinessReviewResponse, int64, error) {
 	if page <= 0 {
 		page = 1

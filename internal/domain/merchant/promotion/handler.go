@@ -19,7 +19,6 @@ func NewPromotionHandler(service PromotionService) *PromotionHandler {
 	return &PromotionHandler{service: service}
 }
 
-// 1. GET ELIGIBLE PRODUCTS
 func (h *PromotionHandler) GetEligibleProducts(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
@@ -39,7 +38,6 @@ func (h *PromotionHandler) GetEligibleProducts(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar produk yang dapat dipromosikan berhasil dimuat", products)
 }
 
-// 2. CREATE PROMOTION
 func (h *PromotionHandler) CreatePromotion(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
@@ -67,7 +65,6 @@ func (h *PromotionHandler) CreatePromotion(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Promosi berhasil dibuat", detail)
 }
 
-// 3. GET PROMOTIONS LIST (TABS: active, popular, ended)
 func (h *PromotionHandler) GetPromotions(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
@@ -93,7 +90,6 @@ func (h *PromotionHandler) GetPromotions(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar promosi berhasil dimuat", res)
 }
 
-// 4. GET PROMOTION DETAIL
 func (h *PromotionHandler) GetPromotionDetail(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	promotionID := strings.TrimSpace(c.Params("promotion_id"))
@@ -113,7 +109,6 @@ func (h *PromotionHandler) GetPromotionDetail(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail promosi berhasil dimuat", detail)
 }
 
-// 5. EXTEND PROMOTION
 func (h *PromotionHandler) ExtendPromotion(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	promotionID := strings.TrimSpace(c.Params("promotion_id"))
@@ -141,7 +136,6 @@ func (h *PromotionHandler) ExtendPromotion(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Promosi berhasil diperpanjang", nil)
 }
 
-// 6. STOP PROMOTION
 func (h *PromotionHandler) StopPromotion(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	promotionID := strings.TrimSpace(c.Params("promotion_id"))

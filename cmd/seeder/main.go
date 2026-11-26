@@ -331,12 +331,12 @@ func main() {
 		}
 	}
 
-	// Ambil ID kategori spesifik untuk relasi Tag
+	// Lookup category IDs for category-bound tags.
 	var retailCat, beautyCat models.Category
 	db.Where("name = ? AND parent_id IS NULL", "Retail & shopping").First(&retailCat)
 	db.Where("name = ? AND parent_id IS NULL", "Beauty & Wellness").First(&beautyCat)
 
-	// Specific Tags (terikat kategori, is_global = false)
+	// Category-scoped tags.
 	specificTagGroups := []models.Tag{
 		{
 			Name:       "Retail & Shopping",
@@ -359,7 +359,7 @@ func main() {
 		},
 	}
 
-	// Global Tags (tidak terikat kategori, is_global = true)
+	// Global platform tags.
 	globalTagGroups := []models.Tag{
 		{
 			Name:     "System / Platform",

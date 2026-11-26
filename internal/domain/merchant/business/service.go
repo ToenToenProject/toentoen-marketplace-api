@@ -24,7 +24,7 @@ func encryptBusinessLegal(b *models.Business) {
 	}
 	b.NIB, _ = crypto.EncryptPointer(b.NIB)
 	for i := range b.Certificates {
-		// Normalisasi field utama dari alias jika kosong
+		// Normalize primary fields from aliases if empty.
 		if b.Certificates[i].Type == "" && b.Certificates[i].Name != "" {
 			b.Certificates[i].Type = b.Certificates[i].Name
 		}
@@ -44,7 +44,7 @@ func encryptBusinessLegal(b *models.Business) {
 			b.Certificates[i].ImageURL, _ = crypto.Encrypt(b.Certificates[i].ImageURL)
 		}
 
-		// Sinkronkan alias agar tidak menyimpan teks mentah (plaintext) dalam JSONB database
+		// Synchronize aliases to prevent storing plaintext in JSONB columns.
 		b.Certificates[i].Name = b.Certificates[i].Type
 		b.Certificates[i].CertificateName = b.Certificates[i].Type
 		b.Certificates[i].CertificateType = b.Certificates[i].Type
@@ -60,7 +60,7 @@ func decryptBusinessLegal(b *models.Business) {
 	}
 	b.NIB, _ = crypto.DecryptPointer(b.NIB)
 	for i := range b.Certificates {
-		// Fallback pemulihan nilai jika tersimpan di field alias
+		// Fallback recovery for values stored in alias fields.
 		if b.Certificates[i].Type == "" && b.Certificates[i].Name != "" {
 			b.Certificates[i].Type = b.Certificates[i].Name
 		}
@@ -80,7 +80,7 @@ func decryptBusinessLegal(b *models.Business) {
 			b.Certificates[i].ImageURL, _ = crypto.Decrypt(b.Certificates[i].ImageURL)
 		}
 
-		// Set alias agar response FE lengkap terlepas key mana yang dibaca oleh Frontend
+		// Populate aliases to ensure frontend response compatibility.
 		b.Certificates[i].Name = b.Certificates[i].Type
 		b.Certificates[i].CertificateName = b.Certificates[i].Type
 		b.Certificates[i].CertificateType = b.Certificates[i].Type
@@ -161,12 +161,11 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		return "", errors.New("Email akun Anda belum terverifikasi. Silakan verifikasi email Anda terlebih dahulu sebelum membuat bisnis.")
 	}
 
-	// Merchant diperbolehkan membuat & mengelola toko meskipun KYC belum disetujui.
-	// Toko baru selalu dibuat dalam kondisi tertutup (is_manually_closed = true)
-	// dan tidak akan tampil ke publik (customer) sampai KYC owner disetujui ('verified').
+	// Merchants may create and configure stores prior to KYC verification;
+	// stores are initialized in closed state (is_manually_closed = true) and remain hidden until KYC approval.
 	_ = kycStatus
 
-	// Validasi Tag NIB: Tag NIB hanya dapat dipilih jika bisnis memiliki NIB yang terisi
+	// NIB Tag validation: NIB tag requires registered NIB value.
 	cleanNIB := strings.TrimSpace(input.NIB)
 	hasNIB := cleanNIB != ""
 	if len(input.Tags) > 0 {
@@ -197,7 +196,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		return "", err
 	}
 
-	// Resolusi alias sertifikat jika field utama kosong
+	// Resolve certificate aliases if primary field is empty.
 	if len(input.Certificates) == 0 {
 		if len(input.CertificatesAlias) > 0 {
 			input.Certificates = input.CertificatesAlias
@@ -211,7 +210,7 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		input.Certificates = []models.BusinessCertificate{}
 	}
 
-	// Resolusi alias deskripsi jika dikirim field 'description'
+	// Resolve description from compatibility alias if provided.
 	if strings.TrimSpace(input.BusinessDetails) == "" && strings.TrimSpace(input.Description) != "" {
 		input.BusinessDetails = strings.TrimSpace(input.Description)
 	}
@@ -250,7 +249,6 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 		SocialInstagram:  toPointerOrNil(input.SocialInstagram),
 		SocialTiktok:     toPointerOrNil(input.SocialTiktok),
 		
-		// 🪄 MAGIC JSONB: Langsung masukkan array-nya, GORM akan mengurus sisanya
 		BusinessImages:   input.BusinessImages,
 		Certificates:     input.Certificates,
 		SocialWebsites:   input.SocialWebsites,
@@ -277,7 +275,6 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 	// Enkripsi data sensitif (NIB & Dokumen Sertifikat)
 	encryptBusinessLegal(&business)
 
-	// Panggil Repository dengan 4 Argumen saja
 	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.Tags, hours); err != nil {
 		return "", err
 	}
@@ -374,16 +371,15 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 		return nil, errors.New("bisnis tidak ditemukan")
 	}
 
-	// Dekripsi dokumen sensitif untuk owner/admin
+	// Decrypt sensitive documents for owner/admin access.
 	decryptBusinessLegal(business)
 
-	// Set alias field agar backward-compatible dan konsisten
 	business.BusinessNameAlias = business.BusinessName
 	business.SocialWebsitesAlias = business.SocialWebsites
 	business.TotalLikes = business.LikeCount
 	business.TotalReviews = business.ReviewCount
 
-	// Inisialisasi slice sertifikat agar tidak mengembalikan null ke FE dan set alias
+	// Initialize certificates slice to prevent null JSON responses and set aliases.
 	if business.Certificates == nil {
 		business.Certificates = []models.BusinessCertificate{}
 	}
@@ -398,7 +394,7 @@ func (s *businessService) GetBusinessDetail(businessID string) (*models.Business
 	business.Visibility = kychelper.BuildBusinessVisibility(ownerKYCStatus, business.IsActive, business.Status)
 	business.IsVerified = (ownerKYCStatus == "verified")
 
-	// Filter: Jika bisnis belum memiliki NIB, pastikan tag NIB tidak ikut dimunculkan
+	// Suppress NIB tag if business lacks registered NIB.
 	hasNIBDetail := business.NIB != nil && strings.TrimSpace(*business.NIB) != ""
 	if !hasNIBDetail && len(business.Tags) > 0 {
 		var filteredTags []models.Tag
@@ -503,10 +499,10 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		return errors.New("bisnis tidak ditemukan")
 	}
 
-	// Dekripsi dulu dokumen sensitif lama agar tidak terjadi double-encryption saat disimpan ulang
+	// Decrypt existing sensitive documents to avoid double encryption upon re-saving.
 	decryptBusinessLegal(business)
 
-	// Resolusi alias jika field utama tidak diisi namun alias diisi
+	// Resolve primary field from alias if omitted.
 	if input.BusinessName == nil && input.Name != nil {
 		input.BusinessName = input.Name
 	}
@@ -537,7 +533,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		input.VenueName != nil || input.SocialInstagram != nil || input.SocialTiktok != nil ||
 		input.SocialWebsites != nil || input.Websites != nil
 
-	// Verifikasi apakah requester adalah owner atau admin aktif di toko ini
+	// Verify requester is owner or active admin on this store.
 	isOwner := business.AccountID == requesterID
 	if !isOwner {
 		var assignment models.BusinessAdminAssignment
@@ -545,7 +541,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 			return errors.New("forbidden: Anda tidak memiliki akses untuk memperbarui bisnis ini")
 		}
 
-		// Cegah admin non-owner mengubah identitas toko, NIB, sertifikat, atau nomor kontak resmi toko
+		// Non-owner admins cannot alter store identity, NIB, certificates, or phone number.
 		hasIdentityUpdate := input.BusinessName != nil || input.Name != nil ||
 			input.NIB != nil || input.Handle != nil || input.PhoneContact != nil || input.WhatsappContact != nil ||
 			input.Email != nil || input.Certificates != nil
@@ -559,7 +555,6 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 
 	// ==========================================
-	// 1. ATRIBUT WAJIB (MANDATORY FIELDS)
 	// ==========================================
 	if input.BusinessName == nil && input.Name != nil {
 		input.BusinessName = input.Name
@@ -570,7 +565,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		if cleanName == "" {
 			return errors.New("nama bisnis wajib diisi dan tidak boleh kosong")
 		}
-		// Catat riwayat perubahan nama jika berbeda dari nama lama
+		// Record name change history if updated.
 		if business.BusinessName != nil && *business.BusinessName != "" && *business.BusinessName != cleanName {
 			history := models.BusinessNameHistory{
 				HistoryID:  utils.GenerateUUID("BNH"),
@@ -614,7 +609,6 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 
 	// ==========================================
-	// 2. ATRIBUT OPSIONAL (OPTIONAL FIELDS - UPDATE OR CLEAR)
 	// ==========================================
 	if input.LogoURL != nil {
 		cleanLogo := strings.TrimSpace(*input.LogoURL)
@@ -625,7 +619,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		}
 	}
 
-	// Resolusi alias deskripsi jika field utama kosong namun alias dikirim
+	// Resolve description alias if primary field is empty.
 	if input.BusinessDetails == nil && input.Description != nil {
 		input.BusinessDetails = input.Description
 	}
@@ -788,7 +782,6 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 
 	// ==========================================
-	// 3. ATRIBUT KOLEKSI (COLLECTIONS / JSONB)
 	// ==========================================
 	if input.BusinessImages != nil {
 		if *input.BusinessImages == nil {
@@ -835,7 +828,6 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 
 	// ==========================================
-	// 4. ATRIBUT RELASI (HOURS, CATEGORIES, TAGS)
 	// ==========================================
 	var hoursToUpdate *[]models.BusinessHour
 	if input.Hours != nil {
@@ -881,8 +873,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		}
 		tagIDs = &uniqueTags
 	} else if !hasNIBUpdate {
-		// Jika NIB dikosongkan/dihapus tetapi array tags tidak dikirim pada request update,
-		// pastikan tag NIB dicabut dari pivot table agar status terverifikasi tidak tertinggal
+		// If NIB is removed but tags are omitted in update request, strip NIB tag.
 		_ = s.repo.RemoveNIBTagFromBusiness(business.BusinessID)
 	}
 
@@ -900,7 +891,7 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 		return fmt.Errorf("gagal memperbarui data bisnis di database: %w", err)
 	}
 
-	// 🔔 Notifikasi ke Owner jika staf memperbarui profil atau jam buka toko
+	// Alert owner if staff updates store profile or operating hours.
 	if !isOwner && (hasHoursUpdate || hasProfileUpdate) {
 		notification.NotifyOwnerStaffActivity(
 			database.DB,
@@ -928,7 +919,6 @@ func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 		return errors.New("bisnis tidak ditemukan atau Anda tidak memiliki akses")
 	}
 
-	// 1. Kumpulkan ID produk toko untuk pembersihan Meilisearch
 	var productIDs []string
 	database.DB.Model(&models.Product{}).Where("business_id = ?", businessID).Pluck("product_id", &productIDs)
 
@@ -936,7 +926,6 @@ func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 		return err
 	}
 
-	// 2. Bersihkan Meilisearch (bisnis & seluruh produk terkait)
 	if meilisearch.Client != nil {
 		go func() {
 			_, _ = meilisearch.Client.Index("businesses").DeleteDocument(businessID, nil)
@@ -946,7 +935,6 @@ func (s *businessService) DeleteBusiness(ownerID, businessID string) error {
 		}()
 	}
 
-	// 3. Bersihkan Redis cache jika ada
 	if config.RDB != nil {
 		config.RDB.Del(config.Ctx, fmt.Sprintf("business_detail:%s", businessID))
 	}
@@ -972,11 +960,11 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 		}
 	}
 
-	// Nilai baru yang akan di-apply (Flip)
+	// Toggle state.
 	newStatus := !business.IsManuallyClosed
 
-	// 🔒 Gerbang KYC: Aksi MEMBUKA toko (!newStatus) wajib menunggu verifikasi KYC owner disetujui ('verified').
-	// Aksi menutup toko (newStatus == true) tetap diperbolehkan.
+	// KYC Gate: opening store (!newStatus) strictly requires approved owner KYC.
+	// Closing store (newStatus == true) is permitted without KYC.
 	if !newStatus {
 		_, ownerKYCStatus, _ := s.repo.GetOwnerKYCStatus(business.AccountID)
 		if ownerKYCStatus != "verified" {
@@ -993,13 +981,11 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	loc := utils.GetWIBLocation()
 	todayStr := time.Now().In(loc).Format("2006-01-02")
 
-	// Simpan status barunya
 	business.IsManuallyClosed = newStatus
 	if !newStatus {
-		// Jika merchant menyalakan toggle ke "Buka":
-		// Selalu set confirmed_open_date ke hari ini agar toko langsung buka dan tidak tertutup kembali
+		// Merchant toggles store open.
+		// Set confirmed_open_date to today to immediately open store.
 		business.ConfirmedOpenDate = &todayStr
-		// Set juga confirmed_overtime_date ke hari ini untuk mendukung merchant yang sengaja membuka toko di luar jam reguler
 		business.ConfirmedOvertimeDate = &todayStr
 	}
 
@@ -1015,7 +1001,7 @@ func (s *businessService) ToggleStoreStatus(requesterID, businessID string) (boo
 	_ = meilisearch.UpdateBusinessStatus(database.DB, businessID)
 	go meilisearch.SyncBusiness(database.DB, businessID)
 
-	// 🔔 Notifikasi ke Owner jika dilakukan oleh staf admin
+	// Alert owner if performed by staff admin.
 	if !isOwner {
 		statusStr := "Buka"
 		if newStatus {
@@ -1062,7 +1048,7 @@ func (s *businessService) ConfirmScheduleAction(requesterID, businessID string, 
 	var actionErr error
 	switch input.Action {
 	case "confirm_open", "confirm_overtime":
-		// 🔒 Gerbang KYC: Konfirmasi buka / lembur hanya boleh dilakukan jika KYC owner sudah 'verified'
+		// KYC Gate: open and overtime confirmations strictly require approved owner KYC.
 		_, ownerKYCStatus, _ := s.repo.GetOwnerKYCStatus(business.AccountID)
 		if ownerKYCStatus != "verified" {
 			if ownerKYCStatus == "pending" {
@@ -1074,14 +1060,14 @@ func (s *businessService) ConfirmScheduleAction(requesterID, businessID string, 
 			return errors.New("toko belum dapat dibuka karena pemilik toko belum menyelesaikan verifikasi identitas (KYC)")
 		}
 		if input.Action == "confirm_open" {
-			// Merchant konfirmasi: Toko siap buka sesuai jadwal hari ini
+			// Store confirmation: ready to open per daily schedule.
 			actionErr = s.repo.ConfirmOpenToday(businessID, todayStr)
 		} else {
-			// Merchant konfirmasi: Toko lanjut buka / lembur melewati jam tutup reguler
+			// Store confirmation: overtime beyond regular closing time.
 			actionErr = s.repo.ConfirmOvertimeToday(businessID, todayStr)
 		}
 	case "decline":
-		// Merchant menolak: Toko tetap tutup / langsung tutup (diizinkan tanpa KYC)
+		// Store decline: remain closed (permitted without KYC).
 		actionErr = s.repo.DeclineSchedule(businessID)
 	default:
 		return errors.New("aksi tidak valid")
@@ -1131,7 +1117,6 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 		return nil, errors.New("bisnis tidak ditemukan")
 	}
 
-	// 1. Verifikasi hak akses: Owner atau Admin toko yang aktif
 	isOwner := business.AccountID == requesterID
 	if !isOwner {
 		var assignment models.BusinessAdminAssignment
@@ -1146,7 +1131,6 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 
 	now := time.Now()
 
-	// 2. Jika mengaktifkan Live Streaming (Toggle ON)
 	if input.IsLive {
 		if input.Platform == nil || strings.TrimSpace(*input.Platform) == "" {
 			return nil, errors.New("platform live streaming wajib dipilih ('tiktok' atau 'instagram')")
@@ -1155,7 +1139,6 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 		platform := strings.ToLower(strings.TrimSpace(*input.Platform))
 		var socialURL string
 
-		// Validasi kelengkapan akun media sosial di profil toko
 		switch platform {
 		case "tiktok":
 			if business.SocialTiktok == nil || strings.TrimSpace(*business.SocialTiktok) == "" {
@@ -1229,7 +1212,6 @@ func (s *businessService) ToggleLiveStatus(requesterID, businessID string, input
 		}, nil
 	}
 
-	// 3. Jika mematikan Live Streaming (Toggle OFF)
 	business.IsLive = false
 	business.LivePlatform = nil
 	business.LiveStartedAt = nil

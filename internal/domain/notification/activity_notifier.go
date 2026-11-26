@@ -7,14 +7,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// NotifyOwnerStaffActivity mengirimkan notifikasi ke Owner (dan Supervisor jika ada)
+// NotifyOwnerStaffActivity alerts owners and supervisors of staff administrative actions.
 // saat staf melakukan tindakan berisiko tinggi (High-Risk Activity).
 //
 // Aturan:
-// 1. Jika aktor adalah Owner sendiri, tidak perlu dikirim.
-// 2. Cek apakah saklar notifikasi staf bersangkutan aktif (is_notify_owner_enabled == true).
-//    Jika dinonaktifkan oleh Owner (false), notifikasi dilewati (anti-spam).
-// 3. Notifikasi dikirimkan via FCM, In-App, dan WebSocket.
+// Skip notification if disabled by owner setting.
 func NotifyOwnerStaffActivity(
 	db *gorm.DB,
 	notifService NotificationService,
@@ -30,18 +27,16 @@ func NotifyOwnerStaffActivity(
 	}
 
 	go func() {
-		// 1. Ambil data bisnis untuk mendapatkan Owner ID
 		var biz models.Business
 		if err := db.Select("account_id, business_name").Where("business_id = ?", businessID).First(&biz).Error; err != nil {
 			return
 		}
 
-		// Jika aksi dilakukan langsung oleh Owner, jangan kirim notifikasi ke diri sendiri
+		// Do not notify self for owner actions.
 		if biz.AccountID == actorAccountID {
 			return
 		}
 
-		// 2. Cek assignment staf untuk memeriksa saklar notifikasi (is_notify_owner_enabled)
 		var assignment models.BusinessAdminAssignment
 		err := db.Select("assignment_id, role, is_notify_owner_enabled, supervisor_id").
 			Where("business_id = ? AND admin_id = ? AND (status = 'active' OR status = 'scheduled_for_deletion')", businessID, actorAccountID).
@@ -50,12 +45,11 @@ func NotifyOwnerStaffActivity(
 			return
 		}
 
-		// Jika saklar notifikasi dimatikan oleh Owner untuk staf ini, jangan kirim
+		// Skip if activity notifications are disabled for this staff member.
 		if !assignment.IsNotifyOwnerEnabled {
 			return
 		}
 
-		// 3. Ambil nama staf untuk personifikasi notifikasi
 		var staffAccount models.Account
 		staffName := "Staf"
 		if err := db.Select("first_name, last_name").Where("account_id = ?", actorAccountID).First(&staffAccount).Error; err == nil {
@@ -68,7 +62,7 @@ func NotifyOwnerStaffActivity(
 		// Siapkan daftar penerima: Owner utama
 		recipients := []string{biz.AccountID}
 
-		// Jika staf memiliki Supervisor langsung (dan bukan aktor), sertakan juga Supervisor
+		// Include direct supervisor in notifications if different from actor.
 		if assignment.SupervisorID != nil && *assignment.SupervisorID != "" && *assignment.SupervisorID != actorAccountID {
 			recipients = append(recipients, *assignment.SupervisorID)
 		}

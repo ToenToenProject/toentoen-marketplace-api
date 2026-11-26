@@ -41,7 +41,7 @@ func ConnectDB() {
 
 	log.Println("🚀 Connected to Database successfully")
 
-	// Konfigurasi Connection Pool Skala Industri (Optimal untuk AWS RDS & Auto-scaling)
+	// Configure database connection pooling.
 	sqlDB, err := DB.DB()
 	if err != nil {
 		log.Fatalf("Failed to retrieve generic database object from GORM: %v", err)

@@ -14,11 +14,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// S3Client adalah client global yang dipakai seluruh aplikasi
+// S3Client is the global AWS S3 client instance.
 var S3Client *s3.Client
 var S3PresignClient *s3.PresignClient
 
-// InitS3Client menginisialisasi koneksi ke AWS S3 menggunakan kredensial dari config
+// InitS3Client initializes the AWS S3 client session.
 func InitS3Client() {
 	cfg, err := awsconfig.LoadDefaultConfig(context.TODO(),
 		awsconfig.WithRegion(config.Envs.AWSRegion),
@@ -36,25 +36,19 @@ func InitS3Client() {
 	S3PresignClient = s3.NewPresignClient(S3Client)
 }
 
-// PresignUploadResult adalah hasil dari GeneratePresignedUploadURL
+// PresignUploadResult contains the pre-signed S3 upload URL and public retrieval URL.
 type PresignUploadResult struct {
 	PresignedURL string `json:"presigned_url"` // URL untuk di-PUT oleh client
 	PublicURL    string `json:"public_url"`    // URL publik permanen setelah upload selesai
 	Key          string `json:"key"`           // Path/key di dalam bucket S3
 }
 
-// GeneratePresignedUploadURL membuat URL sementara agar client bisa upload langsung ke S3
-// folder: folder di dalam bucket, misal "products/images"
-// filename: nama file asli, misal "foto-produk.jpg"
-// contentType: MIME type, misal "image/jpeg"
-// contentLength: ukuran file dalam bytes (opsional, jika diisi akan mengunci batas ukuran di S3)
+// GeneratePresignedUploadURL generates a temporary presigned PUT URL for direct client-to-S3 uploads.
 func GeneratePresignedUploadURL(folder, filename, contentType string, contentLength *int64) (*PresignUploadResult, error) {
-	// Bersihkan folder dari slash berlebih
 	folder = strings.Trim(folder, "/")
 
-	// Buat key unik menggunakan timestamp agar tidak bertabrakan
+	// Build unique S3 key with timestamp prefix to prevent object collisions.
 	timestamp := time.Now().UnixNano()
-	// Bersihkan nama file dari karakter berbahaya
 	safeFilename := strings.ReplaceAll(filename, " ", "-")
 	key := fmt.Sprintf("%s/%d-%s", folder, timestamp, safeFilename)
 
@@ -70,7 +64,7 @@ func GeneratePresignedUploadURL(folder, filename, contentType string, contentLen
 		putInput.ContentLength = contentLength
 	}
 
-	// Buat presigned URL yang berlaku selama 15 menit
+	// 15-minute presigned PUT URL.
 	presignResult, err := S3PresignClient.PresignPutObject(context.TODO(),
 		putInput,
 		s3.WithPresignExpires(15*time.Minute),
@@ -79,7 +73,7 @@ func GeneratePresignedUploadURL(folder, filename, contentType string, contentLen
 		return nil, fmt.Errorf("gagal membuat presigned URL: %w", err)
 	}
 
-	// URL publik permanen setelah file berhasil diupload
+	// Permanent public URL.
 	publicURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, bucket, key)
 
 	return &PresignUploadResult{

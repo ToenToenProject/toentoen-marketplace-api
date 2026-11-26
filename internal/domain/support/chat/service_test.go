@@ -38,7 +38,6 @@ func TestCleanGreetingContent(t *testing.T) {
 }
 
 func TestFormatGreetingMessage(t *testing.T) {
-	// Case 1: Akun baru dengan default "New" "Account"
 	accNew := &models.Account{
 		FirstName: "New",
 		LastName:  "Account",
@@ -53,7 +52,6 @@ func TestFormatGreetingMessage(t *testing.T) {
 		t.Errorf("resNew must not contain 'New': %s", resNew)
 	}
 
-	// Case 2: Akun hanya dengan FirstName "New" dan LastName kosong
 	accNewOnly := &models.Account{
 		FirstName: "New",
 		LastName:  "",
@@ -63,7 +61,6 @@ func TestFormatGreetingMessage(t *testing.T) {
 		t.Errorf("expected %q, got %q", expectedNew, resNewOnly)
 	}
 
-	// Case 3: Akun dengan nama asli pengguna
 	accReal := &models.Account{
 		FirstName: "Jonathan",
 		LastName:  "Saputra",
@@ -74,7 +71,6 @@ func TestFormatGreetingMessage(t *testing.T) {
 		t.Errorf("expected %q, got %q", expectedReal, resReal)
 	}
 
-	// Case 4: Akun tanpa nama tetapi punya username valid
 	accUser := &models.Account{
 		FirstName: "",
 		LastName:  "",
@@ -86,7 +82,6 @@ func TestFormatGreetingMessage(t *testing.T) {
 		t.Errorf("expected %q, got %q", expectedUser, resUser)
 	}
 
-	// Case 5: Akun nil
 	resNil := formatGreetingMessage(nil)
 	if resNil != expectedNew {
 		t.Errorf("expected %q, got %q", expectedNew, resNil)

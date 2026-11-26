@@ -6,7 +6,7 @@ import "time"
 // CORE MODELS
 // ================================================================
 
-// LocationUpdate adalah payload yang dikirim oleh customer via WebSocket
+// LocationUpdate represents client location telemetry over WebSocket.
 type LocationUpdate struct {
 	Lat       float64 `json:"lat" validate:"required,min=-90,max=90"`
 	Lng       float64 `json:"lng" validate:"required,min=-180,max=180"`
@@ -16,7 +16,7 @@ type LocationUpdate struct {
 	Timestamp int64   `json:"timestamp,omitempty"` // Unix timestamp dari device
 }
 
-// NearbyMerchant adalah hasil query merchant terdekat yang dikirim ke customer
+// Dispatch to customer.
 type NearbyMerchant struct {
 	BusinessID   string  `json:"business_id"`
 	BusinessName string  `json:"business_name"`
@@ -28,7 +28,7 @@ type NearbyMerchant struct {
 	StoreType    string  `json:"store_type,omitempty"`
 }
 
-// SubscribeAreaRequest adalah payload customer untuk subscribe update di area tertentu
+// SubscribeAreaRequest represents client viewport subscription bounds.
 type SubscribeAreaRequest struct {
 	Lat      float64 `json:"lat" validate:"required"`
 	Lng      float64 `json:"lng" validate:"required"`
@@ -39,13 +39,13 @@ type SubscribeAreaRequest struct {
 // WEBSOCKET MESSAGE TYPES
 // ================================================================
 
-// WSIncomingMessage adalah format pesan masuk dari client WebSocket
+// WSIncomingMessage represents client WebSocket payload format.
 type WSIncomingMessage struct {
 	Type string      `json:"type"` // LOCATION_UPDATE, SUBSCRIBE_AREA, UNSUBSCRIBE
 	Data interface{} `json:"data,omitempty"`
 }
 
-// WSLocationEvent adalah event yang dikirim ke subscriber saat ada perubahan lokasi
+// WSLocationEvent represents location updates dispatched to subscribers.
 type WSLocationEvent struct {
 	Type string      `json:"type"` // NEARBY_UPDATE, MERCHANT_ONLINE, MERCHANT_OFFLINE
 	Data interface{} `json:"data"`
@@ -71,16 +71,16 @@ type ThrottleState struct {
 // ================================================================
 
 const (
-	// Redis GEO key untuk lokasi semua merchant aktif
+	// Redis GEO key for active merchant coordinates.
 	KeyMerchantLocations = "live:merchants"
 
-	// Redis HASH key untuk metadata merchant (prefix + business_id)
+	// Redis HASH key for merchant metadata.
 	// Fields: business_name, logo_url, is_open, store_type, updated_at
 	KeyMerchantMetaPrefix = "live:meta:"
 
-	// Redis key untuk menyimpan set customer yang sedang subscribe
+	// Redis set key for subscribed customers.
 	KeyCustomerSubPrefix = "live:sub:"
 
-	// TTL untuk metadata merchant di Redis (sync ulang dari DB jika expired)
+	// TTL for cached merchant metadata in Redis.
 	MerchantMetaTTL = 30 * time.Minute
 )

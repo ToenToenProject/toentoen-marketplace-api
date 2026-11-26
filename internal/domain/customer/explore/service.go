@@ -65,14 +65,14 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 	}
 	req.Scope = scope
 
-	// 🔍 Query Understanding: Parsing natural language intent & hard filters
+	// Query understanding: parse natural language intent and extract hard filters.
 	rawKeyword := strings.TrimSpace(req.Keyword)
 	var parsedIntent *ParsedSearchIntent
 	if rawKeyword != "" {
 		parsed := ParseSearchQuery(rawKeyword)
 		parsedIntent = &parsed
 
-		// Terapkan Hard Filter otomatis dari query bahasa natural jika belum diset eksplisit oleh user
+		// Apply extracted query filters if not explicitly provided in request parameters.
 		if parsed.DetectedOpenNow && req.IsOpenNow == nil {
 			openTrue := true
 			req.IsOpenNow = &openTrue
@@ -90,8 +90,6 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 			}
 		}
 
-		// Gunakan clean query agar frasa modifier ("buka sekarang", "dekat sini", "ada wifi")
-		// tidak mengotori pencarian teks utama di Meilisearch
 		req.Keyword = parsed.CleanQuery
 	}
 
@@ -152,7 +150,6 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 		}(entry)
 	}
 
-	// 1. Scope: PRODUCT
 	if req.Scope == "product" {
 		docs, summary, err := s.repo.SearchProducts(req)
 		if err != nil {
@@ -199,7 +196,7 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 		}, nil
 	}
 
-	// 2. Scope: STORE atau ALL
+	// Search scope: store or all.
 	docs, summary, err := s.repo.SearchBusinesses(req)
 	if err != nil {
 		return ExploreResponse{}, err
@@ -213,10 +210,9 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 		docs = []MeiliBusinessDocument{}
 	}
 
-	// Siapkan sinonim ekspansi untuk menghitung Match Explanation
+	// Expand synonyms to compute match explanation rationale.
 	expandedTerms := myMeili.ExpandKeywordWithSynonyms(req.Keyword)
 
-	// Pastikan original koordinat Latitude, Longitude, Lat, Lng berpresisi tinggi terisi
 	// sekaligus hitung Match Explanation (match_type, matched_offering, match_reason)
 	for i := range docs {
 		if docs[i].Latitude == nil && (docs[i].Geo.Lat != 0 || docs[i].Geo.Lng != 0) {
@@ -232,7 +228,7 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 		}
 	}
 
-	// Update parsedIntent entity_type berdasarkan hasil match dominan pertama jika masih GENERAL
+	// Refine entity_type based on first dominant match if general.
 	if parsedIntent != nil && parsedIntent.EntityType == "GENERAL" && len(docs) > 0 {
 		switch docs[0].MatchType {
 		case "EXACT_OFFERING", "RELATED_OFFERING":
@@ -282,8 +278,8 @@ func (s *exploreService) GetExploreBusinesses(req SearchRequest) (ExploreRespons
 	}, nil
 }
 
-// filterMatchedProductsByPrice memfilter item pada matched_products agar produk yang harga efektifnya
-// (final_price atau price) berada di bawah min_price atau di atas max_price tidak disertakan.
+// filterMatchedProductsByPrice filters matched products by effective price range.
+// Exclude products whose effective price falls outside min/max range.
 func filterMatchedProductsByPrice(products []MatchedProductPreview, minPrice, maxPrice *float64) []MatchedProductPreview {
 	if (minPrice == nil && maxPrice == nil) || len(products) == 0 {
 		return products
@@ -322,7 +318,7 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 		query.Limit = 20
 	}
 
-	// 1. Candidate Retrieval (Ambil hingga 250 postingan kandidat)
+	// Candidate retrieval: fetch up to 250 feed post candidates.
 	candidates, err := s.repo.GetCandidatePosts(query.CategoryID, 250)
 	if err != nil {
 		return nil, err
@@ -332,7 +328,6 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 		return []models.PostResponse{}, nil
 	}
 
-	// 2. Load User Profiles & Sinyal Historis
 	var likedMap map[string]bool
 	var bookmarkedBusinesses map[string]bool
 	var userAffinities map[int64]float64
@@ -363,7 +358,6 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 		seenPostIDs = make(map[string]bool)
 	}
 
-	// 3. Multi-Factor Scoring
 	now := time.Now()
 	var scoredList []scoredPost
 
@@ -406,7 +400,7 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 			bookmarkBoost = 1.5
 		}
 
-		// Live Streaming Boost (+2.0 jika toko sedang live streaming)
+		// Live streaming boost: apply score bonus if store is currently streaming.
 		liveBoost := 0.0
 		if p.Business != nil && p.Business.IsLive {
 			liveBoost = 2.0
@@ -421,7 +415,7 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 			bookmarkBoost +
 			liveBoost
 
-		// G. Seen Penalty (Jika postingan sudah dilihat dalam 24 jam terakhir, beri penalti agar konten baru naik)
+		// Seen penalty: downrank posts viewed within the last 24 hours to surface fresh content.
 		if seenPostIDs[p.PostID] {
 			finalScore *= 0.2
 		}
@@ -432,12 +426,11 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 		})
 	}
 
-	// 4. Urutkan berdasarkan Skor Tertinggi
 	sort.Slice(scoredList, func(i, j int) bool {
 		return scoredList[i].score > scoredList[j].score
 	})
 
-	// 5. Diversity Interleaving Filter (Maksimal 1 postingan per toko dalam sliding window 3 item)
+	// Diversity interleaving: limit to 1 post per business within a sliding window of 3 items.
 	var diversePosts []models.BusinessPost
 	recentBusinesses := make([]string, 0, 3)
 
@@ -461,7 +454,7 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 		}
 	}
 
-	// Jika filter diversity menyaring terlalu banyak, tambahkan sisa postingan
+	// Backfill remaining posts if diversity filter over-prunes candidates.
 	if len(diversePosts) < len(scoredList) {
 		included := make(map[string]bool)
 		for _, dp := range diversePosts {
@@ -474,7 +467,6 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 		}
 	}
 
-	// 6. Pagination Slice
 	offset := (query.Page - 1) * query.Limit
 	if offset >= len(diversePosts) {
 		return []models.PostResponse{}, nil
@@ -540,7 +532,7 @@ func (s *exploreService) GetTimelinePosts(query models.TimelineQueryInput, curre
 	return response, nil
 }
 
-// RecordFeedEvents memproses batch event interaksi dari mobile app secara asinkron
+// RecordFeedEvents ingests client interaction event batches asynchronously.
 func (s *exploreService) RecordFeedEvents(accountID string, batch models.FeedEventBatchInput) error {
 	if len(batch.Events) == 0 {
 		return nil
@@ -566,7 +558,7 @@ func (s *exploreService) RecordFeedEvents(accountID string, batch models.FeedEve
 		}
 		interactions = append(interactions, interaction)
 
-		// Hitung bobot delta untuk kategori
+		// Compute category preference delta weights.
 		if strings.TrimSpace(accountID) != "" && ev.CategoryID != nil && *ev.CategoryID > 0 {
 			var delta float64
 			switch ev.ActionType {

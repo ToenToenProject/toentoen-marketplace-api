@@ -14,7 +14,7 @@ func TruncateString(s string, maxLen int) string {
 	return s
 }
 
-// MaskEmail memotong tampilan email (contoh: b***o@gmail.com)
+// MaskEmail masks email addresses for privacy display (e.g. b***o@gmail.com).
 func MaskEmail(email string) string {
 	parts := strings.Split(email, "@")
 	if len(parts) != 2 {
@@ -29,7 +29,7 @@ func MaskEmail(email string) string {
 	return string(username[0]) + "***" + string(username[len(username)-1]) + "@" + domain
 }
 
-// MaskPhoneNumber memotong tampilan nomor telepon (contoh: 0812****789)
+// MaskPhoneNumber masks phone numbers for privacy display (e.g. 0812****789).
 func MaskPhoneNumber(phone string) string {
 	if len(phone) <= 6 {
 		return phone
@@ -41,7 +41,7 @@ func MaskPhoneNumber(phone string) string {
 
 var nonAlphanumericRegex = regexp.MustCompile(`[^a-z0-9_]`)
 
-// NormalizeHashtag membersihkan string hashtag (menghapus #, menghapus spasi, lowercase, dan membuang simbol non-alfanumerik)
+// NormalizeHashtag cleans a hashtag by stripping prefixes/spaces, lowercasing, and removing non-alphanumeric runes.
 func NormalizeHashtag(tag string) string {
 	clean := strings.TrimSpace(tag)
 	for strings.HasPrefix(clean, "#") {
@@ -53,7 +53,7 @@ func NormalizeHashtag(tag string) string {
 	return clean
 }
 
-// NormalizeHashtags memproses slice of hashtags, membuang string kosong, dan mendeduplikasi hasilnya
+// NormalizeHashtags normalizes, deduplicates, and strips empty entries from a list of hashtags.
 func NormalizeHashtags(tags []string) []string {
 	if len(tags) == 0 {
 		return []string{}
@@ -73,7 +73,7 @@ func NormalizeHashtags(tags []string) []string {
 	return result
 }
 
-// ValidateHashtags memvalidasi jumlah dan panjang maksimal tiap kata pada hashtags
+// ValidateHashtags validates the maximum count and maximum character length per hashtag.
 func ValidateHashtags(hashtags []string, maxCount, maxLen int) error {
 	if len(hashtags) > maxCount {
 		return fmt.Errorf("jumlah hashtag maksimal %d kata (diberikan: %d)", maxCount, len(hashtags))
@@ -86,7 +86,7 @@ func ValidateHashtags(hashtags []string, maxCount, maxLen int) error {
 	return nil
 }
 
-// CleanCustomTags merapikan slice custom tags (trim spasi, buang string kosong, dan deduplikasi case-insensitive)
+// CleanCustomTags trims whitespace, removes empty entries, and case-insensitively deduplicates custom tags.
 func CleanCustomTags(tags []string) []string {
 	if len(tags) == 0 {
 		return []string{}
@@ -107,7 +107,7 @@ func CleanCustomTags(tags []string) []string {
 	return result
 }
 
-// ValidateCustomTags memvalidasi jumlah dan panjang maksimal tiap kata pada custom tags
+// ValidateCustomTags validates the maximum count and maximum character length per custom tag.
 func ValidateCustomTags(tags []string, maxCount, maxLen int) error {
 	if len(tags) > maxCount {
 		return fmt.Errorf("jumlah custom tag maksimal %d (diberikan: %d)", maxCount, len(tags))

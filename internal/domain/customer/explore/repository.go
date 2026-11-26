@@ -151,9 +151,8 @@ func productMatchesHashtags(doc MeiliProductDocument, targetHashtags []string) b
 	return false
 }
 
-// rankBusinessDocuments membagi hasil pencarian toko ke dalam dua kelompok:
-// Tier 1 (within_radius) & Tier 2 (outside_radius).
-// Di dalam masing-masing kelompok, hashtag booster diutamakan kemudian diurutkan sesuai sort pilihan user.
+// rankBusinessDocuments partitions business search results into Tier 1 (within radius) and Tier 2 (outside radius),
+// prioritizing hashtag relevance within each tier before applying user sorting.
 func rankBusinessDocuments(docs []MeiliBusinessDocument, req SearchRequest, radiusKm float64) ([]MeiliBusinessDocument, int64, int64) {
 	var within, outside []MeiliBusinessDocument
 
@@ -178,7 +177,7 @@ func rankBusinessDocuments(docs []MeiliBusinessDocument, req SearchRequest, radi
 
 	sortTier := func(items []MeiliBusinessDocument) {
 		sort.SliceStable(items, func(i, j int) bool {
-			// 1. Soft Filter: Hashtag Booster
+			// Hashtag relevance booster.
 			if len(req.Hashtags) > 0 {
 				iMatch := businessMatchesHashtags(items[i], req.Hashtags)
 				jMatch := businessMatchesHashtags(items[j], req.Hashtags)
@@ -190,7 +189,6 @@ func rankBusinessDocuments(docs []MeiliBusinessDocument, req SearchRequest, radi
 				}
 			}
 
-			// 2. Sort Order Sesuai Pilihan User
 			switch req.Sort {
 			case "nearest":
 				return items[i].Distance < items[j].Distance
@@ -266,7 +264,7 @@ func rankProductDocuments(docs []MeiliProductDocument, req SearchRequest, radius
 
 	sortTier := func(items []MeiliProductDocument) {
 		sort.SliceStable(items, func(i, j int) bool {
-			// 1. Soft Filter: Hashtag Booster
+			// Hashtag relevance booster.
 			if len(req.Hashtags) > 0 {
 				iMatch := productMatchesHashtags(items[i], req.Hashtags)
 				jMatch := productMatchesHashtags(items[j], req.Hashtags)
@@ -278,7 +276,6 @@ func rankProductDocuments(docs []MeiliProductDocument, req SearchRequest, radius
 				}
 			}
 
-			// 2. Sort Order Sesuai Pilihan User
 			switch req.Sort {
 			case "nearest":
 				return items[i].Distance < items[j].Distance
@@ -317,7 +314,6 @@ func rankProductDocuments(docs []MeiliProductDocument, req SearchRequest, radius
 }
 
 func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusinessDocument, SearchSummary, error) {
-	// 1. Resolusi Kategori Dua Arah (Nama <-> ID)
 	if req.Category != "" && len(req.CategoryIDs) == 0 {
 		var foundCatIDs []int64
 		r.db.Table("business_categories").Where("LOWER(name) = LOWER(?)", strings.TrimSpace(req.Category)).Pluck("category_id", &foundCatIDs)
@@ -330,7 +326,6 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 		}
 	}
 
-	// 2. Resolusi Tag Dua Arah (Nama String <-> ID Integer)
 	if len(req.TagNames) > 0 {
 		lowerNames := make([]string, len(req.TagNames))
 		for i, n := range req.TagNames {
@@ -356,7 +351,7 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 
 	radiusKm := float64(req.Radius) / 1000.0
 
-	// 3. Eksekusi Pencarian via Meilisearch jika client aktif
+	// Execute search via Meilisearch when available.
 	if myMeili.Client != nil {
 		index := myMeili.Client.Index("businesses")
 
@@ -372,17 +367,14 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 
 		var filters []string
 
-		// Gatekeeping: is_open_now
 		if req.IsOpenNow != nil {
 			filters = append(filters, fmt.Sprintf("is_open = %t", *req.IsOpenNow))
 		}
 
-		// Gatekeeping: is_promo
 		if req.IsPromo != nil {
 			filters = append(filters, fmt.Sprintf("has_promo = %t", *req.IsPromo))
 		}
 
-		// Gatekeeping: store_type
 		if len(req.StoreTypes) > 0 {
 			var stConds []string
 			for _, st := range req.StoreTypes {
@@ -391,7 +383,6 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 			filters = append(filters, "("+strings.Join(stConds, " OR ")+")")
 		}
 
-		// Gatekeeping: min_price & max_price
 		if req.MinPrice != nil {
 			filters = append(filters, fmt.Sprintf("max_price >= %f", *req.MinPrice))
 		}
@@ -399,7 +390,6 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 			filters = append(filters, fmt.Sprintf("min_price <= %f", *req.MaxPrice))
 		}
 
-		// Gatekeeping: stock_types
 		if len(req.StockTypes) > 0 {
 			var stConds []string
 			for _, st := range req.StockTypes {
@@ -518,7 +508,6 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 		}
 	}
 
-	// 4. PostgreSQL Fallback jika Meilisearch mengembalikan 0 data atau offline/error
 	log.Printf("ℹ️ Menjalankan fallback PostgreSQL untuk explore bisnis (keyword='%s', category='%s', catIDs=%v, tags=%v)", req.Keyword, req.Category, req.CategoryIDs, req.TagNames)
 	return r.searchBusinessesFromPostgres(req)
 }
@@ -533,7 +522,7 @@ func (r *exploreRepository) SearchProducts(req SearchRequest) ([]MeiliProductDoc
 
 	radiusKm := float64(req.Radius) / 1000.0
 
-	// Eksekusi Meilisearch jika client aktif
+	// Execute Meilisearch query when client is active.
 	if myMeili.Client != nil {
 		index := myMeili.Client.Index("products")
 
@@ -549,17 +538,14 @@ func (r *exploreRepository) SearchProducts(req SearchRequest) ([]MeiliProductDoc
 
 		var filters []string
 
-		// Gatekeeping: is_open
 		if req.IsOpenNow != nil {
 			filters = append(filters, fmt.Sprintf("is_open = %t", *req.IsOpenNow))
 		}
 
-		// Gatekeeping: is_promo / is_discounted
 		if req.IsPromo != nil {
 			filters = append(filters, fmt.Sprintf("is_discounted = %t", *req.IsPromo))
 		}
 
-		// Gatekeeping: store_type
 		if len(req.StoreTypes) > 0 {
 			var stConds []string
 			for _, st := range req.StoreTypes {
@@ -568,7 +554,6 @@ func (r *exploreRepository) SearchProducts(req SearchRequest) ([]MeiliProductDoc
 			filters = append(filters, "("+strings.Join(stConds, " OR ")+")")
 		}
 
-		// Gatekeeping: min_price & max_price
 		if req.MinPrice != nil {
 			filters = append(filters, fmt.Sprintf("final_price >= %f", *req.MinPrice))
 		}
@@ -576,7 +561,6 @@ func (r *exploreRepository) SearchProducts(req SearchRequest) ([]MeiliProductDoc
 			filters = append(filters, fmt.Sprintf("final_price <= %f", *req.MaxPrice))
 		}
 
-		// Gatekeeping: stock_type
 		if len(req.StockTypes) > 0 {
 			var stConds []string
 			for _, st := range req.StockTypes {
@@ -1033,7 +1017,7 @@ func (r *exploreRepository) GetTimelinePosts(limit, offset int) ([]models.Busine
 	return posts, err
 }
 
-// GetCandidatePosts mengambil kandidat postingan (hingga 200 item) untuk diproses oleh scoring engine
+// GetCandidatePosts retrieves candidate posts (up to 200) for feed scoring engine.
 func (r *exploreRepository) GetCandidatePosts(categoryID int64, limit int) ([]models.BusinessPost, error) {
 	if limit <= 0 {
 		limit = 200

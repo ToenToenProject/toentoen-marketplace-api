@@ -40,8 +40,7 @@ func (r *productDetailRepository) GetSimilarProducts(tags []string, limit int, e
 	query := r.db.Where("product_id != ? AND is_active = ?", excludeProductID, true)
 
 	if len(tags) > 0 {
-		// PostgreSQL JSONB array contains operator ?|
-		// Find products that have ANY of these tags
+		// Match products containing any matching tags via JSONB array overlap.
 		query = query.Where("tags ?| array[?]", tags)
 	}
 
@@ -57,7 +56,7 @@ func (r *productDetailRepository) GetSimilarProducts(tags []string, limit int, e
 func (r *productDetailRepository) GetActivePromotionForProduct(businessID, productID string) (*models.Promotion, *models.PromotionProduct, error) {
 	now := time.Now()
 
-	// 1. Cek dari tabel promotion_products & promotions
+	// Check promotion_products and promotions tables.
 	var pp models.PromotionProduct
 	err := r.db.
 		Preload("Product").
@@ -74,7 +73,7 @@ func (r *productDetailRepository) GetActivePromotionForProduct(businessID, produ
 		}
 	}
 
-	// 2. Cek jika produk merupakan main_product_id dari promosi aktif
+	// Check if product is the main featured product of an active promotion.
 	var promo models.Promotion
 	errMain := r.db.
 		Preload("Post").

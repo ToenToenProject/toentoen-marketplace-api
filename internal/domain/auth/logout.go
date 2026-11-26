@@ -3,6 +3,8 @@ package auth
 import (
 	"time"
 	"toentoen-backend/internal/config"
+	"toentoen-backend/internal/constants"
+	"toentoen-backend/pkg/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -29,8 +31,5 @@ func Logout(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"status":  "success",
-		"message": "Berhasil logout. Semua sesi telah dibersihkan.",
-	})
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil logout. Semua sesi telah dibersihkan.", nil)
 }

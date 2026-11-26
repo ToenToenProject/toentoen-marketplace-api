@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// Action types untuk interaksi feed
+// Interaction types for feed engagement tracking.
 const (
 	ActionImpression   = "impression"   // Muncul di layar
 	ActionDwell        = "dwell"        // Berhenti melihat (> 2 detik)
@@ -17,7 +17,7 @@ const (
 	ActionShare        = "share"        // Bagikan postingan
 )
 
-// UserPostInteraction mencatat log interaksi pengguna terhadap postingan feed
+// UserPostInteraction records user interaction events on feed posts.
 type UserPostInteraction struct {
 	InteractionID string    `gorm:"primaryKey;column:interaction_id" json:"interaction_id"`
 	AccountID     string    `gorm:"column:account_id;index" json:"account_id"`
@@ -37,7 +37,7 @@ func (UserPostInteraction) TableName() string {
 	return "user_post_interactions"
 }
 
-// UserCategoryAffinity mencatat skor preferensi minat kategori per akun pengguna
+// UserCategoryAffinity tracks category preference scores per user account.
 type UserCategoryAffinity struct {
 	AccountID        string    `gorm:"primaryKey;column:account_id" json:"account_id"`
 	CategoryID       int64     `gorm:"primaryKey;column:category_id" json:"category_id"`
@@ -55,7 +55,6 @@ func (UserCategoryAffinity) TableName() string {
 	return "user_category_affinities"
 }
 
-// DTO untuk Batching Events dari Front End Mobile
 type FeedEventInput struct {
 	PostID      string `json:"post_id" validate:"required"`
 	BusinessID  string `json:"business_id"`
@@ -68,7 +67,6 @@ type FeedEventBatchInput struct {
 	Events []FeedEventInput `json:"events" validate:"required,min=1,max=100"`
 }
 
-// DTO untuk Query Timeline / Feed Rekomendasi
 type TimelineQueryInput struct {
 	Lat        float64 `json:"lat"`
 	Lng        float64 `json:"lng"`

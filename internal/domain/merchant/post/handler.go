@@ -112,13 +112,11 @@ func (h *BusinessPostHandler) DeletePost(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	postID := strings.TrimSpace(c.Params("post_id"))
 
-	// Ambil data user yang sedang login
 	requesterID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	// Panggil service untuk mengeksekusi penghapusan
 	if errSvc := h.service.DeletePost(requesterID, role, businessID, postID); errSvc != nil {
 		if strings.Contains(errSvc.Error(), "forbidden") {
 			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)

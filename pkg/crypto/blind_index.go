@@ -9,7 +9,7 @@ import (
 	"toentoen-backend/internal/config"
 )
 
-// getBlindIndexKey mengambil secret key untuk HMAC dari config
+// getBlindIndexKey resolves the blind index HMAC secret key from configuration.
 func getBlindIndexKey() []byte {
 	keyStr := ""
 	if config.Envs != nil {
@@ -21,8 +21,7 @@ func getBlindIndexKey() []byte {
 	return []byte(keyStr)
 }
 
-// GenerateBlindIndex menghasilkan hash deterministik HMAC-SHA256 dari sebuah input (seperti NIK atau nomor identitas).
-// Ini memungkinkan pencarian cepat / pengecekan duplikasi pada basis data tanpa perlu mendekripsi ciphertext.
+// GenerateBlindIndex computes a deterministic HMAC-SHA256 hash for fast exact-match lookups without decrypting ciphertext.
 func GenerateBlindIndex(input string) string {
 	cleaned := strings.TrimSpace(input)
 	if cleaned == "" {

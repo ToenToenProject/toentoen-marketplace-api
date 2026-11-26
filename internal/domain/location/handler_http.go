@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// HTTPLocationHandler menangani REST API untuk live location (fallback & snapshot)
+// HTTPLocationHandler serves REST endpoints for live location queries.
 type HTTPLocationHandler struct {
 	service *LocationService
 }
@@ -18,8 +18,7 @@ func NewHTTPLocationHandler(service *LocationService) *HTTPLocationHandler {
 	return &HTTPLocationHandler{service: service}
 }
 
-// GetNearbyMerchants mengembalikan daftar merchant terdekat dari posisi customer
-// GET /api/v1/location/nearby?lat=X&lng=Y&radius=5&limit=50
+// GetNearbyMerchants returns nearest merchants from customer location.
 func (h *HTTPLocationHandler) GetNearbyMerchants(c *fiber.Ctx) error {
 	latStr := c.Query("lat")
 	lngStr := c.Query("lng")
@@ -68,7 +67,6 @@ func (h *HTTPLocationHandler) GetNearbyMerchants(c *fiber.Ctx) error {
 }
 
 // TrackMerchant mengambil posisi terkini satu merchant tertentu
-// GET /api/v1/location/track/:merchant_id
 func (h *HTTPLocationHandler) TrackMerchant(c *fiber.Ctx) error {
 	merchantID := c.Params("merchant_id")
 	if merchantID == "" {
@@ -77,7 +75,7 @@ func (h *HTTPLocationHandler) TrackMerchant(c *fiber.Ctx) error {
 
 	merchant, err := h.service.GetMerchantPosition(merchantID)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusNotFound, "D1", "Merchant tidak ditemukan atau tidak sedang aktif", nil)
+		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, "Merchant tidak ditemukan atau tidak sedang aktif", nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil posisi merchant", fiber.Map{
@@ -85,8 +83,7 @@ func (h *HTTPLocationHandler) TrackMerchant(c *fiber.Ctx) error {
 	})
 }
 
-// UpdateLocationHTTP adalah fallback REST endpoint jika WebSocket terputus
-// POST /api/v1/location/update
+// UpdateLocationHTTP is a fallback REST endpoint when WebSocket disconnects.
 func (h *HTTPLocationHandler) UpdateLocationHTTP(c *fiber.Ctx) error {
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {

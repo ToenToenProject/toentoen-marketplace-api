@@ -11,24 +11,24 @@ import (
 
 const redisChannel = "signal_events"
 
-// WSEvent adalah format standar event yang dikirim ke client via WebSocket
+// WSEvent represents the standard WebSocket payload envelope.
 type WSEvent struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`
 }
 
-// MessageHandler adalah interface untuk handler pesan masuk dari WebSocket
+// MessageHandler processes incoming WebSocket messages.
 type MessageHandler interface {
 	HandleMessage(client *Client, msgType string, rawData json.RawMessage)
 }
 
-// incomingMessage adalah format pesan masuk dari client WebSocket
+// incomingMessage represents a parsed incoming WebSocket payload.
 type incomingMessage struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data,omitempty"`
 }
 
-// Hub mengelola semua koneksi WebSocket aktif
+// Hub coordinates active WebSocket client sessions and broadcasts.
 type Hub struct {
 	// clients: map[accountID] → set of *Client
 	clients map[string]map[*Client]bool
@@ -39,12 +39,12 @@ type Hub struct {
 
 	rdb *redis.Client
 
-	// Message handlers yang terdaftar (key: prefix tipe pesan)
+	// Registered message handlers keyed by message type prefix.
 	messageHandlers map[string]MessageHandler
 	handlerMu       sync.RWMutex
 }
 
-// NewHub membuat Hub baru dengan koneksi Redis untuk Pub/Sub
+// NewHub initializes WebSocket hub with Redis pub/sub support.
 func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
 		clients:         make(map[string]map[*Client]bool),
@@ -55,9 +55,9 @@ func NewHub(rdb *redis.Client) *Hub {
 	}
 }
 
-// RegisterMessageHandler mendaftarkan handler untuk tipe pesan tertentu
+// RegisterMessageHandler registers a handler for specific message types.
 // Contoh: hub.RegisterMessageHandler("location", locationWSHandler)
-// Akan menangani pesan dengan type: "LOCATION_UPDATE", "SUBSCRIBE_AREA", dll.
+// Handles messages for registered type prefixes.
 func (h *Hub) RegisterMessageHandler(name string, handler MessageHandler) {
 	h.handlerMu.Lock()
 	defer h.handlerMu.Unlock()
@@ -65,7 +65,7 @@ func (h *Hub) RegisterMessageHandler(name string, handler MessageHandler) {
 	log.Printf("📡 WS message handler registered: %s", name)
 }
 
-// HandleIncomingMessage meroute pesan masuk dari client ke handler yang sesuai
+// HandleIncomingMessage routes incoming WebSocket client messages to matching handlers.
 func (h *Hub) HandleIncomingMessage(client *Client, rawMsg []byte) {
 	var msg incomingMessage
 	if err := json.Unmarshal(rawMsg, &msg); err != nil {
@@ -81,8 +81,7 @@ func (h *Hub) HandleIncomingMessage(client *Client, rawMsg []byte) {
 	h.handlerMu.RLock()
 	defer h.handlerMu.RUnlock()
 
-	// Cari handler yang cocok (semua handler menerima semua tipe, 
-	// handler sendiri yang memutuskan apakah tipe ini relevan)
+	// Route to handlers registered for message type prefix.
 	for _, handler := range h.messageHandlers {
 		handler.HandleMessage(client, msg.Type, msg.Data)
 	}
@@ -121,13 +120,13 @@ func (h *Hub) Run() {
 	}
 }
 
-// redisMessage adalah wrapper untuk pesan yang dikirim via Redis Pub/Sub
+// redisMessage wraps broadcast payloads dispatched over Redis Pub/Sub.
 type redisMessage struct {
 	TargetIDs []string `json:"target_ids"` // Daftar account_id tujuan
 	Event     WSEvent  `json:"event"`
 }
 
-// subscribeRedis mendengarkan event dari Redis channel
+// subscribeRedis subscribes to broadcast channels on Redis Pub/Sub.
 func (h *Hub) subscribeRedis() {
 	if h.rdb == nil {
 		log.Println("⚠️ Redis tidak tersedia, Pub/Sub dinonaktifkan")
@@ -148,15 +147,14 @@ func (h *Hub) subscribeRedis() {
 			continue
 		}
 
-		// Kirim event ke semua target yang terkoneksi di server ini
 		h.deliverToLocal(rm.TargetIDs, rm.Event)
 	}
 }
 
-// publishToRedis mengirimkan event ke Redis channel agar bisa diterima oleh semua server
+// publishToRedis broadcasts events across multi-instance nodes via Redis pub/sub.
 func (h *Hub) publishToRedis(targetIDs []string, event WSEvent) {
 	if h.rdb == nil {
-		// Fallback: kirim langsung secara lokal jika Redis tidak tersedia
+		// Fallback: deliver locally when Redis is unavailable.
 		h.deliverToLocal(targetIDs, event)
 		return
 	}
@@ -178,7 +176,7 @@ func (h *Hub) publishToRedis(targetIDs []string, event WSEvent) {
 	}
 }
 
-// deliverToLocal mengirimkan event ke client yang terkoneksi di server ini saja
+// deliverToLocal delivers events to clients connected to this node.
 func (h *Hub) deliverToLocal(targetIDs []string, event WSEvent) {
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -197,7 +195,7 @@ func (h *Hub) deliverToLocal(targetIDs []string, event WSEvent) {
 	}
 }
 
-// safeSend mengirim data ke channel dengan pemulihan panic jika channel tertutup secara bersamaan saat disconnect
+// safeSend delivers event payload safely, recovering if peer disconnected.
 func safeSend(ch chan []byte, data []byte) {
 	defer func() {
 		_ = recover()
@@ -205,12 +203,12 @@ func safeSend(ch chan []byte, data []byte) {
 	select {
 	case ch <- data:
 	default:
-		// Buffer penuh, skip agar tidak blocking
+		// Drop event if client buffer is full to prevent blocking.
 	}
 }
 
 // ================================================================
-// PUBLIC API — dipanggil dari service layer
+// Public API invoked by domain services.
 // ================================================================
 
 // SendToUser mengirimkan event ke satu user tertentu
@@ -218,7 +216,7 @@ func (h *Hub) SendToUser(accountID string, event WSEvent) {
 	h.publishToRedis([]string{accountID}, event)
 }
 
-// SendToAccount adalah alias untuk SendToUser
+// SendToAccount is an alias for SendToUser.
 func (h *Hub) SendToAccount(accountID string, event WSEvent) {
 	h.SendToUser(accountID, event)
 }
@@ -231,7 +229,7 @@ func (h *Hub) BroadcastToUsers(accountIDs []string, event WSEvent) {
 	h.publishToRedis(accountIDs, event)
 }
 
-// BroadcastToRole mengirimkan event ke semua user aktif dengan role tertentu
+// BroadcastToRole delivers events to all active users matching a role.
 func (h *Hub) BroadcastToRole(role string, event WSEvent) {
 	h.mu.RLock()
 	var targetIDs []string

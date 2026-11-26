@@ -147,7 +147,7 @@ func (r *repository) UpdateReportResolution(reportID, status, adminNote, resolve
 		"status": strings.ToLower(strings.TrimSpace(status)),
 	}
 
-	// resolved_at hanya diset untuk status terminal (resolved, rejected, dismissed)
+	// resolved_at is set for terminal statuses (resolved, rejected, dismissed).
 	terminalStatuses := map[string]bool{"resolved": true, "rejected": true, "dismissed": true}
 	if terminalStatuses[strings.ToLower(strings.TrimSpace(status))] {
 		updates["resolved_at"] = gorm.Expr("NOW()")
@@ -176,12 +176,10 @@ func (r *repository) TakedownTargetContent(targetType, targetID string) error {
 			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessReviewComment{})
 			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPostComment{})
 		case "review":
-			// Bersihkan relasi ulasan toko
 			_ = tx.Table("business_review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
 			_ = tx.Table("business_review_comments").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
 			_ = tx.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Review{})
 
-			// Bersihkan relasi ulasan produk
 			_ = tx.Table("product_review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
 			_ = tx.Table("product_review_comments").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
 			_ = tx.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReview{})

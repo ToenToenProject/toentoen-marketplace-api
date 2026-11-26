@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"crypto/subtle"
 	"strconv"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/constants"
@@ -25,7 +26,15 @@ func (h *NotificationHandler) GetMyNotifications(c *fiber.Ctx) error {
 	accountID := accountIDValue.(string)
 
 	page, _ := strconv.Atoi(c.Query("page", "1"))
+	if page < 1 {
+		page = 1
+	}
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	if limit < 1 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
 
 	notifs, total, err := h.service.GetMyNotifications(accountID, page, limit)
 	if err != nil {
@@ -126,7 +135,7 @@ func (h *NotificationHandler) DeleteAllNotifications(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Semua notifikasi berhasil dihapus", nil)
 }
 
-// InternalNotificationInput payload untuk endpoint internal antar-service
+// InternalNotificationInput represents internal service notification payload.
 type InternalNotificationInput struct {
 	RecipientIDs   []string               `json:"recipient_ids"`
 	TriggerActorID string                 `json:"trigger_actor_id"`
@@ -137,13 +146,20 @@ type InternalNotificationInput struct {
 	Data           map[string]interface{} `json:"data"`
 }
 
-// SendInternalNotification memproses pengiriman notifikasi dari internal service lain (misal: Operations Platform / KYC Review)
-// Endpoint ini langsung memicu penyimpanan DB, broadcast WebSocket, dan FCM Push Notification
+// SendInternalNotification processes notifications from internal platform services.
+// Persists notification to database, broadcasts over WebSocket, and triggers FCM push.
 func (h *NotificationHandler) SendInternalNotification(c *fiber.Ctx) error {
-	// 🛡️ Proteksi Keamanan: Pastikan pemanggil berasal dari internal service dengan secret key valid
+	// Security guard: verify internal service secret key across all environments.
+	expectedSecret := ""
+	if config.Envs != nil {
+		expectedSecret = config.Envs.InternalSecret
+		if expectedSecret == "" {
+			expectedSecret = config.Envs.JWTSecret
+		}
+	}
 	secretHeader := c.Get("X-Internal-Secret")
-	if config.Envs.AppEnv == "production" && secretHeader != config.Envs.JWTSecret {
-		return utils.SendResponse(c, fiber.StatusForbidden, constants.FailedValidation, "Akses ditolak: otorisasi internal diperlukan", nil)
+	if expectedSecret == "" || len(secretHeader) != len(expectedSecret) || subtle.ConstantTimeCompare([]byte(secretHeader), []byte(expectedSecret)) != 1 {
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Akses ditolak: otorisasi internal diperlukan", nil)
 	}
 
 	var input InternalNotificationInput

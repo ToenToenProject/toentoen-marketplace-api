@@ -10,8 +10,7 @@ import (
 
 var defaultWIBLocation = time.FixedZone("WIB", 7*3600)
 
-// GetWIBLocation mengembalikan pointer ke *time.Location untuk zona Asia/Jakarta (WIB / UTC+7).
-// Jika sistem OS tidak memiliki tzdata, fungsi ini secara aman fallback ke FixedZone ("WIB", +7 jam).
+// GetWIBLocation returns the Asia/Jakarta (WIB / UTC+7) location, falling back to a fixed zone if tzdata is missing.
 func GetWIBLocation() *time.Location {
 	loc, err := time.LoadLocation("Asia/Jakarta")
 	if err != nil || loc == nil {
@@ -20,15 +19,15 @@ func GetWIBLocation() *time.Location {
 	return loc
 }
 
-// CalculateStoreStatus menghitung apakah toko buka SECARA REAL TIME terkunci pada zona WIB (UTC+7)
-// confirmedDates (opsional): [confirmedOpenDate, confirmedOvertimeDate] dalam format string YYYY-MM-DD
+// CalculateStoreStatus evaluates real-time business open status locked to WIB (UTC+7),
+// accounting for manual closures, daily operating schedules, and overtime confirmations.
 func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, confirmedDates ...*string) bool {
-	// 1. Filter Manual: Jika owner menekan tombol tutup darurat/manual, langsung kembalikan FALSE
+	// Immediate return if business owner triggered manual emergency closure.
 	if isManuallyClosed {
 		return false
 	}
 
-	// 2. Kunci Zona Waktu ke WIB (GMT+7)
+	// Lock evaluation to WIB (GMT+7).
 	loc := GetWIBLocation()
 	now := time.Now().In(loc)
 	todayStr := now.Format("2006-01-02")
@@ -48,14 +47,13 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 
 	nowMinutes := now.Hour()*60 + now.Minute()
 
-	// 3. Filter Sistem: Cek jadwal operasional hari ini
+	// Evaluate today operational schedule.
 	hasScheduleToday := false
 	for _, h := range hours {
 		if h.DayOfWeek == currentDay {
 			if h.IsClosed {
 				return false
 			}
-			// Parse OpenTime dan CloseTime (Format dari DB bisa "08:00:00" atau "08:00")
 			if h.OpenTime != nil && h.CloseTime != nil {
 				hasScheduleToday = true
 				openStr := strings.Split(strings.TrimSpace(*h.OpenTime), ":")
@@ -71,31 +69,31 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 						openTotalMinutes := openHour*60 + openMinute
 						closeTotalMinutes := closeHour*60 + closeMinute
 
-						// Belum masuk jam buka hari ini (izinkan jika merchant sengaja mengaktifkan buka di luar jam reguler)
+						// Before regular opening hours; open only if confirmed for early hours or overtime.
 						if nowMinutes < openTotalMinutes {
 							return isOvertimeConfirmedToday
 						}
 
-						// Toko harus sudah dikonfirmasi buka untuk hari ini
+						// Store must have daily open confirmation for regular hours.
 						if !isOpenConfirmedToday {
 							return false
 						}
 
-						// Toko buka 24 jam (misal 00:00 - 24:00 atau 00:00 - 23:59)
+						// 24-hour schedule.
 						if openTotalMinutes == 0 && (closeTotalMinutes == 0 || closeTotalMinutes >= 1439) {
 							return true
 						}
 
-						// Jadwal reguler (misal 08:00 - 21:00)
+						// Regular same-day schedule.
 						if openTotalMinutes <= closeTotalMinutes {
 							if nowMinutes <= closeTotalMinutes {
 								return true
 							}
-							// Jika sudah lewat jam tutup reguler, hanya buka jika dikonfirmasi lembur (maksimal tengah malam)
+							// Past regular closing time; open only if overtime is confirmed for today.
 							return isOvertimeConfirmedToday
 						}
 
-						// Jadwal lintas tengah malam (misal 18:00 - 02:00)
+						// Overnight schedule spanning midnight.
 						if nowMinutes >= openTotalMinutes || nowMinutes <= closeTotalMinutes {
 							return true
 						}
@@ -106,8 +104,7 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 		}
 	}
 
-	// Jika toko TIDAK mengatur jadwal hari ini, status buka ditentukan oleh toggle manual:
-	// Jika !isManuallyClosed (toggle dinyalakan), toko buka dan akan otomatis ditutup saat reset tengah malam (00:00).
+	// When no schedule is defined for today, open status defaults to manual toggle state.
 	if !hasScheduleToday {
 		return !isManuallyClosed
 	}
@@ -115,10 +112,7 @@ func CalculateStoreStatus(isManuallyClosed bool, hours []models.BusinessHour, co
 	return false
 }
 
-// ParseFlexibleTime mengurai string waktu ke time.Time dengan mendukung beragam format:
-// RFC3339 (ISO-8601 dengan offset timezone misal +07:00 atau Z), RFC3339Nano,
-// format SQL ("2006-01-02 15:04:05"), datetime-local ("2006-01-02T15:04"),
-// dan date-only ("2006-01-02").
+// ParseFlexibleTime parses date-time strings across standard formats (RFC3339, SQL datetime, ISO-8601, Unix epoch) into WIB location.
 func ParseFlexibleTime(val string) (time.Time, error) {
 	val = strings.TrimSpace(val)
 	if val == "" || val == "null" {
@@ -152,7 +146,7 @@ func ParseFlexibleTime(val string) (time.Time, error) {
 		}
 	}
 
-	// Coba parse jika dikirimkan sebagai unix timestamp numerik (detik atau milidetik)
+	// Fall back to Unix epoch timestamp (seconds or milliseconds).
 	if epoch, err := strconv.ParseInt(val, 10, 64); err == nil {
 		if epoch > 1e11 {
 			return time.UnixMilli(epoch), nil
@@ -161,4 +155,4 @@ func ParseFlexibleTime(val string) (time.Time, error) {
 	}
 
 	return time.Parse(time.RFC3339, val)
-}
+}

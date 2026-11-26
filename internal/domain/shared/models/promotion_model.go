@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-// ==========================================
-// 1. ENTITAS DATABASE (GORM MODELS)
-// ==========================================
 
 const (
 	PromotionStatusScheduled = "scheduled"
@@ -52,7 +49,6 @@ type Promotion struct {
 	CreatedAt          time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt          time.Time  `gorm:"column:updated_at" json:"updated_at"`
 
-	// Kolom khusus tipe Bundling
 	PromotionType      string   `gorm:"column:promotion_type;default:'per_product'" json:"promotion_type"`
 	PackageName        *string  `gorm:"column:package_name" json:"package_name,omitempty"`
 	PackagePrice       *float64 `gorm:"column:package_price" json:"package_price,omitempty"`
@@ -61,7 +57,6 @@ type Promotion struct {
 	SavingsAmount      *float64 `gorm:"column:savings_amount" json:"savings_amount,omitempty"`
 	SavingsPercentage  *float64 `gorm:"column:savings_percentage" json:"savings_percentage,omitempty"`
 
-	// Relasi
 	Business    *Business              `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 	MainProduct *Product               `gorm:"foreignKey:MainProductID;references:ProductID" json:"main_product,omitempty"`
 	Post        *BusinessPost          `gorm:"foreignKey:PostID;references:PostID" json:"post,omitempty"`
@@ -80,7 +75,6 @@ type PromotionBundleItem struct {
 	ItemNormalPrice float64   `gorm:"column:item_normal_price;default:0" json:"item_normal_price"`
 	CreatedAt       time.Time `gorm:"column:created_at" json:"created_at"`
 
-	// Relasi
 	Promotion *Promotion `gorm:"foreignKey:PromotionID;references:PromotionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"promotion,omitempty"`
 	Product   *Product   `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
 }
@@ -98,7 +92,7 @@ type PromotionProduct struct {
 	Discount       float64  `gorm:"column:discount;default:0" json:"discount"`
 	MaxDiscount    *float64 `gorm:"column:max_discount" json:"max_discount,omitempty"`
 
-	// Cadangan diskon lama untuk rollback
+	// Backup of previous discount for rollback.
 	HadPreviousDiscount bool       `gorm:"column:had_previous_discount;default:false" json:"had_previous_discount"`
 	PrevDiscountType    *string    `gorm:"column:prev_discount_type" json:"prev_discount_type,omitempty"`
 	PrevDiscount        *float64   `gorm:"column:prev_discount" json:"prev_discount,omitempty"`
@@ -106,11 +100,10 @@ type PromotionProduct struct {
 	PrevDiscountStartAt *time.Time `gorm:"column:prev_discount_start_at" json:"prev_discount_start_at,omitempty"`
 	PrevDiscountEndAt   *time.Time `gorm:"column:prev_discount_end_at" json:"prev_discount_end_at,omitempty"`
 
-	// Snapshot harga untuk riwayat promosi
+	// Price snapshot for promotion history.
 	SnapshotOriginalPrice float64 `gorm:"column:snapshot_original_price;default:0" json:"snapshot_original_price"`
 	SnapshotFinalPrice    float64 `gorm:"column:snapshot_final_price;default:0" json:"snapshot_final_price"`
 
-	// Relasi
 	Product *Product `gorm:"foreignKey:ProductID;references:ProductID" json:"product,omitempty"`
 }
 
@@ -132,9 +125,6 @@ func (PromotionEvent) TableName() string {
 	return "promotion_events"
 }
 
-// ==========================================
-// 2. DTO UNTUK REQUEST & RESPONSE (MERCHANT & CUSTOMER)
-// ==========================================
 
 type BusinessActivePromotionItem struct {
 	PromotionID   string    `json:"promotion_id"`
@@ -269,12 +259,12 @@ func (c *CreatePromotionInput) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Fallback main_product_id dari highlighted_product_id
+	// Fallback main_product_id from highlighted_product_id.
 	if strings.TrimSpace(c.MainProductID) == "" && strings.TrimSpace(c.HighlightedProductID) != "" {
 		c.MainProductID = strings.TrimSpace(c.HighlightedProductID)
 	}
 
-	// Jika ProductIDs diberikan namun Products kosong, bangun Products secara otomatis
+	// Automatically populate Products slice if ProductIDs are specified.
 	if len(c.Products) == 0 && len(c.ProductIDs) > 0 {
 		for _, pid := range c.ProductIDs {
 			cleanID := strings.TrimSpace(pid)
@@ -299,12 +289,12 @@ func (c *CreatePromotionInput) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Auto-fallback main_product_id jika kosong tapi ada produk yang dipilih
+	// Default main_product_id to first product if unassigned.
 	if strings.TrimSpace(c.MainProductID) == "" && len(c.Products) > 0 {
 		c.MainProductID = c.Products[0].ProductID
 	}
 
-	// Auto-fallback caption jika kosong
+	// Auto-generate caption if omitted.
 	if strings.TrimSpace(c.Caption) == "" {
 		c.Caption = "Promo Spesial Toko"
 	}
@@ -356,7 +346,7 @@ func (c *CreateBundlingPromotionInput) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Auto-fallback caption jika kosong
+	// Auto-generate caption if omitted.
 	if strings.TrimSpace(c.Caption) == "" {
 		pkgName := strings.TrimSpace(c.PackageName)
 		if pkgName == "" {
@@ -528,9 +518,6 @@ type GetPromotionsResponse struct {
 	Pagination PaginationMeta      `json:"pagination"`
 }
 
-// ==========================================
-// 3. DTO UNTUK CUSTOMER EVENTS & TRACKING
-// ==========================================
 
 type RecordPromotionEventInput struct {
 	PromotionID string  `json:"promotion_id" validate:"required"`

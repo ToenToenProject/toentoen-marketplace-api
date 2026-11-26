@@ -55,8 +55,6 @@ func (r *demandRepository) GetOpenSignalsByCategory(category string) ([]models.D
 func (r *demandRepository) GetSignalByID(signalID string) (*models.DemandSignal, error) {
 	var signal models.DemandSignal
 
-	// Tip: Jika di struct DemandSignal Anda punya relasi ke data Pembeli (misal: Account),
-	// Anda bisa menambahkan .Preload("Account") sebelum .Where
 	err := r.db.Where("signal_id = ?", signalID).First(&signal).Error
 	if err != nil {
 		return nil, err
@@ -69,15 +67,13 @@ func (r *demandRepository) CreateResponse(response *models.DemandResponse) error
 	return r.db.Create(response).Error
 }
 
-// Transaction: Menerima tawaran sekaligus menutup signal
+// Transaction: accept offer and close signal.
 func (r *demandRepository) AcceptResponse(signalID, responseID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Update Response menjadi accepted
 		if err := tx.Model(&models.DemandResponse{}).Where("response_id = ?", responseID).Update("is_accepted", true).Error; err != nil {
 			return err
 		}
 
-		// 2. Update Signal menjadi processing & terpenuhi
 		now := time.Now()
 		updates := map[string]interface{}{
 			"status":       "processing",
@@ -95,10 +91,7 @@ func (r *demandRepository) AcceptResponse(signalID, responseID string) error {
 func (r *demandRepository) GetOwnerTokensByCategory(categoryName string) ([]string, error) {
 	var tokens []string
 	
-	// Kita melakukan 3 kali JOIN sekarang:
-	// 1. Join ke device_tokens untuk mendapatkan alamat FCM HP Owner
-	// 2. Join ke business_has_categories (Tabel Jembatan / Pivot Table)
-	// 3. Join ke business_categories untuk mencocokkan namanya
+	// Join signal responses and businesses.
 	err := r.db.Table("businesses").
 		Select("DISTINCT device_tokens.fcm_token").
 		Joins("JOIN device_tokens ON device_tokens.account_id = businesses.account_id").
@@ -113,14 +106,12 @@ func (r *demandRepository) GetOwnerTokensByCategory(categoryName string) ([]stri
 func (r *demandRepository) GetActiveSignalsForOwner(ownerLat, ownerLng float64, categories []string) ([]models.DemandSignal, error) {
 	var signals []models.DemandSignal
 
-	// Jika owner belum punya kategori, langsung kembalikan array kosong agar tidak error di SQL
 	if len(categories) == 0 {
 		return signals, nil
 	}
 
 	// Rumus Haversine dalam raw SQL. 
 	// Menghitung jarak (dalam KM) antara koordinat Sinyal (latitude/longitude di tabel) 
-	// dengan koordinat Owner (yang dikirim sebagai parameter ?).
 	distanceQuery := fmt.Sprintf(
 		"(6371 * acos(cos(radians(%f)) * cos(radians(latitude)) * cos(radians(longitude) - radians(%f)) + sin(radians(%f)) * sin(radians(latitude))))",
 		ownerLat, ownerLng, ownerLat,
@@ -130,7 +121,6 @@ func (r *demandRepository) GetActiveSignalsForOwner(ownerLat, ownerLng float64, 
 		Where("status = ?", "open").
 		Where("expires_at > ?", time.Now()).
 		Where("category IN ?", categories).
-		// Karena distanceQuery sudah berisi angka asli (bukan ? lagi), kita tidak perlu melempar variabel di belakangnya
 		Where(distanceQuery + " <= radius_km"). 
 		Order(distanceQuery + " ASC"). // Order by sekarang berisi string rumus yang valid tanpa tanda tanya
 		Find(&signals).Error

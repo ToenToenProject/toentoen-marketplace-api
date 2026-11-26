@@ -9,9 +9,8 @@ import (
 	"toentoen-backend/internal/config"
 )
 
-// NormalizePhoneNumber menstandarkan format nomor telepon Indonesia / internasional:
-// Menghilangkan spasi, strip, tanda kurung, dan simbol '+'.
-// Jika berawalan '08', diubah menjadi '628'.
+// NormalizePhoneNumber standardizes phone numbers into E.164-compatible national format without leading '+'
+// and converts national prefixes (08xx -> 628xx).
 func NormalizePhoneNumber(phone string) string {
 	clean := strings.TrimSpace(phone)
 	clean = strings.ReplaceAll(clean, " ", "")
@@ -25,15 +24,14 @@ func NormalizePhoneNumber(phone string) string {
 	return clean
 }
 
-// MatchPhoneNumbers memeriksa apakah dua representasi nomor telepon merujuk ke nomor yang sama
-// (contoh: '08123456789' cocok dengan '+628123456789' atau '628123456789')
+// MatchPhoneNumbers checks if two phone strings refer to the same number after normalization.
 func MatchPhoneNumbers(phone1, phone2 string) bool {
 	p1 := NormalizePhoneNumber(phone1)
 	p2 := NormalizePhoneNumber(phone2)
 	return p1 != "" && p1 == p2
 }
 
-// VerifyFirebasePhoneToken memverifikasi Firebase ID Token dari Flutter dan mengembalikan nomor telepon yang sah.
+// VerifyFirebasePhoneToken validates a Firebase ID token and extracts the verified phone number claim.
 func VerifyFirebasePhoneToken(idToken string) (string, error) {
 	idToken = strings.TrimSpace(idToken)
 	if idToken == "" {

@@ -64,12 +64,12 @@ type MeiliBusinessDocument struct {
 	CategoryID    int64    `json:"category_id,omitempty"`
 	CategoryIDs   []int64  `json:"category_ids"`
 	CategoryNames []string `json:"category_names"`
-	Categories    []string `json:"categories,omitempty"` // alias untuk kompatibilitas
+	Categories    []string `json:"categories,omitempty"` // legacy alias
 
-	// Tag & Hashtag fields (dipisah menjadi Facilities, Services, Characteristics)
+	// Tag categorization (Facilities, Services, Characteristics)
 	TagIDs          []int64  `json:"tag_ids"`
 	TagNames        []string `json:"tag_names"`
-	Tags            []string `json:"tags,omitempty"` // alias untuk kompatibilitas
+	Tags            []string `json:"tags,omitempty"` // legacy alias
 	Facilities      []string `json:"facilities,omitempty"`
 	Services        []string `json:"services,omitempty"`
 	Characteristics []string `json:"characteristics,omitempty"`
@@ -88,7 +88,7 @@ type MeiliBusinessDocument struct {
 	AddressDetail   string                  `json:"address_detail"`
 	MatchedProducts []MatchedProductPreview `json:"matched_products,omitempty"`
 
-	// Universal Search Match Explanation (computed saat pencarian, tidak wajib disimpan di index)
+	// Universal search match explanation (computed at query time)
 	MatchType       string  `json:"match_type,omitempty"`       // EXACT_OFFERING, RELATED_OFFERING, NAME_MATCH, CATEGORY_MATCH, SERVICE_MATCH, FACILITY_MATCH
 	MatchedOffering string  `json:"matched_offering,omitempty"` // Nama produk/layanan/kategori/fasilitas yang cocok
 	MatchReason     string  `json:"match_reason,omitempty"`     // Label ramah pengguna (mis. "Menu cocok: Ayam Bakar")
@@ -149,7 +149,7 @@ func InitMeilisearchIndices() {
 		},
 	}
 
-	// 1. Indeks "businesses"
+	// Configure "businesses" index.
 	bizIndex := Client.Index("businesses")
 	bizFilterable := &[]interface{}{
 		"_geo",
@@ -207,7 +207,7 @@ func InitMeilisearchIndices() {
 		log.Printf("⚠️ Gagal set typo tolerance businesses: %v", err)
 	}
 
-	// 2. Indeks "products"
+	// Configure "products" index.
 	primaryKey := "id"
 	if _, err := Client.GetIndex("products"); err != nil {
 		_, _ = Client.CreateIndex(&meilisearch.IndexConfig{
@@ -546,7 +546,7 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 	promotionID := ""
 	promotionType := ""
 
-	// 1. Cek diskon langsung di tabel products
+	// Direct product discount.
 	if utils.IsDiscountActive(p.Discount, p.DiscountStartAt, p.DiscountEndAt, now) {
 		cut, pct := utils.CalculateProductDiscount(p.Price, p.DiscountType, p.Discount, p.MaxDiscount)
 		if cut > 0 {
@@ -558,7 +558,7 @@ func BuildProductDocument(db *gorm.DB, p *models.Product, b *models.Business) Me
 		}
 	}
 
-	// 2. Cek apakah ada program promosi aktif di tabel promotions (per_product/catalog)
+	// Active promotion campaigns (per_product/catalog).
 	if db != nil {
 		type promoResult struct {
 			PromotionID   string   `gorm:"column:promotion_id"`
@@ -1019,7 +1019,7 @@ func SyncAllBusinesses(db *gorm.DB) (int, error) {
 		return 0, nil
 	}
 
-	// Bersihkan bisnis yang owner-nya belum KYC verified atau tidak aktif agar tidak bocor ke publik
+	// Remove unverified or inactive businesses from the public search index.
 	var hiddenBizIDs []string
 	if errHidden := db.Table("businesses").
 		Where("is_active = ? OR status = ? OR NOT EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')", false, "deleted").
@@ -1167,7 +1167,7 @@ func UpdateBusinessStatus(db *gorm.DB, businessID string) error {
 		return err
 	}
 
-	// Jangan pernah update / buat dokumen di Meilisearch jika owner belum KYC verified atau toko tidak aktif
+	// Do not update or index businesses with unverified owner KYC or inactive status.
 	if !b.IsActive || b.Status == "deleted" || !kychelper.IsOwnerKYCVerified(db, b.AccountID) {
 		_ = DeleteBusinessDoc(businessID)
 		_ = DeleteBusinessProductsDoc(db, businessID)
@@ -1188,7 +1188,7 @@ func UpdateBusinessStatus(db *gorm.DB, businessID string) error {
 	}
 
 	primaryKey := "id"
-	// 1. Partial update index "businesses"
+	// Update "businesses" index.
 	bizIndex := Client.Index("businesses")
 	updateDoc := map[string]interface{}{
 		"id":                 b.BusinessID,
@@ -1201,7 +1201,7 @@ func UpdateBusinessStatus(db *gorm.DB, businessID string) error {
 		log.Printf("⚠️ Gagal update status bisnis %s di Meilisearch: %v", businessID, err)
 	}
 
-	// 2. Partial update seluruh produk milik toko ini di index "products"
+	// Update products belonging to this business.
 	var productIDs []string
 	if errProd := db.Model(&models.Product{}).Where("business_id = ? AND is_active = ?", businessID, true).Pluck("product_id", &productIDs).Error; errProd == nil && len(productIDs) > 0 {
 		prodUpdates := make([]map[string]interface{}, 0, len(productIDs))
@@ -1274,8 +1274,7 @@ func SyncPromotion(db *gorm.DB, promotionID string) error {
 	return nil
 }
 
-// inferTagType mengklasifikasikan tag menjadi 'facility', 'service', atau 'characteristic'.
-// Jika kolom tag_type dari DB sudah terisi eksplisit, nilai tersebut diprioritaskan.
+// inferTagType classifies a tag as facility, service, or characteristic, prioritizing explicit DB column values.
 func inferTagType(name, explicitType string) string {
 	et := strings.ToLower(strings.TrimSpace(explicitType))
 	if et == "facility" || et == "service" || et == "characteristic" {
@@ -1304,8 +1303,7 @@ func inferTagType(name, explicitType string) string {
 	return "characteristic"
 }
 
-// SyncOwnerBusinesses menyinkronkan ulang (atau menghapus dari index publik) semua bisnis milik seorang owner
-// setelah status KYC owner berubah (approved / rejected).
+// SyncOwnerBusinesses reconciles all businesses of an owner in the search index upon KYC status change.
 func SyncOwnerBusinesses(db *gorm.DB, ownerAccountID string) (int, error) {
 	if db == nil || strings.TrimSpace(ownerAccountID) == "" {
 		return 0, nil

@@ -72,7 +72,6 @@ func (h *CustomerPromotionHandler) RecordEvents(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Events recorded", nil)
 }
 
-// 2. GET PROMOTION DETAIL (CUSTOMER VIEW)
 func (h *CustomerPromotionHandler) GetPromotionDetail(c *fiber.Ctx) error {
 	promotionID := strings.TrimSpace(c.Params("promotion_id"))
 	if promotionID == "" {

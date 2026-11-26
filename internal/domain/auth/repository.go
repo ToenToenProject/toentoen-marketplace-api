@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrAmbiguousAccount dikembalikan ketika identifier yang sama terdaftar di lebih dari
-// satu role (customer, owner, business_admin) dan request tidak menyertakan role spesifik.
+// ErrAmbiguousAccount is returned when an identifier is registered across multiple roles
+// and the request does not specify a target role.
 var ErrAmbiguousAccount = errors.New("Email/nomor ini terdaftar di lebih dari satu akun (Pelanggan, Pemilik Toko, atau Admin). Sertakan parameter role (customer, owner, atau business_admin) untuk melanjutkan.")
 
 type AuthRepository interface {
@@ -20,10 +20,10 @@ type AuthRepository interface {
 	UpdateAccountStatus(accountID string, status string) error
 	UpdateEmailVerified(accountID string, verifiedAt time.Time, newStatus string) error
 	UpdatePhoneVerified(accountID string, verifiedAt time.Time, newStatus string) error
-	// FindByIdentifier mencari akun berdasarkan email/telepon/username di dalam kelompok role.
-	// roleGroup kosong = cari di semua kelompok; jika ditemukan >1 akun, mengembalikan ErrAmbiguousAccount.
+	// FindByIdentifier searches for an account within a role group by email, phone, or username.
+	// If roleGroup is empty and multiple accounts match, ErrAmbiguousAccount is returned.
 	FindByIdentifier(identifier string, roleGroup string) (*models.Account, error)
-	// FindAllByIdentifier mencari seluruh akun berdasarkan email/telepon/username (opsional dibatasi roleGroup)
+	// FindAllByIdentifier retrieves all accounts matching an email, phone, or username across role groups.
 	FindAllByIdentifier(identifier string, roleGroup ...string) ([]*models.Account, error)
 	FindByID(id string) (*models.Account, error)
 	Update(account *models.Account) error
@@ -69,7 +69,7 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 					ownerRecord.KtpName = account.Owner.KtpName
 				}
 			}
-			// Wariskan data KYC terverifikasi jika pengguna sudah memiliki akun Admin yang terverifikasi
+			// Inherit verified KYC if user already holds a verified admin account.
 			kychelper.InheritVerifiedKYCOnCreate(tx, account, "owner", &ownerRecord, nil)
 			if err := tx.Create(&ownerRecord).Error; err != nil {
 				return err
@@ -92,7 +92,7 @@ func (r *authRepository) CreateAccountWithProfile(account *models.Account, role 
 					adminRecord.KtpName = account.BusinessAdmin.KtpName
 				}
 			}
-			// Wariskan data KYC terverifikasi jika pengguna sudah memiliki akun Owner yang terverifikasi
+			// Inherit verified KYC if user already holds a verified owner account.
 			kychelper.InheritVerifiedKYCOnCreate(tx, account, "business_admin", nil, &adminRecord)
 			if err := tx.Create(&adminRecord).Error; err != nil {
 				return err
@@ -132,7 +132,7 @@ func (r *authRepository) UpdatePhoneVerified(accountID string, verifiedAt time.T
 		Updates(updates).Error
 }
 
-// PhoneVariants membuat variasi format nomor telepon (08xxx, 628xxx, +628xxx)
+// PhoneVariants generates common phone formatting variants (08xxx, 628xxx, +628xxx).
 func PhoneVariants(identifier string) []string {
 	clean := strings.TrimPrefix(identifier, "+")
 	if strings.HasPrefix(clean, "08") {

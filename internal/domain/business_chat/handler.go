@@ -17,7 +17,7 @@ func NewBusinessChatHandler(service BusinessChatService) *BusinessChatHandler {
 	return &BusinessChatHandler{service: service}
 }
 
-// InitiateChat memulai atau mengambil percakapan dengan toko
+// InitiateChat retrieves or creates a conversation with a business.
 func (h *BusinessChatHandler) InitiateChat(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -50,7 +50,7 @@ func (h *BusinessChatHandler) InitiateChat(c *fiber.Ctx) error {
 	})
 }
 
-// GetCustomerConversations mengambil daftar percakapan toko milik customer
+// GetCustomerConversations returns store conversations for a customer.
 func (h *BusinessChatHandler) GetCustomerConversations(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -68,7 +68,7 @@ func (h *BusinessChatHandler) GetCustomerConversations(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar percakapan toko berhasil dimuat", convs)
 }
 
-// GetMerchantConversations mengambil daftar percakapan pelanggan masuk ke toko
+// GetMerchantConversations returns incoming customer conversations for a store.
 func (h *BusinessChatHandler) GetMerchantConversations(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -91,7 +91,7 @@ func (h *BusinessChatHandler) GetMerchantConversations(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar chat pelanggan berhasil dimuat", convs)
 }
 
-// GetMessages mengambil riwayat pesan dalam percakapan toko
+// GetMessages retrieves message history for a store conversation.
 func (h *BusinessChatHandler) GetMessages(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -124,7 +124,7 @@ func (h *BusinessChatHandler) GetMessages(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan berhasil dimuat", respData)
 }
 
-// SendMessage mengirim pesan baru ke dalam percakapan toko
+// SendMessage posts a message to a store conversation.
 func (h *BusinessChatHandler) SendMessage(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {

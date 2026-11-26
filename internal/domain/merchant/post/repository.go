@@ -55,12 +55,10 @@ func (r *businessPostRepository) ToggleLike(postID, accountID string) (string, e
 		result := tx.Where("post_id = ? AND account_id = ?", postID, accountID).First(&existingLike)
 
 		if result.Error == nil {
-			// Jika sudah ada, berarti user melakukan UNLIKE
 			if err := tx.Delete(&existingLike).Error; err != nil { return err }
 			if err := tx.Model(&models.BusinessPost{}).Where("post_id = ?", postID).UpdateColumn("like_count", gorm.Expr("like_count - ?", 1)).Error; err != nil { return err }
 			status = "unliked"
 		} else {
-			// Jika belum ada, berarti user melakukan LIKE
 			newLike := models.BusinessPostLike{PostID: postID, AccountID: accountID}
 			if err := tx.Create(&newLike).Error; err != nil { return err }
 			if err := tx.Model(&models.BusinessPost{}).Where("post_id = ?", postID).UpdateColumn("like_count", gorm.Expr("like_count + ?", 1)).Error; err != nil { return err }
@@ -73,7 +71,6 @@ func (r *businessPostRepository) ToggleLike(postID, accountID string) (string, e
 
 func (r *businessPostRepository) GetPostByID(postID string) (*models.BusinessPost, error) {
 	var post models.BusinessPost
-	// Preload "Business" jika Anda butuh info nama tokonya sekalian
 	err := r.db.Where("post_id = ?", postID).First(&post).Error
 	return &post, err
 }

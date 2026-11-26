@@ -124,7 +124,6 @@ func TestPublicProfileSummary_IsVerifiedLogic(t *testing.T) {
 	now := time.Now()
 	phone := "+628123456789"
 
-	// 1. Akun baru / dummy (email belum verified, phone belum verified) -> false
 	service1 := NewPublicProfileService(&mockPublicProfileRepo{
 		account: &models.Account{
 			AccountID: "ACC-DUMMY",
@@ -135,7 +134,6 @@ func TestPublicProfileSummary_IsVerifiedLogic(t *testing.T) {
 		t.Errorf("expected is_verified = false for dummy account")
 	}
 
-	// 2. Akun hanya email verified, phone belum -> false
 	service2 := NewPublicProfileService(&mockPublicProfileRepo{
 		account: &models.Account{
 			AccountID:       "ACC-EMAIL-ONLY",
@@ -147,7 +145,6 @@ func TestPublicProfileSummary_IsVerifiedLogic(t *testing.T) {
 		t.Errorf("expected is_verified = false when phone is not verified")
 	}
 
-	// 3. Akun email verified dan phone verified -> true
 	service3 := NewPublicProfileService(&mockPublicProfileRepo{
 		account: &models.Account{
 			AccountID:       "ACC-FULLY-VERIFIED",

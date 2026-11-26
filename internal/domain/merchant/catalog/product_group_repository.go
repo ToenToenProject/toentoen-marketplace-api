@@ -22,7 +22,6 @@ type ProductGroupRepository interface {
 	DeleteGroup(businessID, productGroupID string) error
 	CountProductsInGroup(businessID, productGroupID string) (int64, error)
 
-	// Untuk memanipulasi isi grup
 	AddProductsToGroup(businessID, productGroupID string, productIDs []string) error
 	RemoveProductsFromGroup(businessID string, productIDs []string) error
 }
@@ -53,7 +52,7 @@ func (r *productGroupRepository) CheckNameExists(businessID, name string) bool {
 
 func (r *productGroupRepository) GetGroups(businessID string) ([]models.ProductGroup, error) {
 	var groups []models.ProductGroup
-	// Diurutkan berdasarkan display_order terkecil ke terbesar, lalu ditapis berdasarkan yang aktif saja jika diperlukan
+	// Order by display_order ascending, filtering active groups.
 	err := r.db.Where("business_id = ?", businessID).Order("display_order ASC, created_at DESC").Find(&groups).Error
 	return groups, err
 }
@@ -72,7 +71,6 @@ func (r *productGroupRepository) CreateGroup(group *models.ProductGroup) error {
 
 func (r *productGroupRepository) GetMaxDisplayOrder(businessID string) int {
 	var maxOrder int
-	// Cari nilai maksimum display_order. Jika toko belum punya grup sama sekali, kembalikan 0.
 	r.db.Model(&models.ProductGroup{}).
 		Where("business_id = ?", businessID).
 		Select("COALESCE(MAX(display_order), 0)").
@@ -107,7 +105,6 @@ func (r *productGroupRepository) DeleteGroup(businessID, productGroupID string) 
 	return r.db.Where("business_id = ? AND product_group_id = ?", businessID, productGroupID).Delete(&models.ProductGroup{}).Error
 }
 
-// Memasukkan produk ke grup ini
 func (r *productGroupRepository) AddProductsToGroup(businessID, productGroupID string, productIDs []string) error {
 	if len(productIDs) == 0 {
 		return nil
@@ -122,8 +119,7 @@ func (r *productGroupRepository) RemoveProductsFromGroup(businessID string, prod
 		return nil
 	}
 
-	// Gunakan Debug() untuk melihat query asli
-	// Gunakan Updates dengan map untuk memastikan NULL terkirim
+	// Use map updates to ensure NULL values are dispatched to SQL.
 	result := r.db.Debug().Model(&models.Product{}).
 		Where("business_id = ? AND product_id IN ?", businessID, productIDs).
 		Updates(map[string]interface{}{"product_group_id": nil})
@@ -132,7 +128,6 @@ func (r *productGroupRepository) RemoveProductsFromGroup(businessID string, prod
 		return result.Error
 	}
 
-	// Cek apakah ada data yang berhasil di-update
 	if result.RowsAffected == 0 {
 		return errors.New("tidak ada produk ditemukan dengan ID tersebut di toko ini")
 	}

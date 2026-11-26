@@ -30,7 +30,6 @@ func NewPostInteractionService(repo PostInteractionRepository, businessRepo busi
 	return &postInteractionService{repo, businessRepo, notifService}
 }
 
-// 1. TOGGLE LIKE POSTINGAN
 func (s *postInteractionService) TogglePostLike(postID, accountID string) (bool, error) {
 	isLiked, err := s.repo.TogglePostLike(postID, accountID)
 	if err == nil && isLiked {
@@ -58,7 +57,6 @@ func (s *postInteractionService) TogglePostLike(postID, accountID string) (bool,
 	return isLiked, err
 }
 
-// 2. CREATE KOMENTAR / BALASAN POSTINGAN
 func (s *postInteractionService) AddPostComment(postID, accountID string, input models.CreateCommentInput) error {
 	businessID, err := s.repo.GetBusinessIDByPostID(postID)
 	if err != nil {
@@ -97,7 +95,6 @@ func (s *postInteractionService) AddPostComment(postID, accountID string, input 
 		return errors.New("gagal menambahkan komentar")
 	}
 
-	// Kirim Notifikasi
 	go func() {
 		if input.ReplyToCommentID != nil && parentComment != nil {
 			recipientID := parentComment.AccountID
@@ -158,7 +155,6 @@ func (s *postInteractionService) EditPostComment(postID, commentID, accountID st
 	return s.repo.UpdatePostComment(comment)
 }
 
-// 4. DELETE KOMENTAR POSTINGAN
 func (s *postInteractionService) DeletePostComment(postID, commentID, requesterID string) error {
 	comment, err := s.repo.GetPostCommentByID(commentID)
 	if err != nil {
@@ -183,7 +179,6 @@ func (s *postInteractionService) DeletePostComment(postID, commentID, requesterI
 	return s.repo.DeletePostComment(commentID)
 }
 
-// 5. GET KOMENTAR POSTINGAN (TREE + BADGES)
 func (s *postInteractionService) GetPostComments(postID, currentAccountID string) ([]models.CommentResponse, error) {
 	cleanPostID := strings.TrimSpace(postID)
 	// Guard fallback mock IDs used by Flutter frontend when business has no active posts
@@ -283,7 +278,6 @@ func (s *postInteractionService) GetPostComments(postID, currentAccountID string
 	return finalComments, nil
 }
 
-// 6. TOGGLE LIKE KOMENTAR POST
 func (s *postInteractionService) TogglePostCommentLike(commentID, accountID string) (bool, error) {
 	isLiked, err := s.repo.TogglePostCommentLike(commentID, accountID)
 	if err == nil && isLiked {

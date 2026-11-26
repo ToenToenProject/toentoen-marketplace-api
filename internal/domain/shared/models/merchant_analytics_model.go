@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// 1. Model untuk tabel PostgreSQL
 type MerchantAnalytics struct {
 	LogID       int64     `gorm:"primaryKey;autoIncrement;column:log_id" json:"log_id"`
 	BusinessID  string    `gorm:"not null;index;column:business_id" json:"business_id"`
@@ -17,7 +16,6 @@ func (MerchantAnalytics) TableName() string {
 	return "merchant_analytics"
 }
 
-// 2. Struct untuk menyusun JSON Response
 type DailyAnalyticsResponse struct {
 	TotalVisitors   int64               `json:"total_visitors"`
 	TotalImpression int64               `json:"total_impression"`
@@ -41,7 +39,6 @@ type ProductStat struct {
 	Count       int64  `json:"count"`
 }
 
-// Struct Response untuk History Page
 type HistoryAnalyticsResponse struct {
 	TotalVisitors        int64               `json:"total_visitors"`
 	VisitorsGrowth       float64             `json:"visitors_growth"`   // Contoh: 80.5 (berarti +80.5%)
@@ -58,7 +55,6 @@ type HistoryAnalyticsResponse struct {
 	SignalRespondedGrowth float64            `json:"signal_responded_growth"`
 }
 
-// 5. Struct Response untuk Explore Page
 type ExploreAnalyticsResponse struct {
 	TagsSimilarities    []TagSimilarity     `json:"tags_similarities"`
 	ProductSimilarities []ProductSimilarity `json:"product_similarities"`

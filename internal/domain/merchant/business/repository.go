@@ -9,14 +9,12 @@ import (
 )
 
 type BusinessRepository interface {
-	// Parameter websites dan images dihapus karena sudah otomatis masuk di *models.Business (JSONB)
 	CreateBusinessWithRelations(business *models.Business, categoryIDs []int64, tagIDs []int64, hours []models.BusinessHour) error
 
 	FindBusinessesByOwnerID(ownerID string) ([]models.Business, error)
 	FindBusinessByIDAndOwner(businessID, ownerID string) (*models.Business, error)
 	CheckHandleExists(handle, excludeBusinessID string) bool
 	
-	// Parameter newWebsites dan newImages dihapus
 	UpdateBusiness(business *models.Business, newHours *[]models.BusinessHour, newCategoryIDs *[]int64, newTagIDs *[]int64) error
 	
 	DeleteBusiness(business *models.Business) error
@@ -52,12 +50,10 @@ func NewBusinessRepository(db *gorm.DB) BusinessRepository {
 
 func (r *businessRepository) CreateBusinessWithRelations(business *models.Business, categoryIDs []int64, tagIDs []int64, hours []models.BusinessHour) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Create Business (Otomatis menyimpan kolom Photos dan SocialWebsites karena JSONB)
 		if err := tx.Create(business).Error; err != nil {
 			return err
 		}
 
-		// 2. Simpan Relasi Business Hours
 		if len(hours) > 0 {
 			for i := range hours {
 				hours[i].BusinessID = business.BusinessID
@@ -67,10 +63,7 @@ func (r *businessRepository) CreateBusinessWithRelations(business *models.Busine
 			}
 		}
 
-		// 3. Simpan Relasi Pivot Categories (Manual)
 		if len(categoryIDs) > 0 {
-			// Anda bisa juga menggunakan tx.Model(business).Association("Categories").Append(...)
-			// Tapi cara manual ini juga sangat aman dan valid.
 			var businessCategories []map[string]interface{}
 			for _, catID := range categoryIDs {
 				businessCategories = append(businessCategories, map[string]interface{}{
@@ -83,7 +76,6 @@ func (r *businessRepository) CreateBusinessWithRelations(business *models.Busine
 			}
 		}
 
-		// 4. Simpan Relasi Pivot Tags (Manual)
 		if len(tagIDs) > 0 {
 			var businessTags []map[string]interface{}
 			for _, tagID := range tagIDs {
@@ -107,7 +99,6 @@ func (r *businessRepository) FindBusinessesByOwnerID(ownerID string) ([]models.B
 		Preload("Hours").
 		Preload("Categories").
 		Preload("Tags").
-		// Preload("Websites") & Preload("Images") dihapus karena tidak perlu
 		Where("account_id = ?", ownerID).
 		Find(&businesses).Error
 	return businesses, err
@@ -125,7 +116,6 @@ func (r *businessRepository) FindBusinessByIDAndOwnerWithPreload(businessID, own
 		Preload("Hours").
 		Preload("Categories").
 		Preload("Tags").
-		// Preload("Websites") & Preload("Images") dihapus karena tidak perlu
 		Where("business_id = ? AND account_id = ?", businessID, ownerID).
 		First(&business).Error
 
@@ -140,7 +130,7 @@ func (r *businessRepository) CheckHandleExists(handle, excludeBusinessID string)
 
 func (r *businessRepository) UpdateBusiness(business *models.Business, newHours *[]models.BusinessHour, newCategoryIDs *[]int64, newTagIDs *[]int64) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// tx.Omit mencegah GORM meng-upsert relasi yang ter-preload yang bisa memicu conflict key
+		// Omit associations to prevent unique constraint conflicts during upserts.
 		if err := tx.Omit("Hours", "Categories", "Tags").Save(business).Error; err != nil {
 			return err
 		}
@@ -210,7 +200,6 @@ func (r *businessRepository) DeleteBusiness(business *models.Business) error {
 
 func (r *businessRepository) CheckBusinessNameExists(ownerID, name string) bool {
 	var count int64
-	// PERBAIKAN: name diubah menjadi business_name agar sesuai dengan kolom SQL
 	r.db.Model(&models.Business{}).Where("account_id = ? AND business_name = ?", ownerID, name).Count(&count)
 	return count > 0
 }
@@ -248,7 +237,6 @@ func (r *businessRepository) FindBusinessByID(businessID string) (*models.Busine
 }
 
 func (r *businessRepository) ToggleStoreStatus(business *models.Business) error {
-	// Update kolom status operasional di database menggunakan Raw SQL agar GORM tidak mencoba save relasi (ON CONFLICT)
 	if !business.IsManuallyClosed {
 		return r.db.Exec(`
 			UPDATE businesses 
@@ -263,7 +251,7 @@ func (r *businessRepository) ToggleStoreStatus(business *models.Business) error 
 }
 
 func (r *businessRepository) ResetManualCloseStatus() error {
-	// Otomatis tutup toko di tengah malam (00:00 WIB) jika merchant lupa mematikan toggle (is_manually_closed = false -> true)
+	// Auto-close stores at midnight (00:00 WIB) if manual toggle was left open.
 	return r.db.Exec("UPDATE businesses SET is_manually_closed = true WHERE is_manually_closed = false AND status != 'draft'").Error
 }
 
@@ -296,7 +284,6 @@ func (r *businessRepository) UpdateBusinessRating(businessID string, avgRating f
 	}).Error
 }
 
-// FUNGSI BARU UNTUK MENDUKUNG UI LIST
 func (r *businessRepository) GetBusinessListWithPreviews(accountID string, role string, search string, categoryID int64, tagIDs []int64, cursor string, limit int) ([]models.BusinessWithPreview, error) {
 	var businesses []models.Business
 	
@@ -310,19 +297,19 @@ func (r *businessRepository) GetBusinessListWithPreviews(accountID string, role 
 	
 	// --- 1. LOGIKA PENCARIAN (Search) ---
 	if search != "" {
-		// Menggunakan ILIKE agar pencarian tidak case-sensitive (huruf besar/kecil tidak masalah)
+		// Case-insensitive lookup using ILIKE.
 		query = query.Where("business_name ILIKE ?", "%"+search+"%")
 	}
 
 	// --- 2. LOGIKA FILTER KATEGORI ---
 	if categoryID > 0 {
-		// Subquery: Cari ID bisnis yang punya kategori ini di tabel pivot
+		// Subquery for businesses matching category.
 		query = query.Where("business_id IN (SELECT business_id FROM business_has_categories WHERE category_id = ?)", categoryID)
 	}
 
 	// --- 3. LOGIKA FILTER TAGS ---
 	if len(tagIDs) > 0 {
-		// Subquery: Cari ID bisnis yang punya MINIMAL SALAH SATU tag yang dikirim (OR logic)
+		// Subquery for businesses matching any specified tag.
 		query = query.Where("business_id IN (SELECT business_id FROM business_has_tags WHERE tag_id IN ?)", tagIDs)
 	}
 	
@@ -351,7 +338,6 @@ func (r *businessRepository) GetBusinessListWithPreviews(accountID string, role 
 	var accountName string
 	r.db.Table("accounts").Select("full_name").Where("account_id = ?", accountID).Scan(&accountName) 
 
-	// Ambil Rating Rata-rata dari Seluruh Review Produk Toko
 	type ProductRatingAgg struct {
 		BusinessID   string
 		AvgRating    float64
@@ -392,14 +378,12 @@ func (r *businessRepository) GetBusinessListWithPreviews(accountID string, role 
 func (r *businessRepository) GetBusinessStaffAccountIDs(businessID string) ([]string, error) {
 	var accountIDs []string
 
-	// 1. Ambil owner (AccountID di tabel businesses)
 	var business models.Business
 	if err := r.db.Select("account_id").Where("business_id = ?", businessID).First(&business).Error; err != nil {
 		return nil, err
 	}
 	accountIDs = append(accountIDs, business.AccountID)
 
-	// 2. Ambil admins (admin_id di tabel business_admin_assignments)
 	var assignments []models.BusinessAdminAssignment
 	if err := r.db.Select("admin_id").Where("business_id = ? AND status IN ('accepted', 'active', 'scheduled_for_deletion')", businessID).Find(&assignments).Error; err == nil {
 		for _, a := range assignments {
@@ -497,4 +481,4 @@ func (r *businessRepository) RemoveNIBTagFromBusiness(businessID string) error {
 
 func (r *businessRepository) CreateNameHistory(history *models.BusinessNameHistory) error {
 	return r.db.Create(history).Error
-}
+}

@@ -31,7 +31,7 @@ func getSessionIDParam(c *fiber.Ctx) string {
 	return sessionID
 }
 
-// InitiateChat memulai atau membuka kembali sesi live chat CS aktif
+// InitiateChat initiates or reopens an active customer support live chat session.
 func (h *SupportChatHandler) InitiateChat(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -59,7 +59,7 @@ func (h *SupportChatHandler) InitiateChat(c *fiber.Ctx) error {
 	})
 }
 
-// GetActiveChat mengambil sesi live chat yang sedang aktif untuk user yang login
+// GetActiveChat retrieves the currently active live chat session for the authenticated user.
 func (h *SupportChatHandler) GetActiveChat(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -78,7 +78,7 @@ func (h *SupportChatHandler) GetActiveChat(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sesi live chat aktif ditemukan", session)
 }
 
-// GetMessages mengambil riwayat pesan dalam sesi live chat
+// GetMessages retrieves message history within a live chat session.
 func (h *SupportChatHandler) GetMessages(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -102,7 +102,7 @@ func (h *SupportChatHandler) GetMessages(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan berhasil dimuat", messages)
 }
 
-// SendMessage mengirim pesan baru ke dalam sesi live chat
+// SendMessage posts a message into the live chat session.
 func (h *SupportChatHandler) SendMessage(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -140,7 +140,7 @@ func (h *SupportChatHandler) SendMessage(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pesan berhasil terkirim", message)
 }
 
-// EndChat mengakhiri sesi live chat dan menyimpan rating/feedback
+// EndChat concludes a live chat session and records satisfaction rating and feedback.
 func (h *SupportChatHandler) EndChat(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -167,8 +167,7 @@ func (h *SupportChatHandler) EndChat(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sesi live chat telah berhasil diakhiri. Terima kasih atas masukan Anda!", nil)
 }
 
-// MarkAsRead menandai pesan dalam sesi live chat sebagai telah dibaca
-// POST /api/v1/support/chat/:session_id/read atau /api/v1/support/chat/:sessionId/read
+// MarkAsRead marks messages in a live chat session as read.
 func (h *SupportChatHandler) MarkAsRead(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {

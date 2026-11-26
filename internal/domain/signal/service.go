@@ -16,7 +16,6 @@ import (
 )
 
 type SignalService interface {
-	// Customer
 	CreateSignal(customerID string, input models.CreateSignalInput) (*models.Signal, error)
 	UpdateSignal(customerID, signalID string, input models.UpdateSignalInput) (*models.Signal, error)
 	DeleteSignal(customerID, signalID string) error
@@ -26,14 +25,12 @@ type SignalService interface {
 	CompleteSignal(customerID, signalID string) error
 	GetCustomerConversations(customerID string) ([]models.ConversationListItem, error)
 
-	// Merchant
 	ExploreSignals(accountID, businessID string, lat, lng float64) ([]models.SignalExploreItem, error)
 	GetMerchantSignalDetail(signalID, merchantAccountID string) (*models.MerchantSignalDetailResponse, error)
 	ReplyToSignal(accountID, role, signalID string, input models.InitiateConversationInput) (*models.SignalConversation, error)
 	GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error)
 	GetProductSuggestions(businessID, signalID string) ([]models.Product, error)
 
-	// Shared (Customer & Merchant)
 	GetMessages(accountID, role, conversationID string, page, limit int) ([]models.SignalMessage, int64, *models.SignalPostReference, error)
 	SendMessage(accountID, role, conversationID string, input models.SendMessageInput) (*models.SignalMessage, error)
 }
@@ -64,7 +61,6 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		return nil, errors.New("deskripsi kebutuhan wajib diisi")
 	}
 
-	// 1. Kumpulkan semua category ID yang diminta
 	var requestedCatIDs []int64
 	if len(input.CategoryIDs) > 0 {
 		seen := make(map[int64]bool)
@@ -87,7 +83,6 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		return nil, errors.New("maksimal 5 kategori dapat dipilih")
 	}
 
-	// 2. Validasi ke database
 	var resolvedCategories []models.Category
 	if len(requestedCatIDs) > 0 {
 		cats, err := s.signalRepo.GetCategoriesByIDs(requestedCatIDs)
@@ -164,12 +159,10 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		ExpiresAt:   time.Now().Add(time.Duration(expiresInHours) * time.Hour),
 	}
 
-	// 1. Simpan signal ke database
 	if err := s.signalRepo.CreateSignal(&signal); err != nil {
 		return nil, fmt.Errorf("gagal membuat signal: %w", err)
 	}
 
-	// 2. Simpan relasi multi-kategori ke database
 	var signalCats []models.SignalCategory
 	for _, c := range resolvedCategories {
 		signalCats = append(signalCats, models.SignalCategory{
@@ -182,12 +175,10 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 	}
 	signal.SignalCategories = signalCats
 
-	// 3. Update kolom PostGIS location via raw SQL
 	if err := s.signalRepo.UpdateSignalLocation(signal.SignalID, input.Latitude, input.Longitude); err != nil {
 		fmt.Printf("Warning: gagal update lokasi PostGIS untuk signal %s: %v\n", signal.SignalID, err)
 	}
 
-	// 4. Simpan gambar lampiran (jika ada, dukung image_urls, media_urls, atau images)
 	imgList := input.ImageURLs
 	if len(imgList) == 0 && len(input.MediaUrls) > 0 {
 		imgList = input.MediaUrls
@@ -216,7 +207,6 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		}
 	}
 
-	// 5. Simpan tags yang dipilih customer (jika ada) — digunakan sebagai booster relevansi
 	if len(input.TagIDs) > 0 {
 		var signalTags []models.SignalTag
 		for _, tagID := range input.TagIDs {
@@ -234,7 +224,6 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 		}
 	}
 
-	// 6. 🔔 REAL-TIME BROADCAST: Kirim notifikasi instan ke toko terdekat yang relevan
 	go s.notifyNearbyMerchantsNewSignal(signal.SignalID, resolvedCatIDs, resolvedCatNames, input.Latitude, input.Longitude, float64(radiusKm), signal.IsUrgent)
 
 	return &signal, nil
@@ -254,12 +243,10 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 		return nil, fmt.Errorf("signal tidak dapat diubah karena status saat ini: %s", signal.Status)
 	}
 
-	// 1. Deskripsi jika diisi
 	if desc := strings.TrimSpace(input.Description); desc != "" {
 		signal.Description = desc
 	}
 
-	// 2. Kategori jika diubah
 	if len(input.CategoryIDs) > 0 || (input.CategoryID != nil && *input.CategoryID > 0) || strings.TrimSpace(input.Category) != "" {
 		var requestedCatIDs []int64
 		if len(input.CategoryIDs) > 0 {
@@ -321,7 +308,6 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 		}
 	}
 
-	// 3. Lokasi jika diubah
 	if input.Latitude != nil && input.Longitude != nil && *input.Latitude != 0 && *input.Longitude != 0 {
 		signal.Latitude = *input.Latitude
 		signal.Longitude = *input.Longitude
@@ -330,17 +316,14 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 		}
 	}
 
-	// 4. Radius jika diubah
 	if input.RadiusKm != nil && *input.RadiusKm > 0 {
 		signal.RadiusKm = *input.RadiusKm
 	}
 
-	// 5. IsUrgent jika diubah
 	if input.IsUrgent != nil {
 		signal.IsUrgent = *input.IsUrgent
 	}
 
-	// 6. ExpiresInHours jika diubah
 	if input.ExpiresInHours != nil && *input.ExpiresInHours > 0 {
 		hours := *input.ExpiresInHours
 		if hours > 72 {
@@ -349,7 +332,6 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 		signal.ExpiresAt = time.Now().Add(time.Duration(hours) * time.Hour)
 	}
 
-	// 7. Budget & MaxOffers jika diubah
 	if input.MinBudget != nil {
 		signal.MinBudget = input.MinBudget
 	}
@@ -360,12 +342,10 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 		signal.MaxOffers = input.MaxOffers
 	}
 
-	// 8. Simpan perubahan signal
 	if err := s.signalRepo.UpdateSignal(signal); err != nil {
 		return nil, fmt.Errorf("gagal mengupdate signal: %w", err)
 	}
 
-	// 8. Update Gambar jika dikirim
 	imgList := input.ImageURLs
 	if len(imgList) == 0 && len(input.MediaUrls) > 0 {
 		imgList = input.MediaUrls
@@ -390,7 +370,6 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 		}
 	}
 
-	// 9. Update Tags jika dikirim
 	if input.TagIDs != nil {
 		var signalTags []models.SignalTag
 		for _, tagID := range input.TagIDs {
@@ -479,7 +458,7 @@ func (s *signalService) GetSignalDetail(signalID, accountID, role string) (*mode
 		return nil, fmt.Errorf("signal dengan ID %s tidak ditemukan", signalID)
 	}
 
-	// Customer hanya boleh melihat signal miliknya sendiri
+	// Customers may only view their own signals.
 	if role == "customer" && signal.CustomerID != accountID {
 		return nil, errors.New("anda tidak memiliki akses ke signal ini")
 	}
@@ -492,7 +471,7 @@ func (s *signalService) GetSignalDetail(signalID, accountID, role string) (*mode
 		}(signal.SignalID)
 	}
 
-	// Dekripsi pesan pada relasi percakapan
+	// Decrypt conversation messages.
 	for i := range signal.Conversations {
 		for j := range signal.Conversations[i].Messages {
 			signal.Conversations[i].Messages[j].MessageText, _ = crypto.Decrypt(signal.Conversations[i].Messages[j].MessageText)
@@ -521,13 +500,13 @@ func (s *signalService) CompleteSignal(customerID, signalID string) error {
 		return err
 	}
 
-	// 🔔 REAL-TIME: Beritahu semua merchant yang punya conversation
+	// Notify all participating merchants in real time.
 	go s.notifySignalCompleted(signalID, customerID)
 
 	return nil
 }
 
-// notifyNearbyMerchantsNewSignal menyebarkan event dan push notifikasi ke seluruh merchant terdekat yang relevan (semua kategori yang cocok)
+// notifyNearbyMerchantsNewSignal broadcasts new signal alerts to nearby matching merchants.
 func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, categoryIDs []int64, categoryNames []string, lat, lng, radiusKm float64, isUrgent bool) {
 	accountIDs, err := s.signalRepo.FindNearbyMatchingMerchantAccountIDs(categoryIDs, lat, lng, radiusKm)
 	if err != nil || len(accountIDs) == 0 {
@@ -569,10 +548,8 @@ func (s *signalService) notifyNearbyMerchantsNewSignal(signalID string, category
 		},
 	}
 
-	// Broadcast ke WebSocket merchant yang sedang online
 	s.hub.BroadcastToUsers(accountIDs, event)
 
-	// Kirim In-App Notification & Push Notification FCM
 	if s.notifService != nil {
 		s.notifService.SendNotification(
 			accountIDs,
@@ -610,10 +587,8 @@ func (s *signalService) notifySignalCompleted(signalID, customerID string) {
 		},
 	}
 
-	// Kirim via WebSocket (live roomchat event)
 	s.hub.BroadcastToUsers(merchantIDs, event)
 
-	// Simpan ke in-app notification & push FCM
 	if s.notifService != nil {
 		s.notifService.SendNotification(
 			merchantIDs,
@@ -742,7 +717,6 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 		return nil, errors.New("toko Anda sudah pernah membalas signal ini")
 	}
 
-	// Validasi Kuota Penawaran (Offer Cap)
 	if signal.MaxOffers != nil && *signal.MaxOffers > 0 && signal.OfferCount >= *signal.MaxOffers {
 		return nil, errors.New("batas maksimal kuota penawaran untuk sinyal ini telah tercapai")
 	}
@@ -762,7 +736,6 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 	// Increment offer count
 	_ = s.signalRepo.IncrementOfferCount(signalID)
 
-	// Kirim pesan pertama dari merchant
 	var firstMsg *models.SignalMessage
 	if input.Message != "" {
 		msg := models.SignalMessage{
@@ -789,7 +762,7 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 	// 🔔 REAL-TIME: Beritahu customer bahwa merchant telah membalas
 	go s.notifyNewConversation(signal.CustomerID, accountID, &conv, firstMsg)
 
-	// 🔔 Notifikasi ke Owner jika yang merespons sinyal adalah staf admin
+	// Alert owner when staff admin responds to a signal.
 	if role == "business_admin" {
 		notification.NotifyOwnerStaffActivity(
 			database.DB,
@@ -810,7 +783,7 @@ func (s *signalService) ReplyToSignal(accountID, role, signalID string, input mo
 	return &conv, nil
 }
 
-// GetProductSuggestions mencari produk dari katalog toko yang paling cocok dengan sinyal kebutuhan
+// GetProductSuggestions returns store catalog recommendations matching a signal.
 func (s *signalService) GetProductSuggestions(businessID, signalID string) ([]models.Product, error) {
 	signal, err := s.signalRepo.GetSignalByID(signalID)
 	if err != nil {
@@ -830,7 +803,7 @@ func (s *signalService) GetProductSuggestions(businessID, signalID string) ([]mo
 	return products, nil
 }
 
-// notifyNewConversation mengirimkan event new_conversation ke customer pemilik signal
+// notifyNewConversation sends conversation alert to signal owner.
 func (s *signalService) notifyNewConversation(customerID, merchantAccountID string, conv *models.SignalConversation, firstMsg *models.SignalMessage) {
 	event := realtime.WSEvent{
 		Type: "new_conversation",
@@ -845,10 +818,8 @@ func (s *signalService) notifyNewConversation(customerID, merchantAccountID stri
 		},
 	}
 
-	// Kirim via WebSocket (live roomchat event)
 	s.hub.SendToUser(customerID, event)
 
-	// Simpan ke in-app notification & push FCM
 	if s.notifService != nil {
 		bizName := "Toko"
 		if biz, err := s.businessRepo.FindBusinessByID(conv.BusinessID); err == nil && biz != nil && biz.BusinessName != nil && *biz.BusinessName != "" {
@@ -911,7 +882,7 @@ func (s *signalService) GetMessages(accountID, role, conversationID string, page
 		limit = 50
 	}
 
-	// Hanya tandai read saat membaca halaman pertama (mencegah false-positive saat scroll history)
+	// Mark read on initial page read only to prevent false-positives during history scroll.
 	if page == 1 {
 		_ = s.signalRepo.MarkMessagesAsRead(conversationID, accountID)
 	}
@@ -982,7 +953,7 @@ func (s *signalService) SendMessage(accountID, role, conversationID string, inpu
 		return nil, errors.New("gagal mengirim pesan")
 	}
 
-	// 🔔 REAL-TIME: Kirim event new_message ke lawan bicara + in-app notification + multi-device sync
+	// Dispatch real-time new message event, in-app notification, and multi-device sync.
 	go s.notifyNewMessage(accountID, conv, signal, &msg)
 
 	return &msg, nil
@@ -1015,7 +986,6 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 	}
 
 	if isCustomer {
-		// Customer mengirim pesan -> ambil semua staff & owner toko
 		staffIDs, err := s.businessRepo.GetBusinessStaffAccountIDs(conv.BusinessID)
 		if err == nil && len(staffIDs) > 0 {
 			recipientIDs = staffIDs
@@ -1026,7 +996,6 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 			}
 		}
 
-		// Pastikan conv.MerchantID masuk jika belum ada
 		hasMerchant := false
 		for _, rid := range recipientIDs {
 			if rid == conv.MerchantID {
@@ -1041,10 +1010,9 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 		notifTitle = "Pesan Baru dari Pelanggan"
 		senderName = customerName
 
-		// Live WebSocket broadcast ke semua staff/owner toko
 		s.hub.BroadcastToUsers(recipientIDs, event)
 	} else {
-		// Merchant (Owner/Staff) mengirim pesan -> kirim ke Customer
+		// Dispatch to customer.
 		recipientIDs = []string{signal.CustomerID}
 		bizName := "Toko"
 		if biz, err := s.businessRepo.FindBusinessByID(conv.BusinessID); err == nil && biz != nil && biz.BusinessName != nil && *biz.BusinessName != "" {
@@ -1053,10 +1021,8 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 		notifTitle = fmt.Sprintf("Pesan Baru dari %s", bizName)
 		senderName = bizName
 
-		// Live WebSocket ke customer
 		s.hub.SendToUser(signal.CustomerID, event)
 
-		// Real-time sync ke merchant lain (owner/staff) di bisnis yang sama agar screen mereka terupdate
 		if conv.MerchantID != senderID {
 			s.hub.SendToUser(conv.MerchantID, event)
 		}
@@ -1065,8 +1031,6 @@ func (s *signalService) notifyNewMessage(senderID string, conv *models.SignalCon
 		}
 	}
 
-	// Simpan ke in-app notification & push FCM
-	// Jika pengirim adalah customer dan isi pesan adalah template inisiasi, lewati pembuatan notifikasi in-app
 	if isCustomer && isTemplate {
 		return
 	}

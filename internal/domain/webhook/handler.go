@@ -14,12 +14,8 @@ func NewWebhookHandler() *WebhookHandler {
 	return &WebhookHandler{}
 }
 
-// VerifyWhatsAppWebhook menangani GET request verifikasi handshake dari Meta for Developers.
-// Meta mengirimkan:
-//   - hub.mode=subscribe
-//   - hub.challenge=<angka_challenge>
-//   - hub.verify_token=<token_yang_didaftarkan>
-// Server wajib merespon dengan status 200 OK dan body berisi string hub.challenge secara langsung (plain text).
+// VerifyWhatsAppWebhook handles the GET verification handshake from Meta Webhooks API,
+// validating the verify token and echoing hub.challenge with a 200 OK response.
 func (h *WebhookHandler) VerifyWhatsAppWebhook(c *fiber.Ctx) error {
 	mode := c.Query("hub.mode")
 	token := c.Query("hub.verify_token")
@@ -39,11 +35,11 @@ func (h *WebhookHandler) VerifyWhatsAppWebhook(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusForbidden).SendString("Verification token mismatch")
 }
 
-// HandleWhatsAppWebhookEvent menangani POST event notifikasi dari Meta (status pesan terkirim, dibaca, atau pesan masuk).
+// HandleWhatsAppWebhookEvent processes Meta WhatsApp Cloud API webhooks.
 func (h *WebhookHandler) HandleWhatsAppWebhookEvent(c *fiber.Ctx) error {
 	body := c.Body()
 	log.Printf("[WHATSAPP-WEBHOOK-EVENT] Received notification from Meta: %s", string(body))
 
-	// Respon 200 OK sesegera mungkin agar Meta tidak mengirim ulang (retry)
+	// Return 200 OK immediately to prevent Meta webhook delivery retries.
 	return c.Status(fiber.StatusOK).SendString("EVENT_RECEIVED")
 }

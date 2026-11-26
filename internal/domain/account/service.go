@@ -49,14 +49,12 @@ func validatePhoneNumber(phone *string) error {
 		return nil
 	}
 	clean := strings.TrimSpace(*phone)
-	// Hapus karakter pemisah umum seperti spasi, strip, tanda kurung
 	sanitized := strings.ReplaceAll(clean, " ", "")
 	sanitized = strings.ReplaceAll(sanitized, "-", "")
 	sanitized = strings.ReplaceAll(sanitized, "(", "")
 	sanitized = strings.ReplaceAll(sanitized, ")", "")
 
-	// Standar internasional E.164 & lokal: opsional diawali '+' lalu 7 sampai 15 digit angka
-	// Mendukung +628..., 08..., 628..., +1..., +44..., +65..., dan seluruh kode negara di dunia
+	// International E.164 and local standard: optional '+' followed by 7 to 15 digits.
 	phonePattern := regexp.MustCompile(`^\+?[0-9]{7,15}$`)
 	if !phonePattern.MatchString(sanitized) {
 		return errors.New("Nomor telepon tidak valid (masukkan nomor valid dengan format lokal seperti 08... atau internasional seperti +62... / kode negara lainnya)")
@@ -250,13 +248,12 @@ func isAccountDataComplete(account *models.Account) string {
 		return "inactive"
 	}
 
-	// Jangan mengubah status jika akun sedang ditangguhkan atau diblokir
+	// Preserve suspended or banned account statuses.
 	if account.AccountStatus == "suspended" || account.AccountStatus == "banned" {
 		return account.AccountStatus
 	}
 
-	// Karena verifikasi via nomor telepon belum tersedia, status akun aktif/verified
-	// hanya ditentukan jika pengguna sudah memiliki email terdaftar dan terverifikasi
+	// When phone verification is unavailable, active verification status requires verified email.
 	if account.Email != nil && strings.TrimSpace(*account.Email) != "" {
 		return "active"
 	}
@@ -275,7 +272,6 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 
 	account.AccountIDAlias = account.AccountID
 
-	// Load profil untuk role akun saat ini
 	if account.Role == "customer" {
 		customer, _ := s.repo.GetCustomerByAccountID(accountID)
 		account.Customer = customer
@@ -289,7 +285,7 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 		account.BusinessAdmin = admin
 	}
 
-	// Deteksi multi-role: cari seluruh akun terkait dengan email atau nomor telepon yang sama
+	// Multi-role detection: discover linked accounts sharing the same email or phone number.
 	var identifier string
 	if account.Email != nil && strings.TrimSpace(*account.Email) != "" {
 		identifier = strings.TrimSpace(*account.Email)
@@ -314,7 +310,7 @@ func (s *profileService) GetMyProfile(accountID string) (*models.Account, error)
 					roleSet[sib.Role] = true
 					availableRoles = append(availableRoles, sib.Role)
 				}
-				// Muat sub-profil peran lain yang tersedia
+				// Load associated role sub-profiles.
 				switch sib.Role {
 				case "customer":
 					if account.Customer == nil {
@@ -509,10 +505,10 @@ func (s *profileService) ForceDeleteAccount(identifier string) (*ForceDeleteResu
 		return nil, errors.New("Identifier wajib diisi (bisa berupa account_id, email, username, nomor telepon, atau NIK)")
 	}
 
-	// Cari akun berdasarkan identifier (email/username/phone/nik)
+	// Find account by identifier (email/username/phone/nik).
 	account, err := s.repo.GetAccountByIdentifier(cleanIdentifier)
 	if err != nil {
-		// Fallback: coba langsung cari berdasarkan AccountID
+		// Fallback to direct AccountID lookup.
 		account, err = s.repo.GetAccountByID(cleanIdentifier)
 		if err != nil {
 			return nil, errors.New("Akun dengan identifier '" + cleanIdentifier + "' tidak ditemukan")
@@ -521,13 +517,12 @@ func (s *profileService) ForceDeleteAccount(identifier string) (*ForceDeleteResu
 
 	accountID := account.AccountID
 
-	// Eksekusi penghapusan tuntas dalam transaksi database
+	// Execute account deletion within a database transaction.
 	deletedBusinessIDs, deletedProductIDs, err := s.repo.DeleteAccountTx(accountID, account.Role)
 	if err != nil {
 		return nil, errors.New("Gagal menghapus akun secara permanen: " + err.Error())
 	}
 
-	// Hapus OTP delete di Redis jika ada
 	redisKey := "delete_account_otp:" + accountID
 	config.RDB.Del(config.Ctx, redisKey)
 
@@ -753,7 +748,7 @@ func (s *profileService) GetKYCStatus(accountID string) (*models.KYCStatusRespon
 			res.SubmittedAt = owner.KycSubmittedAt
 			res.VerifiedAt = owner.KycVerifiedAt
 		}
-		// Jika belum verified, sinkronisasikan jika akun Admin saudara sudah terverifikasi
+		// Synchronize KYC status from verified sibling admin account if present.
 		if res.KycStatus != "verified" {
 			if s.repo.SyncVerifiedKYC(accountID, "owner") {
 				res.KycStatus = "verified"
@@ -772,7 +767,7 @@ func (s *profileService) GetKYCStatus(accountID string) (*models.KYCStatusRespon
 			res.SubmittedAt = admin.KycSubmittedAt
 			res.VerifiedAt = admin.KycVerifiedAt
 		}
-		// Jika belum verified, sinkronisasikan jika akun Owner saudara sudah terverifikasi
+		// Synchronize KYC status from verified sibling owner account if present.
 		if res.KycStatus != "verified" {
 			if s.repo.SyncVerifiedKYC(accountID, "business_admin") {
 				res.KycStatus = "verified"
@@ -810,12 +805,12 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 		return errors.New("Pengajuan verifikasi identitas (KYC) hanya berlaku untuk merchant owner dan business admin")
 	}
 
-	// Jika akun saudara (owner <-> admin) sudah terverifikasi KYC, otomatis sinkronisasi tanpa perlu upload ulang
+	// Sibling account KYC inheritance: auto-synchronize without requiring re-upload.
 	if s.repo.SyncVerifiedKYC(accountID, account.Role) {
 		return errors.New("Akun Anda sudah terverifikasi KYC")
 	}
 
-	// Periksa status pengajuan KYC saat ini: jika pending atau verified, jangan izinkan submit ulang
+	// Disallow re-submitting KYC if current status is already pending or verified.
 	switch account.Role {
 	case "owner":
 		owner, err := s.repo.GetOwnerByAccountID(accountID)
@@ -944,7 +939,7 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 			return errors.New("Gagal menyimpan pengajuan verifikasi KYC")
 		}
 
-		// 🎁 Poin 8-1: Program Sambutan Mitra Baru saat Pemilik Toko selesai registrasi data diri / KYC
+		// Trigger new merchant welcome program upon KYC completion.
 		if s.notifService != nil {
 			go s.notifService.SendWelcomeMerchantNotification(accountID)
 		}

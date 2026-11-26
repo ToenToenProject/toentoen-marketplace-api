@@ -17,5 +17,5 @@ func (ReferralUser) TableName() string {
 	return "operations.users"
 }
 
-// OperationsUser adalah representasi pengguna internal dari skema operations (CTO, Admin, CS, dsb)
+// OperationsUser represents internal administrative staff from the operations schema.
 type OperationsUser = ReferralUser

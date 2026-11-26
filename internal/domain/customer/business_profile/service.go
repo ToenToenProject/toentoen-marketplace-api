@@ -163,8 +163,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		return BusinessProfileResponse{}, err
 	}
 
-	// Catat event visitor secara async (fire-and-forget, tidak memblok response)
-	// Abaikan kunjungan dari pemilik toko sendiri agar data analitik akurat
+	// Record visit event asynchronously, ignoring visits from the business owner.
 	isOwner := accountID != "" && business.AccountID == accountID
 	if s.analyticsSvc != nil && !isOwner {
 		if sourceType == "" {
@@ -187,7 +186,6 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 
 	isVerified, hasNIB, _ := s.repo.GetVerificationStatus(businessID)
 
-	// Tentukan Kategori Utama (Ambil yang pertama jika ada)
 	category := "General"
 	if len(business.Categories) > 0 {
 		category = business.Categories[0].Name
@@ -195,7 +193,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		category = *business.CustomCategory
 	}
 
-	// Hitung IsOpenNow secara akurat menggunakan utils.CalculateStoreStatus (terkunci ke WIB / UTC+7)
+	// Calculate real-time open status locked to WIB (UTC+7).
 	isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours, business.ConfirmedOpenDate, business.ConfirmedOvertimeDate)
 
 	bName := ""
@@ -246,7 +244,7 @@ func (s *service) GetBusinessProfile(businessID, accountID string, sourceType st
 		recentReviews = []models.Review{}
 	}
 
-	// Hitung status Live Streaming (otomatis kedaluwarsa jika sudah lewat 4 jam)
+	// Live streaming automatically expires after 4 hours.
 	isLive := business.IsLive
 	var livePlatform *string
 	var liveStartedAt *time.Time
@@ -326,7 +324,6 @@ func decryptBusinessCertificates(certs []models.BusinessCertificate) []models.Bu
 }
 
 func (s *service) ToggleBookmark(accountID, businessID string) (bool, error) {
-	// Verifikasi toko exist
 	_, err := s.repo.GetBusinessDetail(businessID)
 	if err != nil {
 		return false, err
@@ -357,7 +354,6 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 
 	var responses []BusinessProfileResponse
 	for _, business := range businesses {
-		// Tentukan Kategori Utama (Ambil yang pertama jika ada)
 		category := "General"
 		if len(business.Categories) > 0 {
 			category = business.Categories[0].Name
@@ -365,7 +361,7 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 			category = *business.CustomCategory
 		}
 
-		// Hitung IsOpenNow secara akurat menggunakan utils.CalculateStoreStatus (terkunci ke WIB / UTC+7)
+		// Calculate real-time open status locked to WIB (UTC+7).
 		isOpenNow := utils.CalculateStoreStatus(business.IsManuallyClosed, business.Hours, business.ConfirmedOpenDate, business.ConfirmedOvertimeDate)
 
 		bName := ""
@@ -428,7 +424,6 @@ func (s *service) GetBookmarks(accountID string) ([]BusinessProfileResponse, err
 		})
 	}
 
-	// Inisialisasi menjadi slice kosong agar bukan null (di JSON)
 	if responses == nil {
 		responses = []BusinessProfileResponse{}
 	}
@@ -703,7 +698,7 @@ func (s *service) GetAllProducts(businessID string, groupID string) ([]SimplePro
 
 	var simpleProducts []SimpleProductResponse
 
-	// Jika melihat grup "Promosi" atau katalog umum, sertakan paket bundling aktif di paling atas
+	// Prepend active bundling packages for promotional or general catalog views.
 	if groupID == "promotion" || groupID == "" {
 		bundlingPromos, _ := s.repo.GetActiveBundlingPromotions(businessID)
 		for _, bp := range bundlingPromos {
@@ -1026,7 +1021,7 @@ func (s *service) GetSavedAndWishlistedShops(accountID string, filter string) (S
 	if shops == nil {
 		shops = []SavedShopItem{}
 	} else {
-		// Sort: toko yang memiliki SavedAt terbaru di urutan pertama
+		// Sort stores by most recent save timestamp first.
 		sort.Slice(shops, func(i, j int) bool {
 			if shops[i].SavedAt == nil && shops[j].SavedAt == nil {
 				return shops[i].AverageRating > shops[j].AverageRating

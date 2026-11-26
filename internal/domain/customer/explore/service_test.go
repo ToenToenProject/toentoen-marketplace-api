@@ -270,7 +270,6 @@ func TestExploreServiceScopes(t *testing.T) {
 
 	svc := NewExploreService(mockRepo)
 
-	// 1. Test Scope "store" (MatchedProducts should be stripped)
 	resStore, err := svc.GetExploreBusinesses(SearchRequest{Scope: "store"})
 	if err != nil {
 		t.Fatalf("Scope store error: %v", err)
@@ -285,7 +284,6 @@ func TestExploreServiceScopes(t *testing.T) {
 		t.Errorf("Expected MatchedProducts to be stripped in scope 'store', got %v", resStore.Businesses[0].MatchedProducts)
 	}
 
-	// 2. Test Scope "all" (MatchedProducts preserved)
 	resAll, err := svc.GetExploreBusinesses(SearchRequest{Scope: "all"})
 	if err != nil {
 		t.Fatalf("Scope all error: %v", err)
@@ -297,7 +295,6 @@ func TestExploreServiceScopes(t *testing.T) {
 		t.Errorf("Expected MatchedProducts to be preserved in scope 'all', got %v", resAll.Businesses[0].MatchedProducts)
 	}
 
-	// 3. Test Scope "product" (Returns Products array)
 	resProd, err := svc.GetExploreBusinesses(SearchRequest{Scope: "product"})
 	if err != nil {
 		t.Fatalf("Scope product error: %v", err)
@@ -426,7 +423,6 @@ func TestExploreServiceMatchedProductsPriceFilter(t *testing.T) {
 
 	svc := NewExploreService(mockRepo)
 
-	// Test 1: min_price = 15000, max_price = 30000 -> P2 (20000) & P3 (25000) harus masuk, P1 & P4 dieliminasi
 	min15 := 15000.0
 	max30 := 30000.0
 	res1, err := svc.GetExploreBusinesses(SearchRequest{
@@ -449,7 +445,7 @@ func TestExploreServiceMatchedProductsPriceFilter(t *testing.T) {
 		t.Errorf("Expected products [P2, P3], got [%s, %s]", matched1[0].ProductID, matched1[1].ProductID)
 	}
 
-	// Test 2: min_price = 26000 -> Hanya P4 (50000) yang memenuhi
+	// Test filter min_price.
 	min26 := 26000.0
 	res2, err := svc.GetExploreBusinesses(SearchRequest{
 		Scope:    "all",
@@ -464,7 +460,6 @@ func TestExploreServiceMatchedProductsPriceFilter(t *testing.T) {
 		t.Errorf("Expected only P4, got %v", matched2)
 	}
 
-	// Test 3: max_price = 15000 -> Hanya P1 (10000) yang memenuhi
 	max15 := 15000.0
 	res3, err := svc.GetExploreBusinesses(SearchRequest{
 		Scope:    "all",
@@ -479,7 +474,6 @@ func TestExploreServiceMatchedProductsPriceFilter(t *testing.T) {
 		t.Errorf("Expected only P1, got %v", matched3)
 	}
 
-	// Test 4: min_price = 100000 -> Tidak ada produk yang cocok, array matched_products kosong
 	min100 := 100000.0
 	res4, err := svc.GetExploreBusinesses(SearchRequest{
 		Scope:    "all",
@@ -494,7 +488,6 @@ func TestExploreServiceMatchedProductsPriceFilter(t *testing.T) {
 		t.Errorf("Expected 0 matched products, got %d", len(matched4))
 	}
 
-	// Test 5: Tanpa filter harga -> Seluruh 4 produk tetap terjaga
 	res5, err := svc.GetExploreBusinesses(SearchRequest{
 		Scope: "all",
 		Limit: 10,

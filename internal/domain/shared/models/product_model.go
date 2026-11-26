@@ -6,16 +6,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// ==========================================
-// 1. ENTITAS DATABASE (GORM MODELS)
-// ==========================================
 
 type Product struct {
 	ProductID      string  `gorm:"primaryKey;column:product_id" json:"product_id"`
 	BusinessID     string  `gorm:"column:business_id;index" json:"business_id"`
 	ProductGroupID *string `gorm:"column:product_group_id;index" json:"product_group_id"` // Pointer karena bisa NULL
 
-	// Serializer JSON otomatis dari GORM
+	// Automatic JSON serializer for GORM.
 	ProductPreview     []string `gorm:"column:product_preview;type:jsonb;serializer:json;default:'[]'" json:"product_preview"`
 	ProductName        string   `gorm:"column:product_name" json:"product_name"`
 	ProductOrigin      string   `gorm:"column:product_origin;default:'domestic'" json:"product_origin"`
@@ -37,7 +34,7 @@ type Product struct {
 	PackageSavingsPercentage *float64             `gorm:"column:package_savings_percentage" json:"package_savings_percentage,omitempty"`
 	PackageItems             []ProductPackageItem `gorm:"foreignKey:PackageProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"package_items,omitempty"`
 
-	// 🪄 KOLOM VIRTUAL HASIL SUBQUERY (Aman, tidak memicu error migrasi/gorm insert)
+	// Virtual subquery fields; ignored by GORM schema migrations.
 	HasVariants bool    `gorm:"->;column:has_variants" json:"has_variants"`
 	MinPrice    float64 `gorm:"->;column:min_price" json:"min_price"`
 	MaxPrice    float64 `gorm:"->;column:max_price" json:"max_price"`
@@ -60,7 +57,6 @@ type Product struct {
 	UpdatedAt time.Time      `gorm:"column:updated_at" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"` // Disembunyikan dari JSON response
 
-	// Relasi GORM (Otomatis ditarik saat Preload)
 	Business *Business        `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 	Group    *ProductGroup    `gorm:"foreignKey:ProductGroupID;references:ProductGroupID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"product_group,omitempty"`
 	Variants []ProductVariant `gorm:"foreignKey:ProductID;references:ProductID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"variants,omitempty"`
@@ -86,7 +82,6 @@ type ProductPackageItem struct {
 	HasDiscount        bool      `gorm:"column:has_discount;default:false" json:"has_discount"`
 	CreatedAt          time.Time `gorm:"column:created_at" json:"created_at"`
 
-	// Relasi
 	ItemProduct *Product `gorm:"foreignKey:ItemProductID;references:ProductID" json:"product,omitempty"`
 }
 
@@ -94,9 +89,6 @@ func (ProductPackageItem) TableName() string {
 	return "product_package_items"
 }
 
-// ==========================================
-// 2. DTO UNTUK INPUT (REQUEST)
-// ==========================================
 
 type CreateProductInput struct {
 	ProductGroupID     *string    `json:"product_group_id"`
@@ -137,9 +129,6 @@ type UpdateProductInput struct {
 	IsActive           *bool      `json:"is_active"`
 }
 
-// ==========================================
-// 3. DTO UNTUK OUTPUT (RESPONSE CATALOG & PAGINASI)
-// ==========================================
 
 type PaginationMeta struct {
 	NextCursor string `json:"next_cursor"`
@@ -162,15 +151,15 @@ type ProductListItem struct {
 	ImageURL    string `json:"image_url"`
 	HasVariants bool   `json:"has_variants"`
 
-	// HARGA CORET (Sebelum Diskon)
+	// Original price before discount.
 	OriginalMinPrice float64 `json:"original_min_price"`
 	OriginalMaxPrice float64 `json:"original_max_price"`
 
-	// HARGA UTAMA / BAYAR (Setelah Diskon)
+	// Effective price after discount.
 	FinalMinPrice float64 `json:"final_min_price"`
 	FinalMaxPrice float64 `json:"final_max_price"`
 
-	// INFO DISKON
+	// Discount metadata.
 	IsDiscounted    bool       `json:"is_discounted"`
 	DiscountType    string     `json:"discount_type"`          // "nominal" atau "percentage"
 	Discount        float64    `json:"discount"`               // Nilai diskon input (misal: 10000 atau 20)
@@ -187,7 +176,6 @@ type ProductListItem struct {
 	LikeCount     int      `json:"like_count"`
 	ReviewCount   int      `json:"review_count"`
 
-	// Digunakan jika detail varian ingin disertakan pada response tertentu
 	Variants []ProductVariant `json:"variants,omitempty"`
 }
 
@@ -197,7 +185,6 @@ type GetProductsResponse struct {
 	Pagination PaginationMeta    `json:"pagination"`
 }
 
-// Taruh ini di internal/models/models.go
 type ProductDetailResponse struct {
 	ProductID          string   `json:"product_id"`
 	BusinessID         string   `json:"business_id"`
@@ -240,7 +227,6 @@ type ProductDetailResponse struct {
 }
 
 // ==========================================
-// 3. DTO UNTUK FITUR PAKET PRODUK (STANDALONE PACKAGE)
 // ==========================================
 
 type PackageProductItemInput struct {

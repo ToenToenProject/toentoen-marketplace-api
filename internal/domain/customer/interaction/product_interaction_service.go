@@ -17,7 +17,6 @@ import (
 
 type ProductInteractionService interface {
 
-	// 2. Review Produk (Ulasan Berbintang)
 	AddProductReview(productID, accountID string, input models.CreateProductReviewInput) error
 	UpdateProductReview(reviewID, accountID string, input models.UpdateProductReviewInput) error
 	DeleteProductReview(reviewID, requesterID string) error
@@ -34,7 +33,6 @@ type ProductInteractionService interface {
 	ReportReview(reviewID, accountID string, input models.CreateReportInput) error
 	ReportReviewReply(commentID, accountID string, input models.CreateReportInput) error
 
-	// 3. Komentar Diskusi / Q&A Produk
 	AddProductComment(productID, accountID string, input models.CreateProductCommentInput) error
 	EditProductComment(commentID, accountID string, input models.UpdateProductCommentInput) error
 	DeleteProductComment(commentID, requesterID string) error
@@ -42,7 +40,6 @@ type ProductInteractionService interface {
 	ToggleProductCommentLike(commentID, accountID string) (bool, error)
 	ReportProductComment(commentID, accountID string, input models.CreateReportInput) error
 
-	// 4. Unified Likes & Comments
 	ToggleUnifiedCommentLike(commentID, accountID string) (bool, error)
 	ToggleUnifiedReviewLike(reviewID, accountID string) (bool, error)
 	DeleteUnifiedComment(commentID, requesterID string) error
@@ -80,7 +77,6 @@ func getOwnerInteractionLabel(isOwnerLiked, isOwnerReplied, isByOwner bool) stri
 
 
 // ----------------------------------------------------
-// 2. REVIEW PRODUK (ULASAN BERBINTANG)
 // ----------------------------------------------------
 
 func (s *productInteractionService) AddProductReview(productID, accountID string, input models.CreateProductReviewInput) error {
@@ -89,7 +85,7 @@ func (s *productInteractionService) AddProductReview(productID, accountID string
 		return errors.New("Produk tidak ditemukan atau tidak memiliki toko yang valid")
 	}
 
-	// 🛡️ Cegah pemilik dan staf toko mereview produk milik sendiri
+	// Prevent store owners and staff from reviewing their own products.
 	staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(businessID)
 	for _, sid := range staffIDs {
 		if sid == accountID {
@@ -177,7 +173,7 @@ func (s *productInteractionService) DeleteProductReview(reviewID, requesterID st
 		return errors.New("ulasan produk tidak ditemukan")
 	}
 
-	// 🛡️ Hanya pembuat ulasan yang dapat menghapus ulasannya sendiri
+	// Only review author may delete their review.
 	if review.AccountID != requesterID {
 		return errors.New("Anda hanya memiliki izin untuk menghapus ulasan yang Anda buat sendiri")
 	}
@@ -401,7 +397,7 @@ func (s *productInteractionService) GetSmartDisplayProductReviews(productID, cur
 		return nil, err
 	}
 
-	// Filter kualitas: Hanya review dengan min. 10 kata
+	// Quality filter: reviews require at least 10 words.
 	var eligible []models.ProductReview
 	for _, r := range rawReviews {
 		if countWords(r.Comment) >= 10 {
@@ -423,7 +419,6 @@ func (s *productInteractionService) GetSmartDisplayProductReviews(productID, cur
 		staffMap[sid] = true
 	}
 
-	// Hitung rata-rata rating
 	summary, _ := s.repo.GetProductReviewSummary(productID)
 	avgRating := 5.0
 	if summary != nil && summary.TotalReviews > 0 {
@@ -526,7 +521,7 @@ func (s *productInteractionService) GetSmartDisplayProductReviews(productID, cur
 	takeN(midList, targetMid)
 	takeN(lowList, targetLow)
 
-	// Jika belum mencapai 5, isi dari sisa daftar apa saja berdasarkan skor tertinggi
+	// Backfill remaining slots up to 5 by highest rating score.
 	if len(selected) < 5 {
 		var allRemaining []ScoredReview
 		for _, l := range [][]ScoredReview{highList, midList, lowList} {
@@ -870,7 +865,6 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 		return nil
 	}
 
-	// 2. Cek apakah ini ulasan bisnis / toko di reviews
 	var bReview models.Review
 	if errB := database.DB.Where("review_id = ?", reviewID).First(&bReview).Error; errB == nil {
 		var assignment models.BusinessAdminAssignment
@@ -1027,7 +1021,6 @@ func (s *productInteractionService) ReportReviewReply(commentID, accountID strin
 }
 
 // ----------------------------------------------------
-// 3. KOMENTAR DISKUSI / Q&A PRODUK
 // ----------------------------------------------------
 
 func (s *productInteractionService) AddProductComment(productID, accountID string, input models.CreateProductCommentInput) error {
@@ -1283,17 +1276,14 @@ func (s *productInteractionService) DeleteUnifiedComment(commentID, requesterID 
 	commentID = strings.TrimSpace(commentID)
 	requesterID = strings.TrimSpace(requesterID)
 
-	// 1. Cek di product_comments
 	if err := s.DeleteProductComment(commentID, requesterID); err == nil {
 		return nil
 	}
 
-	// 2. Cek di product_review_comments
 	if err := s.DeleteReviewReply(commentID, requesterID); err == nil {
 		return nil
 	}
 
-	// 3. Cek di business_review_comments
 	var bComment models.BusinessReviewComment
 	if err := database.DB.Where("comment_id = ?", commentID).First(&bComment).Error; err == nil {
 		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(bComment.BusinessID)
@@ -1314,7 +1304,6 @@ func (s *productInteractionService) DeleteUnifiedComment(commentID, requesterID 
 		return nil
 	}
 
-	// 4. Cek di business_post_comments
 	var bpComment models.BusinessPostComment
 	if err := database.DB.Where("comment_id = ?", commentID).First(&bpComment).Error; err == nil {
 		staffIDs, _ := s.businessRepo.GetBusinessStaffAccountIDs(bpComment.BusinessID)

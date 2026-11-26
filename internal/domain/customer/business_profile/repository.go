@@ -90,30 +90,36 @@ func (r *repository) CheckBookmark(accountID, businessID string) (bool, error) {
 }
 
 func (r *repository) ToggleBookmark(accountID, businessID string) (bool, error) {
-	var existing models.BusinessBookmark
-	err := r.db.Where("account_id = ? AND business_id = ?", accountID, businessID).First(&existing).Error
+	var isBookmarked bool
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		var existing models.BusinessBookmark
+		err := tx.Where("account_id = ? AND business_id = ?", accountID, businessID).First(&existing).Error
 
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Buat baru
-			newBookmark := models.BusinessBookmark{
-				AccountID:  accountID,
-				BusinessID: businessID,
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				newBookmark := models.BusinessBookmark{
+					AccountID:  accountID,
+					BusinessID: businessID,
+				}
+				if errCreate := tx.Create(&newBookmark).Error; errCreate != nil {
+					return errCreate
+				}
+				isBookmarked = true
+				return nil
 			}
-			if errCreate := r.db.Create(&newBookmark).Error; errCreate != nil {
-				return false, errCreate
-			}
-			return true, nil // Sekarang di-bookmark
+			return err
 		}
-		return false, err
-	}
 
-	// Hapus (Unbookmark)
-	if errDelete := r.db.Delete(&existing).Error; errDelete != nil {
-		return true, errDelete // gagal hapus, masih bookmarked
-	}
+		if errDelete := tx.Delete(&existing).Error; errDelete != nil {
+			isBookmarked = true
+			return errDelete
+		}
 
-	return false, nil // Sudah tidak di-bookmark
+		isBookmarked = false
+		return nil
+	})
+
+	return isBookmarked, err
 }
 
 func (r *repository) CheckBusinessLike(accountID, businessID string) (bool, error) {
@@ -195,7 +201,10 @@ func (r *repository) GetBookmarkedBusinesses(accountID string) ([]models.Busines
 		Preload("Categories").
 		Preload("Hours").
 		Joins("JOIN business_bookmarks ON business_bookmarks.business_id = businesses.business_id").
-		Where("business_bookmarks.account_id = ?", accountID).
+		Where("business_bookmarks.account_id = ? AND businesses.is_active = ? AND businesses.status != ?", accountID, true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')").
+		Order("business_bookmarks.created_at DESC").
+		Limit(100).
 		Find(&businesses).Error
 
 	return businesses, err
@@ -222,15 +231,11 @@ func (r *repository) GetRecentPosts(businessID string, limit int) ([]models.Busi
 func (r *repository) GetSimilarBusinesses(category string, city string, currentBusinessID string, limit int) ([]models.Business, error) {
 	var businesses []models.Business
 	
-	// Cari bisnis yang ada di kota yang sama, KECUALI bisnis saat ini
+	// Find other active, KYC-verified businesses in the same city.
 	query := r.db.Preload("Categories").Preload("Hours").
-		Where("city = ? AND business_id != ?", city, currentBusinessID)
+		Where("city = ? AND business_id != ? AND is_active = ? AND status != ?", city, currentBusinessID, true, "deleted").
+		Where("EXISTS (SELECT 1 FROM owners o WHERE o.account_id = businesses.account_id AND o.kyc_status = 'verified')")
 
-	// Jika kita ingin mencari berdasarkan kategori juga:
-	// Di postgres_go/gorm, join ke business_category_tags agak rumit dengan gorm many2many langsung filter.
-	// Untuk sederhana, kita tarik berdasarkan kota saja atau kita bisa gunakan raw query jika butuh exact category match.
-	// Saat ini, ambil berdasarkan city dulu untuk "Similar in Area" sebagai awalan.
-	// Jika category tidak kosong, kita cari bisnis yang tergabung dalam kategori itu
 	if category != "" && category != "General" {
 		query = query.Joins("JOIN business_category_tags bct ON bct.business_id = businesses.business_id").
 			Joins("JOIN categories c ON c.id = bct.category_id").
@@ -477,7 +482,6 @@ func (r *repository) GetSavedAndWishlistedBizIDs(accountID string) (SavedShopDat
 		return data, nil
 	}
 
-	// 1. Query bookmarked businesses
 	type bookmarkRow struct {
 		BusinessID string    `gorm:"column:business_id"`
 		CreatedAt  time.Time `gorm:"column:created_at"`
@@ -494,7 +498,6 @@ func (r *repository) GetSavedAndWishlistedBizIDs(accountID string) (SavedShopDat
 		data.SavedBizMap[b.BusinessID] = b.CreatedAt
 	}
 
-	// 2. Query wishlisted products and their business_id
 	type wishlistRow struct {
 		BusinessID       string    `gorm:"column:business_id"`
 		Count            int       `gorm:"column:count"`

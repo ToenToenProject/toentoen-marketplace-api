@@ -7,7 +7,7 @@ import (
 	"toentoen-backend/internal/domain/realtime"
 )
 
-// WSLocationHandler menangani pesan WebSocket yang berhubungan dengan Live Location
+// WSLocationHandler handles WebSocket messages for live location streaming.
 type WSLocationHandler struct {
 	service *LocationService
 	// throttleStates menyimpan state throttle per client connection
@@ -22,7 +22,7 @@ func NewWSLocationHandler(service *LocationService) *WSLocationHandler {
 	}
 }
 
-// HandleMessage memproses pesan masuk dari WebSocket client yang berhubungan dengan lokasi
+// HandleMessage processes incoming location WebSocket events.
 func (h *WSLocationHandler) HandleMessage(client *realtime.Client, msgType string, rawData json.RawMessage) {
 	switch msgType {
 	case "LOCATION_UPDATE":
@@ -36,8 +36,7 @@ func (h *WSLocationHandler) HandleMessage(client *realtime.Client, msgType strin
 	}
 }
 
-// handleLocationUpdate menerima update lokasi dari customer
-// dan mengembalikan daftar merchant terdekat yang terbaru
+// handleLocationUpdate processes customer coordinates and returns nearest active merchants.
 func (h *WSLocationHandler) handleLocationUpdate(client *realtime.Client, rawData json.RawMessage) {
 	var update LocationUpdate
 	if err := json.Unmarshal(rawData, &update); err != nil {
@@ -45,12 +44,10 @@ func (h *WSLocationHandler) handleLocationUpdate(client *realtime.Client, rawDat
 		return
 	}
 
-	// Validasi dasar
 	if update.Lat < -90 || update.Lat > 90 || update.Lng < -180 || update.Lng > 180 {
 		return
 	}
 
-	// Ambil atau buat throttle state untuk client ini
 	state := client.GetLocationState()
 
 	// Proses lokasi melalui service (throttle, jitter filter, nearby query)
@@ -59,7 +56,6 @@ func (h *WSLocationHandler) handleLocationUpdate(client *realtime.Client, rawDat
 		return
 	}
 
-	// Kirim update nearby merchants ke customer
 	response := realtime.WSEvent{
 		Type: "NEARBY_UPDATE",
 		Data: map[string]interface{}{
@@ -82,8 +78,7 @@ func (h *WSLocationHandler) handleLocationUpdate(client *realtime.Client, rawDat
 	}
 }
 
-// handleSubscribeArea menangani customer yang ingin subscribe ke area tertentu
-// untuk menerima update real-time jika ada perubahan merchant di area tersebut
+// handleSubscribeArea manages customer viewport area subscriptions.
 func (h *WSLocationHandler) handleSubscribeArea(client *realtime.Client, rawData json.RawMessage) {
 	var req SubscribeAreaRequest
 	if err := json.Unmarshal(rawData, &req); err != nil {
@@ -95,10 +90,8 @@ func (h *WSLocationHandler) handleSubscribeArea(client *realtime.Client, rawData
 		req.RadiusKm = 5
 	}
 
-	// Set subscription area di client
 	client.SetSubscriptionArea(req.Lat, req.Lng, req.RadiusKm)
 
-	// Kirim snapshot awal merchant terdekat
 	merchants, err := h.service.GetNearbyMerchants(req.Lat, req.Lng, req.RadiusKm, 50)
 	if err != nil {
 		log.Printf("⚠️ WS Location: error getting nearby for %s: %v", client.AccountID, err)

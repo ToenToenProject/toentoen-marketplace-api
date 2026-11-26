@@ -14,17 +14,17 @@ import (
 )
 
 const (
-	// DefaultReviewerEmail adalah alamat email resmi untuk pengujian Google Play Reviewer
+	// DefaultReviewerEmail is the designated test account for Google Play store review.
 	DefaultReviewerEmail = "google.tester@toentoen.com"
 
-	// DefaultReviewerPassword adalah password untuk akun pengujian Google Play
+	// DefaultReviewerPassword is the test password for Google Play reviewer accounts.
 	DefaultReviewerPassword = "ToenToen2026!"
 
-	// DefaultReviewerOTP adalah kode OTP statis khusus akun pengujian Google Play
+	// DefaultReviewerOTP is the static bypass OTP for Google Play reviewer accounts.
 	DefaultReviewerOTP = "123456"
 )
 
-// isReviewerIdentifier memeriksa apakah identifier (email/no HP) adalah akun pengujian Google Play
+// isReviewerIdentifier checks whether an identifier belongs to the Google Play review account.
 func isReviewerIdentifier(identifier string) bool {
 	clean := strings.ToLower(strings.TrimSpace(cleanIdentifier(identifier)))
 	if clean == "" {
@@ -41,14 +41,13 @@ func isReviewerIdentifier(identifier string) bool {
 		clean == "6281299998888"
 }
 
-// isReviewerPassword memvalidasi kata sandi untuk akun pengujian Google Play
+// isReviewerPassword checks whether a password matches the Google Play reviewer password.
 func isReviewerPassword(password string) bool {
 	p := strings.TrimSpace(password)
 	return p == DefaultReviewerPassword || p == "Reviewer2026!" || p == "Password123!"
 }
 
-// ensureReviewerAccounts memastikan akun pengujian Google Play selalu tersedia untuk seluruh role:
-// customer, owner, dan business_admin.
+// ensureReviewerAccounts seeds reviewer accounts across customer, owner, and business_admin roles.
 func (s *authService) ensureReviewerAccounts(identifier string) error {
 	roles := []string{"customer", "owner", "business_admin"}
 	var lastErr error
@@ -135,7 +134,7 @@ func (s *authService) ensureReviewerAccounts(identifier string) error {
 	return lastErr
 }
 
-// ensureReviewerAccountExists mempertahankan kompatibilitas lama
+// ensureReviewerAccountExists maintains backward compatibility for reviewer seeding.
 func (s *authService) ensureReviewerAccountExists(identifier string) (*models.Account, error) {
 	_ = s.ensureReviewerAccounts(identifier)
 	return s.repo.FindByIdentifier(identifier, models.RoleGroupCustomer)

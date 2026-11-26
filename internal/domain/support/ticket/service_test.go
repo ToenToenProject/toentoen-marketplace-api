@@ -56,7 +56,6 @@ func TestFormatDetailResponse_FallbackDinamis(t *testing.T) {
 }
 
 func TestDecryptTicket_WithEncryptedAndPlaintextReplies(t *testing.T) {
-	// 1. Plaintext reply dari toentoen-internal-operations
 	plainReply := "Pesan balasan plaintext dari tim CS Operations"
 	ticketPlain := &models.SupportTicket{
 		CustomerServiceSuggestions: &plainReply,
@@ -65,7 +64,6 @@ func TestDecryptTicket_WithEncryptedAndPlaintextReplies(t *testing.T) {
 	assert.NotNil(t, ticketPlain.CustomerServiceSuggestions)
 	assert.Equal(t, plainReply, *ticketPlain.CustomerServiceSuggestions)
 
-	// 2. Encrypted reply jika ada
 	encryptedReply, err := crypto.Encrypt("Pesan balasan rahasia dari CS")
 	assert.NoError(t, err)
 	ticketEnc := &models.SupportTicket{

@@ -47,7 +47,6 @@ func (h *PackageHandler) CalculatePackagePrice(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kalkulasi harga paket berhasil", res)
 }
 
-// 2. CREATE PACKAGE
 func (h *PackageHandler) CreatePackage(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
@@ -76,7 +75,6 @@ func (h *PackageHandler) CreatePackage(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Paket produk berhasil dibuat", res)
 }
 
-// 3. GET ALL PACKAGES
 func (h *PackageHandler) GetPackages(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
@@ -96,7 +94,6 @@ func (h *PackageHandler) GetPackages(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar paket produk berhasil diambil", res)
 }
 
-// 4. GET PACKAGE DETAIL
 func (h *PackageHandler) GetPackageDetail(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	packageID := strings.TrimSpace(c.Params("package_id"))
@@ -120,7 +117,6 @@ func (h *PackageHandler) GetPackageDetail(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail paket produk berhasil diambil", res)
 }
 
-// 5. UPDATE PACKAGE
 func (h *PackageHandler) UpdatePackage(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	packageID := strings.TrimSpace(c.Params("package_id"))
@@ -153,7 +149,6 @@ func (h *PackageHandler) UpdatePackage(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Paket produk berhasil diperbarui", res)
 }
 
-// 6. DELETE PACKAGE
 func (h *PackageHandler) DeletePackage(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	packageID := strings.TrimSpace(c.Params("package_id"))

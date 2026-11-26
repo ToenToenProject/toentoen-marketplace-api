@@ -27,7 +27,7 @@ func NewRedisLocationStore(rdb *redis.Client) *RedisLocationStore {
 // MERCHANT LOCATION (Redis GEO)
 // ================================================================
 
-// UpsertMerchantLocation menyimpan atau memperbarui lokasi merchant di Redis GEO
+// UpsertMerchantLocation updates merchant coordinates in Redis GEO.
 func (s *RedisLocationStore) UpsertMerchantLocation(businessID string, lat, lng float64) error {
 	return s.rdb.GeoAdd(s.ctx, KeyMerchantLocations, &redis.GeoLocation{
 		Name:      businessID,
@@ -36,12 +36,12 @@ func (s *RedisLocationStore) UpsertMerchantLocation(businessID string, lat, lng 
 	}).Err()
 }
 
-// RemoveMerchantLocation menghapus lokasi merchant dari Redis GEO
+// RemoveMerchantLocation evicts merchant coordinates from Redis GEO.
 func (s *RedisLocationStore) RemoveMerchantLocation(businessID string) error {
 	return s.rdb.ZRem(s.ctx, KeyMerchantLocations, businessID).Err()
 }
 
-// GetNearbyMerchants mengambil daftar merchant dalam radius tertentu dari titik customer
+// GetNearbyMerchants retrieves merchant members within a radius in Redis GEO.
 func (s *RedisLocationStore) GetNearbyMerchants(lat, lng, radiusKm float64, limit int) ([]redis.GeoLocation, error) {
 	if limit <= 0 {
 		limit = 50
@@ -60,7 +60,7 @@ func (s *RedisLocationStore) GetNearbyMerchants(lat, lng, radiusKm float64, limi
 		return nil, err
 	}
 
-	// GeoSearch hanya mengembalikan nama member, kita perlu posisi juga
+	// Query positions along with member names from GeoSearch.
 	var locations []redis.GeoLocation
 	for _, name := range results {
 		pos, err := s.rdb.GeoPos(s.ctx, KeyMerchantLocations, name).Result()
@@ -110,7 +110,7 @@ func (s *RedisLocationStore) GetMerchantLocation(businessID string) (*redis.GeoP
 	return positions[0], nil
 }
 
-// GetTotalActiveMerchants mengembalikan jumlah merchant yang aktif di Redis GEO
+// GetTotalActiveMerchants returns count of active merchants in Redis GEO.
 func (s *RedisLocationStore) GetTotalActiveMerchants() (int64, error) {
 	return s.rdb.ZCard(s.ctx, KeyMerchantLocations).Result()
 }
@@ -137,20 +137,20 @@ func (s *RedisLocationStore) SetMerchantMeta(businessID, businessName, logoURL, 
 	return err
 }
 
-// GetMerchantMeta mengambil metadata merchant dari Redis Hash
+// GetMerchantMeta loads merchant metadata from Redis Hash.
 func (s *RedisLocationStore) GetMerchantMeta(businessID string) (map[string]string, error) {
 	key := KeyMerchantMetaPrefix + businessID
 	return s.rdb.HGetAll(s.ctx, key).Result()
 }
 
-// DeleteMerchantMeta menghapus metadata merchant dari Redis
+// DeleteMerchantMeta removes merchant metadata from Redis.
 func (s *RedisLocationStore) DeleteMerchantMeta(businessID string) error {
 	key := KeyMerchantMetaPrefix + businessID
 	return s.rdb.Del(s.ctx, key).Err()
 }
 
 // ================================================================
-// BATCH OPERATIONS (untuk sync dari PostgreSQL)
+// Batch synchronization operations from PostgreSQL.
 // ================================================================
 
 // BatchUpsertMerchantLocations menyimpan banyak lokasi merchant sekaligus menggunakan pipeline
@@ -166,7 +166,6 @@ func (s *RedisLocationStore) BatchUpsertMerchantLocations(merchants []MerchantGe
 			Latitude:  m.Lat,
 			Longitude: m.Lng,
 		})
-		// Simpan metadata
 		key := KeyMerchantMetaPrefix + m.BusinessID
 		pipe.HSet(s.ctx, key, map[string]interface{}{
 			"business_name": m.BusinessName,
@@ -182,7 +181,7 @@ func (s *RedisLocationStore) BatchUpsertMerchantLocations(merchants []MerchantGe
 	return err
 }
 
-// MerchantGeoData adalah struct perantara untuk batch sync dari DB ke Redis
+// MerchantGeoData encapsulates coordinates for batch Redis sync.
 type MerchantGeoData struct {
 	BusinessID   string
 	BusinessName string

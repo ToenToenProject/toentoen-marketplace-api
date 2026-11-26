@@ -20,7 +20,6 @@ type BusinessTransferRequest struct {
 	CreatedAt        time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt        time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 
-	// Relasi
 	Business     *Business `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
 	CurrentOwner *Account  `gorm:"foreignKey:CurrentOwnerID;references:AccountID" json:"current_owner,omitempty"`
 	TargetAccount *Account `gorm:"foreignKey:TargetAccountID;references:AccountID" json:"target_account,omitempty"`
@@ -30,7 +29,6 @@ func (BusinessTransferRequest) TableName() string {
 	return "business_transfer_requests"
 }
 
-// DTO Input & Response
 
 type CheckTransferTargetInput struct {
 	TargetIdentifier string `json:"target_identifier" validate:"required"`

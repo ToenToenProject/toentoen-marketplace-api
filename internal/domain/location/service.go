@@ -10,14 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// LocationService mengelola logika bisnis fitur Live Location
+// LocationService manages live location tracking and discovery.
 type LocationService struct {
 	store *RedisLocationStore
 	hub   *realtime.Hub
 	db    *gorm.DB
 }
 
-// NewLocationService membuat instance baru LocationService
+// NewLocationService initializes LocationService.
 func NewLocationService(store *RedisLocationStore, hub *realtime.Hub, db *gorm.DB) *LocationService {
 	return &LocationService{
 		store: store,
@@ -30,7 +30,7 @@ func NewLocationService(store *RedisLocationStore, hub *realtime.Hub, db *gorm.D
 // CORE: NEARBY QUERY
 // ================================================================
 
-// GetNearbyMerchants mengambil daftar merchant terdekat dari posisi customer
+// GetNearbyMerchants queries nearest merchants within a radius using Redis GEO.
 func (s *LocationService) GetNearbyMerchants(lat, lng, radiusKm float64, limit int) ([]NearbyMerchant, error) {
 	if radiusKm <= 0 {
 		radiusKm = 5 // Default 5 km
@@ -48,7 +48,7 @@ func (s *LocationService) GetNearbyMerchants(lat, lng, radiusKm float64, limit i
 	for _, r := range results {
 		meta, err := s.store.GetMerchantMeta(r.Name)
 		if err != nil || len(meta) == 0 {
-			// Metadata belum ada di Redis, skip (akan di-sync oleh worker)
+			// Skip if metadata is missing in Redis (reconciled by worker).
 			continue
 		}
 
@@ -92,10 +92,10 @@ func (s *LocationService) GetMerchantPosition(businessID string) (*NearbyMerchan
 }
 
 // ================================================================
-// CUSTOMER LOCATION PROCESSING (dari WebSocket)
+// Customer location processing from WebSocket.
 // ================================================================
 
-// ProcessCustomerLocation menerima update lokasi dari customer,
+// ProcessCustomerLocation handles incoming customer location telemetry.
 // menjalankan filter, dan mengembalikan daftar merchant terdekat terbaru
 func (s *LocationService) ProcessCustomerLocation(state *realtime.LocationState, update LocationUpdate) ([]NearbyMerchant, bool) {
 	now := time.Now()
@@ -105,36 +105,32 @@ func (s *LocationService) ProcessCustomerLocation(state *realtime.LocationState,
 		timeSinceLastUpdate = now.Sub(state.LastUpdateAt)
 	}
 
-	// 1. Rate limiting: maksimal 1 update per detik
 	if !state.LastUpdateAt.IsZero() && timeSinceLastUpdate < 1*time.Second {
 		return nil, false
 	}
 	state.LastUpdateAt = now
 	state.UpdateCount++
 
-	// 2. GPS accuracy filter: tolak update dengan akurasi > 100 meter
+	// Reject location updates with GPS accuracy worse than 100 meters.
 	if update.Accuracy > 100 {
 		return nil, false
 	}
 
-	// 3. GPS jitter filter
 	if state.LastLat != 0 && state.LastLng != 0 {
 		if isGPSJitter(state.LastLat, state.LastLng, update.Lat, update.Lng, update.Speed, timeSinceLastUpdate) {
 			return nil, false
 		}
 	}
 
-	// 4. Adaptive throttle: kurangi frekuensi jika customer diam
+	// Throttle update frequency adaptively when client is stationary.
 	if !shouldSendUpdate(state, update.Lat, update.Lng) {
 		return nil, false
 	}
 
-	// 5. Update state
 	state.LastLat = update.Lat
 	state.LastLng = update.Lng
 	state.LastSentAt = now
 
-	// 6. Query nearby merchants
 	merchants, err := s.GetNearbyMerchants(update.Lat, update.Lng, 5, 50)
 	if err != nil {
 		log.Printf("⚠️ Error querying nearby merchants: %v", err)
@@ -148,8 +144,7 @@ func (s *LocationService) ProcessCustomerLocation(state *realtime.LocationState,
 // SYNC: PostgreSQL → Redis (Startup & Periodic)
 // ================================================================
 
-// SyncMerchantLocationsFromDB membaca semua merchant yang memiliki koordinat
-// dari PostgreSQL dan menyimpannya ke Redis GEO
+// SyncMerchantLocationsFromDB loads coordinates from PostgreSQL into Redis GEO.
 func (s *LocationService) SyncMerchantLocationsFromDB() error {
 	type merchantRow struct {
 		BusinessID   string  `gorm:"column:business_id"`
@@ -227,11 +222,10 @@ func (s *LocationService) StartPeriodicSync(interval time.Duration) {
 // THROTTLE LOGIC
 // ================================================================
 
-// shouldSendUpdate menentukan apakah update lokasi ini layak diteruskan (adaptive throttle)
+// shouldSendUpdate evaluates adaptive throttling threshold for location updates.
 func shouldSendUpdate(t *realtime.LocationState, lat, lng float64) bool {
 	now := time.Now()
 
-	// Jika belum pernah mengirim, langsung kirim
 	if t.LastSentAt.IsZero() {
 		return true
 	}
@@ -243,11 +237,9 @@ func shouldSendUpdate(t *realtime.LocationState, lat, lng float64) bool {
 			t.IsStationary = true
 			t.StationarySince = now
 		}
-		// Saat diam: kirim setiap 15 detik saja (hemat resource)
 		return now.Sub(t.LastSentAt) >= 15*time.Second
 	}
 
-	// Bergerak: kirim setiap 3 detik
 	t.IsStationary = false
 	return now.Sub(t.LastSentAt) >= 3*time.Second
 }
@@ -256,27 +248,21 @@ func shouldSendUpdate(t *realtime.LocationState, lat, lng float64) bool {
 // GPS UTILITY FUNCTIONS
 // ================================================================
 
-// isGPSJitter mendeteksi apakah perpindahan koordinat tidak masuk akal
-// berdasarkan kecepatan yang dilaporkan device dan selang waktu update
+// isGPSJitter detects unrealistic coordinate jumps exceeding physical speed thresholds.
 func isGPSJitter(prevLat, prevLng, newLat, newLng, speedKmh float64, elapsed time.Duration) bool {
 	dist := haversine(prevLat, prevLng, newLat, newLng) // dalam meter
 
-	// Jika jeda waktu > 30 detik (misal koneksi terputus lalu tersambung kembali),
-	// jangan anggap jitter karena perpindahan nyata bisa jauh
 	if elapsed > 30*time.Second {
 		return false
 	}
 
-	// Kecepatan default jika tidak tersedia (asumsi jalan kaki)
 	if speedKmh <= 0 {
 		speedKmh = 5
 	}
 
-	// Jarak maksimum yang masuk akal: speed (km/h) × selang waktu nyata (minimal 3 detik)
 	intervalSec := math.Max(elapsed.Seconds(), 3.0)
 	maxPossibleDist := speedKmh * intervalSec / 3.6 // konversi ke meter
 
-	// Jika jarak > 3× jarak logis DAN > 100 meter, anggap jitter
 	return dist > math.Max(maxPossibleDist*3, 100)
 }
 

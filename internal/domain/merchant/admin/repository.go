@@ -8,30 +8,24 @@ import (
 )
 
 type BusinessAdminRepository interface {
-	// Profil Admin
 	CreateAdminProfileIfNotExist(accountID string) error
 
-	// Undangan & Penugasan
 	CreateAssignment(assignment *models.BusinessAdminAssignment) error
 	GetAssignmentByID(assignmentID string) (*models.BusinessAdminAssignment, error)
 	GetAssignmentByAdminAndBusiness(adminID, businessID string) (*models.BusinessAdminAssignment, error)
 	UpdateAssignment(assignment *models.BusinessAdminAssignment) error
 	ReplaceShifts(assignmentID string, shifts []models.BusinessAdminShift) error
 
-	// List untuk Owner & Admin
 	GetAssignmentsByBusinessID(businessID string) ([]models.BusinessAdminAssignment, error)
 	GetAssignmentsByAdminID(adminID string) ([]models.BusinessAdminAssignment, error)
 	GetActiveAssignment(adminID, businessID string) (*models.BusinessAdminAssignment, error)
 
-	// Pencarian Akun
 	FindAccountByInvitationCode(code string) (*models.Account, error)
 	FindAccountByID(accountID string) (*models.Account, error)
 
-	// Hierarki & Admin Tree
 	GetSubordinates(businessID, supervisorID string) ([]models.BusinessAdminAssignment, error)
 	ReassignSubordinatesToOwner(businessID, oldSupervisorID string) error
 
-	// Grace Period & Worker
 	GetExpiredScheduledDeletions() ([]models.BusinessAdminAssignment, error)
 	BatchRevokeAssignments(assignmentIDs []string) error
 
@@ -105,7 +99,6 @@ func (r *businessAdminRepository) UpdateAssignment(assignment *models.BusinessAd
 
 func (r *businessAdminRepository) ReplaceShifts(assignmentID string, shifts []models.BusinessAdminShift) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Hapus shift lama
 		if err := tx.Where("assignment_id = ?", assignmentID).Delete(&models.BusinessAdminShift{}).Error; err != nil {
 			return err
 		}
@@ -177,7 +170,7 @@ func (r *businessAdminRepository) GetSubordinates(businessID, supervisorID strin
 }
 
 func (r *businessAdminRepository) ReassignSubordinatesToOwner(businessID, oldSupervisorID string) error {
-	// Pindahkan bawahan supervisor ini ke Owner (supervisor_id = NULL)
+	// Reassign subordinate staff to owner (supervisor_id = NULL).
 	return r.db.Model(&models.BusinessAdminAssignment{}).
 		Where("business_id = ? AND supervisor_id = ?", businessID, oldSupervisorID).
 		Update("supervisor_id", nil).Error
@@ -200,8 +193,8 @@ func (r *businessAdminRepository) BatchRevokeAssignments(assignmentIDs []string)
 		Update("status", "revoked").Error
 }
 
-// GetPermissions mengambil assignment beserta nama admin untuk ditampilkan di response.
-// Mendukung pencarian berdasarkan assignment_id ataupun admin_id (dengan atau tanpa business_id).
+// GetPermissions retrieves assignment and admin name.
+// Supports lookup by assignment_id or admin_id with optional business_id.
 func (r *businessAdminRepository) GetPermissions(businessID, identifier string) (*models.BusinessAdminAssignment, error) {
 	var assignment models.BusinessAdminAssignment
 	query := r.db.Preload("Admin.Account")
@@ -217,7 +210,7 @@ func (r *businessAdminRepository) GetPermissions(businessID, identifier string) 
 	return &assignment, nil
 }
 
-// UpdatePermissions mengupdate kolom permissions JSONB pada assignment tertentu.
+// UpdatePermissions updates JSONB permissions on an assignment.
 func (r *businessAdminRepository) UpdatePermissions(assignmentID string, permissions models.AdminPermissions) error {
 	return r.db.Model(&models.BusinessAdminAssignment{}).
 		Where("assignment_id = ?", assignmentID).

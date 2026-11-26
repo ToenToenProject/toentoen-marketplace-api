@@ -16,7 +16,7 @@ func NewFeedbackHandler(service FeedbackService) *FeedbackHandler {
 	return &FeedbackHandler{service: service}
 }
 
-// SendFeedback mengirimkan pesan feedback dari pengguna ke email resmi ToenToen
+// SendFeedback sends user feedback to official support email.
 func (h *FeedbackHandler) SendFeedback(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {

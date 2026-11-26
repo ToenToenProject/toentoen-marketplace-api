@@ -21,8 +21,7 @@ import (
 //go:embed assets/toentoen-logo.png
 var embeddedLogoBytes []byte
 
-// getLogoBytes mengembalikan byte logo resmi ToenToen.
-// Prioritas: byte embedded langsung dari binary (go:embed) -> fallback pembacaan disk file.
+// getLogoBytes resolves the official logo bytes, preferring embedded binary assets over disk reads.
 func getLogoBytes() []byte {
 	if len(embeddedLogoBytes) > 0 {
 		return embeddedLogoBytes
@@ -35,8 +34,7 @@ func getLogoBytes() []byte {
 	return nil
 }
 
-// SendEmailOTP mengirimkan kode OTP ke alamat email tujuan.
-// Mengembalikan error jika pengiriman gagal agar caller dapat menangani kegagalan dengan tepat.
+// SendEmailOTP dispatches a one-time password to the target email address.
 func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 	toEmail = strings.TrimSpace(toEmail)
 	if toEmail == "" {
@@ -84,12 +82,11 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 	mailer.SetHeader("To", toEmail)
 	mailer.SetHeader("Subject", content.Subject)
 
-	// Plain text fallback
 	plainBody := fmt.Sprintf("%s\n\n%s\n\nKode verifikasi (OTP) Anda adalah: %s\n\nKode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.\n\nJika Anda tidak merasa melakukan permintaan verifikasi ini, silakan abaikan pesan ini.\n\nSalam,\nTim ToenToen",
 		content.Greeting, stripBasicHTML(content.Description), otp)
 	mailer.SetBody("text/plain", plainBody)
 
-	// Embed logo resmi ToenToen (selalu tersedia di memori via go:embed)
+	// Attach brand logo via Content-ID.
 	logoBytes := getLogoBytes()
 	hasLogo := len(logoBytes) > 0
 	if hasLogo {
@@ -101,7 +98,6 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 		}))
 	}
 
-	// HTML body (modern card design dengan tema ToenToen)
 	htmlBody := buildOTPEmailHTML(content, otp, time.Now(), hasLogo)
 	mailer.AddAlternative("text/html", htmlBody)
 
@@ -474,9 +470,7 @@ func getOTPEmailContent(subject string, customDesc ...string) otpEmailContent {
 	}
 }
 
-// SendWAOTP mengirimkan kode OTP ke nomor WhatsApp tujuan.
-// Jika FONNTE_TOKEN disetel di environment, mengirim via API Fonnte.
-// Jika FONNTE_TOKEN kosong (development/testing), kode dicatat ke log console dan mengembalikan nil.
+// SendWAOTP delivers an OTP code over WhatsApp via Fonnte, falling back to console logging in development environments.
 func SendWAOTP(phoneNumber string, otp string, customMessage ...string) error {
 	phoneNumber = strings.TrimSpace(phoneNumber)
 	if phoneNumber == "" {
@@ -523,12 +517,12 @@ func SendWAOTP(phoneNumber string, otp string, customMessage ...string) error {
 		return nil
 	}
 
-	// Mode development / fallback jika belum ada token gateway WhatsApp
+	// Development fallback when WhatsApp gateway token is unset.
 	log.Printf("[OTP-WA-DEV] Kode OTP verifikasi untuk nomor %s adalah: %s", phoneNumber, otp)
 	return nil
 }
 
-// SendFeedbackEmail mengirimkan email masukan/feedback dari pengguna ke email resmi ToenToen
+// SendFeedbackEmail forwards user feedback submissions to official support channels.
 func SendFeedbackEmail(fromUserEmail, userName, role, subject, message string) error {
 	fromUserEmail = strings.TrimSpace(fromUserEmail)
 	if fromUserEmail == "" {

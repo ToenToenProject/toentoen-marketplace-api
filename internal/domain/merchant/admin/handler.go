@@ -17,7 +17,6 @@ func NewBusinessAdminHandler(service BusinessAdminService) *BusinessAdminHandler
 	return &BusinessAdminHandler{service}
 }
 
-// 1. REKRUT / INVITE ADMIN (Owner atau Supervisor)
 func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -54,7 +53,6 @@ func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Undangan / pengajuan admin berhasil diproses", nil)
 }
 
-// 2. OWNER MERESPONS APPROVAL INVITASI DARI SUPERVISOR
 func (h *BusinessAdminHandler) RespondOwnerApproval(c *fiber.Ctx) error {
 	ownerID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -92,7 +90,6 @@ func (h *BusinessAdminHandler) RespondOwnerApproval(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, nil)
 }
 
-// 3. CALON ADMIN MERESPONS UNDANGAN (Accept / Reject)
 func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 	assignmentID := strings.TrimSpace(c.Params("assignment_id"))
 	if assignmentID == "" {
@@ -129,7 +126,6 @@ func (h *BusinessAdminHandler) RespondToInvitation(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, nil)
 }
 
-// 4. OWNER ATAU SUPERVISOR MEMPERBARUI PERAN / SUPERVISOR ADMIN
 func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -164,7 +160,6 @@ func (h *BusinessAdminHandler) UpdateAdminAssignment(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Penugasan admin berhasil diperbarui", nil)
 }
 
-// 5. MEMBERHENTIKAN ADMIN OLEH OWNER/SPV (Grace Period 3 Hari, Read-Only)
 func (h *BusinessAdminHandler) TerminateAdmin(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -188,7 +183,6 @@ func (h *BusinessAdminHandler) TerminateAdmin(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pemberhentian admin berhasil dijadwalkan dengan masa tenggang 3 hari (Read-Only)", nil)
 }
 
-// 6. ADMIN RESIGN MANDIRI DARI TOKO (Grace Period 3 Hari, Read-Only)
 func (h *BusinessAdminHandler) ResignFromBusiness(c *fiber.Ctx) error {
 	adminID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -211,7 +205,6 @@ func (h *BusinessAdminHandler) ResignFromBusiness(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pengunduran diri berhasil diajukan dengan masa tenggang 3 hari (Read-Only)", nil)
 }
 
-// 7. BATALKAN PENGHENTIAN AKSES (Cancel Termination / Resign)
 func (h *BusinessAdminHandler) CancelTermination(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -234,7 +227,6 @@ func (h *BusinessAdminHandler) CancelTermination(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Penghentian akses berhasil dibatalkan. Status admin kembali aktif normal.", nil)
 }
 
-// 8. LIHAT STRUKTUR ADMIN TREE (Owner -> Supervisors -> Staff)
 func (h *BusinessAdminHandler) GetAdminTree(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -258,7 +250,6 @@ func (h *BusinessAdminHandler) GetAdminTree(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Struktur pohon admin berhasil diambil", tree)
 }
 
-// 9. OWNER MELIHAT DAFTAR ADMIN DI SELURUH TOKONYA
 func (h *BusinessAdminHandler) GetAdminsByOwner(c *fiber.Ctx) error {
 	ownerID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -288,9 +279,6 @@ func (h *BusinessAdminHandler) GetMyAssignments(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar penugasan berhasil diambil", assignments)
 }
 
-// 11. LIHAT PERMISSION ADMIN (Owner atau Supervisor)
-// 11. GET PERMISSION ADMIN (Owner atau Supervisor)
-// GET /business/:business_id/admins/:assignment_id/permissions ATAU /admins/:assignment_id/permissions
 func (h *BusinessAdminHandler) GetPermissions(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -320,8 +308,6 @@ func (h *BusinessAdminHandler) GetPermissions(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Izin admin berhasil diambil", result)
 }
 
-// 12. UPDATE PERMISSION ADMIN (Owner atau Supervisor)
-// PUT/PATCH /business/:business_id/admins/:assignment_id/permissions ATAU /admins/:assignment_id/permissions
 func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -342,7 +328,6 @@ func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
-	// Dukung format payload flat {"change_product_image": true, ...} jika tidak dibungkus {"permissions": {...}}
 	if len(input.Permissions) == 0 {
 		var flatPerms models.AdminPermissions
 		if err := c.BodyParser(&flatPerms); err == nil && len(flatPerms) > 0 {
@@ -367,7 +352,6 @@ func (h *BusinessAdminHandler) UpdatePermissions(c *fiber.Ctx) error {
 }
 
 // 13. SAKLAR NOTIFIKASI AKTIVITAS STAF KE OWNER (Poin 9b: Menu Titik Tiga)
-// PATCH /business/:business_id/admins/:admin_id/notification-toggle
 func (h *BusinessAdminHandler) ToggleNotification(c *fiber.Ctx) error {
 	requesterID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {

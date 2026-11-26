@@ -17,11 +17,9 @@ var (
 )
 
 func InitFirebase() {
-	// Firebase SDK terbaru lebih stabil jika kita membiarkannya membaca ProjectID 
-	// langsung dari file JSON secara otomatis.
+	// Let the Firebase SDK auto-detect ProjectID from credentials file.
 	opt := option.WithCredentialsFile("pkg/config/toentoen-app-firebase-adminsdk-fbsvc-894ab133f2.json")
 	
-	// Gunakan nil untuk config agar SDK membaca dari file kredensial
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {
 		log.Printf("⚠️ Warning initializing firebase app: %v (Push notifications disabled)\n", err)
@@ -45,7 +43,7 @@ func InitFirebase() {
 	}
 }
 
-// VerifyFirebaseIDToken memverifikasi Firebase ID token dan mengembalikan decoded token
+// VerifyFirebaseIDToken validates a Firebase ID token and returns the decoded token.
 func VerifyFirebaseIDToken(ctx context.Context, idToken string) (*auth.Token, error) {
 	if FirebaseAuthClient == nil {
 		return nil, fmt.Errorf("Firebase Auth client belum diinisialisasi")
@@ -53,7 +51,7 @@ func VerifyFirebaseIDToken(ctx context.Context, idToken string) (*auth.Token, er
 	return FirebaseAuthClient.VerifyIDToken(ctx, idToken)
 }
 
-// SendPushNotification diperbarui untuk menghindari error 404 /batch
+// SendPushNotification dispatches messages via individual v1 endpoints to avoid batch API deprecation issues.
 func SendPushNotification(tokens []string, title, body string, data map[string]string) error {
 	if FCMClient == nil || len(tokens) == 0 {
 		return nil
@@ -75,10 +73,10 @@ func SendPushNotification(tokens []string, title, body string, data map[string]s
 			Data:         data,
 		}
 
-		// Kirim ke endpoint v1 (/messages:send)
+		// Dispatch via v1 endpoint (/messages:send).
 		_, err := FCMClient.Send(context.Background(), message)
 		if err != nil {
-			// Kita log tapi tidak return error agar token lain tetap terkirim
+			// Log individual delivery errors without failing remaining recipients.
 			log.Printf("⚠️ Gagal mengirim ke token %s: %v\n", token, err)
 			continue
 		}

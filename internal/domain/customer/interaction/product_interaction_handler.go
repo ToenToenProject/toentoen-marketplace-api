@@ -85,12 +85,19 @@ func (h *ProductInteractionHandler) DeleteProductReview(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan produk berhasil dihapus", nil)
 }
 
-// 2. Get All Product Reviews (Paginated & Filterable)
 func (h *ProductInteractionHandler) GetProductReviews(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 	accountID, _ := c.Locals("account_id").(string)
 	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
 	limit := c.QueryInt("limit", 10)
+	if limit < 1 {
+		limit = 10
+	} else if limit > 100 {
+		limit = 100
+	}
 	ratingFilter := c.QueryInt("rating", 0)
 	sortStr := c.Query("sort", "newest")
 
@@ -115,7 +122,6 @@ func (h *ProductInteractionHandler) GetProductReviews(c *fiber.Ctx) error {
 	})
 }
 
-// 2b. Get Smart Display 5 Reviews Produk (Publik)
 func (h *ProductInteractionHandler) GetSmartDisplayProductReviews(c *fiber.Ctx) error {
 	productID := strings.TrimSpace(c.Params("product_id"))
 	accountID, _ := c.Locals("account_id").(string)

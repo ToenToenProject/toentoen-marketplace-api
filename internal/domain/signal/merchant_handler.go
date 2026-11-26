@@ -17,8 +17,7 @@ func NewMerchantHandler(service SignalService) *MerchantHandler {
 	return &MerchantHandler{service}
 }
 
-// ExploreSignals menampilkan feed signal aktif berdasarkan lokasi merchant (PostGIS)
-// GET /api/v1/merchant/signals/explore?lat=-6.2&lng=106.8&business_id=BUS-xxx
+// ExploreSignals lists active signals filtered by merchant location and categories.
 func (h *MerchantHandler) ExploreSignals(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -43,8 +42,7 @@ func (h *MerchantHandler) ExploreSignals(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil feed sinyal aktif", signals)
 }
 
-// GetSignalDetail mengambil detail signal yang dipilih merchant (beserta status roomchat merchant)
-// GET /api/v1/merchant/signals/:signal_id
+// GetSignalDetail retrieves signal details and merchant conversation status.
 func (h *MerchantHandler) GetSignalDetail(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -65,7 +63,6 @@ func (h *MerchantHandler) GetSignalDetail(c *fiber.Ctx) error {
 }
 
 // GetMyConversations mengambil semua roomchat percakapan milik merchant
-// GET /api/v1/merchant/conversations
 func (h *MerchantHandler) GetMyConversations(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {
@@ -80,8 +77,7 @@ func (h *MerchantHandler) GetMyConversations(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar percakapan", conversations)
 }
 
-// ReplyToSignal memulai conversation baru dari merchant
-// POST /api/v1/merchant/signals/:signal_id/reply
+// ReplyToSignal initiates a new conversation from merchant.
 func (h *MerchantHandler) ReplyToSignal(c *fiber.Ctx) error {
 	accID, role, err := getSession(c)
 	if err != nil {
@@ -117,7 +113,6 @@ func (h *MerchantHandler) ReplyToSignal(c *fiber.Ctx) error {
 }
 
 // GetMessages membaca isi chat dalam conversation
-// GET /api/v1/merchant/conversations/:conversation_id/messages
 func (h *MerchantHandler) GetMessages(c *fiber.Ctx) error {
 	accID, role, err := getSession(c)
 	if err != nil {
@@ -149,8 +144,7 @@ func (h *MerchantHandler) GetMessages(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil pesan", respData)
 }
 
-// SendMessage mengirim pesan balasan dari merchant
-// POST /api/v1/merchant/conversations/:conversation_id/messages
+// SendMessage posts merchant reply.
 func (h *MerchantHandler) SendMessage(c *fiber.Ctx) error {
 	accID, role, err := getSession(c)
 	if err != nil {
@@ -176,8 +170,7 @@ func (h *MerchantHandler) SendMessage(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Pesan berhasil dikirim", msg)
 }
 
-// GetProductSuggestions memberikan rekomendasi produk dari katalog toko yang cocok dengan sinyal
-// GET /api/v1/merchant/signals/:signal_id/product-suggestions?business_id=BUS-xxx
+// GetProductSuggestions returns store catalog recommendations matching a signal.
 func (h *MerchantHandler) GetProductSuggestions(c *fiber.Ctx) error {
 	accID, _, err := getSession(c)
 	if err != nil {

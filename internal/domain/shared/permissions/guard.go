@@ -6,20 +6,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// GetAdminPermissions mengambil permissions dari assignment yang aktif.
-//
-// Aturan:
-//   - Owner (tidak ada assignment) → semua permission true.
-//   - Supervisor → semua permission true.
-//   - Staff aktif → ambil dari kolom JSONB di assignment.
-//   - Assignment tidak ditemukan → anggap bukan admin toko ini, return semua false.
+// GetAdminPermissions resolves active permissions for the given account.
+// Owners and supervisors receive full access (all true); staff permissions are loaded from assignment JSONB.
+// Unassigned accounts default to no permissions (all false).
 func GetAdminPermissions(db *gorm.DB, accountID, businessID string) models.AdminPermissions {
 	var assignment models.BusinessAdminAssignment
 	err := db.Select("role, permissions").
 		Where("admin_id = ? AND business_id = ? AND (status = 'active' OR status = 'scheduled_for_deletion')", accountID, businessID).
 		First(&assignment).Error
 	if err != nil {
-		// Tidak ditemukan sebagai admin → mungkin owner, izinkan penuh
+		// Unassigned account: assume owner role with full permissions.
 		return models.AdminPermissions{}.AllTrue()
 	}
 	if assignment.Permissions != nil && len(assignment.Permissions) > 0 {
@@ -28,7 +24,7 @@ func GetAdminPermissions(db *gorm.DB, accountID, businessID string) models.Admin
 	if assignment.Role == "supervisor" {
 		return models.AdminPermissions{}.AllTrue()
 	}
-	// Staff: kembalikan permissions dari DB (key tidak ada = false)
+	// Staff: load granular permissions from database JSONB (missing keys default to false).
 	perms := assignment.Permissions
 	if perms == nil {
 		perms = models.AdminPermissions{}
@@ -36,18 +32,18 @@ func GetAdminPermissions(db *gorm.DB, accountID, businessID string) models.Admin
 	return perms
 }
 
-// HasPermission memeriksa apakah account memiliki izin tertentu untuk bisnis terkait.
+// HasPermission verifies whether an account holds a permission for a business.
 //
-// Selalu return true untuk owner (tidak ada assignment di toko tersebut).
-// Return true untuk supervisor.
-// Untuk staff, cek key permission dari JSONB.
+// Always return true for store owners.
+// Always return true for supervisors.
+// For staff, evaluate permission boolean from JSONB assignment.
 func HasPermission(db *gorm.DB, accountID, businessID, permKey string) bool {
 	perms := GetAdminPermissions(db, accountID, businessID)
 	if perms[permKey] {
 		return true
 	}
 
-	// Fallback untuk backward compatibility / merged permissions:
+	// Compatibility fallback for legacy merged permission keys:
 	switch permKey {
 	case models.PermEditProduct:
 		return perms[models.PermEditProductDetails] || perms[models.PermChangeProductImage]

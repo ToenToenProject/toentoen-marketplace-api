@@ -42,9 +42,9 @@ func (h *BusinessHandler) CreateBusiness(c *fiber.Ctx) error {
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "belum terverifikasi") || strings.Contains(errMsg, "KYC") || strings.Contains(errMsg, "identitas") || strings.Contains(errMsg, "tidak ditemukan") {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errMsg, fiber.Map{"error": errMsg})
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errMsg, nil)
 		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal membuat profil toko", fiber.Map{"error": err.Error()})
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal membuat profil toko", nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Profil toko berhasil dibuat", fiber.Map{
@@ -66,16 +66,16 @@ func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 	roleValue := c.Locals("role")
 	userRole, _ := roleValue.(string)
 
-	// 1. Tangkap Parameter Pencarian dan Kursor
 	search := strings.TrimSpace(c.Query("search", ""))
 	cursor := strings.TrimSpace(c.Query("cursor", ""))
 	
 	limit := c.QueryInt("limit", 10)
-	if limit > 50 {
+	if limit < 1 {
+		limit = 10
+	} else if limit > 50 {
 		limit = 50
 	}
 
-	// 2. Tangkap Parameter Category ID
 	categoryID := int64(0)
 	catQuery := strings.TrimSpace(c.Query("category_id", ""))
 	if catQuery != "" {
@@ -84,7 +84,6 @@ func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// 3. Tangkap Parameter Tags (Contoh dari URL: ?tags=1,5,12)
 	var tagIDs []int64
 	tagsQuery := strings.TrimSpace(c.Query("tags", ""))
 	if tagsQuery != "" {
@@ -96,7 +95,6 @@ func (h *BusinessHandler) GetMyBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// 4. Lempar Semuanya ke Service
 	businessesResponse, err := h.service.GetMyBusinesses(accountID, userRole, search, categoryID, tagIDs, cursor, limit)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil data toko", nil)
@@ -143,7 +141,10 @@ func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
 }
 
 func (h *BusinessHandler) DeleteBusiness(c *fiber.Ctx) error {
-	businessID := c.Params("id")
+	businessID := strings.TrimSpace(c.Params("business_id"))
+	if businessID == "" {
+		businessID = strings.TrimSpace(c.Params("id"))
+	}
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
@@ -197,7 +198,6 @@ func (h *BusinessHandler) ToggleStoreStatus(c *fiber.Ctx) error {
 		msg = "Toko sekarang berstatus Tutup (manual)"
 	}
 
-	// Langsung kembalikan payload data toko terbaru ke FE
 	latestDetail, errDetail := h.service.GetBusinessDetail(businessID)
 	if errDetail == nil && latestDetail != nil {
 		return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, latestDetail)
@@ -248,7 +248,6 @@ func (h *BusinessHandler) ConfirmSchedule(c *fiber.Ctx) error {
 		message = "Toko disetel ke status Tutup"
 	}
 
-	// Langsung kembalikan payload data toko terbaru ke FE
 	latestDetail, errDetail := h.service.GetBusinessDetail(businessID)
 	if errDetail == nil && latestDetail != nil {
 		return utils.SendResponse(c, fiber.StatusOK, constants.Success, message, latestDetail)

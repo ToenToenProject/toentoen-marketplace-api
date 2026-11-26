@@ -127,7 +127,6 @@ func TestGetMyProfileSummary(t *testing.T) {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 
-	// 1 business review + 2 product reviews = 3
 	if summary.TotalReviewedPosts != 3 {
 		t.Fatalf("expected 3 total reviews, got %d", summary.TotalReviewedPosts)
 	}
@@ -188,7 +187,6 @@ func TestGetMyBusinessReviews_Unified(t *testing.T) {
 			t.Fatalf("expected 2 reviews, got %d", len(reviews))
 		}
 
-		// Check business review
 		foundBiz := false
 		foundPrd := false
 		for _, r := range reviews {

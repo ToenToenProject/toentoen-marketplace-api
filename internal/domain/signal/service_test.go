@@ -129,7 +129,6 @@ func TestSignal_ToPostReference(t *testing.T) {
 func TestSignal_EvaluateStatus(t *testing.T) {
 	now := time.Now()
 
-	// 1. Sinyal active dengan expires_at di masa depan
 	sigActive := models.Signal{
 		Status:    "active",
 		ExpiresAt: now.Add(2 * time.Hour),
@@ -139,7 +138,6 @@ func TestSignal_EvaluateStatus(t *testing.T) {
 		t.Errorf("expected active with is_active=true, got status=%s is_active=%v", sigActive.Status, sigActive.IsActive)
 	}
 
-	// 2. Sinyal active tapi expires_at sudah lewat (overdue/expired)
 	sigExpired := models.Signal{
 		Status:    "active",
 		ExpiresAt: now.Add(-5 * time.Minute),
@@ -149,7 +147,6 @@ func TestSignal_EvaluateStatus(t *testing.T) {
 		t.Errorf("expected expired with is_active=false, got status=%s is_active=%v", sigExpired.Status, sigExpired.IsActive)
 	}
 
-	// 3. Sinyal closed
 	sigClosed := models.Signal{
 		Status:    "closed",
 		ExpiresAt: now.Add(2 * time.Hour),
@@ -159,7 +156,6 @@ func TestSignal_EvaluateStatus(t *testing.T) {
 		t.Errorf("expected closed with is_active=false, got status=%s is_active=%v", sigClosed.Status, sigClosed.IsActive)
 	}
 
-	// 4. Sinyal inactive
 	sigInactive := models.Signal{
 		Status:    "inactive",
 		ExpiresAt: now.Add(2 * time.Hour),
@@ -169,7 +165,6 @@ func TestSignal_EvaluateStatus(t *testing.T) {
 		t.Errorf("expected inactive with is_active=false, got status=%s is_active=%v", sigInactive.Status, sigInactive.IsActive)
 	}
 
-	// 5. Sinyal completed
 	sigCompleted := models.Signal{
 		Status:    "completed",
 		ExpiresAt: now.Add(2 * time.Hour),
@@ -179,7 +174,6 @@ func TestSignal_EvaluateStatus(t *testing.T) {
 		t.Errorf("expected completed with is_active=false, got status=%s is_active=%v", sigCompleted.Status, sigCompleted.IsActive)
 	}
 
-	// 6. Test UTC format
 	if sigActive.ExpiresAt.Location() != time.UTC {
 		t.Errorf("expected UTC location for expires_at, got %v", sigActive.ExpiresAt.Location())
 	}
@@ -236,7 +230,6 @@ func TestSignal_ValidOfferFilter_TimeValidation(t *testing.T) {
 	signalCreatedAt := time.Now()
 	minTime := signalCreatedAt.Add(-5 * time.Second)
 
-	// Percakapan lama yang terjadi sebelum sinyal dibuat (e.g. chat umum toko)
 	oldConv := models.SignalConversation{
 		ConversationID: "CONV-OLD",
 		CreatedAt:      signalCreatedAt.Add(-1 * time.Hour),
@@ -250,7 +243,6 @@ func TestSignal_ValidOfferFilter_TimeValidation(t *testing.T) {
 		},
 	}
 
-	// Percakapan baru yang terjadi setelah sinyal dibuat tapi belum ada balasan merchant
 	newConvCustomerOnly := models.SignalConversation{
 		ConversationID: "CONV-NEW-1",
 		CreatedAt:      signalCreatedAt.Add(2 * time.Minute),
@@ -264,7 +256,6 @@ func TestSignal_ValidOfferFilter_TimeValidation(t *testing.T) {
 		},
 	}
 
-	// Percakapan baru yang sah dengan balasan penawaran dari merchant
 	newConvValid := models.SignalConversation{
 		ConversationID: "CONV-NEW-2",
 		CreatedAt:      signalCreatedAt.Add(5 * time.Minute),

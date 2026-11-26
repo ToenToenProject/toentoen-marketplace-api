@@ -19,7 +19,6 @@ type UserNotification struct {
 	CreatedAt          time.Time      `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt          time.Time      `gorm:"column:updated_at" json:"updated_at"`
 
-	// Relasi (Opsional, jika ingin Preload nama akun penerima)
 	Recipient *Account `gorm:"foreignKey:RecipientAccountID;references:AccountID" json:"-"`
 }
 
@@ -27,7 +26,6 @@ func (UserNotification) TableName() string {
 	return "user_notifications"
 }
 
-// Untuk response API List Notifikasi
 type NotificationResponse struct {
 	NotificationID string                 `json:"notification_id"`
 	Type           string                 `json:"type"`

@@ -3,6 +3,9 @@ package middlewares
 import (
 	"slices"
 
+	"toentoen-backend/internal/constants"
+	"toentoen-backend/pkg/utils"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -10,25 +13,18 @@ func AllowRoles(allowedRoles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		roleValue := c.Locals("role")
 		if roleValue == nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Role pengguna tidak ditemukan, pastikan rute ini melewati proses otentikasi",
-			})
+			return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Role pengguna tidak ditemukan, pastikan rute ini melewati proses otentikasi", nil)
 		}
 
 		userRole, ok := roleValue.(string)
 		if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Format role tidak valid",
-			})
+			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Format role tidak valid", nil)
 		}
 
 		isAllowed := slices.Contains(allowedRoles, userRole)
 
 		if !isAllowed {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"status": "fail",
-				"error":  "Role Anda (" + userRole + ") tidak memiliki izin untuk mengakses halaman ini",
-			})
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Role Anda ("+userRole+") tidak memiliki izin untuk mengakses halaman ini", nil)
 		}
 
 		return c.Next()

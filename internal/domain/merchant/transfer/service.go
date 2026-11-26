@@ -45,7 +45,6 @@ func (s *businessTransferService) CheckTarget(ownerID, businessID, targetIdentif
 		return nil, errors.New("Email atau nomor telepon target wajib diisi")
 	}
 
-	// 1. Validasi kepemilikan bisnis
 	business, err := s.repo.FindBusinessByID(businessID)
 	if err != nil || business == nil {
 		return nil, errors.New("Bisnis/Toko tidak ditemukan")
@@ -54,13 +53,11 @@ func (s *businessTransferService) CheckTarget(ownerID, businessID, targetIdentif
 		return nil, errors.New("Anda bukan pemilik sah dari bisnis ini")
 	}
 
-	// 2. Cari akun target
 	target, err := s.repo.FindAccountByIdentifier(targetIdentifier)
 	if err != nil || target == nil {
 		return nil, errors.New("Akun tujuan dengan identitas tersebut tidak ditemukan")
 	}
 
-	// 3. Validasi akun target
 	if target.AccountID == ownerID {
 		return nil, errors.New("Anda tidak dapat mentransfer bisnis kepada akun Anda sendiri")
 	}
@@ -100,36 +97,30 @@ func (s *businessTransferService) InitiateTransfer(ownerID, businessID string, i
 		return nil, errors.New("target_identifier wajib diisi")
 	}
 
-	// 1. Validasi target
 	_, err := s.CheckTarget(ownerID, businessID, targetIdentifier)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Cek apakah ada transfer yang masih aktif
 	existing, _ := s.repo.GetActiveTransferByBusiness(businessID)
 	if existing != nil {
 		return nil, errors.New("Bisnis ini sudah memiliki permohonan transfer yang sedang menunggu persetujuan. Silakan batalkan permohonan lama terlebih dahulu.")
 	}
 
-	// 3. Ambil data akun Owner saat ini untuk tujuan pengiriman OTP
 	currentOwner, err := s.repo.FindAccountByID(ownerID)
 	if err != nil || currentOwner == nil {
 		return nil, errors.New("Data akun pemilik tidak ditemukan")
 	}
 
-	// 4. Generate OTP
 	otp := utils.GenerateNumericOTP(6)
 	otpKey := fmt.Sprintf("biz_transfer_otp:%s:%s", businessID, ownerID)
 	targetKey := fmt.Sprintf("biz_transfer_target:%s:%s", businessID, ownerID)
 
-	// Simpan ke Redis (TTL 5 menit)
 	if err := config.RDB.Set(config.Ctx, otpKey, otp, 5*time.Minute).Err(); err != nil {
 		return nil, errors.New("Gagal memproses OTP pada sistem")
 	}
 	_ = config.RDB.Set(config.Ctx, targetKey, targetIdentifier, 5*time.Minute).Err()
 
-	// 5. Kirimkan OTP ke kontak Owner Lama
 	destination := ""
 	channel := strings.ToLower(input.Channel)
 	if channel == "whatsapp" {
@@ -174,18 +165,15 @@ func (s *businessTransferService) VerifyOTPAndCreateTransfer(ownerID, businessID
 		return nil, errors.New("OTP wajib diisi")
 	}
 
-	// 1. Verifikasi OTP dari Redis
 	otpKey := fmt.Sprintf("biz_transfer_otp:%s:%s", businessID, ownerID)
 	storedOTP, err := config.RDB.Get(config.Ctx, otpKey).Result()
 	if err == redis.Nil || storedOTP != inputOTP {
 		return nil, errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
 	}
 
-	// Hapus OTP dari Redis
 	config.RDB.Del(config.Ctx, otpKey)
 	config.RDB.Del(config.Ctx, fmt.Sprintf("biz_transfer_target:%s:%s", businessID, ownerID))
 
-	// 2. Validasi target akun
 	target, err := s.repo.FindAccountByIdentifier(targetIdentifier)
 	if err != nil || target == nil {
 		return nil, errors.New("Akun tujuan tidak ditemukan")
@@ -205,7 +193,6 @@ func (s *businessTransferService) VerifyOTPAndCreateTransfer(ownerID, businessID
 		return nil, errors.New("Anda tidak dapat mentransfer bisnis kepada akun Anda sendiri")
 	}
 
-	// 3. Buat transfer request
 	now := time.Now()
 	expiresAt := now.Add(7 * 24 * time.Hour) // 7 hari masa berlaku
 
@@ -229,7 +216,6 @@ func (s *businessTransferService) VerifyOTPAndCreateTransfer(ownerID, businessID
 	req.Business = business
 	req.TargetAccount = target
 
-	// 4. Kirim notifikasi ke Target Owner
 	bizName := "Toko"
 	if business.BusinessName != nil && *business.BusinessName != "" {
 		bizName = *business.BusinessName
@@ -262,7 +248,6 @@ func (s *businessTransferService) CancelTransfer(ownerID, businessID string) err
 		return errors.New("Gagal membatalkan permohonan transfer")
 	}
 
-	// Kirim notifikasi pembatalan ke target
 	if s.notifService != nil {
 		title := "Permohonan Transfer Toko Dibatalkan"
 		body := "Permohonan pengalihan kepemilikan toko sebelumnya telah dibatalkan oleh pemilik toko."
@@ -369,7 +354,6 @@ func (s *businessTransferService) RespondTransfer(targetAccountID, transferID st
 	}
 
 	// Action == "accept"
-	// Pastikan target masih berstatus owner
 	targetAcc, err := s.repo.FindAccountByID(targetAccountID)
 	if err != nil || targetAcc == nil || targetAcc.Role != "owner" {
 		return errors.New("Akun Anda harus berstatus sebagai Owner untuk menerima transfer bisnis")

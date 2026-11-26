@@ -12,13 +12,11 @@ import (
 )
 
 func TestPromotionValidation_Caption(t *testing.T) {
-	// 1. Caption length > 150 chars
 	longCaption := string(make([]byte, 151))
 	if len(longCaption) <= 150 {
 		t.Errorf("expected caption length > 150")
 	}
 
-	// 2. Caption within 150 chars
 	validCaption := "Diskon Spesial Gajian! Dapatkan potongan harga s.d 50% untuk produk terpilih."
 	if len(validCaption) > 150 {
 		t.Errorf("expected caption <= 150 chars, got %d", len(validCaption))
@@ -71,7 +69,6 @@ func TestPromotionValidation_Duration(t *testing.T) {
 func TestPromotionStatus_Derivation(t *testing.T) {
 	now := time.Now()
 
-	// 1. Scheduled promotion (starts in 2 hours, ends in 48 hours)
 	scheduledStart := now.Add(2 * time.Hour)
 	scheduledEnd := now.Add(48 * time.Hour)
 	status := models.PromotionStatusActive
@@ -82,7 +79,6 @@ func TestPromotionStatus_Derivation(t *testing.T) {
 		t.Errorf("expected status 'scheduled', got '%s'", status)
 	}
 
-	// 2. Active promotion (started 1 hour ago, ends tomorrow)
 	activeStart := now.Add(-1 * time.Hour)
 	activeEnd := now.Add(24 * time.Hour)
 	if !activeStart.After(now) && activeEnd.After(now) {
@@ -92,7 +88,6 @@ func TestPromotionStatus_Derivation(t *testing.T) {
 		t.Errorf("expected status 'active', got '%s'", status)
 	}
 
-	// 3. Ended promotion (ended 1 hour ago)
 	endedEnd := now.Add(-1 * time.Hour)
 	if endedEnd.Before(now) {
 		status = models.PromotionStatusEnded
@@ -181,7 +176,6 @@ func TestPromotionListItem_JSONContract(t *testing.T) {
 	now := time.Now()
 	postID := "PST-123"
 
-	// 1. Catalog Promotion Item
 	catalogItem := models.PromotionListItem{
 		PromotionID:   "PRM-001",
 		PromotionType: models.PromotionTypeCatalog,
@@ -208,7 +202,6 @@ func TestPromotionListItem_JSONContract(t *testing.T) {
 		t.Errorf("expected post to be nil for catalog promotion")
 	}
 
-	// 2. Post Promotion Item
 	postItem := models.PromotionListItem{
 		PromotionID:   postID,
 		PromotionType: models.PromotionTypePost,
@@ -244,7 +237,6 @@ func TestPromotionListItem_JSONContract(t *testing.T) {
 func TestPromotionValidation_Max10ActivePromotions(t *testing.T) {
 	exactErrorMessage := "Batas maksimal 10 promosi aktif telah tercapai. Harap tunggu hingga salah satu promosi berakhir atau hentikan promosi yang sedang berjalan sebelum membuat promosi baru."
 
-	// 1. Kasus 9 promosi aktif (belum mencapai batas 10) -> Harus diizinkan
 	activeCount9 := int64(9)
 	var err9 error
 	if activeCount9 >= 10 {
@@ -254,7 +246,6 @@ func TestPromotionValidation_Max10ActivePromotions(t *testing.T) {
 		t.Errorf("expected 9 active promotions to be allowed, got error: %v", err9)
 	}
 
-	// 2. Kasus 10 promosi aktif (sudah mencapai batas) -> Harus ditolak (cegah promosi ke-11)
 	activeCount10 := int64(10)
 	var err10 error
 	if activeCount10 >= 10 {
@@ -266,7 +257,6 @@ func TestPromotionValidation_Max10ActivePromotions(t *testing.T) {
 		t.Errorf("expected exact error message '%s', got '%s'", exactErrorMessage, err10.Error())
 	}
 
-	// 3. Kasus > 10 promosi aktif -> Tetap ditolak
 	activeCount15 := int64(15)
 	var err15 error
 	if activeCount15 >= 10 {
@@ -313,8 +303,6 @@ func TestEligibleProducts_PackageProductsSupported(t *testing.T) {
 	}
 
 	// Pengurutan sesuai aturan di repository:
-	// 1. Produk belum aktif promosi di atas, aktif promosi di paling bawah
-	// 2. Pada daftar produk yang belum aktif promosi, paket (is_package = true) ditaruh di paling atas
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].IsActivePromoted != items[j].IsActivePromoted {
 			return !items[i].IsActivePromoted
@@ -328,7 +316,6 @@ func TestEligibleProducts_PackageProductsSupported(t *testing.T) {
 		return false
 	})
 
-	// Index 0 harus Paket (is_package = true)
 	if items[0].ProductID != "PRD-PKG-01" {
 		t.Errorf("expected package product to be at index 0, got %s", items[0].ProductID)
 	}
@@ -336,12 +323,10 @@ func TestEligibleProducts_PackageProductsSupported(t *testing.T) {
 		t.Errorf("expected index 0 to have is_package = true")
 	}
 
-	// Index 1 harus Produk reguler yang belum aktif promosi
 	if items[1].ProductID != "PRD-REG-01" {
 		t.Errorf("expected regular product at index 1, got %s", items[1].ProductID)
 	}
 
-	// Index 2 harus Produk yang sedang aktif promosi (paling bawah)
 	if items[2].ProductID != "PRD-REG-02" {
 		t.Errorf("expected active promoted product at index 2, got %s", items[2].ProductID)
 	}
@@ -376,7 +361,6 @@ func TestEligibleProductsSorting_ActivePromotedAtBottom(t *testing.T) {
 		},
 	}
 
-	// Simulasikan pengurutan yang diterapkan pada GetEligibleProducts di repository
 	var normalItems []models.EligibleProductItem
 	var activePromotedItems []models.EligibleProductItem
 	for _, it := range items {
@@ -404,7 +388,6 @@ func TestEligibleProductsSorting_ActivePromotedAtBottom(t *testing.T) {
 }
 
 func TestCreatePromotionInput_UnmarshalJSON_NewFormat(t *testing.T) {
-	// JSON payload dari form baru
 	rawJSON := `{
 		"caption": "Promo Gajian",
 		"product_ids": ["PRD-01", "PRD-02"],
@@ -461,19 +444,16 @@ func TestCreatePromotion_DurationChoices(t *testing.T) {
 func TestCreatePromotion_NominalDiscountValidation(t *testing.T) {
 	productPrice := 50000.0
 
-	// 1. Valid nominal discount (Rp 10.000 < Rp 50.000)
 	validDiscount := 10000.0
 	if validDiscount >= productPrice {
 		t.Errorf("discount %.0f should be strictly less than product price %.0f", validDiscount, productPrice)
 	}
 
-	// 2. Invalid nominal discount (equal to price: Rp 50.000)
 	equalDiscount := 50000.0
 	if equalDiscount < productPrice {
 		t.Errorf("discount equal to price should be rejected")
 	}
 
-	// 3. Invalid nominal discount (exceeds price: Rp 60.000)
 	exceedDiscount := 60000.0
 	if exceedDiscount < productPrice {
 		t.Errorf("discount exceeding price should be rejected")
@@ -484,14 +464,12 @@ func TestPromotionDetailResponse_TitleGeneration(t *testing.T) {
 	bizName := "Warung Berkah"
 	mainProd := "Nasi Goreng Spesial"
 
-	// 1. Single product, percentage
 	title1 := fmt.Sprintf("%s diskon %.0f%% untuk %s.", bizName, 20.0, mainProd)
 	expected1 := "Warung Berkah diskon 20% untuk Nasi Goreng Spesial."
 	if title1 != expected1 {
 		t.Errorf("expected '%s', got '%s'", expected1, title1)
 	}
 
-	// 2. Multiple products (3 products total, N=2), nominal
 	nOthers := 2
 	discNomStr := formatRupiah(10000)
 	title2 := fmt.Sprintf("%s diskon Rp %s untuk %s dan %d produk lainnya.", bizName, discNomStr, mainProd, nOthers)
@@ -504,7 +482,6 @@ func TestPromotionDetailResponse_TitleGeneration(t *testing.T) {
 func TestPushPromotionNotification_SinglePushRule(t *testing.T) {
 	now := time.Now()
 
-	// Promo aktif yang BELUM pernah di-push
 	promoCanPush := models.Promotion{
 		PromotionID: "PRM-ACTIVE-01",
 		Status:      models.PromotionStatusActive,
@@ -515,7 +492,6 @@ func TestPushPromotionNotification_SinglePushRule(t *testing.T) {
 		t.Errorf("expected active promo without notified_at to be pushable")
 	}
 
-	// Promo aktif yang SUDAH pernah di-push
 	promoAlreadyPushed := models.Promotion{
 		PromotionID: "PRM-ACTIVE-02",
 		Status:      models.PromotionStatusActive,

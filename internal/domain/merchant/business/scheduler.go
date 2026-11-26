@@ -28,9 +28,8 @@ func SetLastKnownStoreStatus(businessID string, isOpen bool) {
 	lastKnownStoreStatus[businessID] = isOpen
 }
 
-// StartStoreStatusSyncWorker menjalankan background scheduler setiap 1 menit (sesuai zona waktu WIB)
-// untuk mengevaluasi status operasional (buka/tutup) seluruh toko secara real-time berdasarkan jam operasional toko,
-// serta menyinkronkan status tersebut ke Meilisearch jika terjadi perubahan status.
+// StartStoreStatusSyncWorker runs a background scheduler every minute (in WIB timezone)
+// to evaluate real-time store operating hours and synchronize status changes to Meilisearch.
 func StartStoreStatusSyncWorker(db *gorm.DB) {
 	if db == nil {
 		return
@@ -49,8 +48,7 @@ func StartStoreStatusSyncWorker(db *gorm.DB) {
 	}()
 }
 
-// EvaluateAndSyncAllStoreStatuses memeriksa semua bisnis aktif dan jam operasionalnya saat ini di WIB.
-// Jika status buka/tutup toko berubah (atau belum tersinkron), otomatis update dokumen Meilisearch.
+// EvaluateAndSyncAllStoreStatuses evaluates operational open/closed status for all active businesses locked to WIB.
 func EvaluateAndSyncAllStoreStatuses(db *gorm.DB) {
 	if meilisearch.Client == nil || db == nil {
 		return
@@ -104,7 +102,6 @@ func EvaluateAndSyncAllStoreStatuses(db *gorm.DB) {
 			log.Printf("⏰ [StoreStatusWorker] Berhasil memperbarui status buka/tutup %d bisnis ke Meilisearch", len(bizUpdates))
 		}
 
-		// Update juga status is_open produk milik toko-toko yang berubah
 		for _, bid := range changedBizIDs {
 			_ = meilisearch.UpdateBusinessStatus(db, bid)
 		}
@@ -112,23 +109,22 @@ func EvaluateAndSyncAllStoreStatuses(db *gorm.DB) {
 }
 
 // StartScheduleReminderWorker menjalankan scheduler berkala setiap pergantian jam (menit ke-00 WIB)
-// untuk mengirimkan notifikasi konfirmasi buka, bersambung/24 jam, dan tutup kepada merchant.
+// Dispatch opening schedule notifications to merchants.
 func StartScheduleReminderWorker(businessRepo BusinessRepository, notifService notification.NotificationService) {
 	go func() {
 		for {
 			loc := utils.GetWIBLocation()
 			now := time.Now().In(loc)
 
-			// Hitung durasi hingga menit ke-00 jam berikutnya
 			nextHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, loc)
 			sleepDuration := nextHour.Sub(now)
 
 			time.Sleep(sleepDuration)
 
-			// Waktu saat ini setelah bangun di jam baru
+			// Current timestamp at hourly boundary.
 			runTime := time.Now().In(loc)
 
-			// 1. Jika tepat pukul 00:00:00 (Tengah Malam), jalankan auto-close & reset live
+			// Reset live streaming and execute auto-close at midnight (00:00 WIB).
 			if runTime.Hour() == 0 {
 				log.Println("[CRON-MIDNIGHT] Menutup otomatis toko yang lupa dimatikan dan mereset status live...")
 				_ = businessRepo.ResetManualCloseStatus()
@@ -136,7 +132,7 @@ func StartScheduleReminderWorker(businessRepo BusinessRepository, notifService n
 				EvaluateAndSyncAllStoreStatuses(database.DB)
 			}
 
-			// 2. Periksa jadwal toko dan kirim pengingat konfirmasi 1 jam sebelumnya
+			// Send opening reminder notification 1 hour prior to scheduled open time.
 			processScheduleReminders(runTime, businessRepo, notifService)
 		}
 	}()
@@ -183,7 +179,7 @@ func processScheduleReminders(now time.Time, repo BusinessRepository, notifServi
 			bName = strings.TrimSpace(*b.BusinessName)
 		}
 
-		// Cari jadwal hari ini dan jadwal besok
+		// Look up operational schedules for today and tomorrow.
 		var todayHour *models.BusinessHour
 		var nextDayHour *models.BusinessHour
 		for i := range b.Hours {
@@ -194,8 +190,8 @@ func processScheduleReminders(now time.Time, repo BusinessRepository, notifServi
 			}
 		}
 
-		// [A] Pengingat Buka 1 Jam Sebelumnya (Poin 4):
-		// Target jam buka adalah jam berikutnya (targetNextHour)
+		// Opening reminder 1 hour prior to scheduled open time.
+		// Target open time is next hour.
 		if todayHour != nil {
 			openH, openM, ok := parseHourMinute(todayHour.OpenTime)
 			if ok && openH == targetNextHour {
@@ -217,13 +213,11 @@ func processScheduleReminders(now time.Time, repo BusinessRepository, notifServi
 			}
 		}
 
-		// [B] Pengingat Bersambung / Toko 24 Jam pada Jam 23:00 WIB (Poin 3):
-		// Cek apakah jadwal hari ini bersambung ke hari berikutnya atau 24 jam
+		// 24-hour schedule reminder at 23:00 WIB.
 		if currentHour == 23 && todayHour != nil {
 			isContinuing := false
 			targetTomorrowTime := "00:00"
 
-			// Cek apakah 24 jam
 			openH, openM, okOpen := parseHourMinute(todayHour.OpenTime)
 			closeH, closeM, okClose := parseHourMinute(todayHour.CloseTime)
 			if okOpen && okClose {
@@ -231,7 +225,6 @@ func processScheduleReminders(now time.Time, repo BusinessRepository, notifServi
 					isContinuing = true
 					targetTomorrowTime = "24 Jam"
 				}
-				// Cek apakah hari ini tutup jam 24:00 dan besok buka jam 00:00
 				if closeH == 24 || (closeH == 23 && closeM >= 59) {
 					if nextDayHour != nil {
 						nextOpenH, _, nextOk := parseHourMinute(nextDayHour.OpenTime)
@@ -263,8 +256,8 @@ func processScheduleReminders(now time.Time, repo BusinessRepository, notifServi
 			}
 		}
 
-		// [C] Pengingat Tutup 1 Jam Sebelumnya (Poin 5a):
-		// Target jam tutup reguler adalah jam berikutnya (targetNextHour)
+		// Closing reminder 1 hour prior to regular closing time.
+		// Target regular closing time is next hour.
 		if todayHour != nil {
 			closeH, closeM, ok := parseHourMinute(todayHour.CloseTime)
 			if ok && closeH == targetNextHour && closeH != 24 {

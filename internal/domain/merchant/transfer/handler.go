@@ -17,7 +17,7 @@ func NewBusinessTransferHandler(service BusinessTransferService) *BusinessTransf
 	return &BusinessTransferHandler{service: service}
 }
 
-// CheckTarget memvalidasi dan menampilkan preview profil calon pemilik baru
+// CheckTarget validates and previews the recipient account profile for business transfer.
 func (h *BusinessTransferHandler) CheckTarget(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -46,7 +46,7 @@ func (h *BusinessTransferHandler) CheckTarget(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data calon pemilik baru ditemukan", preview)
 }
 
-// InitiateTransfer mengirim kode OTP ke pemilik lama untuk otorisasi transfer
+// InitiateTransfer dispatches an authorization OTP to the current owner.
 func (h *BusinessTransferHandler) InitiateTransfer(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -75,7 +75,7 @@ func (h *BusinessTransferHandler) InitiateTransfer(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP otorisasi transfer telah dikirim", res)
 }
 
-// VerifyOTP memvalidasi kode OTP pemilik lama dan menerbitkan permohonan transfer ke calon owner baru
+// VerifyOTP validates the authorization OTP and issues the transfer proposal to the target owner.
 func (h *BusinessTransferHandler) VerifyOTP(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -104,7 +104,7 @@ func (h *BusinessTransferHandler) VerifyOTP(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Permohonan transfer berhasil dibuat dan undangan telah dikirimkan ke calon pemilik baru", transferReq)
 }
 
-// CancelTransfer membatalkan permohonan transfer aktif oleh pemilik lama
+// CancelTransfer cancels an active pending business transfer.
 func (h *BusinessTransferHandler) CancelTransfer(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -123,7 +123,7 @@ func (h *BusinessTransferHandler) CancelTransfer(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Permohonan transfer berhasil dibatalkan", nil)
 }
 
-// GetIncomingTransfers menampilkan daftar undangan transfer bisnis yang masuk ke akun yang sedang login
+// GetIncomingTransfers lists pending business transfer requests targeting the current user.
 func (h *BusinessTransferHandler) GetIncomingTransfers(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -138,7 +138,7 @@ func (h *BusinessTransferHandler) GetIncomingTransfers(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar undangan transfer bisnis berhasil dimuat", list)
 }
 
-// RespondTransfer merespon undangan transfer bisnis (accept atau reject) oleh calon pemilik baru
+// RespondTransfer accepts or rejects a pending business transfer invitation.
 func (h *BusinessTransferHandler) RespondTransfer(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {

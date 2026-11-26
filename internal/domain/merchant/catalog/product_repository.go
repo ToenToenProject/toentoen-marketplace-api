@@ -38,7 +38,6 @@ func NewProductRepository(db *gorm.DB) ProductRepository {
 	return &productRepository{db}
 }
 
-// 1. OTORISASI
 func (r *productRepository) HasAccessToBusiness(accountID, role, businessID string) bool {
 	var count int64
 
@@ -61,12 +60,10 @@ func (r *productRepository) CheckProductGroupExists(businessID, productGroupID s
 	return count > 0
 }
 
-// 2. CREATE
 func (r *productRepository) CreateProduct(product *models.Product) error {
 	return r.db.Create(product).Error
 }
 
-// 3. READ (Single)
 func (r *productRepository) GetProductByID(productID, businessID string) (*models.Product, error) {
 	var product models.Product
 	
@@ -107,14 +104,12 @@ func (r *productRepository) GetProductByID(productID, businessID string) (*model
 	return &product, err
 }
 
-// 4. ADVANCED READ (Cursor Pagination + Preload Group)
 func (r *productRepository) GetProducts(businessID, search, productGroupID, stockType string, isActive *bool, sort string, cursor string, limit int) ([]models.Product, error) {
 	var products []models.Product
 
-	// 🪄 PERBAIKAN 1: Hapus Preload("Variants") di sini agar payload tetap ringan
 	query := r.db.Model(&models.Product{}).Preload("Group").Where("business_id = ?", businessID)
 
-	// Subquery untuk HasVariants dan MinPrice
+	// Subqueries for HasVariants and MinPrice.
 	query = query.Select(`
 		products.*, 
 		
@@ -189,7 +184,6 @@ func (r *productRepository) GetProducts(businessID, search, productGroupID, stoc
 		}
 	}
 
-	// Eksekusi Sorting (Paket selalu diposisikan di urutan teratas)
 	if sort == "lowest_price" {
 		query = query.Order("is_package DESC, price ASC, product_id ASC")
 	} else if sort == "highest_price" {
@@ -199,32 +193,27 @@ func (r *productRepository) GetProducts(businessID, search, productGroupID, stoc
 	}
 
 	// --- 3. EKSEKUSI FINAL ---
-	// 🪄 PERBAIKAN 2: Hapus query.Select(...) yang duplikat di sini
 	err := query.Limit(limit).Find(&products).Error
 
 	return products, err
 }
 
-// 5. UPDATE
 func (r *productRepository) UpdateProduct(product *models.Product) error {
 	return r.db.Save(product).Error
 }
 
-// 6. DELETE
 func (r *productRepository) DeleteProduct(productID, businessID string) error {
 	return r.db.Where("product_id = ? AND business_id = ?", productID, businessID).Delete(&models.Product{}).Error
 }
 
-// 7. BULK UPDATE STATUS (Aktif/Nonaktif masal)
 func (r *productRepository) BulkUpdateStatus(businessID string, productIDs []string, isActive bool) error {
 	return r.db.Model(&models.Product{}).
 		Where("business_id = ? AND product_id IN ?", businessID, productIDs).
 		Update("is_active", isActive).Error
 }
 
-// 8. BULK DELETE (Hapus masal)
 func (r *productRepository) BulkDelete(businessID string, productIDs []string) error {
-	// Menggunakan fitur Soft-Delete GORM (hanya mengisi deleted_at, tidak menghapus permanen dari DB)
+	// Soft-delete product via deleted_at timestamp.
 	return r.db.Where("business_id = ? AND product_id IN ?", businessID, productIDs).
 		Delete(&models.Product{}).Error
 }

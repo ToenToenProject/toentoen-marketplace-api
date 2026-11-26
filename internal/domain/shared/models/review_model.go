@@ -58,7 +58,6 @@ type BusinessReviewCommentLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-// Struct untuk Customer membuat review bisnis
 type CreateReviewInput struct {
 	BusinessID   string   `json:"business_id" validate:"required"`
 	Rating       int      `json:"rating" validate:"required,min=1,max=5"`
@@ -67,7 +66,6 @@ type CreateReviewInput struct {
 	ReviewVideo  *string  `json:"review_video"`
 }
 
-// Struct untuk Customer mengedit review bisnis
 type UpdateReviewInput struct {
 	Rating       int      `json:"rating" validate:"required,min=1,max=5"`
 	Comment      string   `json:"comment" validate:"required"`
@@ -75,7 +73,6 @@ type UpdateReviewInput struct {
 	ReviewVideo  *string  `json:"review_video"`
 }
 
-// Struct untuk membalas review bisnis
 type CreateReviewReplyInput struct {
 	Content              string  `json:"content" validate:"required"`
 	ReplyToReviewID      *string `json:"reply_to_review_id"`
@@ -84,7 +81,6 @@ type CreateReviewReplyInput struct {
 	RepliedToAccountName *string `json:"replied_to_account_name"`
 }
 
-// Struct untuk Owner membalas review langsung
 type ReplyReviewInput struct {
 	ReplyComment string `json:"reply_comment" validate:"required"`
 }
@@ -104,7 +100,6 @@ type ReviewSummary struct {
 }
 
 // ==========================================
-// 4. MODEL GORM UNTUK REVIEW PRODUK
 // ==========================================
 
 type ProductReview struct {
@@ -156,7 +151,6 @@ type ProductReviewCommentLike struct {
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-// DTO Input untuk Review Produk
 type CreateProductReviewInput struct {
 	Rating       float64  `json:"rating" validate:"required,min=1,max=5"`
 	Comment      string   `json:"comment" validate:"required"`
@@ -186,7 +180,6 @@ type ReviewUserProfile struct {
 	AvatarURL *string `json:"avatar_url"`
 }
 
-// DTO Output Response
 type BusinessReviewResponse struct {
 	ReviewID               string                          `json:"review_id"`
 	BusinessID             string                          `json:"business_id"`

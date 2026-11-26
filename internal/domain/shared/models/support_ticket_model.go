@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// SupportTicket merepresentasikan tiket bantuan / keluhan pengguna
+// SupportTicket represents a customer or merchant support ticket.
 type SupportTicket struct {
 	TicketID                   string     `gorm:"primaryKey;column:ticket_id;type:varchar(50)" json:"ticket_id"`
 	AccountID                  string     `gorm:"column:account_id;type:varchar(50);not null;index" json:"account_id"`
@@ -20,7 +20,6 @@ type SupportTicket struct {
 	CreatedAt                  time.Time  `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
 	UpdatedAt                  time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 
-	// Relasi
 	Account     *Account                  `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 	Business    *Business                 `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
 	Resolver    *Account                  `gorm:"foreignKey:ResolvedBy;references:AccountID" json:"resolver,omitempty"`
@@ -31,7 +30,7 @@ func (SupportTicket) TableName() string {
 	return "support_tickets"
 }
 
-// SupportTicketAttachment merepresentasikan lampiran file pada tiket
+// SupportTicketAttachment represents file attachments uploaded for a ticket.
 type SupportTicketAttachment struct {
 	AttachmentID string    `gorm:"primaryKey;column:attachment_id;type:varchar(50)" json:"attachment_id"`
 	TicketID     string    `gorm:"column:ticket_id;type:varchar(50);not null;index" json:"ticket_id"`
@@ -79,7 +78,7 @@ type SupportTicketDetailResponse struct {
 	Attachments                []SupportTicketAttachment `json:"attachments"`
 }
 
-// FormatDetailResponse mengonversi SupportTicket model ke response dengan fallback saran CS yang dinamis
+// FormatDetailResponse converts a SupportTicket model to a detailed API response with dynamic CS fallback suggestions.
 func (t *SupportTicket) FormatDetailResponse() SupportTicketDetailResponse {
 	var suggestions string
 	if t.CustomerServiceSuggestions != nil && *t.CustomerServiceSuggestions != "" {

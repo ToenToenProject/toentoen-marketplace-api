@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// SearchSynonym menyimpan kamus sinonim dinamis di database untuk sinkronisasi Meilisearch & fallback PostgreSQL.
+// SearchSynonym stores dynamic synonyms in PostgreSQL for Meilisearch synchronization and SQL fallbacks.
 type SearchSynonym struct {
 	SynonymID     int64     `gorm:"primaryKey;autoIncrement;column:synonym_id" json:"synonym_id"`
 	Term          string    `gorm:"column:term;uniqueIndex;not null" json:"term"`
@@ -20,7 +20,7 @@ func (SearchSynonym) TableName() string {
 	return "search_synonyms"
 }
 
-// SearchLog mencatat setiap permintaan pencarian pengguna untuk keperluan analitik, CTR, dan pemantauan zero-result.
+// SearchLog tracks user search queries for zero-result monitoring and CTR analytics.
 type SearchLog struct {
 	LogID             string                 `gorm:"primaryKey;column:log_id" json:"log_id"`
 	AccountID         *string                `gorm:"column:account_id" json:"account_id,omitempty"`
@@ -40,13 +40,13 @@ func (SearchLog) TableName() string {
 	return "search_logs"
 }
 
-// SearchClickInput payload untuk mencatat klik user pada hasil pencarian.
+// SearchClickInput represents telemetry for search result clicks.
 type SearchClickInput struct {
 	SearchLogID string `json:"search_log_id" validate:"required"`
 	BusinessID  string `json:"business_id" validate:"required"`
 }
 
-// UpsertSynonymInput payload untuk admin menambah/memperbarui sinonim dinamis.
+// UpsertSynonymInput represents administrator payload for managing dynamic search synonyms.
 type UpsertSynonymInput struct {
 	Term          string   `json:"term" validate:"required"`
 	CanonicalTerm string   `json:"canonical_term" validate:"required"`

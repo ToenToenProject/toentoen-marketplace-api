@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// Model untuk Postingan
 type BusinessPost struct {
 	PostID         string     `gorm:"primaryKey;column:post_id" json:"post_id"`
 	BusinessID     string     `gorm:"column:business_id" json:"business_id"`
@@ -20,7 +19,6 @@ type BusinessPost struct {
 	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 }
 
-// Input Struct
 type CreatePostInput struct {
 	Content        string     `json:"content"`
 	Images         []string   `json:"images"`

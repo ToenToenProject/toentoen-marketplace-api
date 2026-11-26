@@ -2,7 +2,7 @@ package utils
 
 import "github.com/gofiber/fiber/v2"
 
-// GetRequesterInfo mengambil data requester dari Context
+// GetRequesterInfo extracts account ID and role credentials from Fiber request context.
 func GetRequesterInfo(c *fiber.Ctx) (string, string, error) {
 	accountIDValue := c.Locals("account_id")
 	roleValue := c.Locals("role")

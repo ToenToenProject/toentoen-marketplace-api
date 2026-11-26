@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// ParsedSearchIntent merepresentasikan hasil ekstraksi intent & filter terstruktur dari query bahasa natural pengguna.
+// ParsedSearchIntent represents structured search filters extracted from natural language queries.
 type ParsedSearchIntent struct {
 	RawQuery           string   `json:"raw_query"`
 	CleanQuery         string   `json:"clean_query"`
@@ -85,7 +85,7 @@ func removePhraseNormalized(text, phrase string) (string, bool) {
 		return text, false
 	}
 
-	// Pastikan batas kata (word boundary) agar tidak memotong substring di tengah kata
+	// Match complete word boundaries to avoid partial word substring cuts.
 	beforeOK := idx == 0 || isWordBoundary(lowerText[idx-1])
 	endIdx := idx + len(lowerPhrase)
 	afterOK := endIdx == len(lowerText) || isWordBoundary(lowerText[endIdx])
@@ -114,7 +114,7 @@ func trimBoundaryStopWords(text string) string {
 	return strings.Trim(strings.Join(words, " "), " ,.;!?/-")
 }
 
-// ParseSearchQuery menganalisis query pencarian natural Bahasa Indonesia menjadi komponen terstruktur.
+// ParseSearchQuery parses natural language Indonesian queries into structured filters.
 func ParseSearchQuery(rawQuery string) ParsedSearchIntent {
 	trimmed := strings.TrimSpace(rawQuery)
 	intent := ParsedSearchIntent{
@@ -128,7 +128,7 @@ func ParseSearchQuery(rawQuery string) ParsedSearchIntent {
 
 	working := trimmed
 
-	// 1. Deteksi status buka sekarang
+	// Detect open-now modifier.
 	for _, p := range openNowPhrases {
 		if next, ok := removePhraseNormalized(working, p); ok {
 			intent.DetectedOpenNow = true
@@ -137,7 +137,7 @@ func ParseSearchQuery(rawQuery string) ParsedSearchIntent {
 		}
 	}
 
-	// 2. Deteksi lokasi terdekat
+	// Detect nearby location modifier.
 	for _, p := range nearbyPhrases {
 		if next, ok := removePhraseNormalized(working, p); ok {
 			intent.DetectedNearby = true
@@ -146,7 +146,7 @@ func ParseSearchQuery(rawQuery string) ParsedSearchIntent {
 		}
 	}
 
-	// 3. Deteksi promo
+	// Detect promo modifier.
 	for _, p := range promoPhrases {
 		if next, ok := removePhraseNormalized(working, p); ok {
 			intent.DetectedPromo = true
@@ -155,7 +155,6 @@ func ParseSearchQuery(rawQuery string) ParsedSearchIntent {
 		}
 	}
 
-	// 4. Deteksi fasilitas eksplisit (Hard Filter)
 	seenFac := make(map[string]bool)
 	for _, rule := range facilityPhraseRules {
 		for _, p := range rule.phrases {
@@ -173,7 +172,6 @@ func ParseSearchQuery(rawQuery string) ParsedSearchIntent {
 	working = trimBoundaryStopWords(working)
 	intent.CleanQuery = working
 
-	// 5. Tentukan estimasi entity_type awal
 	if intent.CleanQuery == "" && len(intent.DetectedFacilities) > 0 {
 		intent.EntityType = "FACILITY"
 	}
@@ -181,7 +179,7 @@ func ParseSearchQuery(rawQuery string) ParsedSearchIntent {
 	return intent
 }
 
-// ComputeMatchExplanation menganalisis mengapa sebuah bisnis cocok dengan pencarian user
+// ComputeMatchExplanation analyzes matching rationale between a business and the search query.
 // dan mengisi field MatchType, MatchedOffering, MatchReason, serta MatchConfidence.
 func ComputeMatchExplanation(doc *MeiliBusinessDocument, cleanQuery string, expandedTerms []string) {
 	if doc == nil {
@@ -201,7 +199,7 @@ func ComputeMatchExplanation(doc *MeiliBusinessDocument, cleanQuery string, expa
 		}
 	}
 
-	// 1. Cek Exact atau Related Match pada Produk / Menu (Offerings)
+	// 1. Match against products and offerings.
 	for _, mp := range doc.MatchedProducts {
 		pName := strings.ToLower(strings.TrimSpace(mp.ProductName))
 		if pName == "" {
@@ -236,7 +234,7 @@ func ComputeMatchExplanation(doc *MeiliBusinessDocument, cleanQuery string, expa
 		}
 	}
 
-	// Fallback cek array string doc.Products jika MatchedProducts kosong
+	// Fallback to doc.Products string array if MatchedProducts is empty.
 	for _, pStr := range doc.Products {
 		pName := strings.ToLower(strings.TrimSpace(pStr))
 		for i, term := range terms {
@@ -255,7 +253,6 @@ func ComputeMatchExplanation(doc *MeiliBusinessDocument, cleanQuery string, expa
 		}
 	}
 
-	// 2. Cek Nama Bisnis / Brand
 	bizNameLower := strings.ToLower(strings.TrimSpace(doc.Name))
 	if bizNameLower != "" {
 		for i, term := range terms {
@@ -273,7 +270,6 @@ func ComputeMatchExplanation(doc *MeiliBusinessDocument, cleanQuery string, expa
 		}
 	}
 
-	// 3. Cek Layanan (Services)
 	for _, srv := range doc.Services {
 		srvLower := strings.ToLower(strings.TrimSpace(srv))
 		for _, term := range terms {
@@ -287,7 +283,6 @@ func ComputeMatchExplanation(doc *MeiliBusinessDocument, cleanQuery string, expa
 		}
 	}
 
-	// 4. Cek Kategori (CategoryNames)
 	for _, cat := range doc.CategoryNames {
 		catLower := strings.ToLower(strings.TrimSpace(cat))
 		for _, term := range terms {
@@ -301,7 +296,6 @@ func ComputeMatchExplanation(doc *MeiliBusinessDocument, cleanQuery string, expa
 		}
 	}
 
-	// 5. Cek Fasilitas & Tags (Facilities / TagNames)
 	for _, fac := range doc.Facilities {
 		facLower := strings.ToLower(strings.TrimSpace(fac))
 		for _, term := range terms {

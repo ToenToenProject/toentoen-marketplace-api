@@ -93,7 +93,6 @@ func normalizeReasonAndPriority(rawReason string) (string, string) {
 	case strings.Contains(lower, "other") || lower == "lainnya":
 		return "Other", "low"
 	default:
-		// Jika format custom lainnya
 		return clean, "medium"
 	}
 }
@@ -107,7 +106,6 @@ func (s *service) CreateUniversalReport(accountID string, input models.CreateRep
 
 	targetType := strings.ToLower(strings.TrimSpace(input.TargetType))
 	if targetType == "" {
-		// Auto detect dari prefix ID
 		upperID := strings.ToUpper(targetID)
 		if strings.HasPrefix(upperID, "REV") || strings.HasPrefix(upperID, "PRV") {
 			targetType = "review"
@@ -124,13 +122,13 @@ func (s *service) CreateUniversalReport(accountID string, input models.CreateRep
 		}
 	}
 
-	// 1. Cek apakah user sudah pernah melaporkan target ini sebelumnya (1 Akun 1 Report)
+	// Prevent duplicate reports on the same target by the same account.
 	hasReported, errReported := s.repo.HasUserReportedTarget(accountID, targetID)
 	if errReported == nil && hasReported {
 		return errors.New("Anda sudah pernah melaporkan konten ini sebelumnya")
 	}
 
-	// 2. Validasi target existence
+	// Validate target resource exists.
 	exists, err := s.repo.CheckTargetExists(targetType, targetID)
 	if err != nil {
 		return err
@@ -252,7 +250,8 @@ func (s *service) DeleteReport(reportID, requesterAccountID, role string) error 
 	}
 
 	isOwner := strings.EqualFold(strings.TrimSpace(report.AccountID), strings.TrimSpace(requesterAccountID))
-	isAdmin := strings.EqualFold(role, "admin") || strings.EqualFold(role, "superadmin")
+	isAdmin := strings.EqualFold(role, "platform_admin") || strings.EqualFold(role, "super_admin") ||
+		strings.EqualFold(role, "admin") || strings.EqualFold(role, "superadmin")
 
 	if !isOwner && !isAdmin {
 		return errors.New("tidak memiliki izin untuk menghapus laporan ini")
@@ -289,7 +288,7 @@ func (s *service) UpdateReportStatus(reportID string, input models.UpdateReportS
 		return err
 	}
 
-	// 1. Eksekusi Aksi Takedown Konten jika status Resolved (atau jika action == delete_target)
+	// Execute content takedown when report is marked resolved or deletion action is specified.
 	if cleanStatus == "resolved" {
 		shouldDelete := true
 		if input.Action != nil && *input.Action == "none" {
@@ -300,7 +299,6 @@ func (s *service) UpdateReportStatus(reportID string, input models.UpdateReportS
 		}
 	}
 
-	// 2. Kirim Notifikasi Resolusi ke Pelapor (Resolution Loop)
 	if s.notifService != nil && report.AccountID != "" {
 		go func() {
 			notifData := map[string]interface{}{

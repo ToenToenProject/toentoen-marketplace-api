@@ -14,7 +14,6 @@ type ProductGroup struct {
 	Business *Business `gorm:"foreignKey:BusinessID;references:BusinessID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"business,omitempty"`
 }
 
-// DTO untuk Input
 type CreateGroupInput struct {
 	Name         string `json:"name" validate:"required"`
 	DisplayOrder int    `json:"display_order"`
@@ -26,7 +25,6 @@ type UpdateGroupInput struct {
 	IsActive     *bool  `json:"is_active"`
 }
 
-// DTO khusus untuk memanipulasi ISI dari Grup (Tambah/Hapus Produk)
 type UpdateGroupContentsInput struct {
 	AddProductIDs    []string `json:"add_product_ids"`    // ID produk yang mau dimasukkan ke grup ini
 	RemoveProductIDs []string `json:"remove_product_ids"` // ID produk yang mau dikeluarkan (menjadi NULL)

@@ -17,7 +17,6 @@ func NewProductHandler(service ProductService) *ProductHandler {
 	return &ProductHandler{service}
 }
 
-// 1. CREATE PRODUCT
 func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
@@ -52,7 +51,6 @@ func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Produk berhasil dibuat", nil)
 }
 
-// 2. UPDATE PRODUCT
 func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	productID := strings.TrimSpace(c.Params("product_id"))
@@ -79,7 +77,6 @@ func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Produk berhasil diperbarui", nil)
 }
 
-// 3. DELETE PRODUCT
 func (h *ProductHandler) DeleteProduct(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	productID := strings.TrimSpace(c.Params("product_id"))
@@ -96,7 +93,6 @@ func (h *ProductHandler) DeleteProduct(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Produk berhasil dihapus", nil)
 }
 
-// 4. GET DETAIL PRODUCT (Single)
 func (h *ProductHandler) GetProductDetail(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	productID := strings.TrimSpace(c.Params("product_id"))
@@ -115,7 +111,6 @@ func (h *ProductHandler) GetProductDetail(c *fiber.Ctx) error {
 }
 
 // ==========================================
-// HANDLER UNTUK LIST FLAT (FILTER)
 // ==========================================
 
 func (h *ProductHandler) GetFlatProducts(c *fiber.Ctx) error {
@@ -146,7 +141,6 @@ func (h *ProductHandler) GetFlatProducts(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar produk berhasil diambil", response)
 }
 
-// 6. BULK UPDATE STATUS
 func (h *ProductHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	requesterID, requesterRole, err := utils.GetRequesterInfo(c)
@@ -154,7 +148,6 @@ func (h *ProductHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
 	}
 
-	// Struct inline untuk menangkap body JSON array
 	var input struct {
 		ProductIDs []string `json:"product_ids"`
 		IsActive   bool     `json:"is_active"`
@@ -170,7 +163,6 @@ func (h *ProductHandler) BulkUpdateStatus(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Status produk berhasil diperbarui", nil)
 }
 
-// 7. BULK DELETE
 func (h *ProductHandler) BulkDelete(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	requesterID, requesterRole, err := utils.GetRequesterInfo(c)

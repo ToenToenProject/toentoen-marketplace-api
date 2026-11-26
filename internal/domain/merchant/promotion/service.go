@@ -65,7 +65,7 @@ func (s *promotionService) CreatePromotion(
 		return nil, err
 	}
 
-	// Validasi Batas Maksimal 10 Promosi Aktif (Cegah Promosi ke-11)
+	// Enforce maximum limit of 10 concurrent active promotions per store.
 	activeCount, err := s.repo.CountActivePromotions(businessID)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memeriksa jumlah promosi aktif: %w", err)
@@ -97,7 +97,7 @@ func (s *promotionService) CreatePromotion(
 		input.StartAt = now
 		input.EndAt = now.AddDate(0, 0, input.DurationDays)
 	} else {
-		// Berikan toleransi mundur untuk start_at agar tidak gagal karena latency atau perbedaan jam client
+		// Allow small backward tolerance on start_at to handle client clock skew or latency.
 		if input.StartAt.IsZero() || input.StartAt.Before(now.Add(-5*time.Minute)) {
 			input.StartAt = now
 		}
@@ -111,7 +111,6 @@ func (s *promotionService) CreatePromotion(
 		return nil, errors.New("durasi maksimal promosi adalah 90 hari")
 	}
 
-	// Cek apakah main_product_id ada di list produk, auto-fallback jika tidak ada
 	mainProductFound := false
 	productIDMap := make(map[string]bool)
 	for _, p := range input.Products {
@@ -132,7 +131,7 @@ func (s *promotionService) CreatePromotion(
 		mainProductFound = true
 	}
 
-	// Cek konflik: pastikan produk tidak sedang dalam promosi per-produk aktif/terjadwal lain
+	// Ensure products are not already committed to another active or scheduled per-product promotion.
 	activePromoMap, err := s.repo.GetActivePromotionProductIDs(businessID, models.PromotionTypePerProduct)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memeriksa status promosi produk: %w", err)
@@ -143,7 +142,7 @@ func (s *promotionService) CreatePromotion(
 		}
 	}
 
-	// Ambil data produk dari DB untuk validasi dan snapshot harga
+	// Fetch product records to snapshot base prices for rollback.
 	eligibleProducts, err := s.repo.GetEligibleProducts(businessID, models.PromotionTypePerProduct)
 	if err != nil {
 		return nil, fmt.Errorf("gagal memuat data produk: %w", err)
@@ -174,7 +173,7 @@ func (s *promotionService) CreatePromotion(
 		productIDsList = append(productIDsList, item.ProductID)
 
 		keepExisting := item.KeepExistingDiscount != nil && *item.KeepExistingDiscount
-		// Jika merchant tidak set diskon baru dan produk memang punya diskon lama, default keepExisting
+		// Retain existing product discount if new discount is omitted.
 		if item.Discount == nil && prodInfo.HasExistingDiscount {
 			keepExisting = true
 		}
@@ -213,7 +212,7 @@ func (s *promotionService) CreatePromotion(
 			// Merchant membuat diskon baru
 			discSource = models.PromotionDiscountSourceNew
 
-			// Auto-infer discount_type jika kosong
+			// Auto-infer discount_type if omitted.
 			if item.DiscountType == nil || strings.TrimSpace(*item.DiscountType) == "" {
 				defaultType := "percentage"
 				if item.Discount != nil && *item.Discount > 100 {
@@ -237,7 +236,7 @@ func (s *promotionService) CreatePromotion(
 				return nil, fmt.Errorf("nominal diskon produk %s tidak boleh sama atau melebihi harga produk (Rp %.0f)", item.ProductID, prodInfo.Price)
 			}
 
-			// Jika max_discount <= 0, ubah ke nil agar disimpan sebagai SQL NULL
+			// Convert max_discount <= 0 to nil for SQL NULL storage.
 			if item.MaxDiscount != nil && *item.MaxDiscount <= 0 {
 				item.MaxDiscount = nil
 			}
@@ -267,7 +266,7 @@ func (s *promotionService) CreatePromotion(
 			SnapshotFinalPrice:    snapshotFinal,
 		})
 
-		// Jika promosi langsung aktif sekarang, siapkan perubahan pada tabel products
+		// Apply discount to products table if promotion is immediately active.
 		if isActiveNow {
 			productsToUpdate = append(productsToUpdate, models.Product{
 				ProductID:       item.ProductID,
@@ -296,7 +295,6 @@ func (s *promotionService) CreatePromotion(
 		UpdatedAt:       now,
 	}
 
-	// Buat Auto-Post feed jika promosi langsung aktif
 	var autoPost *models.BusinessPost
 	if isActiveNow {
 		images := []string{}
@@ -323,7 +321,7 @@ func (s *promotionService) CreatePromotion(
 	}
 
 	// Promosi langsung aktif di katalog. Sinkronkan data ke Meilisearch.
-	// Blast notifikasi dilakukan secara manual oleh merchant via endpoint push promotion.
+	// Push notifications are triggered via the promotional push endpoint.
 	go meilisearch.SyncBusiness(database.DB, businessID)
 	go meilisearch.SyncPromotion(database.DB, promotionID)
 
@@ -347,19 +345,16 @@ func (s *promotionService) GetPromotions(
 		return models.GetPromotionsResponse{}, err
 	}
 
-	// 1. Ambil katalog promosi
 	promos, err := s.repo.GetPromotions(businessID, tab, "", 100)
 	if err != nil {
 		return models.GetPromotionsResponse{}, err
 	}
 
-	// 2. Ambil postingan promosi
 	posts, _ := s.repo.GetPromotionalPosts(businessID, tab)
 
 	now := time.Now()
 	allItems := make([]models.PromotionListItem, 0, len(promos)+len(posts))
 
-	// Format katalog promosi
 	for _, p := range promos {
 		remainingDays := 0
 		if p.EndAt.After(now) {
@@ -471,7 +466,6 @@ func (s *promotionService) GetPromotions(
 		})
 	}
 
-	// Format postingan promosi
 	for _, post := range posts {
 		remainingDays := 0
 		endAt := post.CreatedAt.AddDate(0, 0, 7)
@@ -656,7 +650,7 @@ func (s *promotionService) buildPromotionDetailResponse(promo *models.Promotion)
 
 	mainProdID := promo.MainProductID
 
-	// Profil bisnis untuk tombol kunjungi toko
+	// Business profile link metadata.
 	var bizProfile *models.PromotionBusinessProfile
 	bizName := "Toko"
 	if promo.Business != nil {

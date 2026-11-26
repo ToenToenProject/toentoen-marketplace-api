@@ -13,12 +13,10 @@ import (
 )
 
 type BusinessAdminService interface {
-	// Undangan & Persetujuan
 	InviteAdmin(requesterID, businessID string, input models.InviteAdminInput) error
 	RespondOwnerApproval(ownerID, businessID, assignmentID string, input models.RespondOwnerApprovalInput) error
 	RespondToInvitation(adminID, assignmentID string, input models.RespondInvitationInput) error
 
-	// Update Penugasan & Demosi
 	UpdateAdminAssignment(requesterID, businessID, assignmentID string, input models.UpdateAssignmentInput) error
 
 	// Grace Period 3 Hari (Pemecatan & Resign)
@@ -50,7 +48,6 @@ func NewBusinessAdminService(adminRepo BusinessAdminRepository, bizRepo business
 	}
 }
 
-// 1. REKRUT / INVITE ADMIN (Owner Langsung atau Supervisor Butuh Approval Owner)
 func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input models.InviteAdminInput) error {
 	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err != nil {
@@ -71,7 +68,7 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 		return errors.New("forbidden: Anda tidak memiliki izin untuk merekrut admin di toko ini")
 	}
 
-	// Supervisor HANYA boleh meng-invite role 'staff'
+	// Supervisors may only invite candidates into the 'staff' role.
 	if isSupervisor {
 		if input.Role != "staff" {
 			return errors.New("supervisor hanya dapat mengundang staf/admin biasa")
@@ -80,7 +77,7 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 
 
 
-	// Cari Akun Calon Admin
+	// Lookup candidate admin account.
 	targetAccount, err := s.adminRepo.FindAccountByInvitationCode(input.InvitationCode)
 	if err != nil {
 		return errors.New("akun dengan Invitation Code tersebut tidak ditemukan")
@@ -94,7 +91,7 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 		return errors.New("Anda tidak dapat mengundang diri Anda sendiri")
 	}
 
-	// Cek apakah target sudah memiliki assignment di toko ini
+	// Check whether target already has an assignment for this store.
 	existing, _ := s.adminRepo.GetAssignmentByAdminAndBusiness(targetAccount.AccountID, businessID)
 	if existing != nil {
 		switch existing.Status {
@@ -107,19 +104,17 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 		case "scheduled_for_deletion":
 			return errors.New("admin ini sedang dalam masa transisi penghentian akses di toko ini")
 		case "rejected":
-			// Cek Cooldown Penolakan (3x reject -> 7 days cooldown)
 			if existing.RejectionCount >= 3 && existing.LastRejectedAt != nil {
 				if time.Since(*existing.LastRejectedAt) < 7*24*time.Hour {
 					cooldownEnd := existing.LastRejectedAt.Add(7 * 24 * time.Hour).Format("02 Jan 2006 15:04")
 					return fmt.Errorf("admin ini telah menolak undangan 3 kali berturut-turut. Anda baru dapat mengundang kembali setelah %s", cooldownEnd)
 				}
-				// Reset cooldown jika sudah lewat 7 hari
+				// Reset rejection cooldown if 7 days have elapsed.
 				existing.RejectionCount = 0
 			}
 		}
 	}
 
-	// Pastikan profil BusinessAdmin ada
 	if err := s.adminRepo.CreateAdminProfileIfNotExist(targetAccount.AccountID); err != nil {
 		return errors.New("gagal memproses profil admin")
 	}
@@ -131,7 +126,7 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 	}
 
 	if isOwner {
-		// ALUR OWNER: Langsung kirim undangan ke calon admin
+		// Owner workflow: directly issue invitation to candidate admin.
 		if existing != nil {
 			existing.Role = input.Role
 			existing.SupervisorID = nil // Owner langsung yang merekrut
@@ -156,7 +151,7 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 			}
 		}
 
-		// Kirim Notifikasi & FCM ke Calon Admin
+		// Dispatch notification and push alert to candidate admin.
 		go s.notifService.SendNotification(
 			[]string{targetAccount.AccountID},
 			requesterID,
@@ -199,7 +194,7 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 			}
 		}
 
-		// Kirim Notifikasi & FCM ke Owner untuk Approval
+		// Dispatch notification and push alert to owner for approval.
 		go s.notifService.SendNotification(
 			[]string{biz.AccountID},
 			requesterID,
@@ -221,7 +216,6 @@ func (s *businessAdminService) InviteAdmin(requesterID, businessID string, input
 	return nil
 }
 
-// 2. OWNER MERESPONS APPROVAL INVITASI DARI SUPERVISOR (Approve / Reject)
 func (s *businessAdminService) RespondOwnerApproval(ownerID, businessID, assignmentID string, input models.RespondOwnerApprovalInput) error {
 	biz, err := s.bizRepo.FindBusinessByIDAndOwner(businessID, ownerID)
 	if err != nil {
@@ -269,7 +263,7 @@ func (s *businessAdminService) RespondOwnerApproval(ownerID, businessID, assignm
 			nil,
 		)
 
-		// Notifikasi ke Calon Admin: Undangan Resmi dari Toko
+		// Dispatch official store invitation notification to candidate admin.
 		go s.notifService.SendNotification(
 			[]string{assignment.AdminID},
 			ownerID,
@@ -292,7 +286,7 @@ func (s *businessAdminService) RespondOwnerApproval(ownerID, businessID, assignm
 			return errors.New("gagal menolak pengajuan")
 		}
 
-		// Notifikasi ke Supervisor: Pengajuan ditolak Owner
+		// Notify supervisor of owner rejection.
 		go s.notifService.SendNotification(
 			[]string{assignment.InvitedBy},
 			ownerID,
@@ -312,7 +306,6 @@ func (s *businessAdminService) RespondOwnerApproval(ownerID, businessID, assignm
 	return nil
 }
 
-// 3. CALON ADMIN MERESPONS UNDANGAN (Accept / Reject)
 func (s *businessAdminService) RespondToInvitation(adminID, assignmentID string, input models.RespondInvitationInput) error {
 	assignment, err := s.adminRepo.GetAssignmentByID(assignmentID)
 	if err != nil {
@@ -405,7 +398,6 @@ func (s *businessAdminService) RespondToInvitation(adminID, assignmentID string,
 	return nil
 }
 
-// 4. OWNER ATAU SUPERVISOR MEMPERBARUI PERAN / SUPERVISOR ADMIN
 func (s *businessAdminService) UpdateAdminAssignment(requesterID, businessID, assignmentID string, input models.UpdateAssignmentInput) error {
 	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err != nil {
@@ -428,7 +420,7 @@ func (s *businessAdminService) UpdateAdminAssignment(requesterID, businessID, as
 
 	assignment, err := s.adminRepo.GetAssignmentByID(assignmentID)
 	if err != nil {
-		// Fallback: cari berdasarkan admin_id dan business_id
+		// Fallback: look up by admin_id and business_id.
 		assignment, err = s.adminRepo.GetAssignmentByAdminAndBusiness(assignmentID, businessID)
 		if err != nil {
 			return errors.New("penugasan admin tidak ditemukan")
@@ -441,15 +433,15 @@ func (s *businessAdminService) UpdateAdminAssignment(requesterID, businessID, as
 
 	// Aturan wewenang Supervisor:
 	if isSupervisor {
-		// Supervisor tidak boleh mengubah sesama Supervisor
+		// Supervisors cannot modify peer supervisors.
 		if assignment.Role == "supervisor" {
 			return errors.New("forbidden: Supervisor tidak dapat mengubah sesama Supervisor")
 		}
-		// Supervisor hanya boleh mengelola staf yang langsung berada di bawahnya
+		// Supervisors may only manage direct subordinate staff.
 		if assignment.SupervisorID == nil || *assignment.SupervisorID != requesterID {
 			return errors.New("forbidden: Anda hanya dapat memperbarui staf yang langsung berada di bawah Anda")
 		}
-		// Supervisor tidak boleh mengangkat staf menjadi supervisor (hanya Owner)
+		// Only owners may promote staff to supervisor.
 		if input.Role != nil && *input.Role == "supervisor" {
 			return errors.New("forbidden: hanya pemilik toko (owner) yang dapat mengangkat staf menjadi supervisor")
 		}
@@ -479,7 +471,7 @@ func (s *businessAdminService) UpdateAdminAssignment(requesterID, businessID, as
 		businessName = *biz.BusinessName
 	}
 
-	// Notifikasi ke Seluruh Tim Toko selain pelaku (Poin 6-5: Transparansi Penuh)
+	// Broadcast administrative activity notice to store team members excluding actor.
 	recipients := s.getBusinessTeamRecipients(businessID, requesterID)
 	if len(recipients) > 0 {
 		targetAdminName := "Staf"
@@ -506,7 +498,6 @@ func (s *businessAdminService) UpdateAdminAssignment(requesterID, businessID, as
 	return nil
 }
 
-// 5. TERMINATE / PEMECAHAN ADMIN OLEH OWNER/SPV (Grace Period 3 Hari, Read-Only)
 func (s *businessAdminService) TerminateAdmin(requesterID, businessID, assignmentID string) error {
 	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err != nil {
@@ -536,14 +527,14 @@ func (s *businessAdminService) TerminateAdmin(requesterID, businessID, assignmen
 		return errors.New("admin ini tidak dalam status aktif di toko ini")
 	}
 
-	// Supervisor hanya boleh memberhentikan staf di bawahnya
+	// Supervisors may only terminate direct subordinates.
 	if isSupervisor {
 		if assignment.SupervisorID == nil || *assignment.SupervisorID != requesterID {
 			return errors.New("forbidden: supervisor hanya dapat memberhentikan staf di bawahnya")
 		}
 	}
 
-	// Jika yang diberhentikan adalah Supervisor, alihkan seluruh bawahannya ke Owner
+	// If terminated admin is a supervisor, reassign subordinates to owner.
 	if assignment.Role == "supervisor" {
 		_ = s.adminRepo.ReassignSubordinatesToOwner(businessID, assignment.AdminID)
 	}
@@ -586,7 +577,6 @@ func (s *businessAdminService) TerminateAdmin(requesterID, businessID, assignmen
 	return nil
 }
 
-// 6. ADMIN RESIGN MANDIRI DARI TOKO (Grace Period 3 Hari, Read-Only)
 func (s *businessAdminService) ResignFromBusiness(adminID, assignmentID string) error {
 	assignment, err := s.adminRepo.GetAssignmentByID(assignmentID)
 	if err != nil {
@@ -607,7 +597,7 @@ func (s *businessAdminService) ResignFromBusiness(adminID, assignmentID string) 
 		businessName = *biz.BusinessName
 	}
 
-	// Jika Supervisor resign, alihkan bawahannya ke Owner
+	// If a supervisor resigns, reassign subordinates to owner.
 	if assignment.Role == "supervisor" {
 		_ = s.adminRepo.ReassignSubordinatesToOwner(assignment.BusinessID, adminID)
 	}
@@ -656,7 +646,6 @@ func (s *businessAdminService) ResignFromBusiness(adminID, assignmentID string) 
 	return nil
 }
 
-// 7. BATALKAN PENGHENTIAN AKSES (Cancel Termination / Cancel Resign)
 func (s *businessAdminService) CancelTermination(requesterID, assignmentID string) error {
 	assignment, err := s.adminRepo.GetAssignmentByID(assignmentID)
 	if err != nil {
@@ -671,14 +660,13 @@ func (s *businessAdminService) CancelTermination(requesterID, assignmentID strin
 	isOwner := biz != nil && biz.AccountID == requesterID
 	isAdminSelf := assignment.AdminID == requesterID
 
-	// Validasi izin pembatalan
 	if assignment.DeletionInitiatedBy != nil && *assignment.DeletionInitiatedBy == "self" {
-		// Jika resign mandiri, hanya Admin itu sendiri atau Owner yang boleh membatalkan
+		// Voluntary resignation can only be cancelled by the admin or owner.
 		if !isAdminSelf && !isOwner {
 			return errors.New("forbidden: Anda tidak berhak membatalkan pengunduran diri ini")
 		}
 	} else {
-		// Jika dipecat oleh Owner/SPV, hanya Owner atau Supervisor pengundang yang boleh membatalkan
+		// Involuntary termination can only be cancelled by owner or hiring supervisor.
 		if !isOwner && (assignment.SupervisorID == nil || *assignment.SupervisorID != requesterID) {
 			return errors.New("forbidden: Anda tidak berhak membatalkan pemberhentian ini")
 		}
@@ -720,7 +708,6 @@ func (s *businessAdminService) CancelTermination(requesterID, assignmentID strin
 	return nil
 }
 
-// 8. LIHAT STRUKTUR ADMIN TREE (Owner -> Supervisors -> Staff)
 func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*models.AdminTreeResponse, error) {
 	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err != nil {
@@ -769,7 +756,6 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 	var staffAssignments []models.BusinessAdminAssignment
 
 	for _, a := range allAssignments {
-		// Tampilkan admin yang berstatus active atau scheduled_for_deletion
 		if a.Status != "active" && a.Status != "scheduled_for_deletion" {
 			continue
 		}
@@ -784,8 +770,8 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 			Status:               a.Status,
 			IsNotifyOwnerEnabled: a.IsNotifyOwnerEnabled,
 			Subordinates:         []models.AdminTreeNode{},
-			// Jika ada permissions khusus di DB, gunakan itu.
-			// Jika belum diset: Supervisor default AllTrue, staff default AllFalse.
+			// Load custom permissions from database if present.
+			// Defaults: supervisor receives all true; staff receives all false.
 			Permissions: func() models.AdminPermissions {
 				if a.Permissions != nil && len(a.Permissions) > 0 {
 					normalized := make(models.AdminPermissions, len(models.AllPermissions))
@@ -809,7 +795,7 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 		}
 	}
 
-	// Masukkan staff ke supervisor masing-masing atau ke DirectStaff
+	// Organize staff under respective supervisors or direct store staff.
 	for _, a := range staffAssignments {
 		perms := a.Permissions
 		if perms == nil {
@@ -841,9 +827,7 @@ func (s *businessAdminService) GetAdminTree(requesterID, businessID string) (*mo
 	return response, nil
 }
 
-// 9. LIST ADMIN BERDASARKAN OWNER (ALL BUSINESSES)
 func (s *businessAdminService) GetAdminsByOwner(ownerID string) ([]models.AdminTreeResponse, error) {
-	// 1. Ambil semua bisnis milik owner
 	businesses, err := s.bizRepo.GetBusinessListWithPreviews(ownerID, "owner", "", 0, nil, "", 1000) // Ambil cukup banyak
 	if err != nil {
 		return nil, errors.New("gagal mengambil daftar toko")
@@ -851,7 +835,6 @@ func (s *businessAdminService) GetAdminsByOwner(ownerID string) ([]models.AdminT
 
 	var allTrees []models.AdminTreeResponse
 	for _, biz := range businesses {
-		// 2. Untuk setiap bisnis, buat Admin Tree
 		tree, err := s.GetAdminTree(ownerID, biz.BusinessID)
 		if err == nil && tree != nil {
 			allTrees = append(allTrees, *tree)
@@ -861,7 +844,7 @@ func (s *businessAdminService) GetAdminsByOwner(ownerID string) ([]models.AdminT
 	return allTrees, nil
 }
 
-// 10. LIST TOKO TEMPAT ADMIN BEKERJA (UNTUK ADMIN)
+// List businesses where admin is assigned.
 func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminAssignmentListItem, error) {
 	assignments, err := s.adminRepo.GetAssignmentsByAdminID(adminID)
 	if err != nil {
@@ -902,7 +885,7 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 
 			ownerName := "" // Biarkan kosong atau jika diperlukan bisa diambil dari repo
 
-			// Permissions: jika ada permissions di DB gunakan itu, jika belum: supervisor default AllTrue, staff default AllFalse
+			// Evaluate permissions: custom JSONB overrides default role baselines.
 			perms := assignment.Permissions
 			if perms != nil && len(perms) > 0 {
 				normalized := make(models.AdminPermissions, len(models.AllPermissions))
@@ -947,7 +930,6 @@ func (s *businessAdminService) GetMyAssignments(adminID string) ([]models.AdminA
 	return response, nil
 }
 
-// 11. GET PERMISSIONS (Owner atau Supervisor melihat izin admin tertentu)
 func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAssignmentID string) (*models.PermissionResponse, error) {
 	target, err := s.adminRepo.GetPermissions(businessID, targetAssignmentID)
 	if err != nil {
@@ -989,7 +971,7 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 		}
 	}
 
-	// Normalisasi: selalu kembalikan seluruh key dari AllPermissions (jika belum diset/false, tampilkan false)
+	// Normalize: return full permission set with explicit boolean values.
 	normalized := make(models.AdminPermissions, len(models.AllPermissions))
 	for _, k := range models.AllPermissions {
 		val := perms[k]
@@ -1025,7 +1007,6 @@ func (s *businessAdminService) GetPermissions(requesterID, businessID, targetAss
 	}, nil
 }
 
-// 12. UPDATE PERMISSIONS (Owner atau Supervisor mengatur izin admin)
 func (s *businessAdminService) UpdatePermissions(requesterID, businessID, targetAssignmentID string, input models.UpdatePermissionsInput) (*models.PermissionResponse, error) {
 	target, err := s.adminRepo.GetPermissions(businessID, targetAssignmentID)
 	if err != nil {
@@ -1058,19 +1039,18 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		return nil, errors.New("admin ini tidak dalam status aktif")
 	}
 
-	// Supervisor tidak boleh mengubah permission sesama supervisor
+	// Supervisors cannot modify permissions of peer supervisors.
 	if !isOwner && target.Role == "supervisor" {
 		return nil, errors.New("forbidden: Supervisor tidak dapat mengubah izin sesama Supervisor")
 	}
 
-	// Supervisor hanya boleh mengubah permission bawahannya langsung
+	// Supervisors may only modify permissions of direct subordinates.
 	if !isOwner && requesterAssignment != nil {
 		if target.SupervisorID == nil || *target.SupervisorID != requesterID {
 			return nil, errors.New("forbidden: Anda hanya dapat mengubah izin staf yang langsung berada di bawah Anda")
 		}
 	}
 
-	// Validasi key permission — tolak unknown keys
 	validKeys := make(map[string]bool, len(models.AllPermissions))
 	for _, k := range models.AllPermissions {
 		validKeys[k] = true
@@ -1084,7 +1064,7 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 	// Persiapkan map permissions baru
 	var updated models.AdminPermissions
 	if input.Replace {
-		// Reset semua wewenang: hanya key yang bernilai true di input yang menjadi true
+		// Reset permissions: only explicitly granted keys evaluate to true.
 		updated = models.AdminPermissions{}
 		for _, k := range models.AllPermissions {
 			if input.Permissions[k] {
@@ -1099,7 +1079,7 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 				updated[k] = v
 			}
 		} else if target.Role == "supervisor" {
-			// Supervisor yang belum pernah diset permission-nya memiliki baseline AllTrue
+			// Uncustomized supervisors inherit all-true permission baseline.
 			for _, k := range models.AllPermissions {
 				updated[k] = true
 			}
@@ -1109,7 +1089,7 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		}
 	}
 
-	// Delegasi Terbatas: Supervisor tidak boleh mendelegasikan wewenang yang tidak dimilikinya
+	// Limited delegation: supervisors cannot grant permissions they do not hold.
 	if !isOwner && requesterAssignment != nil && requesterAssignment.Permissions != nil && len(requesterAssignment.Permissions) > 0 {
 		for _, k := range models.AllPermissions {
 			if updated[k] && !requesterAssignment.Permissions[k] {
@@ -1122,7 +1102,6 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		}
 	}
 
-	// Hitung diff perubahan izin (granted vs revoked) untuk notifikasi
 	var granted []string
 	var revoked []string
 	for _, k := range models.AllPermissions {
@@ -1146,12 +1125,11 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 		}
 	}
 
-	// Gunakan target.AssignmentID agar selalu valid meskipun targetAssignmentID dari URL adalah admin_id
+	// Use target.AssignmentID to ensure canonical assignment key.
 	if err := s.adminRepo.UpdatePermissions(target.AssignmentID, updated); err != nil {
 		return nil, errors.New("gagal memperbarui izin admin")
 	}
 
-	// Kirim notifikasi diff jika ada perubahan wewenang
 	if (len(granted) > 0 || len(revoked) > 0) && s.notifService != nil {
 		bizName := "Toko"
 		if biz.BusinessName != nil && *biz.BusinessName != "" {
@@ -1171,7 +1149,7 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 			bodyText += "\n❌ Dicabut: " + strings.Join(revoked, ", ")
 		}
 
-		// Poin 6-5: Broadcast ke seluruh tim toko selain pelaku
+		// Broadcast activity alert to store team members excluding actor.
 		teamRecipients := s.getBusinessTeamRecipients(businessID, requesterID)
 		if len(teamRecipients) > 0 {
 			go s.notifService.SendNotification(
@@ -1214,7 +1192,6 @@ func (s *businessAdminService) UpdatePermissions(requesterID, businessID, target
 	}, nil
 }
 
-// 13. TOGGLE NOTIFICATION (Owner atau Supervisor mengatur saklar notifikasi aktivitas staf ke Owner)
 func (s *businessAdminService) ToggleNotification(requesterID, businessID, targetIdentifier string, isEnabled bool) (*models.ToggleAdminNotificationResponse, error) {
 	target, err := s.adminRepo.GetPermissions(businessID, targetIdentifier)
 	if err != nil {
@@ -1244,7 +1221,7 @@ func (s *businessAdminService) ToggleNotification(requesterID, businessID, targe
 		return nil, errors.New("forbidden: assignment tidak termasuk dalam toko ini")
 	}
 
-	// Supervisor hanya boleh mengubah pengaturan bawahannya langsung
+	// Supervisors may only modify settings for direct subordinates.
 	if !isOwner && requesterAssignment != nil {
 		if target.SupervisorID == nil || *target.SupervisorID != requesterID {
 			return nil, errors.New("forbidden: Anda hanya dapat mengubah pengaturan notifikasi staf yang langsung berada di bawah Anda")
@@ -1262,13 +1239,12 @@ func (s *businessAdminService) ToggleNotification(requesterID, businessID, targe
 	}, nil
 }
 
-// getBusinessTeamRecipients mengembalikan daftar account_id seluruh tim toko (Owner + seluruh admin aktif),
-// dengan mengecualikan aktor yang melakukan perubahan (actorID).
+// getBusinessTeamRecipients returns account IDs of all active store staff and owner,
+// excluding the actor account.
 func (s *businessAdminService) getBusinessTeamRecipients(businessID, actorID string) []string {
 	var recipients []string
 	seen := make(map[string]bool)
 
-	// 1. Ambil Owner ID
 	biz, err := s.bizRepo.FindBusinessByID(businessID)
 	if err == nil && biz != nil && biz.AccountID != "" {
 		if biz.AccountID != actorID {
@@ -1277,7 +1253,6 @@ func (s *businessAdminService) getBusinessTeamRecipients(businessID, actorID str
 		}
 	}
 
-	// 2. Ambil seluruh admin aktif toko
 	var adminIDs []string
 	_ = database.DB.Model(&models.BusinessAdminAssignment{}).
 		Where("business_id = ? AND status IN ('active', 'scheduled_for_deletion')", businessID).

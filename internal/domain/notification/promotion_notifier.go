@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// NotifyPromotionCreated mengirimkan notifikasi promosi toko ke seluruh customer
-// yang mem-bookmark toko ini DAN customer yang me-wishlist produk-produk di dalam promosi ini.
+// NotifyPromotionCreated broadcasts promotional notifications to store bookmarkers.
+// Dispatches alerts to store bookmarkers and product wishlisters.
 func NotifyPromotionCreated(
 	db *gorm.DB,
 	notifService NotificationService,
@@ -33,7 +33,6 @@ func NotifyPromotionCreated(
 			}
 		}()
 
-		// 1. Ambil nama toko
 		var biz models.Business
 		if err := db.Select("business_name").Where("business_id = ?", businessID).First(&biz).Error; err != nil {
 			return
@@ -43,13 +42,11 @@ func NotifyPromotionCreated(
 			businessName = strings.TrimSpace(*biz.BusinessName)
 		}
 
-		// 2. Ambil seluruh customer yang mem-bookmark toko ini
 		var bookmarkIDs []string
 		_ = db.Table("business_bookmarks").
 			Where("business_id = ?", businessID).
 			Pluck("account_id", &bookmarkIDs).Error
 
-		// 3. Ambil seluruh customer yang me-wishlist produk-produk yang ada dalam promosi ini
 		var wishlistAccountIDs []string
 		if len(productIDs) > 0 {
 			_ = db.Table("product_wishlists").
@@ -58,7 +55,6 @@ func NotifyPromotionCreated(
 				Pluck("account_id", &wishlistAccountIDs).Error
 		}
 
-		// 4. Gabungkan dan deduplikasi ID penerima (Union Bookmark & Wishlist), saring actorID
 		recipientMap := make(map[string]bool)
 		for _, id := range bookmarkIDs {
 			if id != "" && id != actorID {
@@ -80,7 +76,6 @@ func NotifyPromotionCreated(
 			recipients = append(recipients, id)
 		}
 
-		// 5. Tentukan image_url dari produk utama / paket bundling
 		imageURL := ""
 		if promo.PromotionType == models.PromotionTypeBundling && promo.PackageImage != nil && *promo.PackageImage != "" {
 			imageURL = *promo.PackageImage

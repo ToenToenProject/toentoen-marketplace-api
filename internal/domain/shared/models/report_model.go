@@ -5,9 +5,6 @@ import (
 	"time"
 )
 
-// ==========================================
-// 1. DTO INPUT PELAPORAN UNIVERSAL
-// ==========================================
 
 type CreateReportInput struct {
 	TargetType  string   `json:"target_type" validate:"omitempty,oneof=business product review comment post"`
@@ -17,12 +14,8 @@ type CreateReportInput struct {
 	Evidence    []string `json:"evidence,omitempty"`
 }
 
-// Alias untuk kompatibilitas kode lain
 type CreatePostReportInput = CreateReportInput
 
-// ==========================================
-// 2. MODEL TABEL UNIVERSAL REPORTS
-// ==========================================
 
 type Report struct {
 	ReportID    string     `gorm:"primaryKey;column:report_id" json:"report_id"`
@@ -81,9 +74,6 @@ type ReportFilterQuery struct {
 	Limit      int    `query:"limit"`
 }
 
-// ==========================================
-// 3. MODEL PELAPORAN BISNIS LAMA (UNTUK KOMPATIBILITAS)
-// ==========================================
 
 type BusinessReport struct {
 	ReportID    int64      `gorm:"primaryKey;autoIncrement;column:report_id" json:"report_id"`
@@ -191,9 +181,6 @@ type BusinessPostCommentReport struct {
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
-// ==========================================
-// 4. MASTER KATEGORI & ALASAN LAPORAN (REPORT CATEGORIES)
-// ==========================================
 
 type ReportSubCategory struct {
 	ID   string `json:"id"`

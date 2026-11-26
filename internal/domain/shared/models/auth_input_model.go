@@ -13,7 +13,7 @@ type RegisterUnifiedInput struct {
 type VerifyRegisterOTPInput struct {
 	Identifier    string `json:"identifier" validate:"required"`
 	OTP           string `json:"otp"`
-	// Role opsional, wajib jika identifier sedang mendaftar di 2 kelompok role sekaligus
+	// Optional role; required when an identifier registers across multiple role groups.
 	Role          string `json:"role" query:"role"`
 	FirebaseToken string `json:"firebase_token,omitempty"`
 	IDToken       string `json:"id_token,omitempty"`

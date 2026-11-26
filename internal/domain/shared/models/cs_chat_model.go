@@ -22,7 +22,6 @@ type CSChatSession struct {
 	CreatedAt          time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt          time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 
-	// Relasi
 	Account  *Account        `gorm:"foreignKey:AccountID;references:AccountID" json:"account,omitempty"`
 	Business *Business       `gorm:"foreignKey:BusinessID;references:BusinessID" json:"business,omitempty"`
 	CSAdmin  *Account        `gorm:"foreignKey:CSAdminID;references:AccountID" json:"cs_admin,omitempty"`
@@ -33,7 +32,7 @@ func (CSChatSession) TableName() string {
 	return "cs_chat_sessions"
 }
 
-// CSChatRoom adalah type alias untuk backward compatibility
+// CSChatRoom is a legacy type alias for CSChatSession.
 type CSChatRoom = CSChatSession
 
 // CSChatMessage merepresentasikan satu pesan dalam sesi live chat CS
@@ -55,7 +54,6 @@ func (CSChatMessage) TableName() string {
 	return "cs_chat_messages"
 }
 
-// Input Models
 type InitiateCSChatInput struct {
 	BusinessID *string `json:"business_id,omitempty"`
 }

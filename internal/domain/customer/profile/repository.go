@@ -54,7 +54,6 @@ func (r *publicProfileRepository) GetTotalCommentsAndReviews(accountID string) (
 func (r *publicProfileRepository) GetRecentReviews(accountID string, limit int) ([]models.RecentActivityResponse, error) {
 	var recentActivities []models.RecentActivityResponse
 
-	// 1. Get recent business reviews (Preload Business untuk nama toko)
 	var businessReviews []models.Review
 	r.db.Preload("Business").Where("account_id = ?", accountID).Order("created_at desc").Limit(limit).Find(&businessReviews)
 
@@ -82,7 +81,6 @@ func (r *publicProfileRepository) GetRecentReviews(accountID string, limit int) 
 		})
 	}
 
-	// 2. Get recent product reviews (Preload Product untuk nama produk)
 	var productReviews []models.ProductReview
 	r.db.Preload("Product").Where("account_id = ?", accountID).Order("created_at desc").Limit(limit).Find(&productReviews)
 
@@ -108,7 +106,6 @@ func (r *publicProfileRepository) GetRecentReviews(accountID string, limit int) 
 		})
 	}
 
-	// Urutkan berdasarkan waktu terbaru
 	sort.Slice(recentActivities, func(i, j int) bool {
 		return recentActivities[i].CreatedAt.After(recentActivities[j].CreatedAt)
 	})

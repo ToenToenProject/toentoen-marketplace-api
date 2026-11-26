@@ -10,7 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Standar Pembatasan Ukuran File
+// File size and MIME type limits.
 const (
 	Size2MB  int64 = 2 * 1024 * 1024  // 2,097,152 bytes (Foto Profil & Logo)
 	Size10MB int64 = 10 * 1024 * 1024 // 10,485,760 bytes (Foto, Banner, Ulasan, & Dokumen KYC/Tiket)
@@ -30,7 +30,7 @@ func formatBytes(b int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-// MediaLimit mendefinisikan batasan upload per folder dan tipe file
+// MediaLimit defines upload size constraints and MIME types per destination folder.
 type MediaLimit struct {
 	Category     string   `json:"category"`
 	Description  string   `json:"description"`
@@ -39,7 +39,7 @@ type MediaLimit struct {
 	AllowedTypes []string `json:"allowed_content_types"`
 }
 
-// getFolderRule mengembalikan aturan validasi batas ukuran dan MIME types yang diizinkan per folder
+// getFolderRule returns validation constraints and permitted MIME types for a target folder.
 func getFolderRule(folder, contentType string) (maxBytes int64, maxHuman string, category string, allowedTypes []string, isValidType bool, isFolderFound bool) {
 	folder = strings.Trim(strings.ToLower(folder), "/")
 	contentType = strings.TrimSpace(strings.ToLower(contentType))
@@ -51,17 +51,17 @@ func getFolderRule(folder, contentType string) (maxBytes int64, maxHuman string,
 	allMediaTypes := []string{"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "application/pdf", "video/mp4", "video/webm", "video/quicktime"}
 
 	switch folder {
-	// 1. Avatar & Logo (Maksimal 2 MB - Hanya Gambar)
+	// Avatar and logos (max 2 MB, images only).
 	case "accounts/avatars":
 		return Size2MB, "2 MB", "Foto Profil / Avatar", imageTypes, contains(imageTypes, contentType), true
 	case "businesses/logos":
 		return Size2MB, "2 MB", "Logo Toko / Bisnis", imageTypes, contains(imageTypes, contentType), true
 
-	// 2. Dokumen KYC (Maksimal 10 MB - Gambar & PDF)
+	// KYC identity documents (max 10 MB, images & PDF).
 	case "accounts/kyc", "kyc/documents":
 		return Size10MB, "10 MB", "Dokumen Verifikasi KYC", docTypes, contains(docTypes, contentType), true
 
-	// 3. Foto Produk, Banner, & Postingan (Maksimal 10 MB - Hanya Gambar)
+	// Product photos, banners, and posts (max 10 MB, images only).
 	case "businesses/images":
 		return Size10MB, "10 MB", "Foto & Banner Toko", imageAndGifTypes, contains(imageAndGifTypes, contentType), true
 	case "products/images", "products/previews":
@@ -71,7 +71,7 @@ func getFolderRule(folder, contentType string) (maxBytes int64, maxHuman string,
 	case "reviews/images":
 		return Size10MB, "10 MB", "Foto Ulasan Produk", imageTypes, contains(imageTypes, contentType), true
 
-	// 4. Video Produk, Postingan, & Ulasan (Maksimal 50 MB - Hanya Video)
+	// Product and post videos (max 50 MB, video only).
 	case "products/videos":
 		return Size50MB, "50 MB", "Video Produk", videoTypes, contains(videoTypes, contentType), true
 	case "posts/videos":
@@ -79,7 +79,6 @@ func getFolderRule(folder, contentType string) (maxBytes int64, maxHuman string,
 	case "reviews/videos":
 		return Size50MB, "50 MB", "Video Ulasan Produk", videoTypes, contains(videoTypes, contentType), true
 
-	// 5. Lampiran Chat, Demand Signal, & Tiket Bantuan (Gambar/PDF 10 MB, Video 50 MB)
 	case "chat/attachments", "demands/attachments", "tickets/attachments":
 		cat := "Lampiran Chat / Permintaan"
 		if folder == "tickets/attachments" {
@@ -110,8 +109,7 @@ func NewHandler() *Handler {
 	return &Handler{}
 }
 
-// GeneratePresignURL membuat URL sementara untuk upload file langsung ke S3 dengan batasan ukuran & format ketat
-// POST /api/v1/upload/presign
+// GeneratePresignURL generates presigned S3 PUT URL with size and MIME validation.
 func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 	var req struct {
 		Folder      string `json:"folder"`
@@ -124,19 +122,16 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
-	// 1. Validasi folder
 	folder := strings.Trim(strings.TrimSpace(req.Folder), "/")
 	if folder == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'folder' wajib diisi", nil)
 	}
 
-	// 2. Validasi filename
 	filename := strings.TrimSpace(req.Filename)
 	if filename == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'filename' wajib diisi", nil)
 	}
 
-	// 3. Validasi content type
 	contentType := strings.TrimSpace(req.ContentType)
 	if contentType == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'content_type' wajib diisi", nil)
@@ -154,7 +149,6 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 				contentType, folder, strings.Join(allowedTypes, ", ")), nil)
 	}
 
-	// 4. Validasi ukuran file (file_size)
 	if req.FileSize <= 0 {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation,
 			"Field 'file_size' wajib diisi (dalam bytes) dan harus lebih besar dari 0", nil)
@@ -173,7 +167,6 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 			})
 	}
 
-	// 5. Generate presigned URL dari S3 dengan mengunci ContentLength
 	result, err := storage.GeneratePresignedUploadURL(folder, filename, contentType, &req.FileSize)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr,
@@ -193,7 +186,6 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 }
 
 // GetUploadLimits mengembalikan katalog informasi batasan ukuran dan format file upload ToenToen
-// GET /api/v1/upload/limits
 func (h *Handler) GetUploadLimits(c *fiber.Ctx) error {
 	limits := []fiber.Map{
 		{

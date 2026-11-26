@@ -18,13 +18,11 @@ func NewProductGroupHandler(s ProductGroupService) *ProductGroupHandler {
 }
 
 func (h *ProductGroupHandler) GetGroups(c *fiber.Ctx) error {
-	// Tangkap :business_id dari URL
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Business ID wajib diisi", nil)
 	}
 
-	// Panggil service
 	groups, err := h.service.GetGroups(businessID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)

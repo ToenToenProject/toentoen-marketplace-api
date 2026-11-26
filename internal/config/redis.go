@@ -16,7 +16,7 @@ func ConnectRedis() {
 	redisHost := os.Getenv("REDIS_HOST")
 	redisPort := os.Getenv("REDIS_PORT")
 
-	// Fallback untuk di laptop lokal jika tidak ada env
+	// Local development fallback defaults.
 	if redisHost == "" {
 		redisHost = "127.0.0.1"
 	}

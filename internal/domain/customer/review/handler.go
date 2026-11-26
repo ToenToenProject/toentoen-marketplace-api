@@ -19,7 +19,6 @@ func NewReviewHandler(s ReviewService, ps interaction.ProductInteractionService)
 	return &ReviewHandler{s, ps}
 }
 
-// 1. Customer Buat Review Bisnis
 func (h *ReviewHandler) CreateReview(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
@@ -47,7 +46,6 @@ func (h *ReviewHandler) CreateReview(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Ulasan berhasil dikirim", nil)
 }
 
-// 2. Customer Update Review Bisnis
 func (h *ReviewHandler) UpdateReview(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	if reviewID == "" {
@@ -74,7 +72,6 @@ func (h *ReviewHandler) UpdateReview(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan berhasil diperbarui", nil)
 }
 
-// 3. Delete Review Bisnis (Customer pemilik atau Merchant)
 func (h *ReviewHandler) DeleteReview(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	if reviewID == "" {
@@ -92,7 +89,6 @@ func (h *ReviewHandler) DeleteReview(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Ulasan berhasil dihapus", nil)
 }
 
-// 4. Balas Review Bisnis (Customer & Merchant)
 func (h *ReviewHandler) ReplyReview(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	if reviewID == "" {
@@ -119,7 +115,6 @@ func (h *ReviewHandler) ReplyReview(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Balasan berhasil dikirim", nil)
 }
 
-// 5. Delete Balasan Review Bisnis
 func (h *ReviewHandler) DeleteReviewComment(c *fiber.Ctx) error {
 	commentID := strings.TrimSpace(c.Params("comment_id"))
 	if commentID == "" {
@@ -137,7 +132,6 @@ func (h *ReviewHandler) DeleteReviewComment(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Balasan berhasil dihapus", nil)
 }
 
-// 6. Get Smart Display 5 Review Toko (Publik)
 func (h *ReviewHandler) GetSmartDisplayReviews(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
@@ -171,7 +165,6 @@ func (h *ReviewHandler) GetSmartDisplayReviews(c *fiber.Ctx) error {
 	})
 }
 
-// 7. Get All Reviews Toko (Paginated & Filterable)
 func (h *ReviewHandler) GetAllReviews(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	if businessID == "" {
@@ -210,7 +203,6 @@ func (h *ReviewHandler) GetAllReviews(c *fiber.Ctx) error {
 	})
 }
 
-// 8. Get Detail Review Toko beserta Balasannya (Publik)
 func (h *ReviewHandler) GetReviewDetail(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	if reviewID == "" {
@@ -233,7 +225,6 @@ func (h *ReviewHandler) GetReviewDetail(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail ulasan berhasil diambil", review)
 }
 
-// 9. Toggle Like Review Toko
 func (h *ReviewHandler) ToggleReviewLike(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
@@ -253,7 +244,6 @@ func (h *ReviewHandler) ToggleReviewLike(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, fiber.Map{"is_liked": isLiked})
 }
 
-// 10. Toggle Like Balasan Review Toko
 func (h *ReviewHandler) ToggleReviewCommentLike(c *fiber.Ctx) error {
 	commentID := strings.TrimSpace(c.Params("comment_id"))
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
@@ -273,7 +263,6 @@ func (h *ReviewHandler) ToggleReviewCommentLike(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, msg, fiber.Map{"is_liked": isLiked})
 }
 
-// 11. Report Review Toko
 func (h *ReviewHandler) ReportReview(c *fiber.Ctx) error {
 	reviewID := strings.TrimSpace(c.Params("review_id"))
 	accountID, _, errAuth := utils.GetRequesterInfo(c)
@@ -296,7 +285,6 @@ func (h *ReviewHandler) ReportReview(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan ulasan berhasil dikirim", nil)
 }
 
-// 12. Report Balasan Review Toko
 func (h *ReviewHandler) ReportReviewComment(c *fiber.Ctx) error {
 	commentID := strings.TrimSpace(c.Params("comment_id"))
 	accountID, _, errAuth := utils.GetRequesterInfo(c)

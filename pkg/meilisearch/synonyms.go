@@ -14,11 +14,10 @@ var (
 	dynamicSynMap  map[string][]string
 )
 
-// GetIndonesianSynonyms mengembalikan kamus statis sinonim, bahasa gaul, singkatan kuliner,
-// dan toleransi ejaan umum bahasa Indonesia untuk mesin pencari.
+// GetIndonesianSynonyms returns default Indonesian search synonyms, colloquialisms, culinary terms, and common typos.
 func GetIndonesianSynonyms() map[string][]string {
 	return map[string][]string{
-		// ☕ Kopi & Minuman
+		// Coffee & beverages
 		"kopsus":    {"kopi susu", "coffee", "es kopi"},
 		"kopi susu": {"kopsus", "es kopi"},
 		"kopi":      {"coffee", "espresso", "latte", "kopsus", "ngopi"},
@@ -39,7 +38,7 @@ func GetIndonesianSynonyms() map[string][]string {
 		"cokelat":   {"coklat", "chocolate", "choco"},
 		"chocolate": {"cokelat", "coklat"},
 
-		// 🍲 Makanan, Kuliner & Singkatan Populer
+		// Food, dining & culinary terms
 		"nasgor":      {"nasi goreng"},
 		"nasi goreng": {"nasgor"},
 		"mie":         {"bakmi", "mi", "noodle", "noodles", "ramen"},
@@ -71,7 +70,7 @@ func GetIndonesianSynonyms() map[string][]string {
 		"pedas":       {"pedes", "spicy", "hot", "mercon", "geprek"},
 		"pedes":       {"pedas", "spicy"},
 
-		// 👗 Fashion & Pakaian
+		// Fashion & apparel
 		"baju":     {"pakaian", "kaos", "tshirt", "t-shirt", "kemeja", "outfit"},
 		"kaos":     {"tshirt", "t-shirt", "baju"},
 		"tshirt":   {"kaos", "baju"},
@@ -84,7 +83,7 @@ func GetIndonesianSynonyms() map[string][]string {
 		"hijab":    {"jilbab", "kerudung", "pashmina"},
 		"jilbab":   {"hijab", "kerudung"},
 
-		// 🏪 Tipe Tempat & Fasilitas
+		// Venues & facilities
 		"warkop":        {"warung kopi", "kedai kopi", "cafe"},
 		"warung":        {"kedai", "toko", "resto", "rumah makan"},
 		"cafe":          {"kafe", "coffee shop", "warkop"},
@@ -94,7 +93,7 @@ func GetIndonesianSynonyms() map[string][]string {
 		"alun_alun":     {"alun-alun", "alun alun", "lapangan"},
 		"pusat_belanja": {"mall", "plaza", "pertokoan"},
 
-		// 🔤 Typo Umum Bahasa Indonesia
+		// Common typos & variants
 		"antri":     {"antre"},
 		"antre":     {"antri"},
 		"espreso":   {"espresso"},
@@ -102,7 +101,7 @@ func GetIndonesianSynonyms() map[string][]string {
 		"cappucino": {"cappuccino"},
 		"apron":     {"celemek"},
 
-		// 🔧 Otomotif, Jasa & Layanan
+		// Automotive & local services
 		"montir":         {"bengkel mobil", "bengkel", "mekanik", "servis mobil"},
 		"mekanik":        {"bengkel mobil", "bengkel", "montir", "servis mobil"},
 		"bengkel mtr":    {"bengkel motor", "servis motor"},
@@ -118,7 +117,7 @@ func GetIndonesianSynonyms() map[string][]string {
 	}
 }
 
-// LoadMergedSynonyms menggabungkan kamus statis bawaan dengan kamus dinamis dari tabel search_synonyms di DB.
+// LoadMergedSynonyms merges default static synonyms with dynamic entries from the search_synonyms table.
 func LoadMergedSynonyms(db *gorm.DB) map[string][]string {
 	merged := GetIndonesianSynonyms()
 	if db == nil {
@@ -168,7 +167,7 @@ func LoadMergedSynonyms(db *gorm.DB) map[string][]string {
 	return merged
 }
 
-// SyncSynonymsFromDB memuat sinonim gabungan (statis + DB) lalu memperbarui setting Meilisearch.
+// SyncSynonymsFromDB refreshes search synonyms in Meilisearch with merged static and database entries.
 func SyncSynonymsFromDB(db *gorm.DB) error {
 	merged := LoadMergedSynonyms(db)
 	if Client == nil {
@@ -185,7 +184,7 @@ func SyncSynonymsFromDB(db *gorm.DB) error {
 	return nil
 }
 
-// getEffectiveSynonyms mengembalikan kamus sinonim terbaru (cache DB jika tersedia, atau statis).
+// getEffectiveSynonyms returns the active synonym dictionary, prioritizing cached database entries over static defaults.
 func getEffectiveSynonyms() map[string][]string {
 	synonymCacheMu.RLock()
 	cached := dynamicSynMap
@@ -196,8 +195,7 @@ func getEffectiveSynonyms() map[string][]string {
 	return GetIndonesianSynonyms()
 }
 
-// ExpandKeywordWithSynonyms memperluas kata kunci pencarian dengan sinonim (statis + dinamis DB)
-// untuk digunakan pada fallback query PostgreSQL jika Meilisearch offline/kosong.
+// ExpandKeywordWithSynonyms expands a search term with synonyms for PostgreSQL fallback queries when Meilisearch is unavailable.
 func ExpandKeywordWithSynonyms(keyword string) []string {
 	kw := strings.ToLower(strings.TrimSpace(keyword))
 	if kw == "" {
@@ -209,14 +207,14 @@ func ExpandKeywordWithSynonyms(keyword string) []string {
 
 	dict := getEffectiveSynonyms()
 
-	// 1. Cek kecocokan langsung seluruh frasa
+	// Exact phrase match.
 	if syns, ok := dict[kw]; ok {
 		for _, s := range syns {
 			resultMap[s] = true
 		}
 	}
 
-	// 2. Cek setiap kata individual jika frasa terdiri dari beberapa kata
+	// Multi-word phrase terms.
 	words := strings.Fields(kw)
 	for _, w := range words {
 		if syns, ok := dict[w]; ok {

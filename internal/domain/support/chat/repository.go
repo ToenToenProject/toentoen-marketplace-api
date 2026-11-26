@@ -99,7 +99,6 @@ func (r *supportChatRepository) GetMessagesBySessionID(sessionID string, limit i
 	if cursor != "" {
 		var cursorMsg models.CSChatMessage
 		if err := r.db.Select("created_at").Where("message_id = ?", cursor).First(&cursorMsg).Error; err == nil {
-			// Mengambil N pesan tepat sebelum kursor (scroll ke atas)
 			var reverseMessages []models.CSChatMessage
 			err := r.db.Where("session_id = ? AND created_at < ?", sessionID, cursorMsg.CreatedAt).
 				Order("created_at DESC").
@@ -108,7 +107,6 @@ func (r *supportChatRepository) GetMessagesBySessionID(sessionID string, limit i
 			if err != nil {
 				return nil, err
 			}
-			// Balikkan urutan agar tetap kronologis ASC
 			for i := len(reverseMessages) - 1; i >= 0; i-- {
 				messages = append(messages, reverseMessages[i])
 			}

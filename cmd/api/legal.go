@@ -9,8 +9,8 @@ import (
 //go:embed assets/privacy-policy.html
 var privacyPolicyHTML []byte
 
-// registerLegalRoutes mendaftarkan endpoint halaman legal publik (Privacy Policy & Account Deletion)
-// yang diwajibkan oleh Google Play Store.
+// registerLegalRoutes registers public compliance endpoints (Privacy Policy & Account Deletion)
+// required by app stores (Google Play Console).
 func registerLegalRoutes(app *fiber.App, api fiber.Router) {
 	privacyHandler := func(c *fiber.Ctx) error {
 		c.Set("Content-Type", "text/html; charset=utf-8")
@@ -18,18 +18,18 @@ func registerLegalRoutes(app *fiber.App, api fiber.Router) {
 	}
 
 	accountDeletionHandler := func(c *fiber.Ctx) error {
-		// Mengarahkan langsung ke anchor Section 8 (Hak Pengguna & Prosedur Penghapusan Akun)
+		// Redirect to Section 8 anchor for account deletion procedures.
 		return c.Redirect("/privacy-policy#account-deletion", fiber.StatusTemporaryRedirect)
 	}
 
-	// 1. Root-level standard URLs (Sesuai format resmi yang biasa dimasukkan ke Google Play Console)
+	// Root-level endpoints for store listing URLs.
 	app.Get("/privacy-policy", privacyHandler)
 	app.Get("/privacy", privacyHandler)
 	app.Get("/kebijakan-privasi", privacyHandler)
 	app.Get("/account-deletion", accountDeletionHandler)
 	app.Get("/delete-account", accountDeletionHandler)
 
-	// 2. Prefix /api/v1 (opsional agar bisa diakses di bawah route API juga)
+	// API prefix aliases for client routing.
 	if api != nil {
 		api.Get("/privacy-policy", privacyHandler)
 		api.Get("/privacy", privacyHandler)

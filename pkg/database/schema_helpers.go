@@ -21,8 +21,8 @@ var (
 	hasSignalCategoriesLastCheck time.Time
 )
 
-// HasPromotionTypeColumn memeriksa apakah kolom promotion_type sudah ada di tabel promotions.
-// Hasil di-cache selama 30 detik untuk efisiensi performa query.
+// HasPromotionTypeColumn checks whether column promotion_type exists in the promotions table.
+// Results are cached for 30 seconds to minimize redundant information_schema lookups.
 func HasPromotionTypeColumn(db *gorm.DB) bool {
 	if db == nil {
 		return false
@@ -57,7 +57,7 @@ func HasPromotionTypeColumn(db *gorm.DB) bool {
 	return hasPromotionTypeCol
 }
 
-// HasBundleItemsTable memeriksa apakah tabel promotion_bundle_items sudah ada di database.
+// HasBundleItemsTable checks whether table promotion_bundle_items exists in the database.
 func HasBundleItemsTable(db *gorm.DB) bool {
 	if db == nil {
 		return false
@@ -91,7 +91,7 @@ func HasBundleItemsTable(db *gorm.DB) bool {
 	return hasBundleItemsTab
 }
 
-// HasSignalCategoriesTable memeriksa apakah tabel signal_categories sudah ada di database.
+// HasSignalCategoriesTable checks whether table signal_categories exists in the database.
 func HasSignalCategoriesTable(db *gorm.DB) bool {
 	if db == nil {
 		return false

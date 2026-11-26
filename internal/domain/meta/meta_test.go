@@ -103,7 +103,6 @@ func TestGetTagsHandler(t *testing.T) {
 	app := fiber.New()
 	app.Get("/meta/tags", handler.GetTags)
 
-	// Test 1: Without query params
 	req := httptest.NewRequest(http.MethodGet, "/meta/tags", nil)
 	resp, err := app.Test(req)
 	if err != nil {
@@ -119,7 +118,6 @@ func TestGetTagsHandler(t *testing.T) {
 		t.Errorf("expected empty scope, got %s", mockRepo.lastScope)
 	}
 
-	// Test 2: With scope=global and category_id=5
 	req = httptest.NewRequest(http.MethodGet, "/meta/tags?scope=global&category_id=5", nil)
 	resp, err = app.Test(req)
 	if err != nil {

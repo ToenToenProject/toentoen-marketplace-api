@@ -30,10 +30,8 @@ func (h *ProfileHandler) UpdateProfileCustomer(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akses ditolak, sesi tidak valid", nil)
 	}
 
-	// CARA BARU: Langsung tegaskan bahwa ini adalah string
 	accountID, ok := accountIDValue.(string)
 	if !ok {
-		// Jika ternyata bukan string (misal JWT salah konfigurasi), tolak agar tidak error di database
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Tipe data sesi tidak valid", nil)
 	}
 
@@ -65,7 +63,6 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akses ditolak, sesi tidak valid", nil)
 	}
 
-	// CARA BARU: Langsung tegaskan bahwa ini adalah string
 	accountID, ok := accountIDValue.(string)
 	if !ok {
 		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Tipe data sesi tidak valid", nil)
@@ -180,7 +177,7 @@ func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.InternalServerErr, err.Error(), nil)
 	}
 
-	// Hapus cookie sesi saat akun berhasil dihapus
+	// Clear session cookie upon account deletion.
 	isProduction := config.Envs != nil && config.Envs.AppEnv == "production"
 	c.Cookie(&fiber.Cookie{
 		Name:     "auth_token",
@@ -193,37 +190,6 @@ func (h *ProfileHandler) VerifyDeleteOTPAndExecute(c *fiber.Ctx) error {
 	})
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun dan seluruh jejak Anda telah berhasil dihapus secara permanen.", nil)
-}
-
-type ForceDeleteInput struct {
-	Identifier string `json:"identifier"`
-}
-
-func (h *ProfileHandler) ForceDeleteAccount(c *fiber.Ctx) error {
-	var input ForceDeleteInput
-	_ = c.BodyParser(&input)
-
-	identifier := strings.TrimSpace(input.Identifier)
-	if identifier == "" {
-		identifier = strings.TrimSpace(c.Query("identifier"))
-	}
-	if identifier == "" {
-		identifier = strings.TrimSpace(c.Params("identifier"))
-	}
-
-	if identifier == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Identifier akun wajib disertakan dalam body JSON {'identifier': '...'}, query parameter ?identifier=..., atau URL param", nil)
-	}
-
-	result, err := h.service.ForceDeleteAccount(identifier)
-	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "tidak ditemukan") {
-			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-	}
-
-	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Akun berhasil dihapus secara paksa/permanen beserta seluruh data terkait", result)
 }
 
 func (h *ProfileHandler) GetKYCStatus(c *fiber.Ctx) error {
@@ -299,7 +265,7 @@ func (h *ProfileHandler) RegisterDeviceToken(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.RegisterDeviceToken(accountID, input); err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mendaftarkan token perangkat: "+err.Error(), nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mendaftarkan token perangkat", nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Device token berhasil didaftarkan", nil)
@@ -315,8 +281,8 @@ func (h *ProfileHandler) DeleteDeviceToken(c *fiber.Ctx) error {
 	_ = c.BodyParser(&input) // optional body
 
 	if err := h.service.DeleteDeviceToken(accountID, input); err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mencabut token perangkat: "+err.Error(), nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mencabut token perangkat", nil)
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Device token berhasil dihapus", nil)
-}
+}

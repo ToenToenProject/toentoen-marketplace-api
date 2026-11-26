@@ -13,12 +13,12 @@ import (
 	"toentoen-backend/internal/config"
 )
 
-// CiphertextPrefix adalah penanda opsional untuk mendeteksi data terenkripsi secara deterministik
+// CiphertextPrefix identifies values encrypted by this service.
 const CiphertextPrefix = "enc::"
 
 const defaultDevKey = "toentoen-secret-key-32bytes-long!"
 
-// getCandidateKeys menghasilkan daftar kandidat kunci untuk dekripsi (termasuk backward compatibility)
+// getCandidateKeys returns ordered decryption keys to support key rotations and backward compatibility.
 func getCandidateKeys() [][]byte {
 	var keys [][]byte
 	keyStr := ""
@@ -27,23 +27,23 @@ func getCandidateKeys() [][]byte {
 	}
 
 	if keyStr != "" {
-		// 1. Jika hex string 64-karakter (32 byte binary)
+		// 64-character hex-encoded 32-byte key.
 		if len(keyStr) == 64 {
 			if decoded, err := hex.DecodeString(keyStr); err == nil && len(decoded) == 32 {
 				keys = append(keys, decoded)
 			}
 		}
-		// 2. Jika persis 32 byte
+		// Raw 32-byte string.
 		if len(keyStr) == 32 {
 			keys = append(keys, []byte(keyStr))
 		}
-		// 3. Normalisasi slice 32 byte
+		// Normalized 32-byte buffer.
 		norm := make([]byte, 32)
 		copy(norm, []byte(keyStr))
 		keys = append(keys, norm)
 	}
 
-	// 4. Default fallback key untuk backward-compatibility data lokal
+	// Local development fallback key.
 	defaultNorm := make([]byte, 32)
 	copy(defaultNorm, []byte(defaultDevKey))
 	keys = append(keys, defaultNorm)
@@ -51,7 +51,7 @@ func getCandidateKeys() [][]byte {
 	return keys
 }
 
-// getPrimaryAESKey mengambil kunci utama untuk proses enkripsi baru
+// getPrimaryAESKey returns the primary active key used for new encryptions.
 func getPrimaryAESKey() ([]byte, error) {
 	candidates := getCandidateKeys()
 	if len(candidates) > 0 {
@@ -60,7 +60,7 @@ func getPrimaryAESKey() ([]byte, error) {
 	return nil, errors.New("no encryption key configured")
 }
 
-// Encrypt mengenkripsi plaintext string menjadi string base64 berformat "enc::<base64_payload>"
+// Encrypt encrypts plaintext using AES-256-GCM and returns a prefixed base64 string ("enc::<payload>").
 func Encrypt(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
@@ -117,15 +117,14 @@ func decryptPayload(data []byte, key []byte) (string, error) {
 	return string(plaintext), nil
 }
 
-// Decrypt mendekripsi ciphertext berformat "enc::<base64_payload>".
-// Jika data tidak memiliki prefix "enc::" (misal data lama/plaintext),
-// fungsi ini akan mengembalikan data asli secara aman (graceful fallback).
+// Decrypt decrypts AES-GCM ciphertext prefixed with "enc::".
+// Unprefixed or unencrypted strings are returned as-is for backward compatibility.
 func Decrypt(encryptedText string) (string, error) {
 	if encryptedText == "" {
 		return "", nil
 	}
 
-	// Graceful fallback jika data belum terenkripsi (data legacy/plaintext)
+	// Return legacy plaintext directly.
 	if !strings.HasPrefix(encryptedText, CiphertextPrefix) {
 		return encryptedText, nil
 	}
@@ -133,7 +132,6 @@ func Decrypt(encryptedText string) (string, error) {
 	payload := strings.TrimPrefix(encryptedText, CiphertextPrefix)
 	data, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
-		// Jika decode gagal, kembalikan string asli agar tidak merusak data
 		return encryptedText, nil
 	}
 
@@ -144,11 +142,11 @@ func Decrypt(encryptedText string) (string, error) {
 		}
 	}
 
-	// Jika semua kandidat kunci gagal decrypt (misal data rusak), fallback ke teks asli
+	// Fall back to original text if decryption fails with all candidate keys.
 	return encryptedText, nil
 }
 
-// EncryptPointer adalah helper untuk mengenkripsi pointer string (*string)
+// EncryptPointer encrypts a nullable string pointer.
 func EncryptPointer(plaintext *string) (*string, error) {
 	if plaintext == nil || *plaintext == "" {
 		return plaintext, nil
@@ -161,7 +159,7 @@ func EncryptPointer(plaintext *string) (*string, error) {
 	return &encrypted, nil
 }
 
-// DecryptPointer adalah helper untuk mendekripsi pointer string (*string)
+// DecryptPointer decrypts a nullable string pointer.
 func DecryptPointer(ciphertext *string) (*string, error) {
 	if ciphertext == nil || *ciphertext == "" {
 		return ciphertext, nil

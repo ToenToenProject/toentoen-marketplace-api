@@ -34,7 +34,6 @@ func (h *AnalyticsHandler) GetDailyAnalytics(c *fiber.Ctx) error {
 func (h *AnalyticsHandler) GetHistoryAnalytics(c *fiber.Ctx) error {
 	businessID := strings.TrimSpace(c.Params("business_id"))
 	
-	// Tangkap query params (format harus YYYY-MM-DD)
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
@@ -72,7 +71,7 @@ func (h *AnalyticsHandler) GetExploreAnalytics(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data analitik pencarian berhasil dimuat", data)
 }
 
-// TrackImpressions menerima batch impression dari Flutter (fire-and-forget, selalu 200 OK)
+// TrackImpressions ingests batch client impression telemetry asynchronously.
 func (h *AnalyticsHandler) TrackImpressions(c *fiber.Ctx) error {
 	var body struct {
 		Impressions []ImpressionItem `json:"impressions"`
@@ -81,7 +80,7 @@ func (h *AnalyticsHandler) TrackImpressions(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'impressions' wajib diisi", nil)
 	}
 
-	// Jalankan async agar response langsung cepat
+	// Process telemetry asynchronously to avoid delaying response.
 	go h.service.TrackImpressions(body.Impressions)
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Impressions recorded", nil)

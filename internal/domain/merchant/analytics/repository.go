@@ -41,7 +41,6 @@ func (r *analyticsRepository) GetDailyAnalytics(businessID, today string, limit 
 	var wg sync.WaitGroup
 	wg.Add(5)
 
-	// 1. Total Visitors (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Model(&models.MerchantAnalytics{}).
@@ -49,7 +48,6 @@ func (r *analyticsRepository) GetDailyAnalytics(businessID, today string, limit 
 			Count(&totalVisitors)
 	}()
 
-	// 2. Total Impression (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Model(&models.MerchantAnalytics{}).
@@ -57,7 +55,6 @@ func (r *analyticsRepository) GetDailyAnalytics(businessID, today string, limit 
 			Count(&totalImpression)
 	}()
 
-	// 3. Traffic Sources (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Model(&models.MerchantAnalytics{}).
@@ -67,7 +64,6 @@ func (r *analyticsRepository) GetDailyAnalytics(businessID, today string, limit 
 			Scan(&trafficSources)
 	}()
 
-	// 4. Visitor by Tags (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Model(&models.MerchantAnalytics{}).
@@ -78,7 +74,6 @@ func (r *analyticsRepository) GetDailyAnalytics(businessID, today string, limit 
 			Scan(&visitorByTags)
 	}()
 
-	// 5. Visitor by Products (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Table("merchant_analytics").
@@ -111,7 +106,7 @@ func (r *analyticsRepository) GetDailyAnalytics(businessID, today string, limit 
 	}, nil
 }
 
-// Mengambil angka dasar (Visitors & Impressions) untuk dihitung persentasenya secara paralel
+// Query base visitor and impression metrics concurrently.
 func (r *analyticsRepository) GetBasicStatsByDateRange(businessID string, startDate, endDate string) (int64, int64, error) {
 	var visitors, impressions int64
 	var wg sync.WaitGroup
@@ -146,7 +141,6 @@ func (r *analyticsRepository) GetHistoryDetails(businessID string, startDate, en
 	var wg sync.WaitGroup
 	wg.Add(3)
 
-	// 1. Traffic Sources (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Model(&models.MerchantAnalytics{}).
@@ -156,7 +150,6 @@ func (r *analyticsRepository) GetHistoryDetails(businessID string, startDate, en
 			Scan(&trafficSources)
 	}()
 
-	// 2. Visitor by Tags (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Model(&models.MerchantAnalytics{}).
@@ -166,7 +159,6 @@ func (r *analyticsRepository) GetHistoryDetails(businessID string, startDate, en
 			Scan(&visitorByTags)
 	}()
 
-	// 3. Visitor by Products (Parallel)
 	go func() {
 		defer wg.Done()
 		r.db.Table("merchant_analytics").
@@ -197,7 +189,6 @@ func (r *analyticsRepository) GetHistoryDetails(businessID string, startDate, en
 }
 
 func (r *analyticsRepository) GetExploreAnalytics(businessID, keyword string, radiusKm float64, limit int) (*models.ExploreAnalyticsResponse, error) {
-	// 1. Dapatkan koordinat toko kita sendiri (Pusat Radius)
 	var centerBiz struct {
 		Latitude  *float64
 		Longitude *float64
@@ -212,7 +203,7 @@ func (r *analyticsRepository) GetExploreAnalytics(businessID, keyword string, ra
 		CompetitorsRelated:  []models.CompetitorStat{},
 	}
 
-	// Jika toko belum memiliki koordinat lokasi, kembalikan response kosong
+	// Return empty response if store coordinates are unset.
 	if centerBiz.Latitude == nil || centerBiz.Longitude == nil || (*centerBiz.Latitude == 0 && *centerBiz.Longitude == 0) {
 		return emptyResponse, nil
 	}
@@ -220,7 +211,6 @@ func (r *analyticsRepository) GetExploreAnalytics(businessID, keyword string, ra
 	lat := *centerBiz.Latitude
 	lng := *centerBiz.Longitude
 
-	// 2. Cari ID kompetitor dalam radius 5 KM menggunakan Haversine Formula yang terlindungi
 	var competitorIDs []string
 	r.db.Table("businesses").
 		Select("business_id").
@@ -229,12 +219,12 @@ func (r *analyticsRepository) GetExploreAnalytics(businessID, keyword string, ra
 			lat, lng, lat, radiusKm).
 		Pluck("business_id", &competitorIDs)
 
-	// Jika tidak ada kompetitor di sekitar, kembalikan response kosong
+	// Return empty response if no nearby competitors exist.
 	if len(competitorIDs) == 0 {
 		return emptyResponse, nil
 	}
 
-	// Persiapkan pencarian keyword (Jika ada)
+	// Prepare keyword search filters if provided.
 	searchKeyword := "%" + keyword + "%"
 
 	var (
@@ -246,7 +236,6 @@ func (r *analyticsRepository) GetExploreAnalytics(businessID, keyword string, ra
 	var wg sync.WaitGroup
 	wg.Add(3)
 
-	// 3. Ambil Tags Similarities dari kompetitor tersebut (Parallel)
 	go func() {
 		defer wg.Done()
 		queryTags := r.db.Model(&models.MerchantAnalytics{}).
@@ -258,7 +247,6 @@ func (r *analyticsRepository) GetExploreAnalytics(businessID, keyword string, ra
 		queryTags.Group("searched_tag").Order("audience_count DESC").Limit(limit).Scan(&tagsSimilarities)
 	}()
 
-	// 4. Ambil Product Similarities dari kompetitor tersebut (Parallel)
 	go func() {
 		defer wg.Done()
 		queryProds := r.db.Table("merchant_analytics").
@@ -271,7 +259,6 @@ func (r *analyticsRepository) GetExploreAnalytics(businessID, keyword string, ra
 		queryProds.Group("products.product_name").Order("audience_count DESC").Limit(limit).Scan(&productSimilarities)
 	}()
 
-	// 5. Ambil Top Competitors (Parallel)
 	go func() {
 		defer wg.Done()
 		queryComps := r.db.Table("merchant_analytics").
@@ -332,13 +319,13 @@ func (r *analyticsRepository) TrackImpressionsBatch(events []models.MerchantAnal
 	return r.db.Create(&events).Error
 }
 
-// GetSignalStats menghitung signal yang diterima (masuk ke kategori toko) dan yang sudah direspons secara paralel
+// GetSignalStats computes received and responded signal counts concurrently.
 func (r *analyticsRepository) GetSignalStats(businessID string, startDate, endDate string) (int64, int64, error) {
 	var received, responded int64
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Signal yang relevan dengan toko ini (Parallel)
+	// Concurrently query matching signals.
 	go func() {
 		defer wg.Done()
 		r.db.Raw(`
@@ -352,7 +339,7 @@ func (r *analyticsRepository) GetSignalStats(businessID string, startDate, endDa
 		`, businessID, startDate, endDate).Scan(&received)
 	}()
 
-	// Signal yang sudah direspons oleh bisnis ini (Parallel)
+	// Concurrently query responded signals.
 	go func() {
 		defer wg.Done()
 		r.db.Raw(`
@@ -366,4 +353,4 @@ func (r *analyticsRepository) GetSignalStats(businessID string, startDate, endDa
 
 	wg.Wait()
 	return received, responded, nil
-}
+}

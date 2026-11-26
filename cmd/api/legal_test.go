@@ -69,7 +69,6 @@ func TestLegalRoutes_PrivacyPolicy(t *testing.T) {
 				t.Errorf("expected body to contain %q, but did not find it", tc.wantSubstr)
 			}
 
-			// Pastikan bagian penting ada di dalam HTML
 			if !strings.Contains(body, "support@toentoen.com") {
 				t.Errorf("expected body to contain contact email 'support@toentoen.com'")
 			}

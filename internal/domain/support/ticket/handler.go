@@ -17,7 +17,7 @@ func NewSupportTicketHandler(service SupportTicketService) *SupportTicketHandler
 	return &SupportTicketHandler{service: service}
 }
 
-// CreateTicket membuat tiket bantuan baru
+// CreateTicket creates a new support ticket.
 func (h *SupportTicketHandler) CreateTicket(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -41,7 +41,7 @@ func (h *SupportTicketHandler) CreateTicket(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Tiket bantuan berhasil dikirim", ticketRes)
 }
 
-// GetMyTickets mengambil daftar seluruh tiket yang pernah dikirim oleh pengguna
+// GetMyTickets lists tickets submitted by the authenticated user.
 func (h *SupportTicketHandler) GetMyTickets(c *fiber.Ctx) error {
 	accountID, _, err := utils.GetRequesterInfo(c)
 	if err != nil {
@@ -59,7 +59,7 @@ func (h *SupportTicketHandler) GetMyTickets(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Daftar tiket bantuan berhasil dimuat", tickets)
 }
 
-// GetTicketDetail mengambil detail informasi tiket beserta lampiran dan balasan CS
+// GetTicketDetail returns ticket details, attachments, and support replies.
 func (h *SupportTicketHandler) GetTicketDetail(c *fiber.Ctx) error {
 	accountID, role, err := utils.GetRequesterInfo(c)
 	if err != nil {

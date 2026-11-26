@@ -19,17 +19,14 @@ func TestBuildOTPEmailHTML(t *testing.T) {
 	_ = os.MkdirAll("C:/Users/ADMIN/.gemini/antigravity/brain/c91a8afd-aa22-40f8-94dd-962b4148c3ce/scratch", 0755)
 	_ = os.WriteFile("C:/Users/ADMIN/.gemini/antigravity/brain/c91a8afd-aa22-40f8-94dd-962b4148c3ce/scratch/preview_email.html", []byte(html), 0644)
 
-	// Verifikasi greeting dan teks utama
 	if !strings.Contains(html, "Hey Sobat ToenToen!") {
 		t.Errorf("HTML should contain greeting 'Hey Sobat ToenToen!'")
 	}
 
-	// Verifikasi kode OTP ada sebagai teks utuh
 	if !strings.Contains(html, "482910") {
 		t.Errorf("HTML should contain the raw OTP code '482910'")
 	}
 
-	// Pastikan background hitam (#1e1e1e) sudah dihapus dan menggunakan background bersih (#f8fafc) serta card putih (#ffffff)
 	if strings.Contains(html, "#1e1e1e") {
 		t.Errorf("HTML should not contain dark background #1e1e1e")
 	}
@@ -40,27 +37,22 @@ func TestBuildOTPEmailHTML(t *testing.T) {
 		t.Errorf("HTML should contain white card #ffffff")
 	}
 
-	// Pastikan tombol Copy OTP ada sesuai desain referensi
 	if !strings.Contains(html, "Copy OTP") {
 		t.Errorf("HTML should contain 'Copy OTP' button")
 	}
 
-	// Pastikan logo resmi ToenToen dari asset digunakan via CID
 	if !strings.Contains(html, "cid:toentoen-logo.png") {
 		t.Errorf("HTML should contain official logo cid:toentoen-logo.png")
 	}
 
-	// Pastikan tidak ada pemisahan table per digit yang menyebabkan \n saat disalin
 	if strings.Contains(html, "4</td>") {
 		t.Errorf("HTML should not contain separate table cell per digit")
 	}
 
-	// Cek footer waktu WIB
 	if !strings.Contains(html, "WIB") {
 		t.Errorf("HTML footer should contain WIB timezone")
 	}
 
-	// Cek warning 5 menit
 	if !strings.Contains(html, "5 menit") {
 		t.Errorf("HTML should mention 5 minutes validity")
 	}

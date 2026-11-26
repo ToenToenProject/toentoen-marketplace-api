@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
 
@@ -50,7 +51,7 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		scope = "all"
 	}
 
-	// Parse category_ids, category_id, category
+	// Parse category parameters.
 	var catIDs []int64
 	var catName string
 
@@ -75,7 +76,7 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Parse tags (mendukung format nama string misal "WiFi, AC" maupun array ID "10, 11")
+	// Parse tag parameters supporting tag names or IDs.
 	var tagIDs []int64
 	var tagNames []string
 
@@ -101,7 +102,6 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Soft Filter / Ranking Booster: hashtags
 	var hashtags []string
 	rawHashtags := c.Query("hashtags")
 	if rawHashtags == "" {
@@ -117,7 +117,6 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Gatekeeping: is_open_now
 	var isOpenNow *bool
 	rawIsOpen := c.Query("is_open_now")
 	if rawIsOpen == "" {
@@ -129,7 +128,6 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Gatekeeping: is_promo
 	var isPromo *bool
 	rawPromo := c.Query("is_promo")
 	if rawPromo == "" {
@@ -141,7 +139,6 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Gatekeeping: store_type / store_types
 	var storeTypes []string
 	rawStoreTypes := c.Query("store_types")
 	if rawStoreTypes == "" {
@@ -156,7 +153,6 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Gatekeeping: min_price & max_price
 	var minPrice, maxPrice *float64
 	rawMin := c.Query("min_price")
 	if rawMin == "" {
@@ -178,7 +174,6 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Gatekeeping: stock_types / stock_type
 	var stockTypes []string
 	rawStockTypes := c.Query("stock_types")
 	if rawStockTypes == "" {
@@ -193,7 +188,6 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Gatekeeping: offering_types / offering_type
 	var offeringTypes []string
 	rawOfferingTypes := c.Query("offering_types")
 	if rawOfferingTypes == "" {
@@ -258,9 +252,9 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		}
 	}
 
-	// Validate nearest requirement hanya jika user meminta secara eksplisit sort nearest tanpa koordinat
+	// Validate coordinates are present when user explicitly requests nearest sort.
 	if req.Sort == "nearest" && (req.Lat == 0 || req.Lng == 0) {
-		return utils.SendResponse(c, 400, "11", "Latitude dan longitude wajib diisi untuk pengurutan 'terdekat'", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Latitude dan longitude wajib diisi untuk pengurutan 'terdekat'", nil)
 	}
 
 	res, err := h.service.GetExploreBusinesses(req)
@@ -269,10 +263,10 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		if req.Scope == "product" {
 			errMsg = "Gagal mencari produk"
 		}
-		return utils.SendResponse(c, 500, "99", errMsg, nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errMsg, nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Berhasil memuat eksplorasi bisnis", res)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil memuat eksplorasi bisnis", res)
 }
 
 func (h *ExploreHandler) GetTimeline(c *fiber.Ctx) error {
@@ -301,16 +295,16 @@ func (h *ExploreHandler) GetTimeline(c *fiber.Ctx) error {
 
 	posts, err := h.service.GetTimelinePosts(query, accountID)
 	if err != nil {
-		return utils.SendResponse(c, 500, "99", "Gagal memuat postingan linimasa", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memuat postingan linimasa", nil)
 	}
 
-	return utils.SendResponse(c, 200, "00", "Berhasil memuat linimasa", posts)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil memuat linimasa", posts)
 }
 
 func (h *ExploreHandler) RecordFeedEvents(c *fiber.Ctx) error {
 	var input models.FeedEventBatchInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "Format request tidak valid", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
 	}
 
 	var accountID string
@@ -324,53 +318,53 @@ func (h *ExploreHandler) RecordFeedEvents(c *fiber.Ctx) error {
 		_ = h.service.RecordFeedEvents(accID, batch)
 	}(accountID, input)
 
-	return utils.SendResponse(c, fiber.StatusOK, "00", "Aktivitas feed berhasil direkam", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Aktivitas feed berhasil direkam", nil)
 }
 
 func (h *ExploreHandler) RecordSearchClick(c *fiber.Ctx) error {
 	var input models.SearchClickInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "Format request tidak valid", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
 	}
 	if strings.TrimSpace(input.SearchLogID) == "" || strings.TrimSpace(input.BusinessID) == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "search_log_id dan business_id wajib diisi", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "search_log_id dan business_id wajib diisi", nil)
 	}
 
 	go func(in models.SearchClickInput) {
 		_ = h.service.RecordSearchClick(in)
 	}(input)
 
-	return utils.SendResponse(c, fiber.StatusOK, "00", "Klik pencarian berhasil direkam", nil)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Klik pencarian berhasil direkam", nil)
 }
 
 func (h *ExploreHandler) GetZeroResultSearches(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", "50"))
 	logs, err := h.service.GetZeroResultSearches(limit)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, "99", "Gagal mengambil analitik pencarian kosong", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil analitik pencarian kosong", nil)
 	}
-	return utils.SendResponse(c, fiber.StatusOK, "00", "Berhasil mengambil analitik pencarian kosong", logs)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil analitik pencarian kosong", logs)
 }
 
 func (h *ExploreHandler) ListSearchSynonyms(c *fiber.Ctx) error {
 	items, err := h.service.ListSearchSynonyms()
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, "99", "Gagal memuat kamus sinonim", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal memuat kamus sinonim", nil)
 	}
-	return utils.SendResponse(c, fiber.StatusOK, "00", "Berhasil memuat kamus sinonim", items)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil memuat kamus sinonim", items)
 }
 
 func (h *ExploreHandler) UpsertSearchSynonym(c *fiber.Ctx) error {
 	var input models.UpsertSynonymInput
 	if err := c.BodyParser(&input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "Format request tidak valid", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
 	}
 	if strings.TrimSpace(input.Term) == "" || strings.TrimSpace(input.CanonicalTerm) == "" {
-		return utils.SendResponse(c, fiber.StatusBadRequest, "11", "term dan canonical_term wajib diisi", nil)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "term dan canonical_term wajib diisi", nil)
 	}
 	item, err := h.service.UpsertSearchSynonym(input)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, "99", "Gagal menyimpan sinonim", nil)
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal menyimpan sinonim", nil)
 	}
-	return utils.SendResponse(c, fiber.StatusOK, "00", "Sinonim berhasil disimpan dan disinkronkan ke Meilisearch", item)
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Sinonim berhasil disimpan dan disinkronkan ke Meilisearch", item)
 }

@@ -42,12 +42,10 @@ type PromotionRepository interface {
 	GetProductsInActivePromotions(businessID string) ([]models.Product, error)
 	RecordPromotionEvents(events []models.PromotionEvent) error
 
-	// Post Promotions integration
 	GetPromotionalPosts(businessID, tab string) ([]models.BusinessPost, error)
 	GetPostByID(businessID, postID string) (*models.BusinessPost, error)
 	UpdatePostPromotion(post *models.BusinessPost) error
 
-	// Worker methods
 	GetScheduledPromotionsToActivate(now time.Time) ([]models.Promotion, error)
 	GetActivePromotionsToExpire(now time.Time) ([]models.Promotion, error)
 	ExpirePromotionAndRestoreDiscounts(promo *models.Promotion) error
@@ -136,7 +134,7 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 		return nil, err
 	}
 
-	// Ambil produk yang sedang berada dalam promosi per-produk
+	// Retrieve products currently committed to an active promotion.
 	activePerProductMap, err := r.GetActivePromotionProductIDs(businessID, models.PromotionTypePerProduct)
 	if err != nil {
 		return nil, err
@@ -174,8 +172,7 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 			promoStatus = "inactive"
 			promoStatusLabel = "Produk Tidak Aktif"
 		} else if inPerProduct {
-			// Aturan Per-Produk (Katalog):
-			// Produk yang sedang ada di promosi per-produk TIDAK BISA didaftarkan lagi (mencegah konflik diskon katalog).
+			// Products committed to active promotions cannot be registered in conflicting campaigns.
 			isEligible = false
 			isActivePromoted = true
 			promoStatus = "active_promoted"
@@ -211,8 +208,8 @@ func (r *promotionRepository) GetEligibleProducts(businessID string, targetType 
 	}
 
 	// Aturan Urutan:
-	// 1. Produk yang belum aktif promosi berada di ATAS. Produk aktif promosi (isActivePromoted == true) di PALING BAWAH.
-	// 2. Pada daftar produk yang belum aktif promosi, paket (is_package == true) ditaruh di bagian paling atas.
+	// Sort: unpromoted products first, actively promoted products last.
+	// Prioritize standalone packages at the top of unpromoted products.
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].IsActivePromoted != items[j].IsActivePromoted {
 			return !items[i].IsActivePromoted // false (belum aktif promo) ditaruh di atas
@@ -236,7 +233,6 @@ func (r *promotionRepository) CreatePromotion(
 	autoPost *models.BusinessPost,
 ) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Simpan master promosi terlebih dahulu (tanpa PostID) agar baris promotions tersedia untuk FK business_posts
 		promo.PostID = nil
 		promoQuery := tx
 		if !database.HasPromotionTypeColumn(tx) {
@@ -246,7 +242,6 @@ func (r *promotionRepository) CreatePromotion(
 			return fmt.Errorf("gagal menyimpan promosi: %w", err)
 		}
 
-		// 2. Simpan auto-post feed jika ada (sekarang aman karena promotions(promotion_id) sudah tersimpan)
 		if autoPost != nil {
 			if err := tx.Create(autoPost).Error; err != nil {
 				return fmt.Errorf("gagal membuat postingan feed promosi: %w", err)
@@ -261,14 +256,12 @@ func (r *promotionRepository) CreatePromotion(
 			}
 		}
 
-		// 3. Simpan relasi produk promosi
 		if len(promoProducts) > 0 {
 			if err := tx.Create(&promoProducts).Error; err != nil {
 				return fmt.Errorf("gagal menyimpan item promosi: %w", err)
 			}
 		}
 
-		// 4. Update data diskon pada tabel products jika promosi langsung aktif
 		for _, p := range productsToUpdate {
 			updates := map[string]interface{}{
 				"discount_type":     p.DiscountType,
@@ -295,7 +288,6 @@ func (r *promotionRepository) CreateBundlingPromotion(
 	autoPost *models.BusinessPost,
 ) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Simpan master promosi bundling (tanpa PostID)
 		if !database.HasPromotionTypeColumn(tx) || !database.HasBundleItemsTable(tx) {
 			return fmt.Errorf("skema database untuk promosi bundling belum siap. Mohon jalankan migrasi database terlebih dahulu")
 		}
@@ -305,7 +297,6 @@ func (r *promotionRepository) CreateBundlingPromotion(
 			return fmt.Errorf("gagal menyimpan promosi bundling: %w", err)
 		}
 
-		// 2. Simpan auto-post feed jika ada
 		if autoPost != nil {
 			if err := tx.Create(autoPost).Error; err != nil {
 				return fmt.Errorf("gagal membuat postingan feed promosi bundling: %w", err)
@@ -320,7 +311,6 @@ func (r *promotionRepository) CreateBundlingPromotion(
 			}
 		}
 
-		// 3. Simpan item-item bundling
 		if len(bundleItems) > 0 {
 			if err := tx.Create(&bundleItems).Error; err != nil {
 				return fmt.Errorf("gagal menyimpan item bundling: %w", err)
@@ -373,7 +363,7 @@ func (r *promotionRepository) GetPromotionSummary(businessID string) (models.Pro
 	summary.TotalImpressions = row.TotalImpressions
 	summary.TotalClicks = row.TotalClicks
 
-	// Tambahkan jumlah postingan promosi yang sedang aktif
+	// Increment active promotional post count.
 	now := time.Now()
 	var activePostCount int64
 	_ = r.db.Model(&models.BusinessPost{}).
@@ -473,7 +463,6 @@ func (r *promotionRepository) GetBusinessByID(businessID string) (*models.Busine
 
 func (r *promotionRepository) ExtendPromotion(businessID, promotionID string, newEndAt time.Time, productIDs []string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Update promosi
 		if err := tx.Model(&models.Promotion{}).
 			Where("business_id = ? AND promotion_id = ?", businessID, promotionID).
 			Updates(map[string]interface{}{
@@ -483,7 +472,6 @@ func (r *promotionRepository) ExtendPromotion(businessID, promotionID string, ne
 			return err
 		}
 
-		// Update discount_end_at pada seluruh produk promosi
 		if len(productIDs) > 0 {
 			if err := tx.Model(&models.Product{}).
 				Where("product_id IN ? AND business_id = ?", productIDs, businessID).
@@ -495,7 +483,6 @@ func (r *promotionRepository) ExtendPromotion(businessID, promotionID string, ne
 			}
 		}
 
-		// Update postingan promosi terkait
 		_ = tx.Model(&models.BusinessPost{}).
 			Where("promotion_id = ?", promotionID).
 			Updates(map[string]interface{}{
@@ -515,7 +502,6 @@ func (r *promotionRepository) StopPromotion(
 ) error {
 	now := time.Now()
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Update status promosi
 		if err := tx.Model(&models.Promotion{}).
 			Where("business_id = ? AND promotion_id = ?", businessID, promotionID).
 			Updates(map[string]interface{}{
@@ -527,7 +513,6 @@ func (r *promotionRepository) StopPromotion(
 			return err
 		}
 
-		// 2. Kembalikan / bersihkan diskon produk
 		for _, pp := range promoProducts {
 			if pp.DiscountSource == models.PromotionDiscountSourceNew {
 				if pp.HadPreviousDiscount && pp.PrevDiscount != nil && *pp.PrevDiscount > 0 {
@@ -549,7 +534,6 @@ func (r *promotionRepository) StopPromotion(
 						return err
 					}
 				} else {
-					// Hapus diskon
 					if err := tx.Model(&models.Product{}).
 						Where("product_id = ? AND business_id = ?", pp.ProductID, businessID).
 						Updates(map[string]interface{}{
@@ -576,7 +560,6 @@ func (r *promotionRepository) StopPromotion(
 			}
 		}
 
-		// 3. Tandai post promosi tidak aktif lagi jika ada
 		postQuery := tx.Model(&models.BusinessPost{}).Where("promotion_id = ?", promotionID)
 		if postID != nil && *postID != "" {
 			postQuery = tx.Model(&models.BusinessPost{}).Where("promotion_id = ? OR (business_id = ? AND post_id = ?)", promotionID, businessID, *postID)
@@ -636,7 +619,6 @@ func (r *promotionRepository) RecordPromotionEvents(events []models.PromotionEve
 	ctx := context.Background()
 	now := time.Now()
 
-	// Hitung delta per promosi dengan deduplikasi impression via Redis
 	impressionDeltas := make(map[string]int)
 	clickDeltas := make(map[string]int)
 	validEvents := make([]models.PromotionEvent, 0, len(events))
@@ -774,7 +756,7 @@ func (r *promotionRepository) ExpirePromotionAndRestoreDiscounts(promo *models.P
 			}
 		}
 
-		// Matikan status promosi pada postingan feed terkait
+		// Deactivate promotion flag on linked feed post.
 		_ = tx.Model(&models.BusinessPost{}).
 			Where("promotion_id = ?", promo.PromotionID).
 			Updates(map[string]interface{}{

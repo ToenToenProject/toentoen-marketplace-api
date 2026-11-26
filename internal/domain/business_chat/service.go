@@ -46,7 +46,7 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		return nil, nil, false, errors.New("Bisnis/Toko tidak ditemukan")
 	}
 
-	// Cegah chat dengan toko milik sendiri atau toko yang dikelola
+	// Prevent customers from chatting with their own or managed stores.
 	if business.AccountID == customerID {
 		return nil, nil, false, errors.New("Anda tidak dapat memulai chat dengan toko milik Anda sendiri")
 	}
@@ -54,12 +54,12 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		return nil, nil, false, errors.New("Anda tidak dapat memulai chat dengan toko yang Anda kelola")
 	}
 
-	// 1. Cek apakah percakapan sudah ada
+	// 1. Check if conversation already exists.
 	existingConv, err := s.repo.FindConversation(businessID, customerID)
 	if err == nil && existingConv != nil {
-		// Percakapan sudah ada
+		// Existing conversation found.
 		var lastMsg *models.DirectBusinessMessage
-		// Jika ada pesan awal baru yang dikirim saat initiate ulang, kirimkan pesan tersebut
+		// Dispatch initial message if provided on re-initiation.
 		if strings.TrimSpace(input.Message) != "" || (input.ProductID != nil && *input.ProductID != "") {
 			sendInput := models.SendBusinessChatMessageInput{
 				Content:   strings.TrimSpace(input.Message),
@@ -78,7 +78,6 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		return existingConv, lastMsg, false, nil
 	}
 
-	// 2. Buat percakapan baru
 	now := time.Now()
 	convID := utils.GenerateUUID("BCONV")
 
@@ -98,7 +97,6 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		UpdatedAt:          now,
 	}
 
-	// Ambil data customer
 	customer, _ := s.repo.GetAccountByID(customerID)
 	senderName := "Pelanggan"
 	if customer != nil {
@@ -140,7 +138,7 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 		}
 	}
 
-	// Enkripsi pesan & preview sebelum simpan ke database
+	// Encrypt message body and preview before database persistence.
 	newConvToSave := *newConv
 	newConvToSave.LastMessagePreview, _ = crypto.Encrypt(newConv.LastMessagePreview)
 
@@ -159,7 +157,6 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 	newConv.Business = business
 	newConv.Customer = customer
 
-	// Broadcast WS event ke seluruh staff/owner toko jika ada hub & kirim Push Notification jika offline
 	if firstMsg != nil {
 		event := realtime.WSEvent{
 			Type: "BUSINESS_CHAT_NEW_MESSAGE",
@@ -398,12 +395,11 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 	encPreview, _ := crypto.Encrypt(message.Content)
 	_ = s.repo.UpdateConversationLastMessage(conversationID, encPreview, now)
 
-	// Load product detail jika ada
+	// Load product details if referenced.
 	if message.ProductID != nil && *message.ProductID != "" {
 		message.ProductDetail, _ = s.repo.GetProductByID(*message.ProductID)
 	}
 
-	// Broadcast via WebSocket (kirim data plaintext ke websocket) & Push Notification jika offline
 	event := realtime.WSEvent{
 		Type: "BUSINESS_CHAT_NEW_MESSAGE",
 		Data: message,
@@ -411,7 +407,7 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 
 	var offlineAccountIDs []string
 	if isCustomer {
-		// Kirim ke seluruh staf dan owner toko
+		// Dispatch to store staff and owner.
 		staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(conv.BusinessID)
 		for _, staffID := range staffIDs {
 			if s.hub != nil && s.hub.IsOnline(staffID) {
@@ -421,7 +417,7 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 			}
 		}
 	} else {
-		// Kirim ke customer
+		// Dispatch to customer.
 		if s.hub != nil && s.hub.IsOnline(conv.CustomerID) {
 			s.hub.SendToAccount(conv.CustomerID, event)
 		} else {
@@ -434,7 +430,7 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 		isTemplate := strings.EqualFold(cleanContent, "halo kak, saya ingin bertanya mengenai toko anda.") ||
 			strings.Contains(strings.ToLower(cleanContent), "halo kak, saya ingin bertanya mengenai toko anda")
 
-		// Jika bukan template, buatkan entri notifikasi in-app untuk akun merchant (Owner & Staff)
+		// Create in-app notification for merchant staff for non-template messages.
 		staffIDs, _ := s.repo.GetMerchantStaffAccountIDs(conv.BusinessID)
 		if !isTemplate && s.notifService != nil && len(staffIDs) > 0 {
 			go func(recipients []string, sName string) {
@@ -479,7 +475,7 @@ func (s *businessChatService) SendMessage(conversationID string, requesterID str
 			}()
 		}
 	} else {
-		// Pesan dari merchant ke customer
+		// Merchant-to-customer message flow.
 		if s.notifService != nil && len(offlineAccountIDs) > 0 {
 			go func() {
 				title := senderName

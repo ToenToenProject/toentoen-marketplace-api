@@ -29,7 +29,6 @@ func NewPostInteractionRepository(db *gorm.DB) PostInteractionRepository {
 	return &postInteractionRepository{db}
 }
 
-// 1. TOGGLE LIKE POSTINGAN
 func (r *postInteractionRepository) TogglePostLike(postID, accountID string) (bool, error) {
 	postID = strings.TrimSpace(postID)
 	accountID = strings.TrimSpace(accountID)
@@ -70,7 +69,6 @@ func (r *postInteractionRepository) TogglePostLike(postID, accountID string) (bo
 	return isLiked, err
 }
 
-// 2. CREATE KOMENTAR / BALASAN POSTINGAN
 func (r *postInteractionRepository) CreatePostComment(comment *models.BusinessPostComment) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(comment).Error; err != nil {
@@ -85,12 +83,10 @@ func (r *postInteractionRepository) CreatePostComment(comment *models.BusinessPo
 	})
 }
 
-// 3. UPDATE KOMENTAR POSTINGAN
 func (r *postInteractionRepository) UpdatePostComment(comment *models.BusinessPostComment) error {
 	return r.db.Save(comment).Error
 }
 
-// 4. DELETE KOMENTAR POSTINGAN
 func (r *postInteractionRepository) DeletePostComment(commentID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var comment models.BusinessPostComment

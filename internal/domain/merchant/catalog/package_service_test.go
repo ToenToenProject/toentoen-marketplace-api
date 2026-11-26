@@ -99,7 +99,6 @@ func TestCalculatePackagePrice(t *testing.T) {
 	start := now.Add(-1 * time.Hour)
 	end := now.Add(24 * time.Hour)
 
-	// Product A: 12.000 dengan diskon nominal 2.000 (harga efektif 10.000)
 	repo.products["PRD-A"] = models.Product{
 		ProductID:       "PRD-A",
 		BusinessID:      "BUS-1",
@@ -123,7 +122,6 @@ func TestCalculatePackagePrice(t *testing.T) {
 		IsActive:       true,
 	}
 
-	// 1. Validasi minimal 2 produk
 	_, errFew := svc.CalculatePackagePrice("ACC-1", "owner", "BUS-1", models.CalculatePackageInput{
 		Products: []models.PackageProductItemInput{
 			{ProductID: "PRD-A", Quantity: 1},
@@ -133,7 +131,6 @@ func TestCalculatePackagePrice(t *testing.T) {
 		t.Errorf("expected error for less than 2 products")
 	}
 
-	// 2. Kalkulasi benar
 	res, err := svc.CalculatePackagePrice("ACC-1", "owner", "BUS-1", models.CalculatePackageInput{
 		Products: []models.PackageProductItemInput{
 			{ProductID: "PRD-A", Quantity: 1},
@@ -208,7 +205,6 @@ func TestCreatePackagePricingRules(t *testing.T) {
 		t.Errorf("expected rejection when package price exceeds total effective price")
 	}
 
-	// Skenario 2: Lanjut dengan harga total efektif (20.000) -> SUKSES
 	pkgDef, errDef := svc.CreatePackage("ACC-1", "owner", "BUS-1", models.CreatePackageInput{
 		PackageName:  "Paket Normal 20rb",
 		PackagePrice: 20000,

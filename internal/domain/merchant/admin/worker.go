@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-// StartGracePeriodWorker menjalankan background job secara berkala untuk
-// menonaktifkan akun admin yang masa tenggang 3 harinya telah habis.
+// StartGracePeriodWorker runs a background job periodically to revoke admin assignments
+// whose 3-day deletion grace period has expired.
 func StartGracePeriodWorker(repo BusinessAdminRepository, interval time.Duration) {
 	go func() {
 		log.Println("🕒 Grace Period Expiry Worker started...")
-		// Jalankan sekali saat startup
+		// Run once on worker startup.
 		processExpiredAssignments(repo)
 
 		ticker := time.NewTicker(interval)

@@ -31,7 +31,7 @@ func NewBusinessTransferRepository(db *gorm.DB) BusinessTransferRepository {
 
 func (r *businessTransferRepository) FindAccountByIdentifier(identifier string) (*models.Account, error) {
 	var account models.Account
-	// Target transfer bisnis wajib berstatus sebagai owner, filter spesifik ke role='owner'
+	// Transfer recipient must hold an owner role account.
 	err := r.db.Where("(LOWER(email) = LOWER(?) OR phone_number = ? OR LOWER(username) = LOWER(?)) AND role = 'owner'", identifier, identifier, identifier).First(&account).Error
 	if err != nil {
 		return nil, err
@@ -126,7 +126,6 @@ func (r *businessTransferRepository) AcceptTransfer(transferID string, businessI
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
 
-		// 1. Update status transfer request
 		if err := tx.Model(&models.BusinessTransferRequest{}).
 			Where("transfer_id = ?", transferID).
 			Updates(map[string]interface{}{
@@ -137,7 +136,7 @@ func (r *businessTransferRepository) AcceptTransfer(transferID string, businessI
 			return err
 		}
 
-		// 2. Pindahkan kepemilikan bisnis ke owner baru
+		// 2. Transfer business ownership to recipient account.
 		res := tx.Model(&models.Business{}).
 			Where("business_id = ?", businessID).
 			Update("account_id", newOwnerID)
@@ -148,7 +147,7 @@ func (r *businessTransferRepository) AcceptTransfer(transferID string, businessI
 			return errors.New("Bisnis tidak ditemukan atau gagal diperbarui")
 		}
 
-		// 3. Batalkan permohonan transfer lain yang masih pending untuk bisnis ini
+		// 3. Cancel other pending transfer requests for this business.
 		_ = tx.Model(&models.BusinessTransferRequest{}).
 			Where("business_id = ? AND status = 'pending_acceptance' AND transfer_id != ?", businessID, transferID).
 			Updates(map[string]interface{}{
@@ -157,11 +156,11 @@ func (r *businessTransferRepository) AcceptTransfer(transferID string, businessI
 				"updated_at":   now,
 			}).Error
 
-		// 4. Jika pemilik baru sebelumnya terdaftar sebagai staff/admin toko ini, hapus assignment lamanya
+		// 4. Revoke previous staff assignment if recipient was an existing admin on this store.
 		_ = tx.Where("business_id = ? AND admin_id = ?", businessID, newOwnerID).
 			Delete(&models.BusinessAdminAssignment{}).Error
 
-		// 5. Pastikan record Owner di tabel owners tersedia untuk owner baru
+		// 5. Ensure owner profile record exists for recipient account.
 		var ownerCount int64
 		if err := tx.Model(&models.Owner{}).Where("account_id = ?", newOwnerID).Count(&ownerCount).Error; err == nil && ownerCount == 0 {
 			newOwnerRecord := models.Owner{

@@ -19,7 +19,7 @@ type BusinessCertificate struct {
 }
 
 func (b *BusinessCertificate) UnmarshalJSON(data []byte) error {
-	// 1. Tangani jika payload berupa plain string URL (misal: "https://storage...")
+	// Plain URL string format.
 	var strVal string
 	if err := json.Unmarshal(data, &strVal); err == nil {
 		b.ImageURL = strVal
@@ -27,7 +27,7 @@ func (b *BusinessCertificate) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// 2. Tangani jika payload berupa object dengan berbagai kemungkinan alias key dari FE
+	// Object format with potential client alias keys.
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -48,7 +48,7 @@ func (b *BusinessCertificate) UnmarshalJSON(data []byte) error {
 	b.Number = getString("number", "certificate_number", "cert_number", "nomor", "nomor_sertifikat", "no")
 	b.ImageURL = getString("image_url", "imageUrl", "url", "image", "file_url", "certificate_image_url", "photo_url", "foto")
 
-	// Set aliases agar konsisten
+	// Populate compatibility aliases.
 	b.Name = b.Type
 	b.CertificateName = b.Type
 	b.CertificateType = b.Type
@@ -150,7 +150,7 @@ type BusinessHour struct {
 
 func (BusinessHour) TableName() string { return "business_hours" }
 
-// BusinessVisibilityInfo menjelaskan status visibilitas toko di sisi customer berdasarkan status KYC owner.
+// BusinessVisibilityInfo describes customer-facing store visibility based on owner KYC status.
 type BusinessVisibilityInfo struct {
 	IsPublic  bool   `json:"is_public"`
 	KycStatus string `json:"kyc_status"`
@@ -271,7 +271,7 @@ type BusinessListItem struct {
 	IsManuallyClosed    bool    `json:"is_manually_closed"`
 }
 
-// GetBusinessListResponse adalah bungkus utama paginasi
+// GetBusinessListResponse represents the paginated business list response.
 type GetBusinessListResponse struct {
 	Businesses []BusinessListItem `json:"businesses"`
 	Pagination PaginationMeta     `json:"pagination"`
@@ -284,13 +284,13 @@ type BusinessWithPreview struct {
 	TotalProductReviews int64
 }
 
-// ToggleLiveInput adalah payload untuk mengaktifkan / menonaktifkan live streaming
+// ToggleLiveInput represents the request payload to toggle live streaming.
 type ToggleLiveInput struct {
 	IsLive   bool    `json:"is_live"`
 	Platform *string `json:"platform"` // "tiktok" atau "instagram"
 }
 
-// LiveStatusResponse adalah response setelah mengubah status live streaming
+// LiveStatusResponse represents the updated live streaming status.
 type LiveStatusResponse struct {
 	BusinessID    string     `json:"business_id"`
 	IsLive        bool       `json:"is_live"`
@@ -299,7 +299,7 @@ type LiveStatusResponse struct {
 	SocialURL     *string    `json:"social_url,omitempty"`
 }
 
-// ConfirmScheduleInput adalah payload dari notifikasi/popup konfirmasi jadwal buka/tutup
+// ConfirmScheduleInput represents schedule confirmation payload.
 type ConfirmScheduleInput struct {
 	Action string `json:"action" validate:"required,oneof=confirm_open confirm_overtime decline"`
 }

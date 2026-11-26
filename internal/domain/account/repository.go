@@ -199,7 +199,6 @@ func (r *profileRepository) CheckUsernameExists(username string, excludeAccountI
 	if len(roleGroup) > 0 && roleGroup[0] != "" {
 		group = roleGroup[0]
 	} else if excludeAccountID != "" {
-		// Dapatkan group dari akun yang sedang mengedit
 		var acc models.Account
 		if err := r.db.Select("role").Where("account_id = ?", excludeAccountID).First(&acc).Error; err == nil {
 			group = models.RoleGroupOf(acc.Role)
@@ -219,7 +218,6 @@ func (r *profileRepository) CheckEmailExists(email string, excludeAccountID stri
 	if len(roleGroup) > 0 && roleGroup[0] != "" {
 		group = roleGroup[0]
 	} else if excludeAccountID != "" {
-		// Dapatkan group dari akun yang sedang mengedit
 		var acc models.Account
 		if err := r.db.Select("role").Where("account_id = ?", excludeAccountID).First(&acc).Error; err == nil {
 			group = models.RoleGroupOf(acc.Role)
@@ -446,7 +444,6 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 		// Legacy demand_signals v1 (account_id ON DELETE CASCADE, but table may not exist)
 		delRaw("DELETE FROM demand_signals WHERE account_id = ?", accountID)
 
-		// 2. Delete Customer & Demand Signal Entities (if any)
 		if err := del("sender_id = ?", accountID, &models.SignalMessage{}); err != nil {
 			return err
 		}
@@ -480,7 +477,6 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 			return err
 		}
 
-		// 3. Delete Business & Owner Entities (if any businesses are owned by this account)
 		var businesses []models.Business
 		if err := tx.Where("account_id = ?", accountID).Find(&businesses).Error; err == nil && len(businesses) > 0 {
 			for _, b := range businesses {
@@ -659,7 +655,6 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 			return err
 		}
 
-		// 4. Delete Business Admin Entities (if any assignments or profile exist)
 		if err := del("admin_id = ?", accountID, &models.BusinessAdminAssignment{}); err != nil {
 			return err
 		}
@@ -673,7 +668,6 @@ func (r *profileRepository) DeleteAccountTx(accountID string, role string) ([]st
 			return err
 		}
 
-		// 5. Update references in accounts table
 		if err := updateNull(&models.Account{}, "status_updated_by = ?", accountID, "status_updated_by"); err != nil {
 			return err
 		}

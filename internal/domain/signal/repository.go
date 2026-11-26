@@ -11,7 +11,6 @@ import (
 )
 
 type SignalRepository interface {
-	// Signal CRUD
 	CreateSignal(signal *models.Signal) error
 	UpdateSignal(signal *models.Signal) error
 	DeleteSignal(signalID string) error
@@ -25,15 +24,12 @@ type SignalRepository interface {
 	BatchExpireSignals(signalIDs []string) error
 	ExpireOverdueSignals() (int64, error)
 
-	// Signal Images
 	CreateSignalImages(images []models.SignalImage) error
 	ReplaceSignalImages(signalID string, images []models.SignalImage) error
 
-	// Signal Categories (multi-category)
 	CreateSignalCategories(categories []models.SignalCategory) error
 	ReplaceSignalCategories(signalID string, categories []models.SignalCategory) error
 
-	// Signal Tags (booster relevansi)
 	CreateSignalTags(tags []models.SignalTag) error
 	ReplaceSignalTags(signalID string, tags []models.SignalTag) error
 
@@ -43,7 +39,6 @@ type SignalRepository interface {
 	FindMatchingProductsForSignal(businessID string, queryText string, tagIDs []int64) ([]models.Product, error)
 	IncrementOfferCount(signalID string) error
 
-	// Conversations
 	CreateConversation(conv *models.SignalConversation) error
 	GetConversationByID(convID string) (*models.SignalConversation, error)
 	GetConversationsBySignal(signalID string) ([]models.SignalConversation, error)
@@ -91,16 +86,15 @@ func (r *signalRepository) UpdateSignal(signal *models.Signal) error {
 
 func (r *signalRepository) DeleteSignal(signalID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Hapus signal_tags & signal_images
 		tx.Where("signal_id = ?", signalID).Delete(&models.SignalTag{})
 		tx.Where("signal_id = ?", signalID).Delete(&models.SignalImage{})
 
-		// Hapus signal (conversations & messages akan otomatis ter-cascade jika constraint aktif, atau terhapus)
+		// Delete signal and cascade associated conversations.
 		return tx.Where("signal_id = ?", signalID).Delete(&models.Signal{}).Error
 	})
 }
 
-// UpdateSignalLocation menggunakan raw SQL untuk mengisi kolom PostGIS geometry
+// UpdateSignalLocation sets PostGIS geometry point via raw SQL.
 func (r *signalRepository) UpdateSignalLocation(signalID string, lat, lng float64) error {
 	return r.db.Exec(
 		"UPDATE signals SET location = ST_SetSRID(ST_MakePoint(?, ?), 4326) WHERE signal_id = ?",
@@ -153,7 +147,6 @@ func (r *signalRepository) GetSignalByID(signalID string) (*models.Signal, error
 	signal.PopulateCategories()
 	signal.EvaluateStatus()
 
-	// Hitung offer_count valid secara dinamis
 	var validOfferCount int64
 	minTime := signal.CreatedAt.Add(-5 * time.Second)
 	_ = r.db.Model(&models.SignalConversation{}).
@@ -187,7 +180,7 @@ func (r *signalRepository) GetMySignals(customerID string) ([]models.Signal, err
 		signals[i].EvaluateStatus()
 	}
 
-	// Sinkronisasi offer_count valid untuk setiap signal milik customer
+	// Synchronize valid offer_count for customer signals.
 	if len(signals) > 0 {
 		sigIDs := make([]string, len(signals))
 		for i, s := range signals {
@@ -257,11 +250,9 @@ func (r *signalRepository) GetSignalWithConversations(signalID string) (*models.
 	signal.PopulateCategories()
 	signal.EvaluateStatus()
 
-	// Filter percakapan & pesan yang valid:
-	// a. Wajib terhubung ke signal_id ini
+	// Filter valid merchant offers responding to this signal.
 	// b. Percakapan dibuat >= signal.CreatedAt - 5s
 	// c. Pesan dibuat >= signal.CreatedAt - 5s
-	// d. Percakapan hanya diakui sebagai penawaran jika memiliki balasan/penawaran dari merchant (sender_type = 'merchant')
 	var validConversations []models.SignalConversation
 	minTime := signal.CreatedAt.Add(-5 * time.Second)
 
@@ -301,14 +292,12 @@ func (r *signalRepository) GetSignalWithConversations(signalID string) (*models.
 // CompleteSignal mengubah status signal ke 'completed' dan mengunci semua conversation
 func (r *signalRepository) CompleteSignal(signalID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// 1. Update status signal
 		if err := tx.Model(&models.Signal{}).
 			Where("signal_id = ?", signalID).
 			Update("status", "completed").Error; err != nil {
 			return err
 		}
 
-		// 2. Lock semua conversation terkait
 		if err := tx.Model(&models.SignalConversation{}).
 			Where("signal_id = ?", signalID).
 			Update("status", "locked").Error; err != nil {
@@ -338,7 +327,7 @@ func (r *signalRepository) CloseSignal(signalID string) error {
 	})
 }
 
-// ExpireSignal mengubah status signal ke 'expired' jika masih 'active' dan mengunci semua conversation terkait
+// ExpireSignal transitions active signal to expired and locks associated conversations.
 func (r *signalRepository) ExpireSignal(signalID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&models.Signal{}).
@@ -357,7 +346,7 @@ func (r *signalRepository) ExpireSignal(signalID string) error {
 	})
 }
 
-// BatchExpireSignals mengubah status sekumpulan signal ke 'expired' jika masih 'active'
+// BatchExpireSignals marks a batch of active signals as expired.
 func (r *signalRepository) BatchExpireSignals(signalIDs []string) error {
 	if len(signalIDs) == 0 {
 		return nil
@@ -379,7 +368,7 @@ func (r *signalRepository) BatchExpireSignals(signalIDs []string) error {
 	})
 }
 
-// ExpireOverdueSignals mencari semua signal dengan status 'active' dan expires_at <= NOW(),
+// ExpireOverdueSignals finds and expires signals past their expires_at timestamp.
 // lalu mengupdate statusnya menjadi 'expired' dan mengunci (locked) conversation terkait.
 func (r *signalRepository) ExpireOverdueSignals() (int64, error) {
 	var expiredCount int64
@@ -409,7 +398,6 @@ func (r *signalRepository) ExpireOverdueSignals() (int64, error) {
 			return err
 		}
 
-		// Update juga pada tabel legacy demand_signals jika ada
 		var hasDemandSignals bool
 		if err := tx.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'demand_signals')").Scan(&hasDemandSignals).Error; err == nil && hasDemandSignals {
 			tx.Exec("UPDATE demand_signals SET status = 'expired' WHERE expires_at <= NOW() AND status IN ('active', 'open')")
@@ -496,15 +484,12 @@ func (r *signalRepository) ReplaceSignalTags(signalID string, tags []models.Sign
 // EXPLORE (MERCHANT) — Category-Strict + Tag Relevance Ranking
 // ================================================================
 
-// ExploreActiveSignals mengambil sinyal aktif yang tepat sasaran untuk merchant.
+// ExploreActiveSignals returns targeted active signals for merchants.
 //
 // Logika multi-layer:
-//  1. WAJIB: Signal harus memiliki category_id yang sama dengan salah satu kategori bisnis merchant
 //     → Mencegah signal restoran masuk ke merchant bengkel meski punya tag sama
-//  2. LOKASI: Signal harus dalam radius yang ditentukan customer (PostGIS ST_DWithin)
-//  3. RANKING: Signal diurutkan berdasarkan:
 //     a. is_urgent DESC  — sinyal mendesak paling atas
-//     b. tag_overlap DESC — sinyal dengan tag bisnis paling banyak cocok naik peringkat
+// Order by matching tag overlap descending.
 //     c. created_at DESC — terbaru lebih atas
 func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merchantLat, merchantLng float64) ([]models.SignalExploreItem, error) {
 	var results []models.SignalExploreItem
@@ -614,7 +599,7 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		return results, nil
 	}
 
-	// Kumpulkan semua signalID untuk batch query (menghilangkan N+1 query)
+	// Batch fetch related entities to prevent N+1 queries.
 	signalIDs := make([]string, len(results))
 	for i, item := range results {
 		signalIDs[i] = item.SignalID
@@ -630,7 +615,6 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		}
 	}
 
-	// 1. Batch query semua gambar signal dalam 1 query
 	var allImages []models.SignalImage
 	if err := r.db.Where("signal_id IN ?", signalIDs).Find(&allImages).Error; err == nil {
 		imgMap := make(map[string][]string)
@@ -644,7 +628,6 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		}
 	}
 
-	// 2. Batch query semua tag signal dalam 1 query
 	type tagRow struct {
 		SignalID string `gorm:"column:signal_id"`
 		TagName  string `gorm:"column:name"`
@@ -667,7 +650,6 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 		}
 	}
 
-	// 3. Batch query semua kategori signal dari signal_categories dalam 1 query (jika tabel ada)
 	if hasSignalCategories(r.db) {
 		type catRow struct {
 			SignalID     string `gorm:"column:signal_id"`
@@ -722,7 +704,7 @@ func (r *signalRepository) ExploreActiveSignals(merchantBusinessID string, merch
 			results[i].Tags = []string{}
 		}
 
-		// Hanya sertakan sinyal yang statusnya aktif dan belum expired
+		// Restrict to active, non-expired signals.
 		if results[i].Status == "active" && results[i].IsActive {
 			filtered = append(filtered, results[i])
 		}
@@ -789,7 +771,7 @@ func (r *signalRepository) FindExistingConversationByBusiness(signalID, business
 	return &conv, nil
 }
 
-// GetMerchantConversations mengambil inbox merchant/toko dengan 1 query optimal (LATERAL JOIN)
+// GetMerchantConversations retrieves merchant inbox via LATERAL JOIN.
 // Terurut berdasarkan waktu pesan terakhir (last_message_at DESC) dan mendukung multi-role
 func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([]models.ConversationListItem, error) {
 	var items []models.ConversationListItem
@@ -865,7 +847,7 @@ func (r *signalRepository) GetMerchantConversations(merchantAccountID string) ([
 	return items, nil
 }
 
-// GetCustomerConversations mengambil inbox customer dengan 1 query optimal (LATERAL JOIN)
+// GetCustomerConversations retrieves customer inbox via LATERAL JOIN.
 // Terurut berdasarkan waktu pesan terakhir (last_message_at DESC)
 func (r *signalRepository) GetCustomerConversations(customerAccountID string) ([]models.ConversationListItem, error) {
 	var items []models.ConversationListItem
@@ -1049,7 +1031,7 @@ func (r *signalRepository) VerifyBusinessAccess(accountID, role, businessID stri
 	return count > 0
 }
 
-// ExpireOldSignals digunakan oleh cron job untuk mengexpirasi signal yang sudah lewat waktunya
+// ExpireOldSignals marks overdue signals expired.
 func (r *signalRepository) ExpireOldSignals() error {
 	return r.db.Model(&models.Signal{}).
 		Where("status = ? AND expires_at < ?", "active", time.Now()).
@@ -1069,7 +1051,7 @@ func (r *signalRepository) GetFCMTokensByAccountID(accountID string) ([]string, 
 	return tokens, err
 }
 
-// GetMerchantIDsBySignal mengambil semua account_id pemilik dan staf toko yang punya conversation aktif pada signal
+// GetMerchantIDsBySignal retrieves merchant account IDs participating in a signal conversation.
 func (r *signalRepository) GetMerchantIDsBySignal(signalID string) ([]string, error) {
 	var accountIDs []string
 	query := `
@@ -1101,18 +1083,16 @@ func (r *signalRepository) GetMerchantIDsBySignal(signalID string) ([]string, er
 // CATEGORY VALIDATION
 // ================================================================
 
-// GetCategoryByNameOrID mencari kategori resmi di tabel business_categories berdasarkan nama atau category_id
+// GetCategoryByNameOrID resolves category by name or category_id.
 func (r *signalRepository) GetCategoryByNameOrID(categoryName string, categoryID int64) (*models.Category, error) {
 	var category models.Category
 
-	// 1. Coba cari berdasarkan category_id numerik jika disediakan
 	if categoryID > 0 {
 		if err := r.db.Where("category_id = ?", categoryID).First(&category).Error; err == nil {
 			return &category, nil
 		}
 	}
 
-	// 2. Coba cari berdasarkan nama kategori (case-insensitive & trim whitespace) atau ID string
 	cleanName := strings.TrimSpace(categoryName)
 	if cleanName != "" {
 		if err := r.db.Where("LOWER(TRIM(name)) = LOWER(TRIM(?)) OR CAST(category_id AS TEXT) = ?", cleanName, cleanName).
@@ -1133,14 +1113,14 @@ func (r *signalRepository) GetCategoriesByIDs(categoryIDs []int64) ([]models.Cat
 	return categories, err
 }
 
-// IncrementOfferCount menambah jumlah penawaran yang sudah masuk pada sinyal
+// IncrementOfferCount increments offer count on a signal.
 func (r *signalRepository) IncrementOfferCount(signalID string) error {
 	return r.db.Model(&models.Signal{}).
 		Where("signal_id = ?", signalID).
 		UpdateColumn("offer_count", gorm.Expr("offer_count + 1")).Error
 }
 
-// FindNearbyMatchingMerchantAccountIDs mencari account_id (owner & staff) toko dalam radius & kategori yang cocok (mendukung multi-kategori sinyal)
+// FindNearbyMatchingMerchantAccountIDs resolves merchant account IDs within radius and matching categories.
 func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryIDs []int64, lat, lng float64, radiusKm float64) ([]string, error) {
 	if len(categoryIDs) == 0 {
 		return []string{}, nil
@@ -1195,7 +1175,7 @@ func (r *signalRepository) FindNearbyMatchingMerchantAccountIDs(categoryIDs []in
 	return accountIDs, err
 }
 
-// FindMatchingProductsForSignal mencari rekomendasi produk toko yang cocok dengan kebutuhan sinyal
+// FindMatchingProductsForSignal finds product recommendations matching signal criteria.
 func (r *signalRepository) FindMatchingProductsForSignal(businessID string, queryText string, tagIDs []int64) ([]models.Product, error) {
 	query := r.db.Model(&models.Product{}).
 		Where("business_id = ? AND is_archived = false", businessID)

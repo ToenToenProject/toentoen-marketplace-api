@@ -40,7 +40,6 @@ func NewBusinessPostService(
 }
 
 func (s *businessPostService) CreatePost(requesterID, role, businessID string, input models.CreatePostInput) (*models.BusinessPost, error) {
-	// Cek Otoritas
 	if !s.productRepo.HasAccessToBusiness(requesterID, role, businessID) {
 		return nil, errors.New("forbidden: Anda tidak memiliki akses ke bisnis ini")
 	}
@@ -49,7 +48,7 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk membuat postingan")
 	}
 
-	// 🛡️ VALIDASI ATURAN BISNIS
+	// Business validation rules.
 	if len(input.Images) > 5 {
 		return nil, errors.New("maksimal 5 gambar diperbolehkan per postingan")
 	}
@@ -96,7 +95,7 @@ func (s *businessPostService) CreatePost(requesterID, role, businessID string, i
 		return nil, errors.New("gagal membuat postingan")
 	}
 
-	// 📢 Notifikasi ke seluruh customer yang mem-bookmark toko ini
+	// Notify customers who bookmarked this store.
 	if s.notifService != nil {
 		notification.NotifyBusinessPostCreated(database.DB, s.notifService, businessID, post.PostID, post.Content, requesterID)
 	}
@@ -168,7 +167,7 @@ func (s *businessPostService) UpdatePost(requesterID, role, businessID, postID s
 		} else {
 			post.IsPromotion = false
 			post.PromotionEndAt = nil
-			// Jika terhubung ke promosi katalog, hentikan promosi katalognya juga
+			// If linked to catalog promotion, terminate the linked promotion as well.
 			if post.PromotionID != nil && *post.PromotionID != "" && s.promoRepo != nil {
 				if promo, err := s.promoRepo.GetPromotionByID(businessID, *post.PromotionID); err == nil && promo != nil {
 					_ = s.promoRepo.StopPromotion(businessID, promo.PromotionID, promo.Products, &post.PostID)
@@ -204,7 +203,7 @@ func (s *businessPostService) StopPostPromotion(requesterID, role, businessID, p
 	}
 
 	now := time.Now()
-	// Jika terhubung dengan promosi katalog, hentikan promosi dan rollback diskon produk
+	// Terminate linked promotion and restore original base prices.
 	if post.PromotionID != nil && *post.PromotionID != "" && s.promoRepo != nil {
 		promo, err := s.promoRepo.GetPromotionByID(businessID, *post.PromotionID)
 		if err == nil && promo != nil && promo.Status == models.PromotionStatusActive {
@@ -254,7 +253,7 @@ func (s *businessPostService) ExtendPostPromotion(requesterID, role, businessID,
 		newEndAt = baseTime.AddDate(0, 0, addDays)
 	}
 
-	// Jika terhubung dengan promosi katalog, perpanjang promosi katalognya juga
+	// Extend linked catalog promotion duration accordingly.
 	if post.PromotionID != nil && *post.PromotionID != "" && s.promoRepo != nil {
 		promo, err := s.promoRepo.GetPromotionByID(businessID, *post.PromotionID)
 		if err == nil && promo != nil {

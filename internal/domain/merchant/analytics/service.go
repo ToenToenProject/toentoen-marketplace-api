@@ -15,12 +15,12 @@ type AnalyticsService interface {
 	GetHistoryAnalytics(requesterID, role, businessID, startDate, endDate string) (*models.HistoryAnalyticsResponse, error)
 	GetExploreAnalytics(requesterID, role, businessID, keyword string) (*models.ExploreAnalyticsResponse, error)
 
-	// Event Tracking (dipanggil dari customer domain, fire-and-forget)
+	// Asynchronous event telemetry ingestion.
 	TrackVisitor(businessID, accountID, sourceType, searchedTag, productID string)
 	TrackImpressions(impressions []ImpressionItem)
 }
 
-// ImpressionItem digunakan untuk batch impression dari Flutter
+// ImpressionItem represents a batch impression payload item.
 type ImpressionItem struct {
 	BusinessID string `json:"business_id"`
 	Source     string `json:"source"`
@@ -52,7 +52,6 @@ func (s *analyticsService) GetDailyAnalytics(requesterID, role, businessID strin
 		return nil, err
 	}
 
-	// Isi signal stats untuk hari ini
 	received, responded, _ := s.analyticsRepo.GetSignalStats(businessID, today, today)
 	response.SignalReceived = received
 	response.SignalResponded = responded
@@ -68,7 +67,6 @@ func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, st
 		return nil, errors.New("forbidden: Anda tidak memiliki izin untuk melihat riwayat analitik toko")
 	}
 
-	// Validasi format tanggal dan urutan
 	layout := "2006-01-02"
 	startTime, errStart := time.Parse(layout, startDate)
 	endTime, errEnd := time.Parse(layout, endDate)
@@ -90,7 +88,6 @@ func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, st
 	response.TotalVisitors = currentVisitors
 	response.TotalImpression = currentImpressions
 
-	// Hitung persentase pertumbuhan
 	daysDiff := int(endTime.Sub(startTime).Hours() / 24)
 	prevEndTime := startTime.AddDate(0, 0, -1)
 	prevStartTime := prevEndTime.AddDate(0, 0, -daysDiff)
@@ -111,7 +108,6 @@ func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, st
 	response.VisitorsGrowth = calculateGrowth(currentVisitors, prevVisitors)
 	response.ImpressionGrowth = calculateGrowth(currentImpressions, prevImpressions)
 
-	// Hitung signal stats untuk rentang waktu
 	currentSignals, currentResponded, _ := s.analyticsRepo.GetSignalStats(businessID, startDate, endDate)
 	prevSignals, prevResponded, _ := s.analyticsRepo.GetSignalStats(
 		businessID, prevStartTime.Format(layout), prevEndTime.Format(layout))
@@ -121,14 +117,14 @@ func (s *analyticsService) GetHistoryAnalytics(requesterID, role, businessID, st
 	response.SignalReceivedGrowth = calculateGrowth(currentSignals, prevSignals)
 	response.SignalRespondedGrowth = calculateGrowth(currentResponded, prevResponded)
 
-	// Conversion rate: berapa persen dari impression yang menjadi visitor
+	// Conversion rate: percentage of impressions converted into visits.
 	if currentImpressions > 0 {
 		response.ConversionRate = fmt.Sprintf("%.1f%%", float64(currentVisitors)/float64(currentImpressions)*100)
 	} else {
 		response.ConversionRate = "0.0%"
 	}
 
-	// TrafficGrowth = rata-rata growth visitor & impression (lebih bermakna dari sekedar copy visitors_growth)
+	// TrafficGrowth computes blended growth across visitors and impressions.
 	response.TrafficGrowth = (response.VisitorsGrowth + response.ImpressionGrowth) / 2.0
 
 	return response, nil
@@ -148,9 +144,9 @@ func (s *analyticsService) GetExploreAnalytics(requesterID, role, businessID, ke
 	return s.analyticsRepo.GetExploreAnalytics(businessID, keyword, radiusKm, limit)
 }
 
-// TrackVisitor mencatat event kunjungan ke profil toko — dipanggil async (goroutine)
+// TrackVisitor records store profile visits asynchronously.
 func (s *analyticsService) TrackVisitor(businessID, accountID, sourceType, searchedTag, productID string) {
-	// Anti-Spam / Deduplication: Cegah spam refresh berulang dalam waktu 5 menit untuk akun yang sama
+	// Deduplication: suppress duplicate visits from the same account within 5 minutes.
 	if accountID != "" && config.RDB != nil {
 		dedupKey := fmt.Sprintf("analytics:visit:%s:%s", businessID, accountID)
 		isNew, err := config.RDB.SetNX(config.Ctx, dedupKey, 1, 5*time.Minute).Result()
@@ -168,11 +164,11 @@ func (s *analyticsService) TrackVisitor(businessID, accountID, sourceType, searc
 	if productID != "" {
 		prodPtr = &productID
 	}
-	// Fire and forget — error diabaikan agar tidak mempengaruhi response customer
+	// Fire-and-forget: ignore telemetry errors to prevent blocking client responses.
 	_ = s.analyticsRepo.TrackVisitor(businessID, sourceType, tagPtr, prodPtr)
 }
 
-// TrackImpressions mencatat batch impression dari Flutter dalam 1 query batch insert SQL
+// TrackImpressions batches client impressions into a single SQL insert.
 func (s *analyticsService) TrackImpressions(impressions []ImpressionItem) {
 	if len(impressions) == 0 {
 		return
@@ -198,4 +194,4 @@ func (s *analyticsService) TrackImpressions(impressions []ImpressionItem) {
 		_ = s.analyticsRepo.TrackImpressionsBatch(events)
 	}
 }
-
+

@@ -19,7 +19,7 @@ func NewHandler(s Service) *Handler {
 	}
 }
 
-// CreateReport Handler Universal untuk melaporkan semua jenis resource (Review, Comment, Post, Product, Business)
+// CreateReport handles universal moderation reports across all resource types (reviews, comments, posts, products, businesses).
 func (h *Handler) CreateReport(c *fiber.Ctx) error {
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
@@ -31,7 +31,6 @@ func (h *Handler) CreateReport(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format data tidak valid", nil)
 	}
 
-	// Cek apakah target_id dipassing dari URL params (jika endpoint spesifik)
 	if input.TargetID == "" {
 		if c.Params("review_id") != "" {
 			input.TargetID = c.Params("review_id")
@@ -71,7 +70,7 @@ func (h *Handler) CreateReport(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Laporan berhasil dikirim", nil)
 }
 
-// GetAllReports Mengambil daftar semua laporan dengan pagination dan filter
+// GetAllReports retrieves paginated moderation reports with optional filters.
 func (h *Handler) GetAllReports(c *fiber.Ctx) error {
 	var query models.ReportFilterQuery
 	if err := c.QueryParser(&query); err != nil {
@@ -103,7 +102,7 @@ func (h *Handler) GetAllReports(c *fiber.Ctx) error {
 	})
 }
 
-// GetMyReports Mengambil daftar laporan yang dibuat oleh pengguna yang sedang login
+// GetMyReports retrieves reports filed by the authenticated user.
 func (h *Handler) GetMyReports(c *fiber.Ctx) error {
 	accountID, ok := c.Locals("account_id").(string)
 	if !ok || accountID == "" {
@@ -111,7 +110,15 @@ func (h *Handler) GetMyReports(c *fiber.Ctx) error {
 	}
 
 	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
 	limit := c.QueryInt("limit", 20)
+	if limit < 1 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
 
 	reports, total, err := h.service.GetUserReports(accountID, page, limit)
 	if err != nil {
@@ -131,22 +138,35 @@ func (h *Handler) GetMyReports(c *fiber.Ctx) error {
 	})
 }
 
-// GetReportDetail Mengambil detail 1 laporan berdasarkan report_id
+// GetReportDetail retrieves report details by report_id (restricted to report owner or admin).
 func (h *Handler) GetReportDetail(c *fiber.Ctx) error {
 	reportID := strings.TrimSpace(c.Params("report_id"))
 	if reportID == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Report ID wajib diisi", nil)
 	}
 
+	accountID, ok := c.Locals("account_id").(string)
+	if !ok || accountID == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid atau Anda belum login", nil)
+	}
+	role, _ := c.Locals("role").(string)
+
 	report, err := h.service.GetReportDetail(reportID)
 	if err != nil {
 		return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
 	}
 
+	isOwner := strings.EqualFold(strings.TrimSpace(report.AccountID), strings.TrimSpace(accountID))
+	isAdmin := strings.EqualFold(role, "platform_admin") || strings.EqualFold(role, "super_admin") ||
+		strings.EqualFold(role, "admin") || strings.EqualFold(role, "superadmin")
+	if !isOwner && !isAdmin {
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Anda tidak memiliki izin untuk melihat laporan ini", nil)
+	}
+
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Detail laporan berhasil diambil", report)
 }
 
-// DeleteReport Menghapus laporan (oleh pembuat laporan atau admin)
+// DeleteReport removes a report record.
 func (h *Handler) DeleteReport(c *fiber.Ctx) error {
 	reportID := strings.TrimSpace(c.Params("report_id"))
 	if reportID == "" {
@@ -173,7 +193,7 @@ func (h *Handler) DeleteReport(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Laporan berhasil dihapus", nil)
 }
 
-// UpdateReportStatus Memperbarui status laporan (oleh Admin)
+// UpdateReportStatus updates moderation report status (admin only).
 func (h *Handler) UpdateReportStatus(c *fiber.Ctx) error {
 	reportID := strings.TrimSpace(c.Params("report_id"))
 	if reportID == "" {
@@ -204,7 +224,7 @@ func (h *Handler) UpdateReportStatus(c *fiber.Ctx) error {
 	})
 }
 
-// SubmitReport Handler legacy untuk kompatibilitas route bisnis
+// SubmitReport handles legacy business report endpoint.
 func (h *Handler) SubmitReport(c *fiber.Ctx) error {
 	businessID := c.Params("business_id")
 	if businessID == "" {
