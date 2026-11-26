@@ -107,6 +107,8 @@ func ConnectDB() {
 		&models.DeviceToken{},
 		&models.BusinessPost{},
 		&models.BusinessLike{},
+		&models.SearchSynonym{},
+		&models.SearchLog{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {
@@ -116,6 +118,7 @@ func ConnectDB() {
 
 	// Ensure columns in owners, business_admins, and businesses can store encrypted ciphertext (TEXT)
 	alterQueries := []string{
+		`ALTER TYPE enum_business_status ADD VALUE IF NOT EXISTS 'deleted'`,
 		`ALTER TABLE owners ALTER COLUMN ktp_number TYPE TEXT`,
 		`ALTER TABLE owners ALTER COLUMN ktp_photo_url TYPE TEXT`,
 		`ALTER TABLE owners ALTER COLUMN ktp_name TYPE TEXT`,
