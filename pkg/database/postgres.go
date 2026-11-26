@@ -161,6 +161,7 @@ func ConnectDB() {
 		`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS terms_version VARCHAR(50)`,
 		`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS accepted_privacy_at TIMESTAMPTZ`,
 		`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS privacy_version VARCHAR(50)`,
+		`DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='accounts' AND column_name='fullname') THEN ALTER TABLE accounts ALTER COLUMN fullname DROP NOT NULL; END IF; END $$`,
 		`ALTER TABLE owners ADD COLUMN IF NOT EXISTS kyc_status VARCHAR(20) NOT NULL DEFAULT 'unverified'`,
 		`ALTER TABLE owners ADD COLUMN IF NOT EXISTS kyc_rejection_reason TEXT`,
 		`ALTER TABLE owners ADD COLUMN IF NOT EXISTS kyc_submitted_at TIMESTAMP`,
