@@ -63,9 +63,18 @@ func RequireAuth(c *fiber.Ctx) error {
 
 	accountID, ok := claims["account_id"].(string)
 	if ok {
+		if config.RDB != nil {
+			if revoked, _ := config.RDB.Exists(config.Ctx, "revoked_account:"+accountID).Result(); revoked > 0 {
+				return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi Anda telah dicabut atau akun sedang diblokir", nil)
+			}
+		}
+
 		var account models.Account
-		if err := database.DB.Select("last_login_at, email_verified_at").Where("account_id = ?", accountID).First(&account).Error; err != nil {
+		if err := database.DB.Select("last_login_at, email_verified_at, account_status").Where("account_id = ?", accountID).First(&account).Error; err != nil {
 			return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akun tidak ditemukan atau telah dihapus, silakan login kembali", nil)
+		}
+		if account.AccountStatus == "banned" || account.AccountStatus == "suspended" {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Akun Anda sedang ditangguhkan atau diblokir", nil)
 		}
 		if account.LastLoginAt != nil {
 			if iatFloat, ok := claims["iat"].(float64); ok {

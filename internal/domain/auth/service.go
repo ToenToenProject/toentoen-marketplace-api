@@ -14,6 +14,7 @@ import (
 	"time"
 	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
+	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 
 	"github.com/redis/go-redis/v9"
@@ -386,6 +387,19 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	group := models.RoleGroupOf(input.Role)
 	if group == "" {
 		return errors.New("Role tidak valid. Gunakan customer, owner, atau business_admin")
+	}
+
+	// Enforce per-role-group blocklist from operations.blocked_identities
+	if database.DB != nil {
+		var blockedCount int64
+		normID := strings.ToLower(strings.TrimSpace(input.Identifier))
+		_ = database.DB.Raw(
+			`SELECT COUNT(*) FROM operations.blocked_identities WHERE role_group = ? AND identifier_value = ? AND is_active = true`,
+			input.Role, normID,
+		).Scan(&blockedCount).Error
+		if blockedCount > 0 {
+			return errors.New("Identitas ini telah diblokir untuk role " + input.Role + " dan tidak dapat digunakan untuk mendaftar")
+		}
 	}
 
 	var cleanRefCode *string
