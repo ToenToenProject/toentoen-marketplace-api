@@ -244,7 +244,15 @@ func main() {
 
 	// 3. HTTP Server & Routing Setup
 	app := fiber.New(fiber.Config{
-		ProxyHeader: fiber.HeaderXForwardedFor,
+		ProxyHeader:             fiber.HeaderXForwardedFor,
+		EnableTrustedProxyCheck: true,
+		TrustedProxies: []string{
+			"127.0.0.1",
+			"::1",
+			"10.0.0.0/8",
+			"172.16.0.0/12",
+			"192.168.0.0/16",
+		},
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
 			var e *fiber.Error
@@ -286,20 +294,8 @@ func main() {
 
 	app.Use(cors.New(corsConfig))
 
-	// Resolves client IP behind reverse proxy / load balancer.
+	// Resolves client IP using Fiber's trusted proxy check (prevents header spoofing).
 	getClientIP := func(c *fiber.Ctx) string {
-		if cf := c.Get("CF-Connecting-IP"); cf != "" {
-			return cf
-		}
-		if xff := c.Get("X-Forwarded-For"); xff != "" {
-			ips := strings.Split(xff, ",")
-			if len(ips) > 0 && strings.TrimSpace(ips[0]) != "" {
-				return strings.TrimSpace(ips[0])
-			}
-		}
-		if xri := c.Get("X-Real-IP"); xri != "" {
-			return xri
-		}
 		return c.IP()
 	}
 

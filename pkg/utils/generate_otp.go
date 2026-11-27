@@ -1,16 +1,21 @@
 package utils
 
 import (
-	"math/rand"
-	"time"
+	"crypto/rand"
+	"math/big"
 )
 
 func GenerateNumericOTP(length int) string {
-	rand.Seed(time.Now().UnixNano())
-	digits := "0123456789"
+	const digits = "0123456789"
 	otp := make([]byte, length)
+	max := big.NewInt(int64(len(digits)))
 	for i := range otp {
-		otp[i] = digits[rand.Intn(len(digits))]
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			otp[i] = digits[0]
+			continue
+		}
+		otp[i] = digits[n.Int64()]
 	}
 	return string(otp)
 }

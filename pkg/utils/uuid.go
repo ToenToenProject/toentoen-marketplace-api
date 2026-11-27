@@ -2,9 +2,22 @@ package utils
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 )
+
+// GenerateSecureToken returns a cryptographically random hex token of numBytes*2 chars.
+func GenerateSecureToken(numBytes int) (string, error) {
+	if numBytes <= 0 {
+		numBytes = 32
+	}
+	b := make([]byte, numBytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
 func GenerateRandomString(length int) string {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

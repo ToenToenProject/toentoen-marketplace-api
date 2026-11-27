@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -384,6 +385,12 @@ func (s *authService) Register(input models.RegisterUnifiedInput) error {
 	// customer  -> kelompok customer
 	// Merchant roles (owner, business_admin) cannot share credentials.
 	input.Role = NormalizeExpectedRole(input.Role)
+	switch input.Role {
+	case "customer", "owner", "business_admin":
+		// allowed for self-registration
+	default:
+		return errors.New("Role tidak valid. Gunakan customer, owner, atau business_admin")
+	}
 	group := models.RoleGroupOf(input.Role)
 	if group == "" {
 		return errors.New("Role tidak valid. Gunakan customer, owner, atau business_admin")
@@ -525,6 +532,65 @@ func (s *authService) EvaluateAccountStatus(account *models.Account) string {
 	return "inactive"
 }
 
+// verifyScopedOTPWithLockout checks scoped and legacy OTP keys using constant-time comparison
+// and enforces a max-5-attempts lockout per identifier.
+func verifyScopedOTPWithLockout(prefix string, groups []string, identifier, inputOTP string) (string, bool, error) {
+	if config.RDB == nil {
+		return "", false, errors.New("Layanan verifikasi sedang tidak tersedia")
+	}
+	cleanInput := strings.TrimSpace(inputOTP)
+	if cleanInput == "" {
+		return "", false, errors.New("OTP wajib diisi")
+	}
+
+	var matchedKey string
+	var matchedAttemptsKey string
+	var matchedGroup string
+
+	for _, g := range groups {
+		k := scopedKey(prefix, g, identifier)
+		storedOTP, err := config.RDB.Get(config.Ctx, k).Result()
+		if err != nil {
+			continue
+		}
+		ak := scopedKey(prefix+"_attempts", g, identifier)
+		if subtle.ConstantTimeCompare([]byte(storedOTP), []byte(cleanInput)) == 1 {
+			config.RDB.Del(config.Ctx, k, ak)
+			return g, true, nil
+		}
+		if matchedKey == "" {
+			matchedKey = k
+			matchedAttemptsKey = ak
+			matchedGroup = g
+		}
+	}
+
+	legacyKey := fmt.Sprintf("%s:%s", prefix, identifier)
+	if storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result(); err == nil {
+		ak := fmt.Sprintf("%s_attempts:%s", prefix, identifier)
+		if subtle.ConstantTimeCompare([]byte(storedOTP), []byte(cleanInput)) == 1 {
+			config.RDB.Del(config.Ctx, legacyKey, ak)
+			return "", true, nil
+		}
+		if matchedKey == "" {
+			matchedKey = legacyKey
+			matchedAttemptsKey = ak
+		}
+	}
+
+	if matchedKey != "" && matchedAttemptsKey != "" {
+		attempts, _ := config.RDB.Incr(config.Ctx, matchedAttemptsKey).Result()
+		if attempts == 1 {
+			config.RDB.Expire(config.Ctx, matchedAttemptsKey, 5*time.Minute)
+		}
+		if attempts >= 5 {
+			config.RDB.Del(config.Ctx, matchedKey, matchedAttemptsKey)
+			return matchedGroup, false, errors.New("Terlalu banyak percobaan OTP salah, silakan minta kode baru")
+		}
+	}
+	return "", false, errors.New("OTP tidak valid atau sudah kadaluarsa")
+}
+
 func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (string, error) {
 	input.Identifier = cleanIdentifier(input.Identifier)
 	groups := candidateGroups(input.Role)
@@ -643,29 +709,17 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 	}
 
 	// Fallback lookup for legacy or scoped registration OTP.
-	var matchedGroup string
-	var account *models.Account
-
-	if config.RDB != nil {
-		for _, g := range groups {
-			k := scopedKey("register_otp", g, input.Identifier)
-			storedOTP, errOTP := config.RDB.Get(config.Ctx, k).Result()
-			if errOTP == nil && storedOTP == input.OTP {
-				matchedGroup = g
-				config.RDB.Del(config.Ctx, k)
-				break
-			}
+	matchedGroup, ok, errOTP := verifyScopedOTPWithLockout("register_otp", groups, input.Identifier, input.OTP)
+	if !ok {
+		if errOTP != nil && strings.Contains(errOTP.Error(), "Terlalu banyak") {
+			return "", errOTP
 		}
-		if matchedGroup == "" {
-			legacyKey := fmt.Sprintf("register_otp:%s", input.Identifier)
-			storedOTP, errOTP := config.RDB.Get(config.Ctx, legacyKey).Result()
-			if errOTP == nil && storedOTP == input.OTP {
-				config.RDB.Del(config.Ctx, legacyKey)
-			} else {
-				return "", errors.New("OTP tidak valid atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
-			}
+		if errOTP != nil && strings.Contains(errOTP.Error(), "tidak tersedia") {
+			return "", errOTP
 		}
+		return "", errors.New("OTP tidak valid atau sudah kadaluarsa. Silakan lakukan pendaftaran ulang.")
 	}
+	var account *models.Account
 
 	acc, err := s.repo.FindByIdentifier(input.Identifier, matchedGroup)
 	if err != nil {
@@ -759,26 +813,9 @@ func (s *authService) VerifyEmailOTP(input models.VerifyEmailOTPInput) error {
 	}
 
 	groups := candidateGroups(input.Role)
-	var matchedGroup string
-
-	for _, g := range groups {
-		key := scopedKey("email_verify_otp", g, cleanEmail)
-		storedOTP, err := config.RDB.Get(config.Ctx, key).Result()
-		if err == nil && storedOTP == input.OTP {
-			matchedGroup = g
-			config.RDB.Del(config.Ctx, key)
-			break
-		}
-	}
-
-	if matchedGroup == "" {
-		legacyKey := fmt.Sprintf("email_verify_otp:%s", cleanEmail)
-		storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
-		if err == nil && storedOTP == input.OTP {
-			config.RDB.Del(config.Ctx, legacyKey)
-		} else {
-			return errors.New("OTP tidak valid atau sudah kadaluarsa")
-		}
+	matchedGroup, ok, errOTP := verifyScopedOTPWithLockout("email_verify_otp", groups, cleanEmail, input.OTP)
+	if !ok {
+		return errOTP
 	}
 
 	account, err := s.repo.FindByIdentifier(cleanEmail, matchedGroup)
@@ -866,15 +903,27 @@ func (s *authService) VerifyPhoneOTP(input models.VerifyPhoneOTPInput) error {
 
 		isReviewer := isReviewerIdentifier(input.Phone) || isReviewerIdentifier(cleanPhone)
 		if !(isReviewer && inputOTP == DefaultReviewerOTP) {
+			if config.RDB == nil {
+				return errors.New("Layanan verifikasi sedang tidak tersedia")
+			}
 			otpKey := fmt.Sprintf("phone_otp:%s", cleanPhone)
+			attemptsKey := fmt.Sprintf("phone_otp_attempts:%s", cleanPhone)
 			storedOTP, err := config.RDB.Get(config.Ctx, otpKey).Result()
 			if err != nil || storedOTP == "" {
 				return errors.New("Kode OTP tidak valid atau sudah kedaluwarsa")
 			}
-			if storedOTP != inputOTP {
+			if subtle.ConstantTimeCompare([]byte(storedOTP), []byte(inputOTP)) != 1 {
+				attempts, _ := config.RDB.Incr(config.Ctx, attemptsKey).Result()
+				if attempts == 1 {
+					config.RDB.Expire(config.Ctx, attemptsKey, 5*time.Minute)
+				}
+				if attempts >= 5 {
+					config.RDB.Del(config.Ctx, otpKey, attemptsKey)
+					return errors.New("Terlalu banyak percobaan OTP salah, silakan minta kode baru")
+				}
 				return errors.New("Kode OTP salah")
 			}
-			config.RDB.Del(config.Ctx, otpKey)
+			config.RDB.Del(config.Ctx, otpKey, attemptsKey)
 		}
 	}
 
@@ -1038,6 +1087,9 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 	}
 
 	if tokenStr != "" {
+		if config.RDB == nil {
+			return "", nil, errors.New("Layanan verifikasi sedang tidak tersedia")
+		}
 		verifiedPhone, err := utils.VerifyFirebasePhoneToken(tokenStr)
 		if err != nil {
 			return "", nil, err
@@ -1045,10 +1097,19 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 		if !utils.MatchPhoneNumbers(verifiedPhone, input.Identifier) {
 			return "", nil, errors.New("Nomor telepon pada klaim token Firebase tidak cocok dengan identitas login")
 		}
-		if targetRole != "" {
-			matchedGroup = models.RoleGroupOf(targetRole)
-		} else {
-			matchedGroup = models.RoleGroupCustomer
+		// Require a pending login challenge created by POST /auth/login (password check).
+		challengeFound := false
+		for _, g := range groups {
+			k := scopedKey("login_otp", g, input.Identifier)
+			if exists, errEx := config.RDB.Exists(config.Ctx, k).Result(); errEx == nil && exists > 0 {
+				matchedGroup = g
+				challengeFound = true
+				config.RDB.Del(config.Ctx, k, scopedKey("login_otp_attempts", g, input.Identifier))
+				break
+			}
+		}
+		if !challengeFound {
+			return "", nil, errors.New("Sesi login tidak ditemukan atau sudah kadaluarsa, silakan login ulang")
 		}
 	} else if isReviewerIdentifier(input.Identifier) && input.OTP == DefaultReviewerOTP {
 		if targetRole != "" {
@@ -1056,25 +1117,12 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 		} else {
 			matchedGroup = models.RoleGroupCustomer
 		}
-	} else if config.RDB != nil {
-		for _, g := range groups {
-			key := scopedKey("login_otp", g, input.Identifier)
-			storedOTP, err := config.RDB.Get(config.Ctx, key).Result()
-			if err == nil && storedOTP == input.OTP {
-				matchedGroup = g
-				config.RDB.Del(config.Ctx, key)
-				break
-			}
-		}
-
-		if matchedGroup == "" {
-			legacyKey := fmt.Sprintf("login_otp:%s", input.Identifier)
-			storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
-			if err == nil && storedOTP == input.OTP {
-				config.RDB.Del(config.Ctx, legacyKey)
-			} else {
-				return "", nil, errors.New("OTP tidak valid atau sudah kadaluarsa")
-			}
+	} else {
+		var ok bool
+		var errOTP error
+		matchedGroup, ok, errOTP = verifyScopedOTPWithLockout("login_otp", groups, input.Identifier, input.OTP)
+		if !ok {
+			return "", nil, errOTP
 		}
 	}
 
@@ -1091,6 +1139,17 @@ func (s *authService) VerifyLoginOTP(input models.VerifyLoginOTPInput) (string, 
 
 	if targetRole != "" && account.Role != targetRole {
 		return "", nil, NewRoleMismatchError(account.Role, targetRole)
+	}
+
+	switch account.AccountStatus {
+	case "active":
+		// allowed
+	case "banned":
+		return "", nil, errors.New("Akun anda telah diblokir dari platform")
+	case "suspended":
+		return "", nil, errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
+	default:
+		return "", nil, errors.New("Akun tidak aktif atau sedang dalam proses penghapusan")
 	}
 
 	now := time.Now()
@@ -1148,35 +1207,28 @@ func (s *authService) VerifyForgotOTP(input models.VerifyForgotOTPInput) (string
 			matchedGroup = models.RoleGroupCustomer
 		}
 	} else {
-	for _, g := range groups {
-		redisKey := scopedKey("forgot_otp", g, input.Identifier)
-		storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
-		if err == nil && storedOTP == input.OTP {
-			matchedGroup = g
-			config.RDB.Del(config.Ctx, redisKey)
-			config.RDB.Del(config.Ctx, scopedKey("forgot_otp_attempts", g, input.Identifier))
-			break
+		var ok bool
+		var errOTP error
+		matchedGroup, ok, errOTP = verifyScopedOTPWithLockout("forgot_otp", groups, input.Identifier, input.OTP)
+		if !ok {
+			if errOTP != nil && (strings.Contains(errOTP.Error(), "Terlalu banyak") || strings.Contains(errOTP.Error(), "tidak tersedia")) {
+				return "", errOTP
+			}
+			return "", errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
 		}
 	}
 
 	if matchedGroup == "" {
-		legacyKey := fmt.Sprintf("forgot_otp:%s", input.Identifier)
-		storedOTP, err := config.RDB.Get(config.Ctx, legacyKey).Result()
-		if err == nil && storedOTP == input.OTP {
-			config.RDB.Del(config.Ctx, legacyKey)
-			config.RDB.Del(config.Ctx, fmt.Sprintf("forgot_otp_attempts:%s", input.Identifier))
-		} else {
-			return "", errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
-		}
+		matchedGroup = models.RoleGroupCustomer
 	}
+	resetToken, errTok := utils.GenerateSecureToken(32)
+	if errTok != nil {
+		return "", errors.New("Gagal membuat token reset kata sandi")
 	}
-
-	// Generate secure UUID reset token
-	resetToken := utils.GenerateUUID("RST")
-	if matchedGroup != "" {
-		config.RDB.Set(config.Ctx, scopedKey("reset_token", matchedGroup, input.Identifier), resetToken, 10*time.Minute)
+	if config.RDB == nil {
+		return "", errors.New("Layanan verifikasi sedang tidak tersedia")
 	}
-	config.RDB.Set(config.Ctx, fmt.Sprintf("reset_token:%s", input.Identifier), resetToken, 10*time.Minute)
+	config.RDB.Set(config.Ctx, scopedKey("reset_token", matchedGroup, input.Identifier), resetToken, 10*time.Minute)
 
 	return resetToken, nil
 }
@@ -1186,6 +1238,9 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	if input.NewPassword != input.ConfirmNewPassword {
 		return errors.New("Kata sandi baru dan konfirmasi kata sandi tidak cocok")
 	}
+	if config.RDB == nil {
+		return errors.New("Layanan verifikasi sedang tidak tersedia")
+	}
 
 	groups := candidateGroups(input.Role)
 	var matchedGroup string
@@ -1194,20 +1249,11 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	for _, g := range groups {
 		tokenRedisKey := scopedKey("reset_token", g, input.Identifier)
 		storedToken, err := config.RDB.Get(config.Ctx, tokenRedisKey).Result()
-		if err == nil && storedToken == input.ResetToken {
+		if err == nil && subtle.ConstantTimeCompare([]byte(storedToken), []byte(input.ResetToken)) == 1 {
 			matchedGroup = g
 			verifiedToken = true
 			config.RDB.Del(config.Ctx, tokenRedisKey)
 			break
-		}
-	}
-
-	if !verifiedToken {
-		legacyKey := fmt.Sprintf("reset_token:%s", input.Identifier)
-		storedToken, err := config.RDB.Get(config.Ctx, legacyKey).Result()
-		if err == nil && storedToken == input.ResetToken {
-			verifiedToken = true
-			config.RDB.Del(config.Ctx, legacyKey)
 		}
 	}
 
@@ -1475,7 +1521,11 @@ func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPho
 
 		isReviewer := isReviewerIdentifier(newPhoneClean)
 		if !(isReviewer && inputOTP == DefaultReviewerOTP) {
+			if config.RDB == nil {
+				return errors.New("Layanan verifikasi sedang tidak tersedia")
+			}
 			redisKey := fmt.Sprintf("phone_change:%s", accountID)
+			attemptsKey := fmt.Sprintf("phone_change_attempts:%s", accountID)
 			storedJSON, err := config.RDB.Get(config.Ctx, redisKey).Result()
 			if err != nil || storedJSON == "" {
 				return errors.New("Permintaan ubah nomor telepon tidak ditemukan atau sudah kedaluwarsa")
@@ -1484,10 +1534,18 @@ func (s *authService) VerifyPhoneChange(accountID string, input models.VerifyPho
 			if err := json.Unmarshal([]byte(storedJSON), &changeData); err != nil {
 				return errors.New("Gagal memproses data verifikasi")
 			}
-			if changeData["otp"] != inputOTP || !utils.MatchPhoneNumbers(changeData["new_phone"], newPhoneClean) {
+			if subtle.ConstantTimeCompare([]byte(changeData["otp"]), []byte(inputOTP)) != 1 || !utils.MatchPhoneNumbers(changeData["new_phone"], newPhoneClean) {
+				attempts, _ := config.RDB.Incr(config.Ctx, attemptsKey).Result()
+				if attempts == 1 {
+					config.RDB.Expire(config.Ctx, attemptsKey, 5*time.Minute)
+				}
+				if attempts >= 5 {
+					config.RDB.Del(config.Ctx, redisKey, attemptsKey)
+					return errors.New("Terlalu banyak percobaan OTP salah, silakan minta kode baru")
+				}
 				return errors.New("Kode OTP tidak valid")
 			}
-			config.RDB.Del(config.Ctx, redisKey)
+			config.RDB.Del(config.Ctx, redisKey, attemptsKey)
 		}
 	}
 

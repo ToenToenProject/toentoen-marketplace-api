@@ -10,6 +10,9 @@ import (
 )
 
 func TestReviewerHelpers(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("ENABLE_REVIEWER_BYPASS", "true")
+
 	t.Run("isReviewerIdentifier matches expected tester accounts", func(t *testing.T) {
 		testers := []string{
 			"google.tester@toentoen.com",
@@ -53,9 +56,18 @@ func TestReviewerHelpers(t *testing.T) {
 			t.Errorf("expected 'wrongpassword' to be rejected")
 		}
 	})
+	t.Run("disabled in production even when flag is set", func(t *testing.T) {
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("ENABLE_REVIEWER_BYPASS", "true")
+		if isReviewerIdentifier("google.tester@toentoen.com") || isReviewerPassword(DefaultReviewerPassword) {
+			t.Fatalf("expected reviewer bypass to be disabled in production")
+		}
+	})
 }
 
 func TestReviewerLoginFlow(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("ENABLE_REVIEWER_BYPASS", "true")
 	now := time.Now()
 	hashBytes, _ := bcrypt.GenerateFromPassword([]byte(DefaultReviewerPassword), bcrypt.DefaultCost)
 	hashStr := string(hashBytes)

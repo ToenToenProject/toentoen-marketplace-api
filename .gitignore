@@ -98,3 +98,7 @@ docs/
 GEMINI.md
 .vscode/
 AGENTS.md
+
+# Firebase / GCP service account credentials
+pkg/config/*.json
+*firebase-adminsdk*.json

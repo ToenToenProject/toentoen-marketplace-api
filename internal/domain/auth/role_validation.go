@@ -43,7 +43,7 @@ func NormalizeExpectedRole(role string) string {
 	case "admin", "business_admin", "staff", "karyawan":
 		return "business_admin"
 	default:
-		return r
+		return ""
 	}
 }
 

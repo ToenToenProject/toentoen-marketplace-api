@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
@@ -17,8 +18,18 @@ var (
 )
 
 func InitFirebase() {
-	// Let the Firebase SDK auto-detect ProjectID from credentials file.
-	opt := option.WithCredentialsFile("pkg/config/toentoen-app-firebase-adminsdk-fbsvc-894ab133f2.json")
+	credPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if credPath == "" {
+		localFallback := "pkg/config/toentoen-app-firebase-adminsdk-fbsvc-894ab133f2.json"
+		if _, err := os.Stat(localFallback); err == nil {
+			credPath = localFallback
+		}
+	}
+	if credPath == "" {
+		log.Println("⚠️ Warning: GOOGLE_APPLICATION_CREDENTIALS not set (Firebase disabled)")
+		return
+	}
+	opt := option.WithCredentialsFile(credPath)
 	
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {

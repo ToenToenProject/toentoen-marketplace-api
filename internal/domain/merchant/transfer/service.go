@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"strings"
@@ -165,13 +166,28 @@ func (s *businessTransferService) VerifyOTPAndCreateTransfer(ownerID, businessID
 		return nil, errors.New("OTP wajib diisi")
 	}
 
+	if config.RDB == nil {
+		return nil, errors.New("Layanan verifikasi sedang tidak tersedia")
+	}
 	otpKey := fmt.Sprintf("biz_transfer_otp:%s:%s", businessID, ownerID)
+	attemptsKey := fmt.Sprintf("biz_transfer_otp_attempts:%s:%s", businessID, ownerID)
 	storedOTP, err := config.RDB.Get(config.Ctx, otpKey).Result()
-	if err == redis.Nil || storedOTP != inputOTP {
+	if err == redis.Nil || err != nil {
+		return nil, errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
+	}
+	if subtle.ConstantTimeCompare([]byte(storedOTP), []byte(inputOTP)) != 1 {
+		attempts, _ := config.RDB.Incr(config.Ctx, attemptsKey).Result()
+		if attempts == 1 {
+			config.RDB.Expire(config.Ctx, attemptsKey, 5*time.Minute)
+		}
+		if attempts >= 5 {
+			config.RDB.Del(config.Ctx, otpKey, attemptsKey, fmt.Sprintf("biz_transfer_target:%s:%s", businessID, ownerID))
+			return nil, errors.New("Terlalu banyak percobaan OTP salah, silakan minta kode baru")
+		}
 		return nil, errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
 	}
 
-	config.RDB.Del(config.Ctx, otpKey)
+	config.RDB.Del(config.Ctx, otpKey, attemptsKey)
 	config.RDB.Del(config.Ctx, fmt.Sprintf("biz_transfer_target:%s:%s", businessID, ownerID))
 
 	target, err := s.repo.FindAccountByIdentifier(targetIdentifier)

@@ -1,6 +1,7 @@
 package account
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"regexp"
@@ -463,12 +464,28 @@ func (s *profileService) RequestDeleteOTP(accountID string) error {
 }
 
 func (s *profileService) VerifyDeleteOTPAndExecute(accountID string, otp string) error {
+	if config.RDB == nil {
+		return errors.New("layanan verifikasi sedang tidak tersedia")
+	}
 	redisKey := fmt.Sprintf("delete_otp:%s", accountID)
+	attemptsKey := fmt.Sprintf("delete_otp_attempts:%s", accountID)
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
 	cleanOTP := strings.TrimSpace(otp)
-	if err != nil || storedOTP != cleanOTP {
+	if err != nil {
 		return errors.New("OTP salah atau kedaluwarsa")
 	}
+	if subtle.ConstantTimeCompare([]byte(storedOTP), []byte(cleanOTP)) != 1 {
+		attempts, _ := config.RDB.Incr(config.Ctx, attemptsKey).Result()
+		if attempts == 1 {
+			config.RDB.Expire(config.Ctx, attemptsKey, 5*time.Minute)
+		}
+		if attempts >= 5 {
+			config.RDB.Del(config.Ctx, redisKey, attemptsKey)
+			return errors.New("terlalu banyak percobaan OTP salah, silakan minta kode baru")
+		}
+		return errors.New("OTP salah atau kedaluwarsa")
+	}
+	config.RDB.Del(config.Ctx, attemptsKey)
 
 	account, err := s.repo.GetAccountByID(accountID)
 	if err != nil {

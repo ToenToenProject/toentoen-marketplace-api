@@ -26,7 +26,7 @@ func RoleGroupOf(role string) string {
 	case "merchant":
 		return RoleGroupOwner
 	default:
-		return strings.ToLower(strings.TrimSpace(role))
+		return ""
 	}
 }
 

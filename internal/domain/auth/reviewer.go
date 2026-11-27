@@ -24,8 +24,19 @@ const (
 	DefaultReviewerOTP = "123456"
 )
 
+// isReviewerBypassEnabled restricts reviewer credential/OTP bypasses to explicit non-production environments.
+func isReviewerBypassEnabled() bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("ENABLE_REVIEWER_BYPASS")), "true")
+}
+
 // isReviewerIdentifier checks whether an identifier belongs to the Google Play review account.
 func isReviewerIdentifier(identifier string) bool {
+	if !isReviewerBypassEnabled() {
+		return false
+	}
 	clean := strings.ToLower(strings.TrimSpace(cleanIdentifier(identifier)))
 	if clean == "" {
 		return false
@@ -43,12 +54,18 @@ func isReviewerIdentifier(identifier string) bool {
 
 // isReviewerPassword checks whether a password matches the Google Play reviewer password.
 func isReviewerPassword(password string) bool {
+	if !isReviewerBypassEnabled() {
+		return false
+	}
 	p := strings.TrimSpace(password)
 	return p == DefaultReviewerPassword || p == "Reviewer2026!" || p == "Password123!"
 }
 
 // ensureReviewerAccounts seeds reviewer accounts across customer, owner, and business_admin roles.
 func (s *authService) ensureReviewerAccounts(identifier string) error {
+	if !isReviewerBypassEnabled() {
+		return nil
+	}
 	roles := []string{"customer", "owner", "business_admin"}
 	var lastErr error
 
