@@ -615,3 +615,86 @@ func TestToggleStoreStatus_KYCGate(t *testing.T) {
 	})
 }
 
+func TestResolveAndValidateCategoryTags(t *testing.T) {
+	t.Run("rejects more than 3 categories", func(t *testing.T) {
+		input := []models.CategoryTagSelection{
+			{CategoryID: 1, TagIDs: []int64{10}},
+			{CategoryID: 2, TagIDs: []int64{11}},
+			{CategoryID: 3, TagIDs: []int64{12}},
+			{CategoryID: 4, TagIDs: []int64{13}},
+		}
+		_, _, _, err := resolveAndValidateCategoryTags(nil, nil, input)
+		if err == nil {
+			t.Fatalf("expected error for >3 categories, got nil")
+		}
+		if !strings.Contains(err.Error(), "maksimal 3 kategori") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rejects duplicate categories", func(t *testing.T) {
+		input := []models.CategoryTagSelection{
+			{CategoryID: 1, TagIDs: []int64{10}},
+			{CategoryID: 1, TagIDs: []int64{11}},
+		}
+		_, _, _, err := resolveAndValidateCategoryTags(nil, nil, input)
+		if err == nil {
+			t.Fatalf("expected error for duplicate categories, got nil")
+		}
+		if !strings.Contains(err.Error(), "duplikasi kategori") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rejects more than 5 tags in one category", func(t *testing.T) {
+		input := []models.CategoryTagSelection{
+			{CategoryID: 1, TagIDs: []int64{1, 2, 3, 4, 5, 6}},
+		}
+		_, _, _, err := resolveAndValidateCategoryTags(nil, nil, input)
+		if err == nil {
+			t.Fatalf("expected error for >5 tags per category, got nil")
+		}
+		if !strings.Contains(err.Error(), "maksimal 5 tag") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("accepts 3 categories with 5 tags each and deduplicates", func(t *testing.T) {
+		input := []models.CategoryTagSelection{
+			{CategoryID: 1, TagIDs: []int64{10, 11, 12, 13, 14, 14}},
+			{CategoryID: 2, TagIDs: []int64{14, 15, 16}},
+			{CategoryID: 3, TagIDs: []int64{17}},
+		}
+		cats, flatTags, rows, err := resolveAndValidateCategoryTags(nil, nil, input)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(cats) != 3 {
+			t.Fatalf("expected 3 categories, got %d", len(cats))
+		}
+		if len(flatTags) != 8 {
+			t.Fatalf("expected 8 unique flat tags, got %d", len(flatTags))
+		}
+		if len(rows) != 9 {
+			t.Fatalf("expected 9 category-tag pivot rows, got %d", len(rows))
+		}
+	})
+
+	t.Run("legacy flat input enforces max 3 categories and max 5 tags per category", func(t *testing.T) {
+		if _, _, _, err := resolveAndValidateCategoryTags([]int64{1, 2, 3, 4}, []int64{1}, nil); err == nil {
+			t.Fatalf("expected error for >3 legacy categories")
+		}
+		if _, _, _, err := resolveAndValidateCategoryTags([]int64{1}, []int64{1, 2, 3, 4, 5, 6}, nil); err == nil {
+			t.Fatalf("expected error for >5 tags in 1 legacy category")
+		}
+		cats, tags, rows, err := resolveAndValidateCategoryTags([]int64{1, 2}, []int64{1, 2, 3, 4, 5, 6, 7}, nil)
+		if err != nil {
+			t.Fatalf("expected 2 categories with 7 tags (<= 10) to succeed, got %v", err)
+		}
+		if len(cats) != 2 || len(tags) != 7 || rows != nil {
+			t.Fatalf("unexpected legacy resolution: cats=%d tags=%d rows=%v", len(cats), len(tags), rows)
+		}
+	})
+}
+
+

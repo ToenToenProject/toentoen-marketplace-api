@@ -157,6 +157,11 @@ type BusinessVisibilityInfo struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+type CategoryTagSelection struct {
+	CategoryID int64   `json:"category_id"`
+	TagIDs     []int64 `json:"tag_ids"`
+}
+
 type CreateBusinessInput struct {
 	LogoURL      string `json:"logo_url"`
 	BusinessName string `json:"business_name"`
@@ -168,9 +173,10 @@ type CreateBusinessInput struct {
 	BusinessCertificates    []BusinessCertificate `json:"business_certificates" validate:"max=5"`
 	BusinessCertificateSing []BusinessCertificate `json:"business_certificate" validate:"max=5"`
 
-	CategoryIDs     []int64  `json:"category_ids"`
-	CustomCategory  *string  `json:"custom_category" validate:"omitempty,max=100"`
-	Tags            []int64  `json:"tags"`
+	CategoryIDs     []int64                `json:"category_ids"`
+	CategoryTags    []CategoryTagSelection `json:"category_tags"`
+	CustomCategory  *string                `json:"custom_category" validate:"omitempty,max=100"`
+	Tags            []int64                `json:"tags"`
 	CustomTags      []string `json:"custom_tags"`
 	Hashtags        []string `json:"hashtags"`
 	BusinessDetails string   `json:"business_details" validate:"max=300"`
@@ -221,9 +227,10 @@ type UpdateBusinessInput struct {
 	BusinessCertificates    *[]BusinessCertificate `json:"business_certificates" validate:"omitempty,max=5"`
 	BusinessCertificateSing *[]BusinessCertificate `json:"business_certificate" validate:"omitempty,max=5"`
 
-	CategoryIDs     *[]int64  `json:"category_ids"`
-	CustomCategory  *string   `json:"custom_category" validate:"omitempty,max=100"`
-	Tags            *[]int64  `json:"tags"`
+	CategoryIDs     *[]int64                `json:"category_ids"`
+	CategoryTags    *[]CategoryTagSelection `json:"category_tags"`
+	CustomCategory  *string                 `json:"custom_category" validate:"omitempty,max=100"`
+	Tags            *[]int64                `json:"tags"`
 	CustomTags      *[]string `json:"custom_tags"`
 	Hashtags        *[]string `json:"hashtags"`
 	BusinessDetails *string  `json:"business_details" validate:"omitempty,max=300"`

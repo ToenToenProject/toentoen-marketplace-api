@@ -115,6 +115,8 @@ func ConnectDB() {
 		&models.ProductWishlist{},
 		&models.Report{},
 		&models.BusinessAdminShift{},
+		&models.TagGroup{},
+		&models.CategoryTagRule{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {
@@ -164,6 +166,18 @@ func ConnectDB() {
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS last_schedule_reminded_at TIMESTAMPTZ`,
 		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS deletion_scheduled_at TIMESTAMPTZ`,
 		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS deletion_initiated_by VARCHAR(20)`,
+		`ALTER TABLE business_categories ADD COLUMN IF NOT EXISTS slug VARCHAR(120)`,
+		`ALTER TABLE business_categories ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0`,
+		`ALTER TABLE business_categories ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_business_categories_slug ON business_categories (slug) WHERE slug IS NOT NULL`,
+		`ALTER TABLE business_tags ADD COLUMN IF NOT EXISTS slug VARCHAR(120)`,
+		`ALTER TABLE business_tags ADD COLUMN IF NOT EXISTS group_id BIGINT`,
+		`ALTER TABLE business_tags ADD COLUMN IF NOT EXISTS tag_type VARCHAR(50) DEFAULT 'characteristic'`,
+		`ALTER TABLE business_tags ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0`,
+		`ALTER TABLE business_tags ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_business_tags_slug ON business_tags (slug) WHERE slug IS NOT NULL`,
+		`ALTER TABLE business_has_tags ADD COLUMN IF NOT EXISTS category_id BIGINT NOT NULL DEFAULT 0`,
+		`DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'business_has_tags'::regclass AND contype = 'p') THEN ALTER TABLE business_has_tags DROP CONSTRAINT business_has_tags_pkey; END IF; ALTER TABLE business_has_tags ADD PRIMARY KEY (business_id, category_id, tag_id); EXCEPTION WHEN duplicate_table OR others THEN NULL; END $$`,
 		`ALTER TABLE businesses ALTER COLUMN nib TYPE TEXT`,
 		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS min_budget NUMERIC`,
 		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS max_budget NUMERIC`,

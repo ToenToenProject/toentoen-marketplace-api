@@ -151,6 +151,152 @@ func deduplicateInt64(slice []int64) []int64 {
 	return result
 }
 
+type tagMetaRow struct {
+	TagID     int64  `gorm:"column:tag_id"`
+	ParentID  *int64 `gorm:"column:parent_id"`
+	GroupSlug string `gorm:"column:group_slug"`
+}
+
+func resolveAndValidateCategoryTags(categoryIDs []int64, flatTags []int64, categoryTags []models.CategoryTagSelection) ([]int64, []int64, []models.BusinessHasTag, error) {
+	if len(categoryTags) > 0 {
+		if len(categoryTags) > 3 {
+			return nil, nil, nil, errors.New("maksimal 3 kategori yang dapat dipilih")
+		}
+
+		seenCats := make(map[int64]bool, len(categoryTags))
+		resolvedCatIDs := make([]int64, 0, len(categoryTags))
+		allTagSet := make(map[int64]bool)
+		var flatTagIDs []int64
+		var pivotRows []models.BusinessHasTag
+
+		for _, sel := range categoryTags {
+			if sel.CategoryID <= 0 {
+				continue
+			}
+			if seenCats[sel.CategoryID] {
+				return nil, nil, nil, errors.New("duplikasi kategori tidak diperbolehkan")
+			}
+			seenCats[sel.CategoryID] = true
+			resolvedCatIDs = append(resolvedCatIDs, sel.CategoryID)
+
+			uniqueTags := deduplicateInt64(sel.TagIDs)
+			if len(uniqueTags) == 0 {
+				continue
+			}
+
+			finalTagSet := make(map[int64]bool, len(uniqueTags))
+			if database.DB != nil {
+				var activeCatCount int64
+				if err := database.DB.Model(&models.Category{}).Where("category_id = ? AND is_active = ?", sel.CategoryID, true).Count(&activeCatCount).Error; err == nil && activeCatCount == 0 {
+					return nil, nil, nil, fmt.Errorf("kategori %d tidak ditemukan atau sudah tidak aktif", sel.CategoryID)
+				}
+
+				var rows []tagMetaRow
+				err := database.DB.Table("business_tags bt").
+					Select("bt.tag_id, bt.parent_id, COALESCE(tg.slug, '') AS group_slug").
+					Joins("LEFT JOIN tag_groups tg ON tg.group_id = bt.group_id").
+					Joins("JOIN category_tag_rules ctr ON ctr.tag_id = bt.tag_id AND ctr.category_id = ? AND ctr.is_active = true", sel.CategoryID).
+					Where("bt.tag_id IN ? AND bt.is_active = true", uniqueTags).
+					Find(&rows).Error
+				if err == nil && len(rows) > 0 {
+					if len(rows) != len(uniqueTags) {
+						return nil, nil, nil, fmt.Errorf("satu atau lebih tag tidak valid untuk kategori %d", sel.CategoryID)
+					}
+					quota := 0
+					hasPayment := false
+					for _, r := range rows {
+						finalTagSet[r.TagID] = true
+						// Auto-include parent tag (e.g. E-wallet accepted, Pet friendly) without consuming extra quota.
+						if r.ParentID != nil && *r.ParentID > 0 {
+							finalTagSet[*r.ParentID] = true
+						}
+						if r.GroupSlug == "payment-transaction" {
+							if !hasPayment {
+								hasPayment = true
+								quota++
+							}
+						} else {
+							quota++
+						}
+					}
+					if quota > 5 {
+						return nil, nil, nil, errors.New("maksimal 5 tag per kategori (metode pembayaran dihitung 1 tag)")
+					}
+				} else {
+					// Fallback when category_tag_rules is not seeded (e.g. unit tests)
+					if len(uniqueTags) > 5 {
+						return nil, nil, nil, errors.New("maksimal 5 tag per kategori")
+					}
+					for _, tid := range uniqueTags {
+						finalTagSet[tid] = true
+					}
+				}
+			} else {
+				if len(uniqueTags) > 5 {
+					return nil, nil, nil, errors.New("maksimal 5 tag per kategori")
+				}
+				for _, tid := range uniqueTags {
+					finalTagSet[tid] = true
+				}
+			}
+
+			for tid := range finalTagSet {
+				pivotRows = append(pivotRows, models.BusinessHasTag{
+					CategoryID: sel.CategoryID,
+					TagID:      tid,
+				})
+				if !allTagSet[tid] {
+					allTagSet[tid] = true
+					flatTagIDs = append(flatTagIDs, tid)
+				}
+			}
+		}
+
+		if len(resolvedCatIDs) > 3 {
+			return nil, nil, nil, errors.New("maksimal 3 kategori yang dapat dipilih")
+		}
+		return resolvedCatIDs, flatTagIDs, pivotRows, nil
+	}
+
+	uniqueCats := deduplicateInt64(categoryIDs)
+	if len(uniqueCats) > 3 {
+		return nil, nil, nil, errors.New("maksimal 3 kategori yang dapat dipilih")
+	}
+	uniqueTags := deduplicateInt64(flatTags)
+	if len(uniqueCats) > 0 && len(uniqueTags) > len(uniqueCats)*5 {
+		// Check if payment tags collapse into 1 quota when DB is available
+		if database.DB != nil {
+			var rows []tagMetaRow
+			if err := database.DB.Table("business_tags bt").
+				Select("bt.tag_id, bt.parent_id, COALESCE(tg.slug, '') AS group_slug").
+				Joins("LEFT JOIN tag_groups tg ON tg.group_id = bt.group_id").
+				Where("bt.tag_id IN ?", uniqueTags).
+				Find(&rows).Error; err == nil && len(rows) > 0 {
+				quota := 0
+				hasPayment := false
+				for _, r := range rows {
+					if r.GroupSlug == "payment-transaction" {
+						if !hasPayment {
+							hasPayment = true
+							quota++
+						}
+					} else {
+						quota++
+					}
+				}
+				if quota > len(uniqueCats)*5 {
+					return nil, nil, nil, errors.New("maksimal 5 tag per kategori (metode pembayaran dihitung 1 tag)")
+				}
+			} else if len(uniqueTags) > len(uniqueCats)*5 {
+				return nil, nil, nil, errors.New("maksimal 5 tag per kategori")
+			}
+		} else {
+			return nil, nil, nil, errors.New("maksimal 5 tag per kategori")
+		}
+	}
+	return uniqueCats, uniqueTags, nil, nil
+}
+
 func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusinessInput) (string, error) {
 	emailVerified, kycStatus, err := s.repo.GetOwnerKYCStatus(ownerID)
 	if err != nil {
@@ -164,6 +310,13 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 	// Merchants may create and configure stores prior to KYC verification;
 	// stores are initialized in closed state (is_manually_closed = true) and remain hidden until KYC approval.
 	_ = kycStatus
+
+	resolvedCatIDs, resolvedTagIDs, categoryTagRows, errCT := resolveAndValidateCategoryTags(input.CategoryIDs, input.Tags, input.CategoryTags)
+	if errCT != nil {
+		return "", errCT
+	}
+	input.CategoryIDs = resolvedCatIDs
+	input.Tags = resolvedTagIDs
 
 	// NIB Tag validation: NIB tag requires registered NIB value.
 	cleanNIB := strings.TrimSpace(input.NIB)
@@ -277,6 +430,14 @@ func (s *businessService) CreateBusiness(ownerID string, input models.CreateBusi
 
 	if err := s.repo.CreateBusinessWithRelations(&business, input.CategoryIDs, input.Tags, hours); err != nil {
 		return "", err
+	}
+
+	if len(categoryTagRows) > 0 && database.DB != nil {
+		for i := range categoryTagRows {
+			categoryTagRows[i].BusinessID = business.BusinessID
+		}
+		_ = database.DB.Exec("DELETE FROM business_has_tags WHERE business_id = ?", business.BusinessID).Error
+		_ = database.DB.Create(&categoryTagRows).Error
 	}
 
 	go meilisearch.SyncBusiness(database.DB, business.BusinessID)
@@ -855,23 +1016,47 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 	}
 
 	var catIDs *[]int64
-	if input.CategoryIDs != nil {
-		uniqueCats := deduplicateInt64(*input.CategoryIDs)
-		catIDs = &uniqueCats
+	var tagIDs *[]int64
+	var categoryTagRows []models.BusinessHasTag
+
+	if input.CategoryTags != nil {
+		resolvedCats, resolvedTags, rows, errCT := resolveAndValidateCategoryTags(nil, nil, *input.CategoryTags)
+		if errCT != nil {
+			return errCT
+		}
+		catIDs = &resolvedCats
+		tagIDs = &resolvedTags
+		categoryTagRows = rows
+	} else {
+		if input.CategoryIDs != nil {
+			uniqueCats := deduplicateInt64(*input.CategoryIDs)
+			if len(uniqueCats) > 3 {
+				return errors.New("maksimal 3 kategori yang dapat dipilih")
+			}
+			catIDs = &uniqueCats
+		}
+		if input.Tags != nil {
+			var catsForCheck []int64
+			if catIDs != nil {
+				catsForCheck = *catIDs
+			}
+			_, resolvedTags, _, errCT := resolveAndValidateCategoryTags(catsForCheck, *input.Tags, nil)
+			if errCT != nil {
+				return errCT
+			}
+			tagIDs = &resolvedTags
+		}
 	}
 
 	hasNIBUpdate := business.NIB != nil && strings.TrimSpace(*business.NIB) != ""
 
-	var tagIDs *[]int64
-	if input.Tags != nil {
-		uniqueTags := deduplicateInt64(*input.Tags)
-		if len(uniqueTags) > 0 {
-			hasNIBTag, err := s.repo.HasNIBTag(uniqueTags)
+	if tagIDs != nil {
+		if len(*tagIDs) > 0 {
+			hasNIBTag, err := s.repo.HasNIBTag(*tagIDs)
 			if err == nil && hasNIBTag && !hasNIBUpdate {
 				return errors.New("tag 'Verified merchant (NIB)' hanya dapat dipilih jika bisnis memiliki NIB yang terdaftar")
 			}
 		}
-		tagIDs = &uniqueTags
 	} else if !hasNIBUpdate {
 		// If NIB is removed but tags are omitted in update request, strip NIB tag.
 		_ = s.repo.RemoveNIBTagFromBusiness(business.BusinessID)
@@ -889,6 +1074,14 @@ func (s *businessService) UpdateBusiness(requesterID, businessID string, input m
 			return errors.New("satu atau lebih tag yang dipilih tidak valid atau tidak ditemukan")
 		}
 		return fmt.Errorf("gagal memperbarui data bisnis di database: %w", err)
+	}
+
+	if len(categoryTagRows) > 0 && database.DB != nil {
+		for i := range categoryTagRows {
+			categoryTagRows[i].BusinessID = business.BusinessID
+		}
+		_ = database.DB.Exec("DELETE FROM business_has_tags WHERE business_id = ?", business.BusinessID).Error
+		_ = database.DB.Create(&categoryTagRows).Error
 	}
 
 	// Alert owner if staff updates store profile or operating hours.

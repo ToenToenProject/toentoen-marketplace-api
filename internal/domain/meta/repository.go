@@ -22,38 +22,88 @@ func NewMetaRepository(db *gorm.DB) MetaRepository {
 
 func (r *metaRepository) GetAllCategories() ([]models.Category, error) {
 	var categories []models.Category
-	err := r.db.Preload("Children").
-		Preload("Children.Children").
-		Preload("Children.Children.Children").
-		Preload("Children.Children.Children.Children").
-		Where("parent_id IS NULL").
+	err := r.db.Preload("Children", "is_active = ?", true).
+		Preload("Children.Children", "is_active = ?", true).
+		Where("parent_id IS NULL AND is_active = ?", true).
+		Order("sort_order ASC, name ASC").
 		Find(&categories).Error
 	return categories, err
 }
 
 func (r *metaRepository) GetAllTags(categoryID *int64, scope string) ([]models.Tag, error) {
-	var tags []models.Tag
-	query := r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").Where("parent_id IS NULL")
-
-	switch scope {
-	case "global":
-		query = query.Where("is_global = ?", true)
-	case "specific":
-		query = query.Where("is_global = ?", false)
+	var groups []models.TagGroup
+	if err := r.db.Where("is_active = ?", true).Order("sort_order ASC, group_id ASC").Find(&groups).Error; err != nil {
+		return nil, err
 	}
 
+	// Fallback for unseeded/legacy test databases
+	if len(groups) == 0 {
+		var tags []models.Tag
+		query := r.db.Preload("Children").Preload("Children.Children").Where("parent_id IS NULL AND is_active = ?", true)
+		if categoryID != nil {
+			query = query.Where("is_global = ? OR category_id = ?", true, *categoryID)
+		}
+		err := query.Find(&tags).Error
+		return tags, err
+	}
+
+	var flatTags []models.Tag
+	tagQuery := r.db.Model(&models.Tag{}).Where("business_tags.is_active = ?", true)
 	if categoryID != nil {
-		if scope == "global" {
-			query = r.db.Preload("Children").Preload("Children.Children").Preload("Children.Children.Children").
-				Where("parent_id IS NULL").
-				Where("is_global = ? OR category_id = ?", true, *categoryID)
-		} else {
-			query = query.Where("category_id = ?", *categoryID)
+		tagQuery = tagQuery.
+			Joins("JOIN category_tag_rules ctr ON ctr.tag_id = business_tags.tag_id AND ctr.is_active = true").
+			Where("ctr.category_id = ?", *categoryID)
+	}
+	if err := tagQuery.Order("business_tags.sort_order ASC, business_tags.tag_id ASC").Find(&flatTags).Error; err != nil {
+		return nil, err
+	}
+
+	groupSlugByID := make(map[int64]string, len(groups))
+	for _, g := range groups {
+		groupSlugByID[g.GroupID] = g.Slug
+	}
+
+	childrenByParent := make(map[int64][]models.Tag)
+	topTagsByGroup := make(map[int64][]models.Tag)
+	for i := range flatTags {
+		if flatTags[i].GroupID != nil {
+			flatTags[i].GroupSlug = groupSlugByID[*flatTags[i].GroupID]
+		}
+		if flatTags[i].ParentID != nil {
+			childrenByParent[*flatTags[i].ParentID] = append(childrenByParent[*flatTags[i].ParentID], flatTags[i])
+		}
+	}
+	for i := range flatTags {
+		if flatTags[i].ParentID == nil && flatTags[i].GroupID != nil {
+			t := flatTags[i]
+			t.Children = childrenByParent[t.TagID]
+			topTagsByGroup[*t.GroupID] = append(topTagsByGroup[*t.GroupID], t)
 		}
 	}
 
-	err := query.Find(&tags).Error
-	return tags, err
+	result := make([]models.Tag, 0, len(groups))
+	for _, g := range groups {
+		items := topTagsByGroup[g.GroupID]
+		if len(items) == 0 {
+			continue
+		}
+		gid := g.GroupID
+		result = append(result, models.Tag{
+			TagID:     -g.GroupID,
+			Slug:      g.Slug,
+			Name:      g.Name,
+			TagType:   g.TagType,
+			GroupID:   &gid,
+			GroupSlug: g.Slug,
+			IsGlobal:  true,
+			SortOrder: g.SortOrder,
+			IsActive:  true,
+			Children:  items,
+		})
+	}
+
+	_ = scope
+	return result, nil
 }
 
 func (r *metaRepository) GetAllOccupations() ([]models.Occupation, error) {

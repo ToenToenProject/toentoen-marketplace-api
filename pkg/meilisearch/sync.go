@@ -368,6 +368,7 @@ func BuildBusinessDocument(db *gorm.DB, b *models.Business) MeiliBusinessDocumen
 	tags := b.Tags
 	if len(tags) == 0 && db != nil {
 		db.Table("business_tags").
+			Select("DISTINCT business_tags.*").
 			Joins("JOIN business_has_tags ON business_has_tags.tag_id = business_tags.tag_id").
 			Where("business_has_tags.business_id = ?", b.BusinessID).
 			Find(&tags)
