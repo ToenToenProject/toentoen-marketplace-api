@@ -1268,6 +1268,9 @@ func (s *authService) ResetPassword(input models.ResetPasswordInput) error {
 	if input.NewPassword != input.ConfirmNewPassword {
 		return errors.New("Kata sandi baru dan konfirmasi kata sandi tidak cocok")
 	}
+	if len(input.NewPassword) < 8 || len(input.NewPassword) > 72 {
+		return errors.New("Kata sandi baru harus 8-72 karakter")
+	}
 	if config.RDB == nil {
 		return errors.New("Layanan verifikasi sedang tidak tersedia")
 	}
@@ -1329,6 +1332,9 @@ func (s *authService) ChangePassword(accountID string, input models.ChangePasswo
 	}
 	if input.NewPassword != input.ConfirmNewPassword {
 		return errors.New("Kata sandi baru dan konfirmasi kata sandi tidak cocok")
+	}
+	if len(input.NewPassword) < 8 || len(input.NewPassword) > 72 {
+		return errors.New("Kata sandi baru harus 8-72 karakter")
 	}
 
 	account, err := s.repo.FindByID(accountID)

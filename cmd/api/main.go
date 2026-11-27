@@ -246,6 +246,10 @@ func main() {
 	app := fiber.New(fiber.Config{
 		ProxyHeader:             fiber.HeaderXForwardedFor,
 		EnableTrustedProxyCheck: true,
+		ReadTimeout:             15 * time.Second,
+		WriteTimeout:            30 * time.Second,
+		IdleTimeout:             60 * time.Second,
+		BodyLimit:               2 * 1024 * 1024,
 		TrustedProxies: []string{
 			"127.0.0.1",
 			"::1",

@@ -276,9 +276,25 @@ func (r *profileRepository) CheckKtpNumberExists(ktp string, excludeAccountID st
 		excludeIDs = append(excludeIDs, siblings...)
 	}
 
+	// Fast O(1) indexed lookup via HMAC blind index before scanning any legacy unindexed rows.
+	if blindIdx := crypto.GenerateBlindIndex(cleanKtp); blindIdx != "" {
+		var ownerIdxCount int64
+		if err := r.db.Model(&models.Owner{}).
+			Where("ktp_number_blind_index = ? AND account_id NOT IN ?", blindIdx, excludeIDs).
+			Count(&ownerIdxCount).Error; err == nil && ownerIdxCount > 0 {
+			return true, nil
+		}
+		var adminIdxCount int64
+		if err := r.db.Model(&models.BusinessAdmin{}).
+			Where("ktp_number_blind_index = ? AND account_id NOT IN ?", blindIdx, excludeIDs).
+			Count(&adminIdxCount).Error; err == nil && adminIdxCount > 0 {
+			return true, nil
+		}
+	}
+
 	var ownerKtps []string
 	if err := r.db.Model(&models.Owner{}).
-		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id NOT IN ?", excludeIDs).
+		Where("ktp_number IS NOT NULL AND ktp_number != '' AND (ktp_number_blind_index IS NULL OR ktp_number_blind_index = '') AND account_id NOT IN ?", excludeIDs).
 		Pluck("ktp_number", &ownerKtps).Error; err != nil {
 		return false, err
 	}
@@ -292,7 +308,7 @@ func (r *profileRepository) CheckKtpNumberExists(ktp string, excludeAccountID st
 
 	var adminKtps []string
 	if err := r.db.Model(&models.BusinessAdmin{}).
-		Where("ktp_number IS NOT NULL AND ktp_number != '' AND account_id NOT IN ?", excludeIDs).
+		Where("ktp_number IS NOT NULL AND ktp_number != '' AND (ktp_number_blind_index IS NULL OR ktp_number_blind_index = '') AND account_id NOT IN ?", excludeIDs).
 		Pluck("ktp_number", &adminKtps).Error; err != nil {
 		return false, err
 	}

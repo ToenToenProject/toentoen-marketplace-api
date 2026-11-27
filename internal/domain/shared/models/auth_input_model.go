@@ -4,7 +4,7 @@ import "time"
 
 type RegisterUnifiedInput struct {
 	Identifier   string  `json:"identifier" validate:"required"`
-	Password     string  `json:"password" validate:"required,min=6"`
+	Password     string  `json:"password" validate:"required,min=8,max=72"`
 	Role         string  `json:"role" validate:"required"`
 	FromRole     *string `json:"from_role"`
 	ReferralCode *string `json:"referral_code"`
@@ -83,7 +83,7 @@ type VerifyForgotOTPInput struct {
 type ResetPasswordInput struct {
 	Identifier         string `json:"identifier" validate:"required"`
 	ResetToken         string `json:"reset_token" validate:"required"`
-	NewPassword        string `json:"new_password" validate:"required,min=6"`
+	NewPassword        string `json:"new_password" validate:"required,min=8,max=72"`
 	ConfirmNewPassword string `json:"confirm_new_password" validate:"required,eqfield=NewPassword"`
 	Role               string `json:"role" query:"role"`
 }
@@ -112,13 +112,13 @@ type VerifyPhoneChangeInput struct {
 
 type ChangePasswordInput struct {
 	CurrentPassword    string `json:"current_password"`
-	NewPassword        string `json:"new_password" validate:"required,min=6"`
+	NewPassword        string `json:"new_password" validate:"required,min=8,max=72"`
 	ConfirmNewPassword string `json:"confirm_new_password" validate:"required,eqfield=NewPassword"`
 }
 
 type CreateBusinessAdminInput struct {
 	Identifier string `json:"identifier" validate:"required"`
-	Password   string `json:"password" validate:"required,min=6"`
+	Password   string `json:"password" validate:"required,min=8,max=72"`
 }
 
 type CheckReferralInput struct {

@@ -104,9 +104,10 @@ func SendEmailOTP(toEmail string, otp string, customSubject ...string) error {
 
 	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)
 
-	skipVerify := os.Getenv("SMTP_SKIP_VERIFY") == "true"
+	skipVerify := os.Getenv("SMTP_SKIP_VERIFY") == "true" && os.Getenv("APP_ENV") != "production"
 	dialer.TLSConfig = &tls.Config{
 		ServerName:         smtpHost,
+		MinVersion:         tls.VersionTLS12,
 		InsecureSkipVerify: skipVerify,
 	}
 
@@ -628,9 +629,10 @@ func SendFeedbackEmail(fromUserEmail, userName, role, subject, message string) e
 
 	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)
 
-	skipVerify := os.Getenv("SMTP_SKIP_VERIFY") == "true"
+	skipVerify := os.Getenv("SMTP_SKIP_VERIFY") == "true" && os.Getenv("APP_ENV") != "production"
 	dialer.TLSConfig = &tls.Config{
 		ServerName:         smtpHost,
+		MinVersion:         tls.VersionTLS12,
 		InsecureSkipVerify: skipVerify,
 	}
 
