@@ -33,7 +33,8 @@ func ConnectDB() {
 
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger:                                   logger.Default.LogMode(logger.Info),
+		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		log.Fatal("Failed to connect to database. \n", err)
@@ -109,6 +110,10 @@ func ConnectDB() {
 		&models.BusinessLike{},
 		&models.SearchSynonym{},
 		&models.SearchLog{},
+		&models.UserNotification{},
+		&models.ProductWishlist{},
+		&models.Report{},
+		&models.BusinessAdminShift{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {
@@ -143,6 +148,21 @@ func ConnectDB() {
 		`ALTER TABLE business_admins ALTER COLUMN ktp_religion TYPE TEXT`,
 		`ALTER TABLE business_admins ALTER COLUMN ktp_occupation TYPE TEXT`,
 		`ALTER TABLE business_admins ALTER COLUMN ktp_citizenship TYPE TEXT`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS custom_category VARCHAR(100)`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS nib TEXT`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS country VARCHAR(100)`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS google_maps_link TEXT`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS is_location_shared BOOLEAN DEFAULT false`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS venue_name TEXT`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS event_start_date DATE`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS event_end_date DATE`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS event_schedules JSONB DEFAULT '[]'::jsonb`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS social_websites JSONB DEFAULT '[]'::jsonb`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS custom_tags JSONB DEFAULT '[]'::jsonb`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS hashtags JSONB DEFAULT '[]'::jsonb`,
+		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS last_schedule_reminded_at TIMESTAMPTZ`,
+		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS deletion_scheduled_at TIMESTAMPTZ`,
+		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS deletion_initiated_by VARCHAR(20)`,
 		`ALTER TABLE businesses ALTER COLUMN nib TYPE TEXT`,
 		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS min_budget NUMERIC`,
 		`ALTER TABLE signals ADD COLUMN IF NOT EXISTS max_budget NUMERIC`,
