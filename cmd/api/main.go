@@ -319,8 +319,8 @@ func main() {
 			if c.Method() == fiber.MethodOptions {
 				return true
 			}
-			// Ignore non-API bot scans to prevent depleting global rate limiter quotas.
-			if !strings.HasPrefix(c.Path(), "/api/v1") {
+			// Rate-limit /api/v1 and webhook endpoints; ignore unrelated 404 bot scans.
+			if !strings.HasPrefix(c.Path(), "/api/v1") && !strings.HasPrefix(c.Path(), "/webhook/") {
 				return true
 			}
 			return false
@@ -463,7 +463,7 @@ func main() {
 	api.Get("/customer/wishlist", middlewares.RequireAuth, middlewares.RequireEmailVerified, myActivityHandler.GetMyWishlists)
 
 	// Demand Signal V2 customer routes
-	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth, middlewares.RequireEmailVerified)
+	customerSignalGroup := api.Group("/customer/signals", middlewares.RequireAuth, middlewares.RequireEmailVerified, middlewares.AllowRoles("customer"))
 	customerSignalGroup.Post("/", customerSignalHandler.CreateSignal)
 	customerSignalGroup.Get("/", customerSignalHandler.GetMySignals)
 	customerSignalGroup.Get("/:signal_id", customerSignalHandler.GetSignalDetail)

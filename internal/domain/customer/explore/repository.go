@@ -393,7 +393,7 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 		if len(req.StockTypes) > 0 {
 			var stConds []string
 			for _, st := range req.StockTypes {
-				stConds = append(stConds, fmt.Sprintf(`stock_types = "%s"`, strings.TrimSpace(st)))
+				stConds = append(stConds, fmt.Sprintf(`stock_types = "%s"`, escapeMeiliFilterValue(st)))
 			}
 			filters = append(filters, "("+strings.Join(stConds, " OR ")+")")
 		}
@@ -404,7 +404,7 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 			catFilters = append(catFilters, fmt.Sprintf("category_ids = %d", cid))
 		}
 		if req.Category != "" {
-			cleanCat := strings.ReplaceAll(req.Category, "\"", "\\\"")
+			cleanCat := escapeMeiliFilterValue(req.Category)
 			catFilters = append(catFilters, fmt.Sprintf("category_names = \"%s\"", cleanCat))
 		}
 		if len(catFilters) > 0 {
@@ -417,7 +417,7 @@ func (r *exploreRepository) SearchBusinesses(req SearchRequest) ([]MeiliBusiness
 			tagFilters = append(tagFilters, fmt.Sprintf("tag_ids = %d", tid))
 		}
 		for _, tname := range req.TagNames {
-			cleanTag := strings.ReplaceAll(tname, "\"", "\\\"")
+			cleanTag := escapeMeiliFilterValue(tname)
 			tagFilters = append(tagFilters, fmt.Sprintf("tag_names = \"%s\"", cleanTag))
 		}
 		if len(tagFilters) > 0 {
@@ -564,7 +564,7 @@ func (r *exploreRepository) SearchProducts(req SearchRequest) ([]MeiliProductDoc
 		if len(req.StockTypes) > 0 {
 			var stConds []string
 			for _, st := range req.StockTypes {
-				stConds = append(stConds, fmt.Sprintf(`stock_type = "%s"`, strings.TrimSpace(st)))
+				stConds = append(stConds, fmt.Sprintf(`stock_type = "%s"`, escapeMeiliFilterValue(st)))
 			}
 			filters = append(filters, "("+strings.Join(stConds, " OR ")+")")
 		}
@@ -575,7 +575,7 @@ func (r *exploreRepository) SearchProducts(req SearchRequest) ([]MeiliProductDoc
 			catFilters = append(catFilters, fmt.Sprintf("category_ids = %d", cid))
 		}
 		if req.Category != "" {
-			cleanCat := strings.ReplaceAll(req.Category, "\"", "\\\"")
+			cleanCat := escapeMeiliFilterValue(req.Category)
 			catFilters = append(catFilters, fmt.Sprintf("category_names = \"%s\"", cleanCat))
 		}
 		if len(catFilters) > 0 {
@@ -737,7 +737,7 @@ func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]M
 	}
 
 	var businesses []models.Business
-	if err := query.Find(&businesses).Error; err != nil {
+	if err := query.Limit(500).Find(&businesses).Error; err != nil {
 		return nil, SearchSummary{}, err
 	}
 
@@ -780,15 +780,20 @@ func (r *exploreRepository) searchBusinessesFromPostgres(req SearchRequest) ([]M
 	}
 	paginated := rankedDocs[start:end]
 
-	for _, doc := range paginated {
-		go myMeili.SyncBusiness(r.db, doc.ID)
-	}
-
 	return paginated, SearchSummary{
 		WithinRadiusCount:  withinCount,
 		OutsideRadiusCount: outsideCount,
 		TotalHits:          totalHits,
 	}, nil
+}
+
+func escapeMeiliFilterValue(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	return s
 }
 
 func (r *exploreRepository) searchProductsFromPostgres(req SearchRequest) (resultDocs []MeiliProductDocument, resultSummary SearchSummary, errResult error) {

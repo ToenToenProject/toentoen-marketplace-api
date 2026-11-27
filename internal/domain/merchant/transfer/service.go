@@ -77,14 +77,43 @@ func (s *businessTransferService) CheckTarget(ownerID, businessID, targetIdentif
 		targetName = target.Username
 	}
 
+	var maskedEmail *string
+	if target.Email != nil && *target.Email != "" {
+		e := maskEmail(*target.Email)
+		maskedEmail = &e
+	}
+	var maskedPhone *string
+	if target.PhoneNumber != nil && *target.PhoneNumber != "" {
+		p := maskPhone(*target.PhoneNumber)
+		maskedPhone = &p
+	}
+
 	return &models.TransferTargetPreviewResponse{
-		TargetAccountID: target.AccountID,
-		TargetName:      targetName,
-		TargetEmail:     target.Email,
-		TargetPhone:     target.PhoneNumber,
-		TargetAvatar:    target.ProfilePictureUrl,
-		TargetRole:      target.Role,
+		TargetName:   targetName,
+		TargetEmail:  maskedEmail,
+		TargetPhone:  maskedPhone,
+		TargetAvatar: target.ProfilePictureUrl,
+		TargetRole:   target.Role,
 	}, nil
+}
+
+func maskEmail(email string) string {
+	parts := strings.SplitN(email, "@", 2)
+	if len(parts) != 2 || len(parts[0]) == 0 {
+		return "***"
+	}
+	local := parts[0]
+	if len(local) <= 2 {
+		return local[:1] + "***@" + parts[1]
+	}
+	return local[:2] + "***@" + parts[1]
+}
+
+func maskPhone(phone string) string {
+	if len(phone) <= 4 {
+		return "****"
+	}
+	return strings.Repeat("*", len(phone)-4) + phone[len(phone)-4:]
 }
 
 func (s *businessTransferService) InitiateTransfer(ownerID, businessID string, input models.InitiateTransferInput) (map[string]interface{}, error) {

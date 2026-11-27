@@ -80,7 +80,7 @@ func InitConfig() {
 		DBConnMaxIdleTimeMinutes: getEnvAsInt("DB_CONN_MAX_IDLE_TIME_MINUTES", 5),
 
 		JWTSecret:      getEnvMust("JWT_SECRET"),
-		InternalSecret: getEnv("INTERNAL_API_SECRET", getEnvMust("JWT_SECRET")),
+		InternalSecret: getEnv("INTERNAL_API_SECRET", ""),
 
 		DataEncryptionKey: getEnv("DATA_ENCRYPTION_KEY", "toentoen-secret-key-32bytes-long!"),
 		BlindIndexKey:     getEnv("BLIND_INDEX_KEY", "toentoen-blind-index-key-32bytes!"),
@@ -104,6 +104,20 @@ func InitConfig() {
 		WhatsAppToken:         getEnv("WHATSAPP_TOKEN", ""),
 		WhatsAppPhoneNumberID: getEnv("WHATSAPP_PHONE_NUMBER_ID", ""),
 		WhatsAppVerifyToken:   getEnv("WHATSAPP_VERIFY_TOKEN", ""),
+	}
+
+	if Envs.AppEnv == "production" {
+		if Envs.InternalSecret == "" || Envs.InternalSecret == Envs.JWTSecret {
+			log.Fatal("FATAL: INTERNAL_API_SECRET wajib diisi di production dan tidak boleh sama dengan JWT_SECRET")
+		}
+		if Envs.DataEncryptionKey == "" || Envs.DataEncryptionKey == "toentoen-secret-key-32bytes-long!" {
+			log.Fatal("FATAL: DATA_ENCRYPTION_KEY wajib diisi dengan secret produksi")
+		}
+		if Envs.BlindIndexKey == "" || Envs.BlindIndexKey == "toentoen-blind-index-key-32bytes!" {
+			log.Fatal("FATAL: BLIND_INDEX_KEY wajib diisi dengan secret produksi")
+		}
+	} else if Envs.InternalSecret == "" {
+		Envs.InternalSecret = Envs.JWTSecret
 	}
 }
 

@@ -2,6 +2,7 @@ package signal
 
 import (
 	"strconv"
+	"strings"
 	"toentoen-backend/internal/constants"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/utils"
@@ -186,6 +187,9 @@ func (h *MerchantHandler) GetProductSuggestions(c *fiber.Ctx) error {
 	businessID := c.Query("business_id")
 	if businessID == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Query parameter 'business_id' wajib diisi", nil)
+	}
+	if _, errExplore := h.service.ExploreSignals(accID, businessID, 1, 1); errExplore != nil && strings.Contains(errExplore.Error(), "akses ditolak") {
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Anda tidak memiliki akses ke bisnis ini", nil)
 	}
 
 	products, errSvc := h.service.GetProductSuggestions(businessID, signalID)

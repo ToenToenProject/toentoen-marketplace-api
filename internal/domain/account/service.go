@@ -254,8 +254,8 @@ func isAccountDataComplete(account *models.Account) string {
 		return account.AccountStatus
 	}
 
-	// When phone verification is unavailable, active verification status requires verified email.
-	if account.Email != nil && strings.TrimSpace(*account.Email) != "" {
+	// Active status requires a verified email address.
+	if account.Email != nil && strings.TrimSpace(*account.Email) != "" && account.EmailVerifiedAt != nil {
 		return "active"
 	}
 
@@ -377,16 +377,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 		}
 		account.Username = cleanUsername
 	}
-	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
-		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, errors.New("Nomor telepon sudah digunakan")
-		}
-		account.PhoneNumber = input.PhoneNumber
-	}
+	// PhoneNumber must be changed exclusively via /account/phone/change/request + /verify.
 	if input.Gender != nil {
 		cleanGender := strings.TrimSpace(*input.Gender)
 		if cleanGender == "" {
@@ -612,16 +603,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 		}
 		account.Username = cleanUsername
 	}
-	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
-		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, errors.New("Nomor telepon sudah digunakan")
-		}
-		account.PhoneNumber = input.PhoneNumber
-	}
+	// PhoneNumber must be changed exclusively via /account/phone/change/request + /verify.
 	if input.Title != nil {
 		title := strings.ToLower(*input.Title)
 		var gender string
@@ -702,16 +684,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 		}
 		account.Username = cleanUsername
 	}
-	if input.PhoneNumber != nil && *input.PhoneNumber != "" {
-		exists, err := s.repo.CheckPhoneNumberExists(*input.PhoneNumber, accountID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, errors.New("Nomor telepon sudah digunakan")
-		}
-		account.PhoneNumber = input.PhoneNumber
-	}
+	// PhoneNumber must be changed exclusively via /account/phone/change/request + /verify.
 	if input.Title != nil {
 		title := strings.ToLower(*input.Title)
 		var gender string

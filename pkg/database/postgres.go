@@ -31,9 +31,14 @@ func ConnectDB() {
 		sslMode,
 	)
 
+	gormLogLevel := logger.Warn
+	if config.Envs == nil || config.Envs.AppEnv != "production" {
+		gormLogLevel = logger.Info
+	}
+
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger:                                   logger.Default.LogMode(logger.Info),
+		Logger:                                   logger.Default.LogMode(gormLogLevel),
 		DisableForeignKeyConstraintWhenMigrating: true,
 		IgnoreRelationshipsWhenMigrating:         true,
 	})

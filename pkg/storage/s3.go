@@ -12,6 +12,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/google/uuid"
 )
 
 // S3Client is the global AWS S3 client instance.
@@ -43,14 +44,36 @@ type PresignUploadResult struct {
 	Key          string `json:"key"`           // Path/key di dalam bucket S3
 }
 
+func extensionFromContentType(contentType string) string {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "image/gif":
+		return ".gif"
+	case "application/pdf":
+		return ".pdf"
+	case "video/mp4":
+		return ".mp4"
+	case "video/webm":
+		return ".webm"
+	case "video/quicktime":
+		return ".mov"
+	default:
+		return ""
+	}
+}
+
 // GeneratePresignedUploadURL generates a temporary presigned PUT URL for direct client-to-S3 uploads.
 func GeneratePresignedUploadURL(folder, filename, contentType string, contentLength *int64) (*PresignUploadResult, error) {
 	folder = strings.Trim(folder, "/")
 
-	// Build unique S3 key with timestamp prefix to prevent object collisions.
-	timestamp := time.Now().UnixNano()
-	safeFilename := strings.ReplaceAll(filename, " ", "-")
-	key := fmt.Sprintf("%s/%d-%s", folder, timestamp, safeFilename)
+	// Generate server-side UUID filename with extension derived strictly from validated MIME type.
+	ext := extensionFromContentType(contentType)
+	key := fmt.Sprintf("%s/%d-%s%s", folder, time.Now().UnixNano(), uuid.NewString(), ext)
 
 	bucket := config.Envs.AWSRegion
 	bucketName := config.Envs.AWSS3Bucket

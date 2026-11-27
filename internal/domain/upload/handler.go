@@ -127,6 +127,14 @@ func (h *Handler) GeneratePresignURL(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'folder' wajib diisi", nil)
 	}
 
+	role, _ := c.Locals("role").(string)
+	switch folder {
+	case "businesses/logos", "businesses/images", "products/images", "products/previews", "products/videos", "posts/images", "posts/videos", "accounts/kyc", "kyc/documents":
+		if role != "owner" && role != "business_admin" && role != "platform_admin" && role != "super_admin" {
+			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Anda tidak memiliki izin untuk mengunggah ke folder ini", nil)
+		}
+	}
+
 	filename := strings.TrimSpace(req.Filename)
 	if filename == "" {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'filename' wajib diisi", nil)

@@ -2,6 +2,7 @@ package account
 
 import (
 	"testing"
+	"time"
 	"toentoen-backend/internal/domain/shared/models"
 )
 
@@ -38,16 +39,28 @@ func TestIsAccountDataComplete(t *testing.T) {
 		}
 	})
 
-	t.Run("account with valid email returns active even without phone and ktp", func(t *testing.T) {
+	t.Run("account with verified email returns active even without phone and ktp", func(t *testing.T) {
+		now := time.Now()
 		account := &models.Account{
-			Role:        "owner",
-			Email:       &email,
-			PhoneNumber: nil,
-			Owner:       &models.Owner{KtpNumber: nil, KtpPhotoUrl: nil},
+			Role:            "owner",
+			Email:           &email,
+			EmailVerifiedAt: &now,
+			PhoneNumber:     nil,
+			Owner:           &models.Owner{KtpNumber: nil, KtpPhotoUrl: nil},
 		}
 		status := isAccountDataComplete(account)
 		if status != "active" {
 			t.Errorf("expected 'active', got '%s'", status)
+		}
+	})
+
+	t.Run("account with unverified email returns inactive", func(t *testing.T) {
+		account := &models.Account{
+			Role:  "owner",
+			Email: &email,
+		}
+		if status := isAccountDataComplete(account); status != "inactive" {
+			t.Errorf("expected 'inactive' for unverified email, got '%s'", status)
 		}
 	})
 

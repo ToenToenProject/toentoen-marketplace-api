@@ -43,10 +43,12 @@ func getCandidateKeys() [][]byte {
 		keys = append(keys, norm)
 	}
 
-	// Local development fallback key.
-	defaultNorm := make([]byte, 32)
-	copy(defaultNorm, []byte(defaultDevKey))
-	keys = append(keys, defaultNorm)
+	// Local development fallback key (disabled in production).
+	if config.Envs == nil || config.Envs.AppEnv != "production" {
+		defaultNorm := make([]byte, 32)
+		copy(defaultNorm, []byte(defaultDevKey))
+		keys = append(keys, defaultNorm)
+	}
 
 	return keys
 }

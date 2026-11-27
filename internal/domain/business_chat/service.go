@@ -71,6 +71,12 @@ func (s *businessChatService) InitiateChat(customerID string, businessID string,
 			lastMsg, _ = s.SendMessage(existingConv.ConversationID, customerID, sendInput)
 		}
 		if input.SignalID != nil && *input.SignalID != "" {
+			if database.DB != nil {
+				var sigCustomerID string
+				if errSig := database.DB.Table("signals").Select("customer_id").Where("signal_id = ?", *input.SignalID).Scan(&sigCustomerID).Error; errSig != nil || sigCustomerID != customerID {
+					return nil, nil, false, errors.New("signal_id tidak valid atau bukan milik Anda")
+				}
+			}
 			_ = s.repo.UpdateConversationSignalID(existingConv.ConversationID, *input.SignalID)
 			existingConv.SignalID = input.SignalID
 		}

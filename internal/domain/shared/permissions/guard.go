@@ -10,13 +10,25 @@ import (
 // Owners and supervisors receive full access (all true); staff permissions are loaded from assignment JSONB.
 // Unassigned accounts default to no permissions (all false).
 func GetAdminPermissions(db *gorm.DB, accountID, businessID string) models.AdminPermissions {
+	if db == nil || accountID == "" || businessID == "" {
+		return models.AdminPermissions{}
+	}
+
+	// Verify actual business ownership first before granting full owner permissions.
+	var ownerCount int64
+	if err := db.Table("businesses").
+		Where("business_id = ? AND account_id = ? AND status != 'deleted'", businessID, accountID).
+		Count(&ownerCount).Error; err == nil && ownerCount > 0 {
+		return models.AdminPermissions{}.AllTrue()
+	}
+
 	var assignment models.BusinessAdminAssignment
 	err := db.Select("role, permissions").
 		Where("admin_id = ? AND business_id = ? AND (status = 'active' OR status = 'scheduled_for_deletion')", accountID, businessID).
 		First(&assignment).Error
 	if err != nil {
-		// Unassigned account: assume owner role with full permissions.
-		return models.AdminPermissions{}.AllTrue()
+		// Fail closed: unassigned accounts or DB errors receive no permissions.
+		return models.AdminPermissions{}
 	}
 	if assignment.Permissions != nil && len(assignment.Permissions) > 0 {
 		return assignment.Permissions

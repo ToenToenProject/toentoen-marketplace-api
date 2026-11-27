@@ -18,7 +18,6 @@ import (
 	"toentoen-backend/pkg/database"
 	"toentoen-backend/pkg/utils"
 
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -1370,7 +1369,7 @@ func (s *authService) RequestEmailChange(accountID string, input models.RequestE
 	}
 
 	otp := utils.GenerateNumericOTP(6)
-	redisKey := scopedKey("change_email_otp", group, newEmailClean)
+	redisKey := fmt.Sprintf("change_email_otp:%s:%s", accountID, newEmailClean)
 
 	if err := config.RDB.Set(config.Ctx, redisKey, otp, 5*time.Minute).Err(); err != nil {
 		return errors.New("Gagal memproses kode verifikasi")
@@ -1406,32 +1405,39 @@ func (s *authService) VerifyEmailChange(accountID string, input models.VerifyEma
 		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
 	}
 
+	if config.RDB == nil {
+		return errors.New("Layanan verifikasi sedang tidak tersedia")
+	}
 	group := models.RoleGroupOf(account.Role)
-	redisKey := scopedKey("change_email_otp", group, newEmailClean)
-	attemptKey := scopedKey("change_email_attempts", group, newEmailClean)
+	redisKey := fmt.Sprintf("change_email_otp:%s:%s", accountID, newEmailClean)
+	attemptKey := fmt.Sprintf("change_email_attempts:%s:%s", accountID, newEmailClean)
 
 	storedOTP, err := config.RDB.Get(config.Ctx, redisKey).Result()
-	if err == redis.Nil || storedOTP != input.OTP {
-		legacyKey := fmt.Sprintf("change_email_otp:%s", newEmailClean)
-		legacyOTP, legErr := config.RDB.Get(config.Ctx, legacyKey).Result()
-		if legErr != nil || legacyOTP != input.OTP {
-			attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
-			if attempts == 1 {
-				config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
-			}
-			if attempts >= 5 {
-				config.RDB.Del(config.Ctx, redisKey)
-				config.RDB.Del(config.Ctx, attemptKey)
-				return errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
-			}
-			return errors.New("OTP tidak valid atau sudah kadaluarsa")
+	if err != nil || subtle.ConstantTimeCompare([]byte(storedOTP), []byte(strings.TrimSpace(input.OTP))) != 1 {
+		attempts, _ := config.RDB.Incr(config.Ctx, attemptKey).Result()
+		if attempts == 1 {
+			config.RDB.Expire(config.Ctx, attemptKey, 5*time.Minute)
 		}
-		config.RDB.Del(config.Ctx, legacyKey)
+		if attempts >= 5 {
+			config.RDB.Del(config.Ctx, redisKey, attemptKey)
+			return errors.New("Terlalu banyak percobaan kode OTP yang salah. Silakan minta kode OTP baru.")
+		}
+		return errors.New("OTP tidak valid atau sudah kadaluarsa")
+	}
+	config.RDB.Del(config.Ctx, redisKey, attemptKey)
+
+	if exists, err := s.repo.FindByIdentifier(newEmailClean, group); err == nil && exists != nil && exists.AccountID != accountID {
+		return errors.New("Email baru sudah terdaftar pada akun lain")
 	}
 
 	if err := s.repo.UpdateEmail(accountID, newEmailClean); err != nil {
 		return errors.New("Gagal memperbarui email")
 	}
+	now := time.Now()
+	account.Email = &newEmailClean
+	account.EmailVerifiedAt = &now
+	account.LastLoginAt = &now
+	_ = s.repo.Update(account)
 
 	config.RDB.Del(config.Ctx, redisKey)
 	config.RDB.Del(config.Ctx, attemptKey)

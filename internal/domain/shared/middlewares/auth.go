@@ -62,29 +62,39 @@ func RequireAuth(c *fiber.Ctx) error {
 	}
 
 	accountID, ok := claims["account_id"].(string)
-	if ok {
-		if config.RDB != nil {
-			if revoked, _ := config.RDB.Exists(config.Ctx, "revoked_account:"+accountID).Result(); revoked > 0 {
-				return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi Anda telah dicabut atau akun sedang diblokir", nil)
-			}
-		}
-
-		var account models.Account
-		if err := database.DB.Select("last_login_at, email_verified_at, account_status").Where("account_id = ?", accountID).First(&account).Error; err != nil {
-			return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akun tidak ditemukan atau telah dihapus, silakan login kembali", nil)
-		}
-		if account.AccountStatus == "banned" || account.AccountStatus == "suspended" {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Akun Anda sedang ditangguhkan atau diblokir", nil)
-		}
-		if account.LastLoginAt != nil {
-			if iatFloat, ok := claims["iat"].(float64); ok {
-				if int64(iatFloat) < account.LastLoginAt.Unix() {
-					return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi Anda sudah tidak valid, silakan login kembali", nil)
-				}
-			}
-		}
-		c.Locals("email_verified", account.EmailVerifiedAt != nil)
+	if !ok || strings.TrimSpace(accountID) == "" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi tidak valid: identitas akun tidak ditemukan", nil)
 	}
+
+	if config.RDB != nil {
+		if jti, ok := claims["jti"].(string); ok && jti != "" {
+			if revoked, _ := config.RDB.Exists(config.Ctx, "revoked_jti:"+jti).Result(); revoked > 0 {
+				return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi Anda telah dicabut, silakan login kembali", nil)
+			}
+		}
+		if revoked, _ := config.RDB.Exists(config.Ctx, "revoked_account:"+accountID).Result(); revoked > 0 {
+			return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi Anda telah dicabut atau akun sedang diblokir", nil)
+		}
+	}
+
+	var account models.Account
+	if err := database.DB.Select("last_login_at, email_verified_at, account_status").Where("account_id = ?", accountID).First(&account).Error; err != nil {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akun tidak ditemukan atau telah dihapus, silakan login kembali", nil)
+	}
+	if account.AccountStatus == "banned" || account.AccountStatus == "suspended" {
+		return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Akun Anda sedang ditangguhkan atau diblokir", nil)
+	}
+	if account.AccountStatus != "active" && account.AccountStatus != "inactive" {
+		return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Akun Anda sudah tidak aktif", nil)
+	}
+	if account.LastLoginAt != nil {
+		if iatFloat, ok := claims["iat"].(float64); ok {
+			if int64(iatFloat) < account.LastLoginAt.Unix() {
+				return utils.SendResponse(c, fiber.StatusUnauthorized, constants.FailedAuth, "Sesi Anda sudah tidak valid, silakan login kembali", nil)
+			}
+		}
+	}
+	c.Locals("email_verified", account.EmailVerifiedAt != nil)
 
 	c.Locals("account_id", claims["account_id"])
 	c.Locals("role", claims["role"])
@@ -124,17 +134,36 @@ func OptionalAuth(c *fiber.Ctx) error {
 	if err == nil && token.Valid {
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
 			accountID, _ := claims["account_id"].(string)
-			isValid := false
+			isValid := accountID != ""
 
-			var account models.Account
-			if err := database.DB.Select("last_login_at").Where("account_id = ?", accountID).First(&account).Error; err == nil {
-				isValid = true
-				if account.LastLoginAt != nil {
-					if iatFloat, ok := claims["iat"].(float64); ok {
-						if int64(iatFloat) < account.LastLoginAt.Unix() {
-							isValid = false
+			if isValid && config.RDB != nil {
+				if jti, ok := claims["jti"].(string); ok && jti != "" {
+					if revoked, _ := config.RDB.Exists(config.Ctx, "revoked_jti:"+jti).Result(); revoked > 0 {
+						isValid = false
+					}
+				}
+				if isValid {
+					if revoked, _ := config.RDB.Exists(config.Ctx, "revoked_account:"+accountID).Result(); revoked > 0 {
+						isValid = false
+					}
+				}
+			}
+
+			if isValid {
+				var account models.Account
+				if err := database.DB.Select("last_login_at, account_status").Where("account_id = ?", accountID).First(&account).Error; err == nil {
+					if account.AccountStatus == "banned" || account.AccountStatus == "suspended" || (account.AccountStatus != "active" && account.AccountStatus != "inactive") {
+						isValid = false
+					}
+					if isValid && account.LastLoginAt != nil {
+						if iatFloat, ok := claims["iat"].(float64); ok {
+							if int64(iatFloat) < account.LastLoginAt.Unix() {
+								isValid = false
+							}
 						}
 					}
+				} else {
+					isValid = false
 				}
 			}
 

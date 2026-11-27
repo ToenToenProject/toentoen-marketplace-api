@@ -458,8 +458,8 @@ func (s *signalService) GetSignalDetail(signalID, accountID, role string) (*mode
 		return nil, fmt.Errorf("signal dengan ID %s tidak ditemukan", signalID)
 	}
 
-	// Customers may only view their own signals.
-	if role == "customer" && signal.CustomerID != accountID {
+	// Fail closed: only the signal owner may view & decrypt signal details and conversations.
+	if signal.CustomerID != accountID {
 		return nil, errors.New("anda tidak memiliki akses ke signal ini")
 	}
 
@@ -617,6 +617,20 @@ func (s *signalService) ExploreSignals(accountID, businessID string, lat, lng fl
 
 	if businessID != "" {
 		activeBusiness, err = s.businessRepo.FindBusinessByID(businessID)
+		if err == nil && activeBusiness != nil && activeBusiness.AccountID != accountID {
+			authorized := false
+			if staffIDs, errStaff := s.businessRepo.GetBusinessStaffAccountIDs(businessID); errStaff == nil {
+				for _, sid := range staffIDs {
+					if sid == accountID {
+						authorized = true
+						break
+					}
+				}
+			}
+			if !authorized {
+				return nil, fmt.Errorf("bisnis tidak ditemukan atau akses ditolak")
+			}
+		}
 	} else {
 		businesses, errRepo := s.businessRepo.FindBusinessesByOwnerID(accountID)
 		if errRepo == nil && len(businesses) > 0 {

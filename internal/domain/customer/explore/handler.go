@@ -181,8 +181,9 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 	}
 	if rawStockTypes != "" {
 		for _, st := range strings.Split(rawStockTypes, ",") {
-			trimmed := strings.TrimSpace(st)
-			if trimmed != "" {
+			trimmed := strings.ToLower(strings.TrimSpace(st))
+			switch trimmed {
+			case "in_stock", "pre_order", "limited", "out_of_stock":
 				stockTypes = append(stockTypes, trimmed)
 			}
 		}
@@ -237,9 +238,19 @@ func (h *ExploreHandler) SearchBusinesses(c *fiber.Ctx) error {
 		req.Radius = radius * 1000 // Convert km to meters
 	}
 	if page, err := strconv.ParseInt(c.Query("page", "1"), 10, 64); err == nil {
+		if page < 1 {
+			page = 1
+		} else if page > 100 {
+			page = 100
+		}
 		req.Offset = page
 	}
 	if limit, err := strconv.ParseInt(c.Query("limit", "10"), 10, 64); err == nil {
+		if limit < 1 {
+			limit = 1
+		} else if limit > 50 {
+			limit = 50
+		}
 		req.Limit = limit
 	}
 
