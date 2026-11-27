@@ -125,6 +125,8 @@ func (s *signalService) CreateSignal(customerID string, input models.CreateSigna
 	radiusKm := input.RadiusKm
 	if radiusKm <= 0 {
 		radiusKm = 5 // default 5 km
+	} else if radiusKm > 50 {
+		radiusKm = 50 // max 50 km
 	}
 
 	expiresInHours := input.ExpiresInHours
@@ -317,7 +319,11 @@ func (s *signalService) UpdateSignal(customerID, signalID string, input models.U
 	}
 
 	if input.RadiusKm != nil && *input.RadiusKm > 0 {
-		signal.RadiusKm = *input.RadiusKm
+		r := *input.RadiusKm
+		if r > 50 {
+			r = 50
+		}
+		signal.RadiusKm = r
 	}
 
 	if input.IsUrgent != nil {
@@ -689,6 +695,12 @@ func (s *signalService) GetMerchantSignalDetail(signalID, merchantAccountID stri
 		}
 	}
 
+	if !hasReplied {
+		// Fuzz customer coordinates (~1.1 km) before a merchant has an active conversation.
+		signal.Latitude = float64(int64(signal.Latitude*100)) / 100.0
+		signal.Longitude = float64(int64(signal.Longitude*100)) / 100.0
+	}
+
 	return &models.MerchantSignalDetailResponse{
 		Signal:           signal,
 		HasReplied:       hasReplied,
@@ -894,6 +906,8 @@ func (s *signalService) GetMessages(accountID, role, conversationID string, page
 	}
 	if limit <= 0 {
 		limit = 50
+	} else if limit > 100 {
+		limit = 100
 	}
 
 	// Mark read on initial page read only to prevent false-positives during history scroll.

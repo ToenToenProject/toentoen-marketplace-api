@@ -112,7 +112,37 @@ var knownValidDomains = map[string]bool{
 	"toentoen.com":   true,
 }
 
-var domainMXCache sync.Map
+type mxCacheEntry struct {
+	hasMX     bool
+	expiresAt time.Time
+}
+
+var (
+	domainMXMu    sync.RWMutex
+	domainMXCache = make(map[string]mxCacheEntry)
+)
+
+const (
+	domainMXCacheMax = 2048
+	domainMXCacheTTL = 1 * time.Hour
+)
+
+func setDomainMXCache(domain string, hasMX bool) {
+	domainMXMu.Lock()
+	defer domainMXMu.Unlock()
+	if len(domainMXCache) >= domainMXCacheMax {
+		now := time.Now()
+		for k, v := range domainMXCache {
+			if now.After(v.expiresAt) {
+				delete(domainMXCache, k)
+			}
+		}
+		if len(domainMXCache) >= domainMXCacheMax {
+			domainMXCache = make(map[string]mxCacheEntry)
+		}
+	}
+	domainMXCache[domain] = mxCacheEntry{hasMX: hasMX, expiresAt: time.Now().Add(domainMXCacheTTL)}
+}
 
 func checkDomainMX(domain string) bool {
 	domain = strings.ToLower(strings.TrimSpace(domain))
@@ -126,11 +156,12 @@ func checkDomainMX(domain string) bool {
 		return false
 	}
 
-	if val, ok := domainMXCache.Load(domain); ok {
-		if hasMX, ok := val.(bool); ok {
-			return hasMX
-		}
+	domainMXMu.RLock()
+	if entry, ok := domainMXCache[domain]; ok && time.Now().Before(entry.expiresAt) {
+		domainMXMu.RUnlock()
+		return entry.hasMX
 	}
+	domainMXMu.RUnlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
 	defer cancel()
@@ -139,11 +170,11 @@ func checkDomainMX(domain string) bool {
 	if err != nil {
 		var dnsErr *net.DNSError
 		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
-			domainMXCache.Store(domain, false)
+			setDomainMXCache(domain, false)
 			return false
 		}
 		if strings.Contains(strings.ToLower(err.Error()), "no such host") {
-			domainMXCache.Store(domain, false)
+			setDomainMXCache(domain, false)
 			return false
 		}
 		log.Printf("⚠️ DNS MX lookup gagal/timeout untuk domain %s: %v", domain, err)
@@ -151,7 +182,7 @@ func checkDomainMX(domain string) bool {
 	}
 
 	hasMX := len(mxs) > 0
-	domainMXCache.Store(domain, hasMX)
+	setDomainMXCache(domain, hasMX)
 	return hasMX
 }
 
@@ -1038,11 +1069,6 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 		return errors.New("Terjadi kesalahan sistem")
 	}
 
-	// Account exists but role differs from target portal.
-	if targetRole != "" && account.Role != targetRole {
-		return NewRoleMismatchError(account.Role, targetRole)
-	}
-
 	switch account.AccountStatus {
 	case "suspended":
 		return errors.New("Akun anda sedang ditangguhkan, silakan hubungi support untuk informasi lebih lanjut")
@@ -1060,6 +1086,11 @@ func (s *authService) Login(input models.LoginUnifiedInput) error {
 	}
 	if !passMatch {
 		return errors.New("Email atau password salah")
+	}
+
+	// Verify password before revealing role mismatch to prevent unauthenticated role enumeration.
+	if targetRole != "" && account.Role != targetRole {
+		return NewRoleMismatchError(account.Role, targetRole)
 	}
 
 	group := models.RoleGroupOf(account.Role)

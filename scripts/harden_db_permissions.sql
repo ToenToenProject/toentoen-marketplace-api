@@ -22,8 +22,8 @@ REVOKE CONNECT ON DATABASE toentoen_db FROM PUBLIC;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'toentoen_app') THEN
-        -- Ganti password di bawah dengan password acak yang kuat
-        CREATE ROLE toentoen_app WITH LOGIN PASSWORD 'ToenToenAppSecurePass2026!';
+        -- Jalankan dengan: psql -v app_db_password="'<STRONG_PASSWORD>'" -f scripts/harden_db_permissions.sql
+        CREATE ROLE toentoen_app WITH LOGIN PASSWORD :'app_db_password';
         RAISE NOTICE 'Role toentoen_app berhasil dibuat.';
     ELSE
         RAISE NOTICE 'Role toentoen_app sudah ada.';

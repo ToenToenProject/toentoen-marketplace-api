@@ -3,6 +3,7 @@ package realtime
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"toentoen-backend/internal/config"
@@ -28,6 +29,21 @@ func NewWSHandler(hub *Hub) *WSHandler {
 // UpgradeCheck validates WebSocket upgrade headers before dispatching to connection handler.
 func UpgradeCheck(c *fiber.Ctx) error {
 	if websocket.IsWebSocketUpgrade(c) {
+		if allowedOrigins := strings.TrimSpace(os.Getenv("FRONTEND_URL")); allowedOrigins != "" && allowedOrigins != "*" {
+			origin := strings.TrimSpace(c.Get("Origin"))
+			if origin != "" {
+				allowed := false
+				for _, o := range strings.Split(allowedOrigins, ",") {
+					if strings.EqualFold(strings.TrimSpace(o), origin) {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, "Origin WebSocket tidak diizinkan", nil)
+				}
+			}
+		}
 		// Authenticate WebSocket connection via JWT query parameter.
 		tokenString := c.Query("token")
 		if tokenString == "" {

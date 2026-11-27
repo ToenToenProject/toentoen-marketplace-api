@@ -82,6 +82,8 @@ func (h *Handler) GetAllReports(c *fiber.Ctx) error {
 	}
 	if query.Limit < 1 {
 		query.Limit = 20
+	} else if query.Limit > 100 {
+		query.Limit = 100
 	}
 
 	reports, total, err := h.service.GetReports(query)

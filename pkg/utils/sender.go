@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -518,7 +519,9 @@ func SendWAOTP(phoneNumber string, otp string, customMessage ...string) error {
 	}
 
 	// Development fallback when WhatsApp gateway token is unset.
-	log.Printf("[OTP-WA-DEV] Kode OTP verifikasi untuk nomor %s adalah: %s", phoneNumber, otp)
+	if os.Getenv("APP_ENV") != "production" {
+		log.Printf("[OTP-WA-DEV] Kode OTP verifikasi untuk nomor %s adalah: %s", phoneNumber, otp)
+	}
 	return nil
 }
 
@@ -620,7 +623,7 @@ func SendFeedbackEmail(fromUserEmail, userName, role, subject, message string) e
 		</div>
 	</div>
 </body>
-</html>`, userName, fromUserEmail, fromUserEmail, role, subject, time.Now().Format("02 Jan 2006 15:04 WIB"), message, fromUserEmail, fromUserEmail)
+</html>`, html.EscapeString(userName), html.EscapeString(fromUserEmail), html.EscapeString(fromUserEmail), html.EscapeString(role), html.EscapeString(subject), time.Now().Format("02 Jan 2006 15:04 WIB"), html.EscapeString(message), html.EscapeString(fromUserEmail), html.EscapeString(fromUserEmail))
 	mailer.AddAlternative("text/html", htmlBody)
 
 	dialer := gomail.NewDialer(smtpHost, smtpPort, smtpEmail, smtpPassword)

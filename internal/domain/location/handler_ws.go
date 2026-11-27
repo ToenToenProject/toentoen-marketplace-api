@@ -86,8 +86,13 @@ func (h *WSLocationHandler) handleSubscribeArea(client *realtime.Client, rawData
 		return
 	}
 
+	if req.Lat < -90 || req.Lat > 90 || req.Lng < -180 || req.Lng > 180 {
+		return
+	}
 	if req.RadiusKm <= 0 {
 		req.RadiusKm = 5
+	} else if req.RadiusKm > 50 {
+		req.RadiusKm = 50
 	}
 
 	client.SetSubscriptionArea(req.Lat, req.Lng, req.RadiusKm)
@@ -134,8 +139,13 @@ func (h *WSLocationHandler) handleGetNearby(client *realtime.Client, rawData jso
 		return
 	}
 
+	if req.Lat < -90 || req.Lat > 90 || req.Lng < -180 || req.Lng > 180 {
+		return
+	}
 	if req.RadiusKm <= 0 {
 		req.RadiusKm = 5
+	} else if req.RadiusKm > 50 {
+		req.RadiusKm = 50
 	}
 
 	merchants, err := h.service.GetNearbyMerchants(req.Lat, req.Lng, req.RadiusKm, 50)

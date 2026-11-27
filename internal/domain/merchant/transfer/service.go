@@ -216,8 +216,13 @@ func (s *businessTransferService) VerifyOTPAndCreateTransfer(ownerID, businessID
 		return nil, errors.New("Kode OTP tidak valid atau sudah kadaluarsa")
 	}
 
-	config.RDB.Del(config.Ctx, otpKey, attemptsKey)
-	config.RDB.Del(config.Ctx, fmt.Sprintf("biz_transfer_target:%s:%s", businessID, ownerID))
+	targetKey := fmt.Sprintf("biz_transfer_target:%s:%s", businessID, ownerID)
+	storedTarget, errTarget := config.RDB.Get(config.Ctx, targetKey).Result()
+	if errTarget != nil || !strings.EqualFold(strings.TrimSpace(storedTarget), targetIdentifier) {
+		return nil, errors.New("Target transfer tidak cocok dengan sesi OTP yang dikirim")
+	}
+
+	config.RDB.Del(config.Ctx, otpKey, attemptsKey, targetKey)
 
 	target, err := s.repo.FindAccountByIdentifier(targetIdentifier)
 	if err != nil || target == nil {

@@ -6,8 +6,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$EC2_HOST = "3.105.120.199"
-$EC2_KEY = "D:\ToenToen\toentoen-key-ec2.pem"
+$EC2_HOST = $env:TOENTOEN_EC2_HOST
+$EC2_KEY = $env:TOENTOEN_EC2_KEY
+if ([string]::IsNullOrWhiteSpace($EC2_HOST) -or [string]::IsNullOrWhiteSpace($EC2_KEY)) {
+    Write-Error "Set environment variables TOENTOEN_EC2_HOST dan TOENTOEN_EC2_KEY sebelum menjalankan deploy."
+}
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  ToenToen API Deployment ke: $Target" -ForegroundColor Yellow

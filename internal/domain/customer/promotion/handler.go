@@ -32,6 +32,9 @@ func (h *CustomerPromotionHandler) RecordEvents(c *fiber.Ctx) error {
 	if err := c.BodyParser(&input); err != nil || len(input.Events) == 0 {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Payload events tidak valid atau kosong", nil)
 	}
+	if len(input.Events) > 50 {
+		input.Events = input.Events[:50]
+	}
 
 	var accountIDPtr *string
 	if accID, ok := c.Locals("account_id").(string); ok && strings.TrimSpace(accID) != "" {

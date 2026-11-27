@@ -99,6 +99,15 @@ func (h *Hub) Run() {
 			if h.clients[client.AccountID] == nil {
 				h.clients[client.AccountID] = make(map[*Client]bool)
 			}
+			// Cap concurrent WebSocket connections per account to 5.
+			if len(h.clients[client.AccountID]) >= 5 {
+				for oldest := range h.clients[client.AccountID] {
+					delete(h.clients[client.AccountID], oldest)
+					close(oldest.Send)
+					_ = oldest.Conn.Close()
+					break
+				}
+			}
 			h.clients[client.AccountID][client] = true
 			h.mu.Unlock()
 			log.Printf("🟢 WS connected: %s (total connections for user: %d)", client.AccountID, len(h.clients[client.AccountID]))

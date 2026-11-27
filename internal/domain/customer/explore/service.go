@@ -537,6 +537,9 @@ func (s *exploreService) RecordFeedEvents(accountID string, batch models.FeedEve
 	if len(batch.Events) == 0 {
 		return nil
 	}
+	if len(batch.Events) > 50 {
+		batch.Events = batch.Events[:50]
+	}
 
 	now := time.Now()
 	var interactions []models.UserPostInteraction

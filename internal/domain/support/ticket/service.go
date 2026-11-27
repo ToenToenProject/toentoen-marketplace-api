@@ -51,9 +51,16 @@ func (s *supportTicketService) CreateTicket(accountID string, userRole string, i
 		return nil, errors.New("Deskripsi masalah minimal 10 karakter")
 	}
 
+	if len(input.Attachments) > 5 {
+		return nil, errors.New("Maksimal 5 file lampiran per tiket")
+	}
+
 	// Validasi batas ukuran file lampiran
 	var totalSize int64 = 0
 	for _, att := range input.Attachments {
+		if att.FileSize <= 0 {
+			return nil, fmt.Errorf("Ukuran file '%s' tidak valid", att.FileName)
+		}
 		if att.FileSize > MaxFileSizePerAttachment {
 			return nil, fmt.Errorf("Ukuran file '%s' (%d MB) melebihi batas maksimal 10MB per file", att.FileName, att.FileSize/(1024*1024))
 		}

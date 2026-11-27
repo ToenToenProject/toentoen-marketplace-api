@@ -79,6 +79,9 @@ func (h *AnalyticsHandler) TrackImpressions(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil || len(body.Impressions) == 0 {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Field 'impressions' wajib diisi", nil)
 	}
+	if len(body.Impressions) > 50 {
+		body.Impressions = body.Impressions[:50]
+	}
 
 	// Process telemetry asynchronously to avoid delaying response.
 	go h.service.TrackImpressions(body.Impressions)
