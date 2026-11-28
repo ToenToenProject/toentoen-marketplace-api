@@ -98,6 +98,8 @@ type Owner struct {
 	Country            *string    `gorm:"column:country" json:"country"`
 	KtpName            *string    `gorm:"type:text;column:ktp_name" json:"ktpName"`
 	KtpBirthPlace      *string    `gorm:"type:text;column:ktp_birth_place" json:"ktpBirthPlace"`
+	KtpBirthProvince   *string    `gorm:"type:text;column:ktp_birth_province" json:"ktpBirthProvince"`
+	KtpBirthCity       *string    `gorm:"type:text;column:ktp_birth_city" json:"ktpBirthCity"`
 	KtpBirthDate       *string    `gorm:"type:date;column:ktp_birth_date" json:"ktpBirthDate"`
 	KtpGender          *string    `gorm:"type:text;column:ktp_gender" json:"ktpGender"`
 	KtpAddress         *string    `gorm:"type:text;column:ktp_address" json:"ktpAddress"`

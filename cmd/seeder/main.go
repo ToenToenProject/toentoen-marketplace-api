@@ -4,6 +4,7 @@ import (
 	"log"
 	"strings"
 	"toentoen-backend/internal/config"
+	"toentoen-backend/internal/domain/meta"
 	"toentoen-backend/internal/domain/shared/models"
 	"toentoen-backend/pkg/database"
 
@@ -451,6 +452,10 @@ func main() {
 	}
 	if len(activeTagSlugs) > 0 {
 		_ = db.Model(&models.Tag{}).Where("slug IS NULL OR slug NOT IN ?", activeTagSlugs).Update("is_active", false).Error
+	}
+
+	if err := meta.SeedIndonesiaRegions(db); err != nil {
+		log.Printf("⚠️ Failed seeding Indonesia regions: %v", err)
 	}
 
 	_ = strings.TrimSpace("")

@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"strings"
 	"toentoen-backend/internal/domain/shared/models"
 
 	"gorm.io/gorm"
@@ -10,6 +11,8 @@ type MetaRepository interface {
 	GetAllCategories() ([]models.Category, error)
 	GetAllTags(categoryID *int64, scope string) ([]models.Tag, error)
 	GetAllOccupations() ([]models.Occupation, error)
+	GetProvinces(search string) ([]models.Province, error)
+	GetCities(provinceCode, search string) ([]models.City, error)
 }
 
 type metaRepository struct {
@@ -110,5 +113,28 @@ func (r *metaRepository) GetAllOccupations() ([]models.Occupation, error) {
 	var occupations []models.Occupation
 	err := r.db.Where("is_active = ?", true).Order("label ASC").Find(&occupations).Error
 	return occupations, err
+}
+
+func (r *metaRepository) GetProvinces(search string) ([]models.Province, error) {
+	var provinces []models.Province
+	query := r.db.Model(&models.Province{})
+	if s := strings.TrimSpace(search); s != "" {
+		query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(s)+"%")
+	}
+	err := query.Order("name ASC").Find(&provinces).Error
+	return provinces, err
+}
+
+func (r *metaRepository) GetCities(provinceCode, search string) ([]models.City, error) {
+	var cities []models.City
+	query := r.db.Model(&models.City{})
+	if pc := strings.TrimSpace(provinceCode); pc != "" {
+		query = query.Where("province_code = ?", pc)
+	}
+	if s := strings.TrimSpace(search); s != "" {
+		query = query.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(s)+"%")
+	}
+	err := query.Order("name ASC").Find(&cities).Error
+	return cities, err
 }
 

@@ -90,6 +90,14 @@ func (m *mockMetaRepo) GetAllOccupations() ([]models.Occupation, error) {
 	return nil, nil
 }
 
+func (m *mockMetaRepo) GetProvinces(search string) ([]models.Province, error) {
+	return nil, nil
+}
+
+func (m *mockMetaRepo) GetCities(provinceCode, search string) ([]models.City, error) {
+	return nil, nil
+}
+
 func TestGetTagsHandler(t *testing.T) {
 	mockRepo := &mockMetaRepo{
 		tags: []models.Tag{

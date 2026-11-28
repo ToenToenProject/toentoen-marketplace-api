@@ -147,7 +147,9 @@ type BusinessAdmin struct {
 	KtpPhotoUrl    *string   `gorm:"type:text;column:ktp_photo_url" json:"ktp_photo_url"`
 	SelfiePhotoUrl *string   `gorm:"type:text;column:selfie_photo_url" json:"selfie_photo_url"`
 	KtpName        *string   `gorm:"type:text;column:ktp_name" json:"ktp_name"`
-	KtpBirthPlace  *string   `gorm:"type:text;column:ktp_birth_place" json:"ktp_birth_place"`
+	KtpBirthPlace    *string `gorm:"type:text;column:ktp_birth_place" json:"ktp_birth_place"`
+	KtpBirthProvince *string `gorm:"type:text;column:ktp_birth_province" json:"ktp_birth_province"`
+	KtpBirthCity     *string `gorm:"type:text;column:ktp_birth_city" json:"ktp_birth_city"`
 	KtpBirthDate   *string   `gorm:"type:date;column:ktp_birth_date" json:"ktp_birth_date"`
 	KtpGender      *string   `gorm:"type:text;column:ktp_gender" json:"ktp_gender"`
 	KtpAddress     *string   `gorm:"type:text;column:ktp_address" json:"ktp_address"`

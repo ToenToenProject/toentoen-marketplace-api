@@ -94,6 +94,12 @@ func encryptOwnerKTP(owner *models.Owner) error {
 	if owner.KtpBirthPlace, err = crypto.EncryptPointer(owner.KtpBirthPlace); err != nil {
 		return err
 	}
+	if owner.KtpBirthProvince, err = crypto.EncryptPointer(owner.KtpBirthProvince); err != nil {
+		return err
+	}
+	if owner.KtpBirthCity, err = crypto.EncryptPointer(owner.KtpBirthCity); err != nil {
+		return err
+	}
 	if owner.KtpGender, err = crypto.EncryptPointer(owner.KtpGender); err != nil {
 		return err
 	}
@@ -130,6 +136,8 @@ func decryptOwnerKTP(owner *models.Owner) {
 	owner.SelfiePhotoUrl, _ = crypto.DecryptPointer(owner.SelfiePhotoUrl)
 	owner.KtpName, _ = crypto.DecryptPointer(owner.KtpName)
 	owner.KtpBirthPlace, _ = crypto.DecryptPointer(owner.KtpBirthPlace)
+	owner.KtpBirthProvince, _ = crypto.DecryptPointer(owner.KtpBirthProvince)
+	owner.KtpBirthCity, _ = crypto.DecryptPointer(owner.KtpBirthCity)
 	owner.KtpGender, _ = crypto.DecryptPointer(owner.KtpGender)
 	owner.KtpAddress, _ = crypto.DecryptPointer(owner.KtpAddress)
 	owner.KtpRtRw, _ = crypto.DecryptPointer(owner.KtpRtRw)
@@ -158,6 +166,12 @@ func encryptBusinessAdminKTP(admin *models.BusinessAdmin) error {
 		return err
 	}
 	if admin.KtpBirthPlace, err = crypto.EncryptPointer(admin.KtpBirthPlace); err != nil {
+		return err
+	}
+	if admin.KtpBirthProvince, err = crypto.EncryptPointer(admin.KtpBirthProvince); err != nil {
+		return err
+	}
+	if admin.KtpBirthCity, err = crypto.EncryptPointer(admin.KtpBirthCity); err != nil {
 		return err
 	}
 	if admin.KtpGender, err = crypto.EncryptPointer(admin.KtpGender); err != nil {
@@ -196,6 +210,8 @@ func decryptBusinessAdminKTP(admin *models.BusinessAdmin) {
 	admin.SelfiePhotoUrl, _ = crypto.DecryptPointer(admin.SelfiePhotoUrl)
 	admin.KtpName, _ = crypto.DecryptPointer(admin.KtpName)
 	admin.KtpBirthPlace, _ = crypto.DecryptPointer(admin.KtpBirthPlace)
+	admin.KtpBirthProvince, _ = crypto.DecryptPointer(admin.KtpBirthProvince)
+	admin.KtpBirthCity, _ = crypto.DecryptPointer(admin.KtpBirthCity)
 	admin.KtpGender, _ = crypto.DecryptPointer(admin.KtpGender)
 	admin.KtpAddress, _ = crypto.DecryptPointer(admin.KtpAddress)
 	admin.KtpRtRw, _ = crypto.DecryptPointer(admin.KtpRtRw)
@@ -904,6 +920,12 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 		if input.KtpBirthPlace != nil {
 			owner.KtpBirthPlace = input.KtpBirthPlace
 		}
+		if input.KtpBirthProvince != nil {
+			owner.KtpBirthProvince = input.KtpBirthProvince
+		}
+		if input.KtpBirthCity != nil {
+			owner.KtpBirthCity = input.KtpBirthCity
+		}
 		if input.KtpBirthDate != nil {
 			owner.KtpBirthDate = input.KtpBirthDate
 		}
@@ -965,6 +987,12 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 		}
 		if input.KtpBirthPlace != nil {
 			admin.KtpBirthPlace = input.KtpBirthPlace
+		}
+		if input.KtpBirthProvince != nil {
+			admin.KtpBirthProvince = input.KtpBirthProvince
+		}
+		if input.KtpBirthCity != nil {
+			admin.KtpBirthCity = input.KtpBirthCity
 		}
 		if input.KtpBirthDate != nil {
 			admin.KtpBirthDate = input.KtpBirthDate

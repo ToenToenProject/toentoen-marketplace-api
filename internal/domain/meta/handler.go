@@ -57,4 +57,28 @@ func (h *MetaHandler) GetOccupations(c *fiber.Ctx) error {
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar pekerjaan", occupations)
 }
 
+func (h *MetaHandler) GetProvinces(c *fiber.Ctx) error {
+	search := c.Query("search")
+	provinces, err := h.service.GetProvinces(search)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar provinsi", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar provinsi", provinces)
+}
+
+func (h *MetaHandler) GetCities(c *fiber.Ctx) error {
+	provinceCode := c.Query("province_code")
+	if provinceCode == "" {
+		provinceCode = c.Query("province_id")
+	}
+	search := c.Query("search")
+	cities, err := h.service.GetCities(provinceCode, search)
+	if err != nil {
+		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mengambil daftar kota/kabupaten", nil)
+	}
+
+	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Berhasil mengambil daftar kota/kabupaten", cities)
+}
+
 

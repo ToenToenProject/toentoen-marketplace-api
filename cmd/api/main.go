@@ -67,6 +67,14 @@ func main() {
 	config.InitConfig()
 	database.ConnectDB()
 	config.ConnectRedis()
+
+	// Auto-seed Indonesia provinces & cities (38 provinces, 514 regencies/cities) if empty or incomplete
+	var provCount int64
+	if err := database.DB.Model(&models.Province{}).Count(&provCount).Error; err == nil && provCount < 38 {
+		if errSeed := meta.SeedIndonesiaRegions(database.DB); errSeed != nil {
+			log.Printf("⚠️ Auto-seed Indonesia regions error: %v", errSeed)
+		}
+	}
 	meilisearch.ConnectMeilisearch()
 	storage.InitS3Client()
 	config.InitFirebase()
@@ -357,6 +365,8 @@ func main() {
 	metaGroup.Get("/tags", metaHandler.GetTags)
 	metaGroup.Get("/store-types", metaHandler.GetStoreTypes)
 	metaGroup.Get("/occupations", metaHandler.GetOccupations)
+	metaGroup.Get("/provinces", metaHandler.GetProvinces)
+	metaGroup.Get("/cities", metaHandler.GetCities)
 	metaGroup.Get("/report-categories", reportHandler.GetReportCategories)
 
 		// WebSocket route

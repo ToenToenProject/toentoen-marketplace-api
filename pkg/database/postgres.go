@@ -133,6 +133,8 @@ func ConnectDB() {
 		&models.ProductComment{},
 		&models.ProductCommentLike{},
 		&models.ProductCommentReport{},
+		&models.Province{},
+		&models.City{},
 	}
 	for _, m := range modelsToMigrate {
 		if err := DB.AutoMigrate(m); err != nil {
@@ -226,7 +228,11 @@ func ConnectDB() {
 		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS kyc_verified_at TIMESTAMP`,
 		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS selfie_photo_url TEXT`,
 		`ALTER TABLE owners ADD COLUMN IF NOT EXISTS ktp_number_blind_index VARCHAR(64)`,
+		`ALTER TABLE owners ADD COLUMN IF NOT EXISTS ktp_birth_province TEXT`,
+		`ALTER TABLE owners ADD COLUMN IF NOT EXISTS ktp_birth_city TEXT`,
 		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS ktp_number_blind_index VARCHAR(64)`,
+		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS ktp_birth_province TEXT`,
+		`ALTER TABLE business_admins ADD COLUMN IF NOT EXISTS ktp_birth_city TEXT`,
 		`CREATE INDEX IF NOT EXISTS idx_owners_ktp_blind_idx ON owners (ktp_number_blind_index) WHERE ktp_number_blind_index IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_business_admins_ktp_blind_idx ON business_admins (ktp_number_blind_index) WHERE ktp_number_blind_index IS NOT NULL`,
 		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS is_notify_owner_enabled BOOLEAN DEFAULT true`,
