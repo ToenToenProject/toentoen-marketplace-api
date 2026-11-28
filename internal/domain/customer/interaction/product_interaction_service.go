@@ -1150,15 +1150,17 @@ func (s *productInteractionService) GetProductComments(productID, currentAccount
 	likedCommentIDs := make(map[string]bool)
 	ownerLikedCommentIDs := make(map[string]bool)
 	if currentAccountID != "" || len(staffIDs) > 0 {
+		commentIDs := make([]string, 0, len(rawComments))
 		for _, c := range rawComments {
-			likes, _ := s.repo.GetProductCommentLikes(c.CommentID)
-			for _, l := range likes {
-				if currentAccountID != "" && l.AccountID == currentAccountID {
-					likedCommentIDs[c.CommentID] = true
-				}
-				if staffMap[l.AccountID] {
-					ownerLikedCommentIDs[c.CommentID] = true
-				}
+			commentIDs = append(commentIDs, c.CommentID)
+		}
+		likes, _ := s.repo.GetProductCommentLikesByIDs(commentIDs)
+		for _, l := range likes {
+			if currentAccountID != "" && l.AccountID == currentAccountID {
+				likedCommentIDs[l.CommentID] = true
+			}
+			if staffMap[l.AccountID] {
+				ownerLikedCommentIDs[l.CommentID] = true
 			}
 		}
 	}

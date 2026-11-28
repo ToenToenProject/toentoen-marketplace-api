@@ -48,6 +48,7 @@ type ProductInteractionRepository interface {
 	GetProductCommentsByProductID(productID string) ([]models.ProductComment, error)
 	ToggleProductCommentLike(commentID, accountID string) (bool, error)
 	GetProductCommentLikes(commentID string) ([]models.ProductCommentLike, error)
+	GetProductCommentLikesByIDs(commentIDs []string) ([]models.ProductCommentLike, error)
 	CreateProductCommentReport(report *models.ProductCommentReport) error
 
 	// 7. Unified Likes (Universal)
@@ -544,6 +545,15 @@ func (r *productInteractionRepository) ToggleProductCommentLike(commentID, accou
 func (r *productInteractionRepository) GetProductCommentLikes(commentID string) ([]models.ProductCommentLike, error) {
 	var likes []models.ProductCommentLike
 	err := r.db.Where("comment_id = ?", strings.TrimSpace(commentID)).Find(&likes).Error
+	return likes, err
+}
+
+func (r *productInteractionRepository) GetProductCommentLikesByIDs(commentIDs []string) ([]models.ProductCommentLike, error) {
+	if len(commentIDs) == 0 {
+		return nil, nil
+	}
+	var likes []models.ProductCommentLike
+	err := r.db.Where("comment_id IN ?", commentIDs).Find(&likes).Error
 	return likes, err
 }
 

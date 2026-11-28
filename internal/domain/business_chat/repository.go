@@ -80,6 +80,57 @@ func (r *businessChatRepository) GetSignalPostReferenceByID(signalID string) *mo
 	return nil
 }
 
+func (r *businessChatRepository) getSignalPostReferencesMap(convs []models.DirectBusinessConversation) map[string]*models.SignalPostReference {
+	res := make(map[string]*models.SignalPostReference)
+	if len(convs) == 0 {
+		return res
+	}
+	seen := make(map[string]bool)
+	var signalIDs []string
+	for _, c := range convs {
+		if c.SignalID != nil && *c.SignalID != "" && !seen[*c.SignalID] {
+			seen[*c.SignalID] = true
+			signalIDs = append(signalIDs, *c.SignalID)
+		}
+	}
+	if len(signalIDs) == 0 {
+		return res
+	}
+	var sigs []models.Signal
+	if err := r.db.Preload("Images").Where("signal_id IN ?", signalIDs).Find(&sigs).Error; err == nil {
+		for i := range sigs {
+			sigs[i].EvaluateStatus()
+			res[sigs[i].SignalID] = sigs[i].ToPostReference()
+		}
+	}
+	return res
+}
+
+func (r *businessChatRepository) getUnreadCountsMap(convs []models.DirectBusinessConversation, senderType string) map[string]int64 {
+	res := make(map[string]int64)
+	if len(convs) == 0 {
+		return res
+	}
+	convIDs := make([]string, 0, len(convs))
+	for _, c := range convs {
+		convIDs = append(convIDs, c.ConversationID)
+	}
+	type unreadRow struct {
+		ConversationID string
+		Cnt            int64
+	}
+	var rows []unreadRow
+	r.db.Model(&models.DirectBusinessMessage{}).
+		Select("conversation_id, COUNT(*) AS cnt").
+		Where("conversation_id IN ? AND sender_type = ? AND is_read = false", convIDs, senderType).
+		Group("conversation_id").
+		Scan(&rows)
+	for _, row := range rows {
+		res[row.ConversationID] = row.Cnt
+	}
+	return res
+}
+
 func (r *businessChatRepository) UpdateConversationSignalID(conversationID, signalID string) error {
 	if !r.hasSignalIDColumn() {
 		return nil
@@ -188,12 +239,11 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 		}
 	}
 	verifMap := r.getBusinessVerificationInfo(bizIDs)
+	signalRefMap := r.getSignalPostReferencesMap(convs)
+	unreadMap := r.getUnreadCountsMap(convs, "merchant")
 
 	for _, c := range convs {
-		var unread int64
-		r.db.Model(&models.DirectBusinessMessage{}).
-			Where("conversation_id = ? AND sender_type = 'merchant' AND is_read = false", c.ConversationID).
-			Count(&unread)
+		unread := unreadMap[c.ConversationID]
 
 		var bizName string
 		var bizLogo *string
@@ -212,7 +262,7 @@ func (r *businessChatRepository) GetCustomerConversations(customerID string, lim
 
 		var signalRef *models.SignalPostReference
 		if c.SignalID != nil && *c.SignalID != "" {
-			signalRef = r.GetSignalPostReferenceByID(*c.SignalID)
+			signalRef = signalRefMap[*c.SignalID]
 		}
 
 		var sigID, sigTitle, sigDesc string
@@ -267,13 +317,12 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 	verifMap := r.getBusinessVerificationInfo([]string{businessID})
 	isVerif := verifMap[businessID].IsVerified
 	hasNIB := verifMap[businessID].HasNIB
+	signalRefMap := r.getSignalPostReferencesMap(convs)
+	unreadMap := r.getUnreadCountsMap(convs, "customer")
 
 	var results []models.MerchantBusinessConversationListItem
 	for _, c := range convs {
-		var unread int64
-		r.db.Model(&models.DirectBusinessMessage{}).
-			Where("conversation_id = ? AND sender_type = 'customer' AND is_read = false", c.ConversationID).
-			Count(&unread)
+		unread := unreadMap[c.ConversationID]
 
 		var custName string
 		var custAvatar *string
@@ -291,7 +340,7 @@ func (r *businessChatRepository) GetMerchantConversations(businessID string, lim
 
 		var signalRef *models.SignalPostReference
 		if c.SignalID != nil && *c.SignalID != "" {
-			signalRef = r.GetSignalPostReferenceByID(*c.SignalID)
+			signalRef = signalRefMap[*c.SignalID]
 		}
 
 		var sigID, sigTitle, sigDesc string
