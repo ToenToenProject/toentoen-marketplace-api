@@ -144,6 +144,8 @@ func ConnectDB() {
 	alterQueries := []string{
 		`ALTER TYPE enum_business_status ADD VALUE IF NOT EXISTS 'deleted'`,
 		`ALTER TABLE owners ALTER COLUMN ktp_number TYPE TEXT`,
+		`ALTER TABLE accounts DROP CONSTRAINT IF EXISTS accounts_username_key`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_username_role ON accounts (LOWER(username), role) WHERE username IS NOT NULL AND username != ''`,
 		`ALTER TABLE owners ALTER COLUMN ktp_photo_url TYPE TEXT`,
 		`ALTER TABLE owners ALTER COLUMN ktp_name TYPE TEXT`,
 		`ALTER TABLE owners ALTER COLUMN ktp_birth_place TYPE TEXT`,

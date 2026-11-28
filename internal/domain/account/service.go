@@ -604,7 +604,13 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 		account.Username = cleanUsername
 	}
 	// PhoneNumber must be changed exclusively via /account/phone/change/request + /verify.
-	if input.Title != nil {
+	if input.Gender != nil {
+		g := strings.ToLower(strings.TrimSpace(*input.Gender))
+		if g != "male" && g != "female" && g != "other" {
+			g = "other"
+		}
+		account.Gender = &g
+	} else if input.Title != nil {
 		title := strings.ToLower(*input.Title)
 		var gender string
 		if title == "mr" || title == "mr." {
@@ -685,7 +691,13 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 		account.Username = cleanUsername
 	}
 	// PhoneNumber must be changed exclusively via /account/phone/change/request + /verify.
-	if input.Title != nil {
+	if input.Gender != nil {
+		g := strings.ToLower(strings.TrimSpace(*input.Gender))
+		if g != "male" && g != "female" && g != "other" {
+			g = "other"
+		}
+		account.Gender = &g
+	} else if input.Title != nil {
 		title := strings.ToLower(*input.Title)
 		var gender string
 		if title == "mr" || title == "mr." {

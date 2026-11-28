@@ -19,6 +19,7 @@ type UpdateProfileOwnerInput struct {
 	LastName          *string `json:"last_name"`
 	Username          *string `json:"username"`
 	PhoneNumber       *string `json:"phone_number"`
+	Gender            *string `json:"gender"`
 	Title             *string `json:"title"`
 	ProfilePictureUrl *string `json:"profile_picture_url"`
 	Country           *string `json:"country"`
@@ -32,4 +33,4 @@ type VerifyDeleteOTPInput struct {
 type ForceDeleteAccountInput struct {
 	Identifier string `json:"identifier"`
 	AccountID  string `json:"account_id"`
-}
+}
