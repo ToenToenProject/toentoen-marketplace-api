@@ -24,6 +24,9 @@ func (h *ProfileHandler) UpdateProfileCustomer(c *fiber.Ctx) error {
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", fiber.Map{"error": err.Error()})
 	}
+	if errs := utils.ValidateStruct(&input); errs != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errs), errs)
+	}
 
 	accountIDValue := c.Locals("account_id")
 	if accountIDValue == nil {
@@ -37,16 +40,7 @@ func (h *ProfileHandler) UpdateProfileCustomer(c *fiber.Ctx) error {
 
 	updatedAccount, err := h.service.UpdateCustomerProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "Email sudah digunakan" || err.Error() == "Nomor telepon sudah digunakan" || err.Error() == "Username sudah digunakan" || err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" {
-			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
-		}
-		if err.Error() == "Akun tidak ditemukan" || err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
-			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
-		}
-		if strings.HasPrefix(err.Error(), "Gagal") || strings.HasPrefix(err.Error(), "gagal") || strings.HasPrefix(err.Error(), "failed to") {
-			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memperbarui profil customer")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", updatedAccount)
@@ -56,6 +50,9 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 	var input models.UpdateProfileOwnerInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", fiber.Map{"error": err.Error()})
+	}
+	if errs := utils.ValidateStruct(&input); errs != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errs), errs)
 	}
 
 	accountIDValue := c.Locals("account_id")
@@ -70,16 +67,7 @@ func (h *ProfileHandler) UpdateProfileOwner(c *fiber.Ctx) error {
 
 	updatedAccount, err := h.service.UpdateOwnerProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "Email sudah digunakan" || err.Error() == "Nomor telepon sudah digunakan" || err.Error() == "Username sudah digunakan" || err.Error() == "Nomor KTP sudah digunakan" || err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" || err.Error() == "ktp number already in use" {
-			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
-		}
-		if err.Error() == "Akun tidak ditemukan" || err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
-			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
-		}
-		if strings.HasPrefix(err.Error(), "Gagal") || strings.HasPrefix(err.Error(), "gagal") || strings.HasPrefix(err.Error(), "failed to") {
-			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memperbarui profil owner")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil berhasil diperbarui", updatedAccount)
@@ -89,6 +77,9 @@ func (h *ProfileHandler) UpdateProfileBusinessAdmin(c *fiber.Ctx) error {
 	var input models.UpdateBusinessAdminKYCInput
 	if err := c.BodyParser(&input); err != nil {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", fiber.Map{"error": err.Error()})
+	}
+	if errs := utils.ValidateStruct(&input); errs != nil {
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errs), errs)
 	}
 
 	accountIDValue := c.Locals("account_id")
@@ -103,16 +94,7 @@ func (h *ProfileHandler) UpdateProfileBusinessAdmin(c *fiber.Ctx) error {
 
 	updatedAccount, err := h.service.UpdateBusinessAdminProfile(accountID, input)
 	if err != nil {
-		if err.Error() == "Email sudah digunakan" || err.Error() == "Nomor telepon sudah digunakan" || err.Error() == "Username sudah digunakan" || err.Error() == "Nomor KTP sudah digunakan" || err.Error() == "email already in use" || err.Error() == "phone number already in use" || err.Error() == "username already in use" || err.Error() == "ktp number already in use" {
-			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
-		}
-		if err.Error() == "Akun tidak ditemukan" || err.Error() == "akun tidak ditemukan" || err.Error() == "account not found" {
-			return utils.SendResponse(c, fiber.StatusNotFound, constants.UserNotFound, err.Error(), nil)
-		}
-		if strings.HasPrefix(err.Error(), "Gagal") || strings.HasPrefix(err.Error(), "gagal") || strings.HasPrefix(err.Error(), "failed to") {
-			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memperbarui profil admin")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Profil admin berhasil diperbarui", updatedAccount)
@@ -217,14 +199,11 @@ func (h *ProfileHandler) SubmitKYC(c *fiber.Ctx) error {
 		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Format request tidak valid", nil)
 	}
 	if errs := utils.ValidateStruct(&input); errs != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, "Data KYC tidak lengkap", errs)
+		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, utils.FormatValidationErrors(errs), errs)
 	}
 
 	if err := h.service.SubmitKYC(accountID, input); err != nil {
-		if strings.Contains(err.Error(), "sudah terdaftar") {
-			return utils.SendResponse(c, fiber.StatusConflict, constants.FailedValidation, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal mengajukan verifikasi KYC")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Pengajuan verifikasi KYC berhasil dikirimkan dan sedang dalam peninjauan", nil)
@@ -265,7 +244,7 @@ func (h *ProfileHandler) RegisterDeviceToken(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.RegisterDeviceToken(accountID, input); err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mendaftarkan token perangkat", nil)
+		return utils.HandleServiceError(c, err, "Gagal mendaftarkan token perangkat")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Device token berhasil didaftarkan", nil)
@@ -281,7 +260,7 @@ func (h *ProfileHandler) DeleteDeviceToken(c *fiber.Ctx) error {
 	_ = c.BodyParser(&input) // optional body
 
 	if err := h.service.DeleteDeviceToken(accountID, input); err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal mencabut token perangkat", nil)
+		return utils.HandleServiceError(c, err, "Gagal mencabut token perangkat")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Device token berhasil dihapus", nil)

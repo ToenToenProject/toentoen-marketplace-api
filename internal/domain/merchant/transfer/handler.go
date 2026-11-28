@@ -40,7 +40,7 @@ func (h *BusinessTransferHandler) CheckTarget(c *fiber.Ctx) error {
 
 	preview, errSvc := h.service.CheckTarget(accountID, businessID, input.TargetIdentifier)
 	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+		return utils.HandleServiceError(c, errSvc, "Gagal memeriksa akun tujuan transfer")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data calon pemilik baru ditemukan", preview)
@@ -69,7 +69,7 @@ func (h *BusinessTransferHandler) InitiateTransfer(c *fiber.Ctx) error {
 
 	res, errSvc := h.service.InitiateTransfer(accountID, businessID, input)
 	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+		return utils.HandleServiceError(c, errSvc, "Gagal memulai transfer bisnis")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Kode OTP otorisasi transfer telah dikirim", res)

@@ -48,10 +48,7 @@ func (h *ProductGroupHandler) CreateGroup(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.CreateGroup(requesterID, requesterRole, businessID, input); err != nil {
-		if strings.Contains(err.Error(), "forbidden") {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal membuat grup produk")
 	}
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Grup berhasil dibuat", nil)
 }
@@ -74,10 +71,7 @@ func (h *ProductGroupHandler) UpdateGroup(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.UpdateGroup(requesterID, requesterRole, businessID, productGroupID, input); err != nil {
-		if strings.Contains(err.Error(), "forbidden") {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memperbarui grup produk")
 	}
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Grup berhasil diperbarui", nil)
 }

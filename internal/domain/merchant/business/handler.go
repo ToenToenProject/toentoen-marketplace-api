@@ -40,11 +40,7 @@ func (h *BusinessHandler) CreateBusiness(c *fiber.Ctx) error {
 
 	businessID, err := h.service.CreateBusiness(ownerID, input)
 	if err != nil {
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "belum terverifikasi") || strings.Contains(errMsg, "KYC") || strings.Contains(errMsg, "identitas") || strings.Contains(errMsg, "tidak ditemukan") {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errMsg, nil)
-		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, "Gagal membuat profil toko", nil)
+		return utils.HandleServiceError(c, err, "Gagal membuat profil toko")
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Profil toko berhasil dibuat", fiber.Map{
@@ -125,16 +121,7 @@ func (h *BusinessHandler) UpdateBusiness(c *fiber.Ctx) error {
 
 	err = h.service.UpdateBusiness(requesterID, businessID, input)
 	if err != nil {
-		if strings.Contains(err.Error(), "handle sudah digunakan") || strings.Contains(err.Error(), "handle already exists") {
-			return utils.SendResponse(c, fiber.StatusConflict, constants.HandleTaken, "Handle sudah digunakan, silakan pilih yang lain", nil)
-		}
-		if strings.Contains(err.Error(), "tidak ditemukan") {
-			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
-		}
-		if strings.Contains(err.Error(), "tidak memiliki akses") || strings.Contains(err.Error(), "tidak memiliki izin") || strings.Contains(err.Error(), "forbidden") {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memperbarui data toko")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Data toko berhasil diperbarui", nil)

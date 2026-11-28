@@ -69,7 +69,7 @@ func (h *PackageHandler) CreatePackage(c *fiber.Ctx) error {
 
 	res, errSvc := h.service.CreatePackage(requesterID, requesterRole, businessID, input)
 	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+		return utils.HandleServiceError(c, errSvc, "Gagal membuat paket produk")
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Paket produk berhasil dibuat", res)

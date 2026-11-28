@@ -36,10 +36,7 @@ func (h *BusinessPostHandler) CreatePost(c *fiber.Ctx) error {
 
 	_, errSvc := h.service.CreatePost(requesterID, role, businessID, input)
 	if errSvc != nil {
-		if strings.Contains(errSvc.Error(), "forbidden") {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+		return utils.HandleServiceError(c, errSvc, "Gagal membuat post")
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Post berhasil dibuat", nil)

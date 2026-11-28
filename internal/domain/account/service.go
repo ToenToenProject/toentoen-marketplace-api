@@ -381,7 +381,7 @@ func (s *profileService) UpdateCustomerProfile(accountID string, input models.Up
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("Username sudah digunakan")
+			return nil, errors.New("Username sudah terpakai, gunakan username lain")
 		}
 		account.Username = cleanUsername
 	}
@@ -607,7 +607,7 @@ func (s *profileService) UpdateOwnerProfile(accountID string, input models.Updat
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("Username sudah digunakan")
+			return nil, errors.New("Username sudah terpakai, gunakan username lain")
 		}
 		account.Username = cleanUsername
 	}
@@ -694,7 +694,7 @@ func (s *profileService) UpdateBusinessAdminProfile(accountID string, input mode
 			return nil, err
 		}
 		if exists {
-			return nil, errors.New("Username sudah digunakan")
+			return nil, errors.New("Username sudah terpakai, gunakan username lain")
 		}
 		account.Username = cleanUsername
 	}

@@ -56,7 +56,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.Register(input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memproses pendaftaran")
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Kode verifikasi OTP telah dikirimkan ke email Anda, silakan verifikasi untuk menyelesaikan pendaftaran", nil)
@@ -77,7 +77,7 @@ func (h *AuthHandler) VerifyRegisterOTP(c *fiber.Ctx) error {
 
 	token, err := h.service.VerifyRegisterOTP(input)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memverifikasi OTP pendaftaran")
 	}
 
 	isProduction := config.Envs != nil && config.Envs.AppEnv == "production"
@@ -464,7 +464,7 @@ func (h *AuthHandler) VerifyPhoneChange(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.VerifyPhoneChange(accountID, input); err != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal memperbarui nomor telepon")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Nomor telepon Anda telah berhasil diperbarui", nil)
@@ -492,7 +492,7 @@ func (h *AuthHandler) CreateBusinessAdmin(c *fiber.Ctx) error {
 
 	createdAdmin, err := h.service.CreateBusinessAdmin(ownerID, input)
 	if err != nil {
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal membuat akun Business Admin")
 	}
 	_ = createdAdmin // data tersedia tapi tidak perlu dikembalikan ke client
 

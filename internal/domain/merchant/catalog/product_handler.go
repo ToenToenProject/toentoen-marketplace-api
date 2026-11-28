@@ -39,13 +39,7 @@ func (h *ProductHandler) CreateProduct(c *fiber.Ctx) error {
 
 	errSvc := h.service.CreateProduct(requesterID, requesterRole, businessID, input)
 	if errSvc != nil {
-		if strings.Contains(errSvc.Error(), "forbidden") {
-			return utils.SendResponse(c, fiber.StatusForbidden, constants.ForbiddenAccess, errSvc.Error(), nil)
-		}
-		if strings.HasPrefix(errSvc.Error(), "gagal membuat produk:") {
-			return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, errSvc.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+		return utils.HandleServiceError(c, errSvc, "Gagal membuat produk")
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Produk berhasil dibuat", nil)
@@ -71,7 +65,7 @@ func (h *ProductHandler) UpdateProduct(c *fiber.Ctx) error {
 
 	errSvc := h.service.UpdateProduct(requesterID, requesterRole, businessID, productID, input)
 	if errSvc != nil {
-		return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, errSvc.Error(), nil)
+		return utils.HandleServiceError(c, errSvc, "Gagal memperbarui produk")
 	}
 
 	return utils.SendResponse(c, fiber.StatusOK, constants.Success, "Produk berhasil diperbarui", nil)

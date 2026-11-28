@@ -55,16 +55,7 @@ func (h *Handler) CreateReport(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.CreateUniversalReport(accountID, input); err != nil {
-		if strings.Contains(err.Error(), "sudah pernah melaporkan") {
-			return utils.SendResponse(c, fiber.StatusBadRequest, constants.DuplicateData, err.Error(), nil)
-		}
-		if strings.Contains(err.Error(), "tidak ditemukan") {
-			return utils.SendResponse(c, fiber.StatusNotFound, constants.DataNotFound, err.Error(), nil)
-		}
-		if strings.Contains(err.Error(), "wajib diisi") {
-			return utils.SendResponse(c, fiber.StatusBadRequest, constants.FailedValidation, err.Error(), nil)
-		}
-		return utils.SendResponse(c, fiber.StatusInternalServerError, constants.InternalServerErr, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal mengirim laporan")
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Laporan berhasil dikirim", nil)
