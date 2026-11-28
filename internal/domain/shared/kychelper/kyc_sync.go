@@ -85,7 +85,8 @@ func CopyKYCAdminToOwner(src *models.BusinessAdmin, dst *models.Owner) {
 	dst.KtpPhotoUrl = src.KtpPhotoUrl
 	dst.SelfiePhotoUrl = src.SelfiePhotoUrl
 	dst.KtpName = src.KtpName
-	dst.KtpBirthPlace = src.KtpBirthPlace
+	dst.KtpBirthProvince = src.KtpBirthProvince
+	dst.KtpBirthCity = src.KtpBirthCity
 	dst.KtpBirthDate = src.KtpBirthDate
 	dst.KtpGender = src.KtpGender
 	dst.KtpAddress = src.KtpAddress
@@ -115,7 +116,8 @@ func CopyKYCOwnerToAdmin(src *models.Owner, dst *models.BusinessAdmin) {
 	dst.KtpPhotoUrl = src.KtpPhotoUrl
 	dst.SelfiePhotoUrl = src.SelfiePhotoUrl
 	dst.KtpName = src.KtpName
-	dst.KtpBirthPlace = src.KtpBirthPlace
+	dst.KtpBirthProvince = src.KtpBirthProvince
+	dst.KtpBirthCity = src.KtpBirthCity
 	dst.KtpBirthDate = src.KtpBirthDate
 	dst.KtpGender = src.KtpGender
 	dst.KtpAddress = src.KtpAddress
@@ -194,7 +196,8 @@ func SyncVerifiedKYCIfSiblingVerified(db *gorm.DB, accountID string, role string
 				"ktp_photo_url":        updatedOwner.KtpPhotoUrl,
 				"selfie_photo_url":     updatedOwner.SelfiePhotoUrl,
 				"ktp_name":             updatedOwner.KtpName,
-				"ktp_birth_place":      updatedOwner.KtpBirthPlace,
+				"ktp_birth_province":   updatedOwner.KtpBirthProvince,
+				"ktp_birth_city":       updatedOwner.KtpBirthCity,
 				"ktp_birth_date":       updatedOwner.KtpBirthDate,
 				"ktp_gender":           updatedOwner.KtpGender,
 				"ktp_address":          updatedOwner.KtpAddress,
@@ -244,7 +247,8 @@ func SyncVerifiedKYCIfSiblingVerified(db *gorm.DB, accountID string, role string
 				"ktp_photo_url":        updatedAdmin.KtpPhotoUrl,
 				"selfie_photo_url":     updatedAdmin.SelfiePhotoUrl,
 				"ktp_name":             updatedAdmin.KtpName,
-				"ktp_birth_place":      updatedAdmin.KtpBirthPlace,
+				"ktp_birth_province":   updatedAdmin.KtpBirthProvince,
+				"ktp_birth_city":       updatedAdmin.KtpBirthCity,
 				"ktp_birth_date":       updatedAdmin.KtpBirthDate,
 				"ktp_gender":           updatedAdmin.KtpGender,
 				"ktp_address":          updatedAdmin.KtpAddress,

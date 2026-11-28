@@ -1,7 +1,6 @@
 package models
 
 import (
-	"strings"
 	"time"
 )
 
@@ -179,10 +178,8 @@ type SubmitKYCInput struct {
 	KtpPhotoUrlCamel     string  `json:"ktpPhotoUrl"`
 	SelfiePhotoUrl       string  `json:"selfie_photo_url"`
 	SelfiePhotoUrlCamel  string  `json:"selfiePhotoUrl"`
-	KtpName              *string `json:"ktp_name"`
-	KtpNameCamel         *string `json:"ktpName"`
-	KtpBirthPlace         *string `json:"ktp_birth_place"`
-	KtpBirthPlaceCamel    *string `json:"ktpBirthPlace"`
+	KtpName               *string `json:"ktp_name"`
+	KtpNameCamel          *string `json:"ktpName"`
 	KtpBirthProvince      *string `json:"ktp_birth_province"`
 	KtpBirthProvinceCamel *string `json:"ktpBirthProvince"`
 	KtpBirthCity          *string `json:"ktp_birth_city"`
@@ -228,28 +225,11 @@ func (input *SubmitKYCInput) Normalize() {
 	if input.KtpName == nil {
 		input.KtpName = input.KtpNameCamel
 	}
-	if input.KtpBirthPlace == nil {
-		input.KtpBirthPlace = input.KtpBirthPlaceCamel
-	}
 	if input.KtpBirthProvince == nil {
 		input.KtpBirthProvince = input.KtpBirthProvinceCamel
 	}
 	if input.KtpBirthCity == nil {
 		input.KtpBirthCity = input.KtpBirthCityCamel
-	}
-	if input.KtpBirthPlace == nil && (input.KtpBirthCity != nil || input.KtpBirthProvince != nil) {
-		city := ""
-		prov := ""
-		if input.KtpBirthCity != nil {
-			city = strings.TrimSpace(*input.KtpBirthCity)
-		}
-		if input.KtpBirthProvince != nil {
-			prov = strings.TrimSpace(*input.KtpBirthProvince)
-		}
-		combined := strings.Trim(strings.TrimSpace(city+", "+prov), ", ")
-		if combined != "" {
-			input.KtpBirthPlace = &combined
-		}
 	}
 	if input.KtpBirthDate == nil {
 		input.KtpBirthDate = input.KtpBirthDateCamel

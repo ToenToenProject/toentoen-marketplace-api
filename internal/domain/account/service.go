@@ -91,9 +91,6 @@ func encryptOwnerKTP(owner *models.Owner) error {
 	if owner.KtpName, err = crypto.EncryptPointer(owner.KtpName); err != nil {
 		return err
 	}
-	if owner.KtpBirthPlace, err = crypto.EncryptPointer(owner.KtpBirthPlace); err != nil {
-		return err
-	}
 	if owner.KtpBirthProvince, err = crypto.EncryptPointer(owner.KtpBirthProvince); err != nil {
 		return err
 	}
@@ -135,7 +132,6 @@ func decryptOwnerKTP(owner *models.Owner) {
 	owner.KtpPhotoUrl, _ = crypto.DecryptPointer(owner.KtpPhotoUrl)
 	owner.SelfiePhotoUrl, _ = crypto.DecryptPointer(owner.SelfiePhotoUrl)
 	owner.KtpName, _ = crypto.DecryptPointer(owner.KtpName)
-	owner.KtpBirthPlace, _ = crypto.DecryptPointer(owner.KtpBirthPlace)
 	owner.KtpBirthProvince, _ = crypto.DecryptPointer(owner.KtpBirthProvince)
 	owner.KtpBirthCity, _ = crypto.DecryptPointer(owner.KtpBirthCity)
 	owner.KtpGender, _ = crypto.DecryptPointer(owner.KtpGender)
@@ -163,9 +159,6 @@ func encryptBusinessAdminKTP(admin *models.BusinessAdmin) error {
 		return err
 	}
 	if admin.KtpName, err = crypto.EncryptPointer(admin.KtpName); err != nil {
-		return err
-	}
-	if admin.KtpBirthPlace, err = crypto.EncryptPointer(admin.KtpBirthPlace); err != nil {
 		return err
 	}
 	if admin.KtpBirthProvince, err = crypto.EncryptPointer(admin.KtpBirthProvince); err != nil {
@@ -209,7 +202,6 @@ func decryptBusinessAdminKTP(admin *models.BusinessAdmin) {
 	admin.KtpPhotoUrl, _ = crypto.DecryptPointer(admin.KtpPhotoUrl)
 	admin.SelfiePhotoUrl, _ = crypto.DecryptPointer(admin.SelfiePhotoUrl)
 	admin.KtpName, _ = crypto.DecryptPointer(admin.KtpName)
-	admin.KtpBirthPlace, _ = crypto.DecryptPointer(admin.KtpBirthPlace)
 	admin.KtpBirthProvince, _ = crypto.DecryptPointer(admin.KtpBirthProvince)
 	admin.KtpBirthCity, _ = crypto.DecryptPointer(admin.KtpBirthCity)
 	admin.KtpGender, _ = crypto.DecryptPointer(admin.KtpGender)
@@ -917,9 +909,6 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 		if input.KtpName != nil {
 			owner.KtpName = input.KtpName
 		}
-		if input.KtpBirthPlace != nil {
-			owner.KtpBirthPlace = input.KtpBirthPlace
-		}
 		if input.KtpBirthProvince != nil {
 			owner.KtpBirthProvince = input.KtpBirthProvince
 		}
@@ -984,9 +973,6 @@ func (s *profileService) SubmitKYC(accountID string, input models.SubmitKYCInput
 
 		if input.KtpName != nil {
 			admin.KtpName = input.KtpName
-		}
-		if input.KtpBirthPlace != nil {
-			admin.KtpBirthPlace = input.KtpBirthPlace
 		}
 		if input.KtpBirthProvince != nil {
 			admin.KtpBirthProvince = input.KtpBirthProvince
