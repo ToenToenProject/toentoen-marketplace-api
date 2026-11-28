@@ -89,6 +89,7 @@ func ConnectDB() {
 	modelsToMigrate := []interface{}{
 		&models.Owner{},
 		&models.BusinessAdmin{},
+		&models.BusinessAdminAssignment{},
 		&models.CSChatSession{},
 		&models.CSChatMessage{},
 		&models.SupportTicket{},
@@ -234,6 +235,9 @@ func ConnectDB() {
 		`CREATE INDEX IF NOT EXISTS idx_owners_ktp_blind_idx ON owners (ktp_number_blind_index) WHERE ktp_number_blind_index IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_business_admins_ktp_blind_idx ON business_admins (ktp_number_blind_index) WHERE ktp_number_blind_index IS NOT NULL`,
 		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS is_notify_owner_enabled BOOLEAN DEFAULT true`,
+		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS supervisor_id VARCHAR(64)`,
+		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS rejection_count INT NOT NULL DEFAULT 0`,
+		`ALTER TABLE business_admin_assignments ADD COLUMN IF NOT EXISTS last_rejected_at TIMESTAMPTZ`,
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_open_date DATE`,
 		`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS confirmed_overtime_date DATE`,
 		`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,

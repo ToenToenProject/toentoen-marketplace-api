@@ -43,11 +43,7 @@ func (h *BusinessAdminHandler) InviteAdmin(c *fiber.Ctx) error {
 	}
 
 	if err := h.service.InviteAdmin(requesterID, businessID, input); err != nil {
-		status := fiber.StatusBadRequest
-		if strings.Contains(err.Error(), "forbidden") {
-			status = fiber.StatusForbidden
-		}
-		return utils.SendResponse(c, status, constants.FailedValidation, err.Error(), nil)
+		return utils.HandleServiceError(c, err, "Gagal mengirimkan undangan admin")
 	}
 
 	return utils.SendResponse(c, fiber.StatusCreated, constants.Success, "Undangan / pengajuan admin berhasil diproses", nil)

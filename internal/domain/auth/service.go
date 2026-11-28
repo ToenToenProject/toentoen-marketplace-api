@@ -657,7 +657,7 @@ func (s *authService) VerifyRegisterOTP(input models.VerifyRegisterOTPInput) (st
 			if err := json.Unmarshal([]byte(storedJSON), &p); err != nil {
 				return "", errors.New("Gagal membaca data pendaftaran sementara")
 			}
-			if !isFirebaseVerified && p.OTP != input.OTP {
+			if !isFirebaseVerified && p.OTP != strings.TrimSpace(input.OTP) {
 				continue
 			}
 			if pending != nil {
