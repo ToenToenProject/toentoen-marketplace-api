@@ -1,8 +1,15 @@
 package meta
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+	"toentoen-backend/internal/config"
 	"toentoen-backend/internal/domain/shared/models"
 )
+
+const metaCacheTTL = 30 * time.Minute
 
 type MetaService interface {
 	GetCategories() ([]models.Category, error)
@@ -20,11 +27,58 @@ func NewMetaService(metaRepo MetaRepository) MetaService {
 }
 
 func (s *metaService) GetCategories() ([]models.Category, error) {
-	return s.metaRepo.GetAllCategories()
+	const cacheKey = "meta:categories:v1"
+	if config.RDB != nil {
+		if cached, err := config.RDB.Get(config.Ctx, cacheKey).Result(); err == nil && cached != "" {
+			var res []models.Category
+			if json.Unmarshal([]byte(cached), &res) == nil {
+				return res, nil
+			}
+		}
+	}
+
+	res, err := s.metaRepo.GetAllCategories()
+	if err != nil {
+		return nil, err
+	}
+	if config.RDB != nil {
+		if b, errM := json.Marshal(res); errM == nil {
+			config.RDB.Set(config.Ctx, cacheKey, string(b), metaCacheTTL)
+		}
+	}
+	return res, nil
 }
 
 func (s *metaService) GetTags(categoryID *int64, scope string) ([]models.Tag, error) {
-	return s.metaRepo.GetAllTags(categoryID, scope)
+	catKey := "all"
+	if categoryID != nil {
+		catKey = fmt.Sprintf("%d", *categoryID)
+	}
+	scopeKey := strings.ToLower(strings.TrimSpace(scope))
+	if scopeKey == "" {
+		scopeKey = "all"
+	}
+	cacheKey := fmt.Sprintf("meta:tags:v1:%s:%s", catKey, scopeKey)
+
+	if config.RDB != nil {
+		if cached, err := config.RDB.Get(config.Ctx, cacheKey).Result(); err == nil && cached != "" {
+			var res []models.Tag
+			if json.Unmarshal([]byte(cached), &res) == nil {
+				return res, nil
+			}
+		}
+	}
+
+	res, err := s.metaRepo.GetAllTags(categoryID, scope)
+	if err != nil {
+		return nil, err
+	}
+	if config.RDB != nil {
+		if b, errM := json.Marshal(res); errM == nil {
+			config.RDB.Set(config.Ctx, cacheKey, string(b), metaCacheTTL)
+		}
+	}
+	return res, nil
 }
 
 func (s *metaService) GetStoreTypes() []map[string]string {

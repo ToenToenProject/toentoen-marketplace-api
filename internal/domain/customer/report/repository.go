@@ -47,7 +47,7 @@ func (r *repository) CreateUniversalReport(report *models.Report) error {
 func (r *repository) HasUserReportedTarget(accountID, targetID string) (bool, error) {
 	var count int64
 	err := r.db.Model(&models.Report{}).
-		Where("TRIM(LOWER(account_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(target_id)) = TRIM(LOWER(?))", strings.TrimSpace(accountID), strings.TrimSpace(targetID)).
+		Where("account_id = ? AND target_id = ?", strings.TrimSpace(accountID), strings.TrimSpace(targetID)).
 		Count(&count).Error
 	return count > 0, err
 }
@@ -55,7 +55,7 @@ func (r *repository) HasUserReportedTarget(accountID, targetID string) (bool, er
 func (r *repository) CountActiveReportsForTarget(targetID string) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.Report{}).
-		Where("TRIM(LOWER(target_id)) = TRIM(LOWER(?)) AND status NOT IN ('rejected', 'dismissed')", strings.TrimSpace(targetID)).
+		Where("target_id = ? AND status NOT IN ('rejected', 'dismissed')", strings.TrimSpace(targetID)).
 		Count(&count).Error
 	return count, err
 }
@@ -76,7 +76,7 @@ func (r *repository) GetReportsPaginated(filter models.ReportFilterQuery) ([]mod
 		query = query.Where("target_type = ?", strings.ToLower(strings.TrimSpace(filter.TargetType)))
 	}
 	if filter.TargetID != "" {
-		query = query.Where("TRIM(LOWER(target_id)) = TRIM(LOWER(?))", strings.TrimSpace(filter.TargetID))
+		query = query.Where("target_id = ?", strings.TrimSpace(filter.TargetID))
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -102,7 +102,7 @@ func (r *repository) GetUserReports(accountID string, page, limit int) ([]models
 	var total int64
 
 	query := r.db.Model(&models.Report{}).Preload("Account").
-		Where("TRIM(LOWER(account_id)) = TRIM(LOWER(?))", strings.TrimSpace(accountID))
+		Where("account_id = ?", strings.TrimSpace(accountID))
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -123,7 +123,7 @@ func (r *repository) GetUserReports(accountID string, page, limit int) ([]models
 func (r *repository) GetReportByID(reportID string) (*models.Report, error) {
 	var report models.Report
 	err := r.db.Preload("Account").
-		Where("TRIM(LOWER(report_id)) = TRIM(LOWER(?))", strings.TrimSpace(reportID)).
+		Where("report_id = ?", strings.TrimSpace(reportID)).
 		First(&report).Error
 	if err != nil {
 		return nil, err
@@ -132,13 +132,13 @@ func (r *repository) GetReportByID(reportID string) (*models.Report, error) {
 }
 
 func (r *repository) DeleteReport(reportID string) error {
-	return r.db.Where("TRIM(LOWER(report_id)) = TRIM(LOWER(?))", strings.TrimSpace(reportID)).
+	return r.db.Where("report_id = ?", strings.TrimSpace(reportID)).
 		Delete(&models.Report{}).Error
 }
 
 func (r *repository) UpdateReportStatus(reportID, status string) error {
 	return r.db.Model(&models.Report{}).
-		Where("TRIM(LOWER(report_id)) = TRIM(LOWER(?))", strings.TrimSpace(reportID)).
+		Where("report_id = ?", strings.TrimSpace(reportID)).
 		UpdateColumn("status", strings.ToLower(strings.TrimSpace(status))).Error
 }
 
@@ -160,7 +160,7 @@ func (r *repository) UpdateReportResolution(reportID, status, adminNote, resolve
 	}
 
 	return r.db.Model(&models.Report{}).
-		Where("TRIM(LOWER(report_id)) = TRIM(LOWER(?))", strings.TrimSpace(reportID)).
+		Where("report_id = ?", strings.TrimSpace(reportID)).
 		Updates(updates).Error
 }
 
@@ -171,26 +171,26 @@ func (r *repository) TakedownTargetContent(targetType, targetID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		switch targetType {
 		case "comment":
-			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductComment{})
-			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReviewComment{})
-			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessReviewComment{})
-			_ = tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPostComment{})
+			_ = tx.Where("comment_id = ?", targetID).Delete(&models.ProductComment{})
+			_ = tx.Where("comment_id = ?", targetID).Delete(&models.ProductReviewComment{})
+			_ = tx.Where("comment_id = ?", targetID).Delete(&models.BusinessReviewComment{})
+			_ = tx.Where("comment_id = ?", targetID).Delete(&models.BusinessPostComment{})
 		case "review":
-			_ = tx.Table("business_review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Table("business_review_comments").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Review{})
+			_ = tx.Table("business_review_likes").Where("review_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("business_review_comments").Where("review_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("review_id = ?", targetID).Delete(&models.Review{})
 
-			_ = tx.Table("product_review_likes").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Table("product_review_comments").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Delete(&models.ProductReview{})
+			_ = tx.Table("product_review_likes").Where("review_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("product_review_comments").Where("review_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("review_id = ?", targetID).Delete(&models.ProductReview{})
 		case "post":
-			_ = tx.Table("business_post_likes").Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Table("business_post_comments").Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Delete(&models.BusinessPost{})
+			_ = tx.Table("business_post_likes").Where("post_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("business_post_comments").Where("post_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("post_id = ?", targetID).Delete(&models.BusinessPost{})
 		case "product":
-			_ = tx.Table("product_likes").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Table("product_comments").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(map[string]interface{}{})
-			_ = tx.Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Delete(&models.Product{})
+			_ = tx.Table("product_likes").Where("product_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Table("product_comments").Where("product_id = ?", targetID).Delete(map[string]interface{}{})
+			_ = tx.Where("product_id = ?", targetID).Delete(&models.Product{})
 		}
 		return nil
 	})
@@ -213,23 +213,23 @@ func (r *repository) CheckTargetExists(targetType, targetID string) (bool, error
 
 	switch targetType {
 	case "business":
-		err = r.db.Table("businesses").Where("TRIM(LOWER(business_id)) = TRIM(LOWER(?))", targetID).Count(&count).Error
+		err = r.db.Table("businesses").Where("business_id = ?", targetID).Count(&count).Error
 	case "product":
-		err = r.db.Table("products").Where("TRIM(LOWER(product_id)) = TRIM(LOWER(?))", targetID).Count(&count).Error
+		err = r.db.Table("products").Where("product_id = ?", targetID).Count(&count).Error
 	case "review":
 		var pCount, bCount int64
-		_ = r.db.Table("product_reviews").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Count(&pCount).Error
-		_ = r.db.Table("reviews").Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", targetID).Count(&bCount).Error
+		_ = r.db.Table("product_reviews").Where("review_id = ?", targetID).Count(&pCount).Error
+		_ = r.db.Table("reviews").Where("review_id = ?", targetID).Count(&bCount).Error
 		count = pCount + bCount
 	case "comment":
 		var c1, c2, c3, c4 int64
-		_ = r.db.Table("product_comments").Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Count(&c1).Error
-		_ = r.db.Table("product_review_comments").Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Count(&c2).Error
-		_ = r.db.Table("business_review_comments").Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Count(&c3).Error
-		_ = r.db.Table("business_post_comments").Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", targetID).Count(&c4).Error
+		_ = r.db.Table("product_comments").Where("comment_id = ?", targetID).Count(&c1).Error
+		_ = r.db.Table("product_review_comments").Where("comment_id = ?", targetID).Count(&c2).Error
+		_ = r.db.Table("business_review_comments").Where("comment_id = ?", targetID).Count(&c3).Error
+		_ = r.db.Table("business_post_comments").Where("comment_id = ?", targetID).Count(&c4).Error
 		count = c1 + c2 + c3 + c4
 	case "post":
-		err = r.db.Table("business_posts").Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", targetID).Count(&count).Error
+		err = r.db.Table("business_posts").Where("post_id = ?", targetID).Count(&count).Error
 	default:
 		return true, nil
 	}

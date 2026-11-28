@@ -906,7 +906,7 @@ func (s *productInteractionService) AddReviewReply(reviewID, accountID string, i
 			return errors.New("gagal mengirimkan balasan")
 		}
 
-		_ = database.DB.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", reviewID).UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+		_ = database.DB.Model(&models.Review{}).Where("review_id = ?", reviewID).UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
 
 		if s.notifService != nil {
 			go func() {
@@ -1300,7 +1300,7 @@ func (s *productInteractionService) DeleteUnifiedComment(commentID, requesterID 
 		if err := database.DB.Delete(&bComment).Error; err != nil {
 			return err
 		}
-		_ = database.DB.Model(&models.Review{}).Where("TRIM(LOWER(review_id)) = TRIM(LOWER(?))", bComment.ReviewID).UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
+		_ = database.DB.Model(&models.Review{}).Where("review_id = ?", bComment.ReviewID).UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
 		return nil
 	}
 
@@ -1320,7 +1320,7 @@ func (s *productInteractionService) DeleteUnifiedComment(commentID, requesterID 
 		if err := database.DB.Delete(&bpComment).Error; err != nil {
 			return err
 		}
-		_ = database.DB.Model(&models.BusinessPost{}).Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", bpComment.PostID).UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
+		_ = database.DB.Model(&models.BusinessPost{}).Where("post_id = ?", bpComment.PostID).UpdateColumn("comment_count", gorm.Expr("GREATEST(comment_count - 1, 0)")).Error
 		return nil
 	}
 

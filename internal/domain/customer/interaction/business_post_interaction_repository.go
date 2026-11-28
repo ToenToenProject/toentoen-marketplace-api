@@ -36,13 +36,13 @@ func (r *postInteractionRepository) TogglePostLike(postID, accountID string) (bo
 	var isLiked bool
 
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", postID, accountID).First(&like)
+		result := tx.Where("post_id = ? AND account_id = ?", postID, accountID).First(&like)
 
 		if result.Error == nil {
 			if err := tx.Delete(&like).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.BusinessPost{}).Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", postID).
+			if err := tx.Model(&models.BusinessPost{}).Where("post_id = ?", postID).
 				UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error; err != nil {
 				return err
 			}
@@ -55,7 +55,7 @@ func (r *postInteractionRepository) TogglePostLike(postID, accountID string) (bo
 			if err := tx.Create(&newLike).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.BusinessPost{}).Where("TRIM(LOWER(post_id)) = TRIM(LOWER(?))", postID).
+			if err := tx.Model(&models.BusinessPost{}).Where("post_id = ?", postID).
 				UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
 				return err
 			}
@@ -141,13 +141,13 @@ func (r *postInteractionRepository) TogglePostCommentLike(commentID, accountID s
 	var isLiked bool
 
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?)) AND TRIM(LOWER(account_id)) = TRIM(LOWER(?))", commentID, accountID).First(&like)
+		result := tx.Where("comment_id = ? AND account_id = ?", commentID, accountID).First(&like)
 
 		if result.Error == nil {
 			if err := tx.Delete(&like).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.BusinessPostComment{}).Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", commentID).
+			if err := tx.Model(&models.BusinessPostComment{}).Where("comment_id = ?", commentID).
 				UpdateColumn("like_count", gorm.Expr("GREATEST(like_count - 1, 0)")).Error; err != nil {
 				return err
 			}
@@ -160,7 +160,7 @@ func (r *postInteractionRepository) TogglePostCommentLike(commentID, accountID s
 			if err := tx.Create(&newLike).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.BusinessPostComment{}).Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", commentID).
+			if err := tx.Model(&models.BusinessPostComment{}).Where("comment_id = ?", commentID).
 				UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
 				return err
 			}
@@ -176,7 +176,7 @@ func (r *postInteractionRepository) TogglePostCommentLike(commentID, accountID s
 
 func (r *postInteractionRepository) GetPostCommentLikes(commentID string) ([]models.BusinessPostCommentLike, error) {
 	var likes []models.BusinessPostCommentLike
-	err := r.db.Where("TRIM(LOWER(comment_id)) = TRIM(LOWER(?))", strings.TrimSpace(commentID)).Find(&likes).Error
+	err := r.db.Where("comment_id = ?", strings.TrimSpace(commentID)).Find(&likes).Error
 	return likes, err
 }
 
